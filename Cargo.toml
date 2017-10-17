@@ -1,0 +1,11 @@
+[package]
+name = "hydra-blocks"
+version = "0.1.0"
+authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
+
+[dependencies]
+serde = "1"
+serde_derive = "1"
+serde_json = "1"
+multihash = "0.6"
+# multicodec = { git = "https://github.com/mudlee/rust-multicodec" }
