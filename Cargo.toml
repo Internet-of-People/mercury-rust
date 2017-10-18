@@ -2,6 +2,7 @@
 name = "hydra-blocks"
 version = "0.1.0"
 authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
+license = "LGPL-3.0+"
 
 [dependencies]
 futures = "0.1"
