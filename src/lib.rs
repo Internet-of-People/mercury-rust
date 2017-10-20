@@ -1,3 +1,4 @@
+extern crate base64;
 extern crate futures;
 extern crate multihash;
 extern crate serde;

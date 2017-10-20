@@ -13,7 +13,7 @@ pub trait Serializer<ObjectType, SerializedType>
 
 pub trait Hasher<ObjectType, HashType>
 {
-    fn hash(&self, object: &ObjectType) -> Result<HashType, HashError>;
+    fn get_hash(&self, object: &ObjectType) -> Result<HashType, HashError>;
     fn validate(&self, object: &ObjectType, hash: &HashType) -> Result<bool, HashError>;
 }
 
@@ -40,17 +40,44 @@ impl MultiHasher
             multihash::Error::UnsupportedType   => HashError::UnsupportedType,
         }
     }
-}
 
-impl Hasher<Vec<u8>, Vec<u8>> for MultiHasher
-{
-    fn hash(&self, data: &Vec<u8>) -> Result<Vec<u8>, HashError>
+    fn get_hash_bytes(&self, data: &Vec<u8>) -> Result<Vec<u8>, HashError>
     {
         multihash::encode(self.hash_algorithm, data)
             .map_err(MultiHasher::to_hasher_error)
     }
 
-    fn validate(&self, data: &Vec<u8>, expected_hash: &Vec<u8>) -> Result<bool, HashError>
+    fn get_hash_string(&self, data: &Vec<u8>) -> Result<String, HashError>
+    {
+        self.get_hash_bytes(&data)
+            .map( |bytes| base64::encode(&bytes) )
+    }
+}
+
+//impl Hasher<Vec<u8>, Vec<u8>> for MultiHasher
+//{
+//    fn get_hash(&self, data: &Vec<u8>) -> Result<Vec<u8>, HashError>
+//        { self.get_hash_bytes(&data) }
+//
+//    fn validate(&self, data: &Vec<u8>, expected_hash: &Vec<u8>) -> Result<bool, HashError>
+//    {
+//        //        // TODO should we do this here or just drop this step and check hash equality?
+//        //        let decode_result = decode(expected_hash)
+//        //            .map_err(MultiHasher::to_hasher_error)?;
+//        //        if decode_result.alg != self.hash_algorithm
+//        //            { return Err(HashError::UnsupportedType); }
+//
+//        let calculated_hash = self.get_hash_bytes(&data)?;
+//        Ok(*expected_hash == calculated_hash)
+//    }
+//}
+
+impl Hasher<Vec<u8>, String> for MultiHasher
+{
+    fn get_hash(&self, data: &Vec<u8>) -> Result<String, HashError>
+        { self.get_hash_string(&data) }
+
+    fn validate(&self, data: &Vec<u8>, expected_hash: &String) -> Result<bool, HashError>
     {
         //        // TODO should we do this here or just drop this step and check hash equality?
         //        let decode_result = decode(expected_hash)
@@ -58,11 +85,11 @@ impl Hasher<Vec<u8>, Vec<u8>> for MultiHasher
         //        if decode_result.alg != self.hash_algorithm
         //            { return Err(HashError::UnsupportedType); }
 
-        let calculated_hash = multihash::encode(self.hash_algorithm, data)
-            .map_err(MultiHasher::to_hasher_error)?;
+        let calculated_hash = self.get_hash_string(&data)?;
         Ok(*expected_hash == calculated_hash)
     }
 }
+
 
 
 
@@ -130,7 +157,7 @@ mod tests
     {
         let ser_obj = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
         let hasher = MultiHasher{hash_algorithm: multihash::Hash::Keccak256};
-        let hash = hasher.hash(&ser_obj);
+        let hash = hasher.get_hash(&ser_obj);
         assert!( hash.is_ok() );
         let valid = hasher.validate( &ser_obj, &hash.unwrap() );
         assert!( valid.is_ok() );

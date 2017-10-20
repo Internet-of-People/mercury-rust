@@ -1,7 +1,6 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-//use super::*;
 use common::*;
 use error::*;
 
@@ -10,7 +9,7 @@ use error::*;
 pub trait HashSpace<ObjectType, HashType>
 {
     fn store(&mut self, object: ObjectType) -> Result<HashType, HashSpaceError>;
-    fn lookup(&self, hash: &HashType) -> Result<ObjectType, HashSpaceError>;
+    fn resolve(&self, hash: &HashType) -> Result<ObjectType, HashSpaceError>;
     fn validate(&self, object: &ObjectType, hash: &HashType) -> Result<bool, HashSpaceError>;
 }
 
@@ -38,14 +37,14 @@ for CompositeHashSpace<ObjectType, SerializedType, HashType>
     {
         let serialized_obj = self.serializer.serialize(&object)
             .map_err( |e| HashSpaceError::SerializerError(e) )?;
-        let obj_hash = self.hasher.hash(&serialized_obj)
+        let obj_hash = self.hasher.get_hash(&serialized_obj)
             .map_err( |e| HashSpaceError::HashError(e) )?;
         self.storage.store( &obj_hash, serialized_obj )
             .map_err( |e| HashSpaceError::StorageError(e) )?;
         Ok(obj_hash)
     }
 
-    fn lookup(&self, hash: &HashType) -> Result<ObjectType, HashSpaceError>
+    fn resolve(&self, hash: &HashType) -> Result<ObjectType, HashSpaceError>
     {
         let serialized_obj = self.storage.lookup(&hash)
             .map_err( |e| HashSpaceError::StorageError(e) )?;
@@ -75,7 +74,7 @@ impl<KeyType, ValueType> InMemoryStore<KeyType, ValueType>
     where KeyType: Eq + Hash
 {
     pub fn new() -> Self
-    { InMemoryStore{ map: HashMap::new() } }
+        { InMemoryStore{ map: HashMap::new() } }
 }
 
 impl<KeyType, ValueType>
@@ -132,8 +131,8 @@ mod tests
     #[test]
     fn test_hashspace()
     {
-        let store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
-        let mut hashspace: CompositeHashSpace<Person, Vec<u8>, Vec<u8>> = CompositeHashSpace{
+        let store: InMemoryStore<String, Vec<u8>> = InMemoryStore::new();
+        let mut hashspace: CompositeHashSpace<Person, Vec<u8>, String> = CompositeHashSpace{
             serializer: Box::new( SerdeJsonSerializer{} ),
             hasher:     Box::new( MultiHasher::new(multihash::Hash::Keccak512) ),
             storage:    Box::new(store) };
@@ -142,7 +141,7 @@ mod tests
         let store_res = hashspace.store( object.clone() );
         assert!( store_res.is_ok() );
         let hash = store_res.unwrap();
-        let lookup_res = hashspace.lookup(&hash);
+        let lookup_res = hashspace.resolve(&hash);
         assert!( lookup_res.is_ok() );
         assert_eq!( lookup_res.unwrap(), object );
         let validate_res = hashspace.validate(&object, &hash);
