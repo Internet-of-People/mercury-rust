@@ -1,11 +1,11 @@
-use super::*;
-
 use std::collections::HashMap;
 use std::hash::Hash;
 
 use futures::future::Future;
 
-use error::{SerializerError, HashError, StorageError, HashSpaceError};
+use super::*;
+use common::*;
+use error::*;
 
 
 pub trait HashSpace<ObjectType, HashType>
@@ -20,24 +20,6 @@ pub trait HashSpace<ObjectType, HashType>
 
 
 
-pub trait Serializer<ObjectType, SerializedType>
-{
-    // TODO error handling: these two operations could return different error types
-    //      (SerErr/DeserErr), consider if that might be clearer
-    fn serialize(&self, object: &ObjectType)
-        -> Box< Future<Item=SerializedType, Error=SerializerError> >;
-    fn deserialize(&self, serialized_object: &SerializedType)
-        -> Box< Future<Item=ObjectType, Error=SerializerError> >;
-}
-
-pub trait Hasher<ObjectType, HashType>
-{
-    fn hash(&self, object: &ObjectType)
-        -> Box< Future<Item=HashType, Error=HashError> >;
-    fn validate(&self, object: &ObjectType, hash: &HashType)
-        -> Box< Future<Item=bool, Error=HashError> >;
-}
-
 pub trait KeyValueStore<KeyType, ValueType>
 {
     fn store(&mut self, key: &KeyType, object: ValueType)
@@ -45,6 +27,7 @@ pub trait KeyValueStore<KeyType, ValueType>
     fn lookup(&self, key: &KeyType)
         -> Box< Future<Item=ValueType, Error=StorageError> >;
 }
+
 
 
 pub struct CompositeHashSpace<ObjectType, SerializedType, HashType>
