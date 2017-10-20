@@ -26,6 +26,12 @@ pub struct MultiHasher
 
 impl MultiHasher
 {
+    pub fn new(hash_algorithm: multihash::Hash) -> Self
+        { MultiHasher{hash_algorithm: hash_algorithm} }
+}
+
+impl MultiHasher
+{
     fn to_hasher_error(error: multihash::Error) -> HashError
     {
         match error {

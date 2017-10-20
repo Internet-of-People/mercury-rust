@@ -104,6 +104,7 @@ for InMemoryStore<KeyType, ValueType>
 mod tests
 {
     use super::*;
+    use super::super::*;
 
 
     #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
@@ -134,7 +135,7 @@ mod tests
         let store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
         let mut hashspace: CompositeHashSpace<Person, Vec<u8>, Vec<u8>> = CompositeHashSpace{
             serializer: Box::new( SerdeJsonSerializer{} ),
-            hasher:     Box::new( MultiHasher{hash_algorithm: multihash::Hash::Keccak512} ),
+            hasher:     Box::new( MultiHasher::new(multihash::Hash::Keccak512) ),
             storage:    Box::new(store) };
 
         let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };

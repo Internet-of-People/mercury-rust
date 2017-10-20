@@ -3,7 +3,7 @@ use std::hash::Hash;
 
 use futures::future::Future;
 
-use super::*;
+//use super::*;
 use common::*;
 use error::*;
 
