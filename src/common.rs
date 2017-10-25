@@ -50,6 +50,7 @@ impl MultiHasher
     fn get_hash_string(&self, data: &Vec<u8>) -> Result<String, HashError>
     {
         self.get_hash_bytes(&data)
+            // TODO this should use something like a "multibase" lib, similar to multihash
             .map( |bytes| base64::encode(&bytes) )
     }
 }

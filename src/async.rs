@@ -1,95 +1,155 @@
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::io;
+use std::rc::Rc;
 
 use futures::prelude::*;
 use futures::future;
-//use futures::future::IntoFuture;
 
-use common::*;
 use error::*;
 
 
-pub trait HashSpace<ObjectType, HashType>
+type DefaultSerializedType = Vec<u8>;
+type DefaultHashType = String;
+
+
+
+pub trait HashSpace
 {
-    fn store(&mut self, object: ObjectType)
-        -> Box< Future<Item=HashType, Error=HashSpaceError> >;
-    fn resolve(&self, hash: HashType)
-        -> Box< Future<Item=ObjectType, Error=HashSpaceError> >;
-    fn validate(&self, object: &ObjectType, hash: &HashType)
+    type ObjectType;
+    type HashType; // = DefaultHashType;
+
+    fn store(&mut self, object: Self::ObjectType)
+        -> Box< Future<Item=Self::HashType, Error=HashSpaceError> >;
+    fn resolve(&self, hash: Self::HashType)
+        -> Box< Future<Item=Self::ObjectType, Error=HashSpaceError> >;
+    fn validate(&self, object: &Self::ObjectType, hash: &Self::HashType)
         -> Box< Future<Item=bool, Error=HashSpaceError> >;
 }
 
 
-
-pub trait KeyValueStore<KeyType, ValueType>
+pub trait Serializer
 {
-    fn store(&mut self, key: KeyType, object: ValueType)
+    type ObjectType;
+    type SerializedType; // = DefaultSerializedType;
+
+    // TODO error handling: these two operations could return different error types
+    //      (SerErr/DeserErr), consider if that might be clearer
+    fn serialize(&self, object: &Self::ObjectType)
+        -> Result<Self::SerializedType, SerializerError>;
+    fn deserialize(&self, serialized_object: &Self::SerializedType)
+        -> Result<Self::ObjectType, SerializerError>;
+}
+
+pub trait Hasher
+{
+    type SerializedType;
+    type HashType; // = DefaultHashType;
+
+    fn get_hash(&self, object: &Self::SerializedType)
+        -> Result<Self::HashType, HashError>;
+    fn validate(&self, object: &Self::SerializedType, hash: &Self::HashType)
+        -> Result<bool, HashError>;
+}
+
+pub trait KeyValueStore
+{
+    type KeyType; // = DefaultHashType;
+    type ValueType; // = DefaultSerializedType;
+
+    fn store(&mut self, key: Self::KeyType, object: Self::ValueType)
         -> Box< Future<Item=(), Error=StorageError> >;
-    fn lookup(&self, key: KeyType)
-        -> Box< Future<Item=ValueType, Error=StorageError> >;
+    fn lookup(&self, key: Self::KeyType)
+        -> Box< Future<Item=Self::ValueType, Error=StorageError> >;
 }
 
 
 
-//pub struct CompositeHashSpace<ObjectType, SerializedType, HashType>
+pub struct CompositeHashSpace<Obj>
+{
+    serializer: Rc< Serializer<ObjectType=Obj, SerializedType=DefaultSerializedType> >,
+    hasher:     Rc< Hasher<SerializedType=DefaultSerializedType, HashType=DefaultHashType> >,
+    storage:    Rc< KeyValueStore<KeyType=DefaultHashType, ValueType=DefaultSerializedType> >,
+}
+
+
+//impl<Obj> CompositeHashSpace<Obj>
 //{
-//    serializer: Box< Serializer<ObjectType, SerializedType> >,
-//    hasher:     Box< Hasher<SerializedType, HashType> >,
-//    storage:    Box< KeyValueStore<HashType, SerializedType> >,
-//}
-//
-//
-//impl <ObjectType, SerializedType, HashType>
-//HashSpace<ObjectType, HashType>
-//for CompositeHashSpace<ObjectType, SerializedType, HashType>
-//    where HashType: ToOwned
-//{
-//    fn store(&mut self, object: ObjectType)
-//        -> Box< Future<Item=HashType, Error=HashSpaceError> >
+//    fn deserialize(&self, serialized_object: DefaultSerializedType)
+//        -> Result<Obj, HashSpaceError>
 //    {
-//        let hash_result: Result<(SerializedType,HashType), HashSpaceError> = self.serializer.serialize(&object)
-//            .map_err( |e| HashSpaceError::SerializerError(e) )
-//            .and_then( |serialized_obj|
-//                self.hasher.hash(&serialized_obj)
-//                    .map( |obj_hash| (serialized_obj, obj_hash) )
-//                    .map_err( |e| HashSpaceError::HashError(e) )
-//            );
-//        match hash_result {
-//            Err(e) => Box::new( future::err(e) ),
-//            Ok( (serialized_obj, obj_hash) ) => {
-//                let result = self.storage.store( obj_hash.to_owned(), serialized_obj )
-//                    .map( |_| obj_hash )
-//                    .map_err( |e| HashSpaceError::StorageError(e) );
-//                Box::new(result)
-//            }
-//        }
-//    }
-//
-//    fn resolve(&self, hash: HashType)
-//        -> Box< Future<Item=ObjectType, Error=HashSpaceError> >
-//    {
-//        let result = self.storage.lookup(hash)
-//            .map_err( |e| HashSpaceError::StorageError(e) )
-//            .and_then( |serialized_obj|
-//                self.serializer.deserialize(&serialized_obj)
-//                    .map_err( |e| HashSpaceError::SerializerError(e) ) );
-//        Box::new(result)
-//    }
-//
-//    fn validate(&self, object: &ObjectType, hash: &HashType)
-//        -> Box< Future<Item=bool, Error=HashSpaceError> >
-//    {
-//        let valid = self.serializer.serialize(&object)
-//            .map_err( |e| HashSpaceError::SerializerError(e) )
-//            .and_then( |serialized_obj|
-//                self.hasher.validate(&serialized_obj, &hash)
-//                    .map_err( |e| HashSpaceError::HashError(e) ) );
-//        Box::new( future::res(valid) )
+//        self.serializer.deserialize(&serialized_object)
+//            .map_err( move |e| HashSpaceError::SerializerError(e) )
 //    }
 //}
-//
-//
-//
+
+
+impl<Obj: 'static>
+HashSpace
+for CompositeHashSpace<Obj>
+{
+    type ObjectType = Obj;
+    type HashType = DefaultHashType;
+
+    fn store(&mut self, object: Self::ObjectType)
+        -> Box< Future<Item=Self::HashType, Error=HashSpaceError> >
+    {
+        let mut storage_rc_clone = self.storage.clone();
+        let storage_opt = Rc::get_mut(&mut storage_rc_clone);
+        let storage_res = storage_opt.ok_or( HashSpaceError::Other(
+            Box::new( io::Error::new(io::ErrorKind::PermissionDenied, "Implementation error: could not get access to Rc") ) ) );
+        let storage = match storage_res {
+            Err(e)  => return Box::new( future::err(e) ),
+            Ok(val) => val,
+        };
+
+        let hash_result = self.serializer.serialize(&object)
+            .map_err( |e| HashSpaceError::SerializerError(e) )
+            .and_then( |serialized_obj|
+                self.hasher.get_hash(&serialized_obj)
+                    .map( |obj_hash| (serialized_obj, obj_hash) )
+                    .map_err( |e| HashSpaceError::HashError(e) )
+            );
+
+        match hash_result
+        {
+            Err(e) => Box::new( future::err(e) ),
+            Ok( (serialized_obj, obj_hash) ) => {
+                Box::new( storage.store( obj_hash.clone(), serialized_obj )
+                    .map( |_| obj_hash )
+                    .map_err( |e| HashSpaceError::StorageError(e) ) )
+            }
+        }
+    }
+
+    fn resolve(&self, hash: Self::HashType)
+        -> Box< Future<Item=Self::ObjectType, Error=HashSpaceError> >
+    {
+        let serializer_clone = self.serializer.clone();
+        let result = self.storage.lookup(hash)
+            .map_err( |e| HashSpaceError::StorageError(e) )
+//            .and_then(|serialized_obj| self.deserialize(serialized_obj));
+            .and_then( move |serialized_obj|
+                serializer_clone.deserialize(&serialized_obj)
+                    .map_err( move |e| HashSpaceError::SerializerError(e) ) );
+        Box::new(result)
+//        Box::new( future::err(HashSpaceError::HashError(HashError::BadInputLength)))
+    }
+
+    fn validate(&self, object: &Self::ObjectType, hash: &Self::HashType)
+        -> Box< Future<Item=bool, Error=HashSpaceError> >
+    {
+        let valid = self.serializer.serialize(&object)
+            .map_err( |e| HashSpaceError::SerializerError(e) )
+            .and_then( |serialized_obj|
+                self.hasher.validate(&serialized_obj, &hash)
+                    .map_err( |e| HashSpaceError::HashError(e) ) );
+        Box::new( future::result(valid) )
+    }
+}
+
+
+
 //pub struct InMemoryStore<KeyType, ValueType>
 //{
 //    map: HashMap<KeyType, ValueType>,

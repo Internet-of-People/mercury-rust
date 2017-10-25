@@ -48,6 +48,11 @@ for CompositeHashSpace<ObjectType, SerializedType, HashType>
     {
         let serialized_obj = self.storage.lookup(&hash)
             .map_err( |e| HashSpaceError::StorageError(e) )?;
+        let valid_hash = self.hasher.validate(&serialized_obj, &hash)
+            .map_err( |e| HashSpaceError::HashError(e) )?;
+        if ! valid_hash
+            { return Err( HashSpaceError::StorageError(StorageError::InvalidKey) ) };
+
         let object = self.serializer.deserialize(&serialized_obj)
             .map_err( |e| HashSpaceError::SerializerError(e) )?;
         Ok(object)
