@@ -3,6 +3,7 @@ extern crate futures;
 extern crate multihash;
 extern crate serde;
 extern crate serde_json;
+extern crate tokio_core;
 
 #[macro_use]
 extern crate serde_derive;

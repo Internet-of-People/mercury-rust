@@ -11,4 +11,5 @@ multihash = "0.6"
 serde = "1"
 serde_derive = "1"
 serde_json = "1"
+tokio-core = "0.1"
 # multicodec = { git = "https://github.com/mudlee/rust-multicodec" }
