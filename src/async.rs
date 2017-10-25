@@ -73,16 +73,6 @@ pub struct CompositeHashSpace<Obj>
 }
 
 
-//impl<Obj> CompositeHashSpace<Obj>
-//{
-//    fn deserialize(&self, serialized_object: DefaultSerializedType)
-//        -> Result<Obj, HashSpaceError>
-//    {
-//        self.serializer.deserialize(&serialized_object)
-//            .map_err( move |e| HashSpaceError::SerializerError(e) )
-//    }
-//}
-
 
 impl<Obj: 'static>
 HashSpace
@@ -128,12 +118,10 @@ for CompositeHashSpace<Obj>
         let serializer_clone = self.serializer.clone();
         let result = self.storage.lookup(hash)
             .map_err( |e| HashSpaceError::StorageError(e) )
-//            .and_then(|serialized_obj| self.deserialize(serialized_obj));
             .and_then( move |serialized_obj|
                 serializer_clone.deserialize(&serialized_obj)
                     .map_err( move |e| HashSpaceError::SerializerError(e) ) );
         Box::new(result)
-//        Box::new( future::err(HashSpaceError::HashError(HashError::BadInputLength)))
     }
 
     fn validate(&self, object: &Self::ObjectType, hash: &Self::HashType)
