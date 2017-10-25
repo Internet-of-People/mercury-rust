@@ -346,26 +346,27 @@ mod tests
     }
 
 
-//    #[test]
-//    fn test_hashspace()
-//    {
-//        let store: InMemoryStore<String, Vec<u8>> = InMemoryStore::new();
-//        let mut hashspace: CompositeHashSpace<Person> = CompositeHashSpace{
-//            serializer: Rc::new( SerdeJsonSerializer{} ),
-//            hasher:     Rc::new( MultiHasher{hash_algorithm: multihash::Hash::Keccak512} ),
-//            storage:    Rc::new(store) };
-//
-//        let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
-//        let store_res = hashspace.store( object.clone() ).wait();
-//        assert!( store_res.is_ok() );
-//        let hash = store_res.unwrap();
-//        let lookup_res = hashspace.resolve( hash.clone() ).wait();
-//        assert!( lookup_res.is_ok() );
-//        assert_eq!( lookup_res.unwrap(), object );
-//        let validate_res = hashspace.validate(&object, &hash).wait();
-//        assert!( validate_res.is_ok() );
-//        assert!( validate_res.unwrap() );
-//    }
+    #[test]
+    fn test_hashspace()
+    {
+        let store: InMemoryStore<String, Vec<u8>> = InMemoryStore::new();
+        let mut hashspace: CompositeHashSpace<Person> = CompositeHashSpace{
+            serializer: Rc::new( SerdeJsonSerializer::new() ),
+            hasher:     Rc::new( MultiHasher{hash_algorithm: multihash::Hash::Keccak512} ),
+            storage:    Rc::new(store) };
+
+        let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
+        let store_res = hashspace.store( object.clone() ).wait();
+    println!("{:?}", store_res);
+        assert!( store_res.is_ok() );
+        let hash = store_res.unwrap();
+        let lookup_res = hashspace.resolve( hash.clone() ).wait();
+        assert!( lookup_res.is_ok() );
+        assert_eq!( lookup_res.unwrap(), object );
+        let validate_res = hashspace.validate(&object, &hash).wait();
+        assert!( validate_res.is_ok() );
+        assert!( validate_res.unwrap() );
+    }
 
 
 
