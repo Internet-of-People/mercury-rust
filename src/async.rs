@@ -35,17 +35,14 @@ pub trait HashSpace
 }
 
 
-pub trait Serializer
+pub trait Serializer<ObjectType, SerializedType>
 {
-    type ObjectType;
-    type SerializedType; // = DefaultSerializedType;
-
     // TODO error handling: these two operations could return different error types
     //      (SerErr/DeserErr), consider if that might be clearer
-    fn serialize(&self, object: &Self::ObjectType)
-        -> Result<Self::SerializedType, SerializerError>;
-    fn deserialize(&self, serialized_object: &Self::SerializedType)
-        -> Result<Self::ObjectType, SerializerError>;
+    fn serialize(&self, object: &ObjectType)
+        -> Result<SerializedType, SerializerError>;
+    fn deserialize(&self, serialized_object: &SerializedType)
+        -> Result<ObjectType, SerializerError>;
 }
 
 pub trait Hasher
@@ -72,9 +69,9 @@ pub trait KeyValueStore
 
 
 
-pub struct CompositeHashSpace<Obj>
+pub struct CompositeHashSpace<ObjectType>
 {
-    serializer: Rc< Serializer<ObjectType=Obj, SerializedType=DefaultSerializedType> >,
+    serializer: Rc< Serializer<ObjectType, DefaultSerializedType> >,
     hasher:     Box< Hasher<SerializedType=DefaultSerializedType, HashType=DefaultHashType> >,
     storage:    Box< KeyValueStore<KeyType=DefaultHashType, ValueType=DefaultSerializedType> >,
 }
@@ -159,27 +156,24 @@ impl<Obj> SerdeJsonSerializer<Obj>
         { SerializerError::SerializationError( Box::new(error) ) }
 }
 
-impl<Obj: serde::Serialize + serde::de::DeserializeOwned>
-Serializer for SerdeJsonSerializer<Obj>
+impl<ObjectType: serde::Serialize + serde::de::DeserializeOwned>
+Serializer<ObjectType, DefaultSerializedType> for SerdeJsonSerializer<ObjectType>
 {
-    type ObjectType = Obj;
-    type SerializedType = DefaultSerializedType;
-
-    fn serialize(&self, object: &Self::ObjectType)
-        -> Result<Self::SerializedType, SerializerError>
+    fn serialize(&self, object: &ObjectType)
+        -> Result<DefaultSerializedType, SerializerError>
     {
         serde_json::to_string(&object)
             .map( |str| str.into_bytes() )
-            .map_err(SerdeJsonSerializer::<Obj>::to_serializer_error)
+            .map_err(SerdeJsonSerializer::<ObjectType>::to_serializer_error)
     }
 
-    fn deserialize(&self, serialized_object: &Self::SerializedType)
-        -> Result<Self::ObjectType, SerializerError>
+    fn deserialize(&self, serialized_object: &DefaultSerializedType)
+        -> Result<ObjectType, SerializerError>
     {
         let json_string = String::from_utf8(serialized_object.clone() )
             .map_err(|e| SerializerError::DeserializationError( Box::new(e) ) )?;
         serde_json::from_str(& json_string)
-            .map_err(SerdeJsonSerializer::<Obj>::to_serializer_error)
+            .map_err(SerdeJsonSerializer::<ObjectType>::to_serializer_error)
     }
 }
 
