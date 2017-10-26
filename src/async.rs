@@ -45,14 +45,11 @@ pub trait Serializer<ObjectType, SerializedType>
         -> Result<ObjectType, SerializerError>;
 }
 
-pub trait Hasher
+pub trait Hasher<SerializedType, HashType>
 {
-    type SerializedType;
-    type HashType; // = DefaultHashType;
-
-    fn get_hash(&self, serialized_data: &Self::SerializedType)
-        -> Result<Self::HashType, HashError>;
-    fn validate(&self, serialized_data: &Self::SerializedType, hash: &Self::HashType)
+    fn get_hash(&self, serialized_data: &SerializedType)
+        -> Result<HashType, HashError>;
+    fn validate(&self, serialized_data: &SerializedType, hash: &HashType)
         -> Result<bool, HashError>;
 }
 
@@ -72,7 +69,7 @@ pub trait KeyValueStore
 pub struct CompositeHashSpace<ObjectType>
 {
     serializer: Rc< Serializer<ObjectType, DefaultSerializedType> >,
-    hasher:     Box< Hasher<SerializedType=DefaultSerializedType, HashType=DefaultHashType> >,
+    hasher:     Box< Hasher<DefaultSerializedType, DefaultHashType> >,
     storage:    Box< KeyValueStore<KeyType=DefaultHashType, ValueType=DefaultSerializedType> >,
 }
 
@@ -213,16 +210,13 @@ impl MultiHasher
 }
 
 
-impl Hasher for MultiHasher
+impl Hasher<DefaultSerializedType, DefaultHashType> for MultiHasher
 {
-    type SerializedType = DefaultSerializedType;
-    type HashType = DefaultHashType;
-
-    fn get_hash(&self, serialized_data: &Self::SerializedType)
-            -> Result<Self::HashType, HashError>
+    fn get_hash(&self, serialized_data: &DefaultSerializedType)
+            -> Result<DefaultHashType, HashError>
         { self.get_hash_string(&serialized_data) }
 
-    fn validate(&self, serialized_data: &Self::SerializedType, expected_hash: &Self::HashType)
+    fn validate(&self, serialized_data: &DefaultSerializedType, expected_hash: &DefaultHashType)
         -> Result<bool, HashError>
     {
         //        // TODO should we do this here or just drop this step and check hash equality?
