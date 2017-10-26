@@ -21,16 +21,13 @@ type DefaultHashType = String;
 
 
 
-pub trait HashSpace
+pub trait HashSpace<ObjectType, HashType>
 {
-    type ObjectType;
-    type HashType; // = DefaultHashType;
-
-    fn store(&mut self, object: Self::ObjectType)
-        -> Box< Future<Item=Self::HashType, Error=HashSpaceError> >;
-    fn resolve(&self, hash: Self::HashType)
-        -> Box< Future<Item=Self::ObjectType, Error=HashSpaceError> >;
-    fn validate(&self, object: &Self::ObjectType, hash: &Self::HashType)
+    fn store(&mut self, object: ObjectType)
+        -> Box< Future<Item=HashType, Error=HashSpaceError> >;
+    fn resolve(&self, hash: HashType)
+        -> Box< Future<Item=ObjectType, Error=HashSpaceError> >;
+    fn validate(&self, object: &ObjectType, hash: &HashType)
         -> Box< Future<Item=bool, Error=HashSpaceError> >;
 }
 
@@ -63,24 +60,21 @@ pub trait KeyValueStore<KeyType, ValueType>
 
 
 
-pub struct CompositeHashSpace<ObjectType>
+pub struct CompositeHashSpace<ObjectType, SerializedType, HashType>
 {
-    serializer: Rc< Serializer<ObjectType, DefaultSerializedType> >,
-    hasher:     Box< Hasher<DefaultSerializedType, DefaultHashType> >,
-    storage:    Box< KeyValueStore<DefaultHashType, DefaultSerializedType> >,
+    serializer: Rc< Serializer<ObjectType, SerializedType> >,
+    hasher:     Box< Hasher<SerializedType, HashType> >,
+    storage:    Box< KeyValueStore<HashType, SerializedType> >,
 }
 
 
 
-impl<Obj: 'static>
-HashSpace
-for CompositeHashSpace<Obj>
+impl<ObjectType: 'static, SerializedType: 'static, HashType: Clone + 'static>
+HashSpace<ObjectType, HashType>
+for CompositeHashSpace<ObjectType, SerializedType, HashType>
 {
-    type ObjectType = Obj;
-    type HashType = DefaultHashType;
-
-    fn store(&mut self, object: Self::ObjectType)
-        -> Box< Future<Item=Self::HashType, Error=HashSpaceError> >
+    fn store(&mut self, object: ObjectType)
+        -> Box< Future<Item=HashType, Error=HashSpaceError> >
     {
 //        let mut storage_rc_clone = self.storage.clone();
 //        let storage_opt = Rc::get_mut(&mut storage_rc_clone);
@@ -109,8 +103,8 @@ for CompositeHashSpace<Obj>
         Box::new(result)
     }
 
-    fn resolve(&self, hash: Self::HashType)
-        -> Box< Future<Item=Self::ObjectType, Error=HashSpaceError> >
+    fn resolve(&self, hash: HashType)
+        -> Box< Future<Item=ObjectType, Error=HashSpaceError> >
     {
         let serializer_clone = self.serializer.clone();
         let result = self.storage.lookup(hash)
@@ -121,7 +115,7 @@ for CompositeHashSpace<Obj>
         Box::new(result)
     }
 
-    fn validate(&self, object: &Self::ObjectType, hash: &Self::HashType)
+    fn validate(&self, object: &ObjectType, hash: &HashType)
         -> Box< Future<Item=bool, Error=HashSpaceError> >
     {
         let valid = self.serializer.serialize(&object)
@@ -332,7 +326,7 @@ mod tests
     fn test_hashspace()
     {
         let store: InMemoryStore<String, Vec<u8>> = InMemoryStore::new();
-        let mut hashspace: CompositeHashSpace<Person> = CompositeHashSpace{
+        let mut hashspace: CompositeHashSpace<Person, Vec<u8>, String> = CompositeHashSpace{
             serializer: Rc::new( SerdeJsonSerializer::new() ),
             hasher:     Box::new( MultiHasher{hash_algorithm: multihash::Hash::Keccak512} ),
             storage:    Box::new(store) };
