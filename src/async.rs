@@ -75,8 +75,8 @@ pub trait KeyValueStore
 pub struct CompositeHashSpace<Obj>
 {
     serializer: Rc< Serializer<ObjectType=Obj, SerializedType=DefaultSerializedType> >,
-    hasher:     Rc< Hasher<SerializedType=DefaultSerializedType, HashType=DefaultHashType> >,
-    storage:    Rc< KeyValueStore<KeyType=DefaultHashType, ValueType=DefaultSerializedType> >,
+    hasher:     Box< Hasher<SerializedType=DefaultSerializedType, HashType=DefaultHashType> >,
+    storage:    Box< KeyValueStore<KeyType=DefaultHashType, ValueType=DefaultSerializedType> >,
 }
 
 
@@ -91,14 +91,14 @@ for CompositeHashSpace<Obj>
     fn store(&mut self, object: Self::ObjectType)
         -> Box< Future<Item=Self::HashType, Error=HashSpaceError> >
     {
-        let mut storage_rc_clone = self.storage.clone();
-        let storage_opt = Rc::get_mut(&mut storage_rc_clone);
-        let storage_res = storage_opt.ok_or( HashSpaceError::Other(
-            Box::new( io::Error::new(io::ErrorKind::PermissionDenied, "Implementation error: could not get access to Rc") ) ) );
-        let storage = match storage_res {
-            Err(e)  => return Box::new( future::err(e) ),
-            Ok(val) => val,
-        };
+//        let mut storage_rc_clone = self.storage.clone();
+//        let storage_opt = Rc::get_mut(&mut storage_rc_clone);
+//        let storage_res = storage_opt.ok_or( HashSpaceError::Other(
+//            Box::new( io::Error::new(io::ErrorKind::PermissionDenied, "Implementation error: could not get access to Rc") ) ) );
+//        let storage = match storage_res {
+//            Err(e)  => return Box::new( future::err(e) ),
+//            Ok(val) => val,
+//        };
 
         let hash_result = self.serializer.serialize(&object)
             .map_err( |e| HashSpaceError::SerializerError(e) )
@@ -108,14 +108,14 @@ for CompositeHashSpace<Obj>
                     .map_err( |e| HashSpaceError::HashError(e) )
             );
 
-        match hash_result {
-            Err(e) => Box::new( future::err(e) ),
-            Ok( (serialized_obj, obj_hash) ) => {
-                Box::new( storage.store( obj_hash.clone(), serialized_obj )
-                    .map( |_| obj_hash )
-                    .map_err( |e| HashSpaceError::StorageError(e) ) )
-            }
-        }
+        if let Err(e) = hash_result
+            { return Box::new( future::err(e) ); }
+        let (serialized_obj, obj_hash) = hash_result.unwrap();
+
+        let result = self.storage.store( obj_hash.clone(), serialized_obj )
+            .map( |_| obj_hash )
+            .map_err( |e| HashSpaceError::StorageError(e) );
+        Box::new(result)
     }
 
     fn resolve(&self, hash: Self::HashType)
@@ -352,12 +352,11 @@ mod tests
         let store: InMemoryStore<String, Vec<u8>> = InMemoryStore::new();
         let mut hashspace: CompositeHashSpace<Person> = CompositeHashSpace{
             serializer: Rc::new( SerdeJsonSerializer::new() ),
-            hasher:     Rc::new( MultiHasher{hash_algorithm: multihash::Hash::Keccak512} ),
-            storage:    Rc::new(store) };
+            hasher:     Box::new( MultiHasher{hash_algorithm: multihash::Hash::Keccak512} ),
+            storage:    Box::new(store) };
 
         let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
         let store_res = hashspace.store( object.clone() ).wait();
-    println!("{:?}", store_res);
         assert!( store_res.is_ok() );
         let hash = store_res.unwrap();
         let lookup_res = hashspace.resolve( hash.clone() ).wait();
