@@ -13,6 +13,8 @@ pub trait Serializer<ObjectType, SerializedType>
 
 pub trait Hasher<ObjectType, HashType>
 {
+    // TODO should (maybe in a different trait?) differentiate between
+    //      calculated binary hash and its multibase string representation
     fn get_hash(&self, object: &ObjectType) -> Result<HashType, HashError>;
     fn validate(&self, object: &ObjectType, hash: &HashType) -> Result<bool, HashError>;
 }
@@ -47,8 +49,7 @@ impl MultiHasher
     fn get_hash_string(&self, data: &Vec<u8>) -> Result<String, HashError>
     {
         self.get_hash_bytes(&data)
-            // TODO this should use something like a "multibase" lib, similar to multihash
-            .map( |bytes| base64::encode(&bytes) )
+            .map( |bytes| multibase::encode(multibase::Base64, &bytes) )
     }
 }
 
@@ -59,11 +60,11 @@ impl MultiHasher
 //
 //    fn validate(&self, data: &Vec<u8>, expected_hash: &Vec<u8>) -> Result<bool, HashError>
 //    {
-//        //        // TODO should we do this here or just drop this step and check hash equality?
-//        //        let decode_result = decode(expected_hash)
-//        //            .map_err(MultiHasher::to_hasher_error)?;
-//        //        if decode_result.alg != self.hash_algorithm
-//        //            { return Err(HashError::UnsupportedType); }
+//        // TODO should we do this here or just drop this step and check hash equality?
+//        let decode_result = decode(expected_hash)
+//            .map_err(MultiHasher::to_hasher_error)?;
+//        if decode_result.alg != self.hash_algorithm
+//            { return Err(HashError::UnsupportedType); }
 //
 //        let calculated_hash = self.get_hash_bytes(&data)?;
 //        Ok(*expected_hash == calculated_hash)
@@ -77,11 +78,11 @@ impl Hasher<Vec<u8>, String> for MultiHasher
 
     fn validate(&self, data: &Vec<u8>, expected_hash: &String) -> Result<bool, HashError>
     {
-        //        // TODO should we do this here or just drop this step and check hash equality?
-        //        let decode_result = decode(expected_hash)
-        //            .map_err(MultiHasher::to_hasher_error)?;
-        //        if decode_result.alg != self.hash_algorithm
-        //            { return Err(HashError::UnsupportedType); }
+//        // TODO should we do this here or just drop this step and check hash equality?
+//        let decode_result = decode(expected_hash)
+//            .map_err(MultiHasher::to_hasher_error)?;
+//        if decode_result.alg != self.hash_algorithm
+//            { return Err(HashError::UnsupportedType); }
 
         let calculated_hash = self.get_hash_string(&data)?;
         Ok(*expected_hash == calculated_hash)

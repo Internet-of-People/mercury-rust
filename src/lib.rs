@@ -1,5 +1,6 @@
 extern crate base64;
 extern crate futures;
+extern crate multibase;
 extern crate multihash;
 extern crate serde;
 extern crate serde_json;
