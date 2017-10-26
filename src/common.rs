@@ -154,7 +154,7 @@ mod tests
     fn test_hasher()
     {
         let ser_obj = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
-        let hasher = MultiHasher{hash_algorithm: multihash::Hash::Keccak256};
+        let hasher = MultiHasher::new(multihash::Hash::Keccak256);
         let hash = hasher.get_hash(&ser_obj);
         assert!( hash.is_ok() );
         let valid = hasher.validate( &ser_obj, &hash.unwrap() );
