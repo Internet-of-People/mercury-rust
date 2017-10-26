@@ -53,15 +53,12 @@ pub trait Hasher<SerializedType, HashType>
         -> Result<bool, HashError>;
 }
 
-pub trait KeyValueStore
+pub trait KeyValueStore<KeyType, ValueType>
 {
-    type KeyType; // = DefaultHashType;
-    type ValueType; // = DefaultSerializedType;
-
-    fn store(&mut self, key: Self::KeyType, object: Self::ValueType)
+    fn store(&mut self, key: KeyType, object: ValueType)
         -> Box< Future<Item=(), Error=StorageError> >;
-    fn lookup(&self, key: Self::KeyType)
-        -> Box< Future<Item=Self::ValueType, Error=StorageError> >;
+    fn lookup(&self, key: KeyType)
+        -> Box< Future<Item=ValueType, Error=StorageError> >;
 }
 
 
@@ -70,7 +67,7 @@ pub struct CompositeHashSpace<ObjectType>
 {
     serializer: Rc< Serializer<ObjectType, DefaultSerializedType> >,
     hasher:     Box< Hasher<DefaultSerializedType, DefaultHashType> >,
-    storage:    Box< KeyValueStore<KeyType=DefaultHashType, ValueType=DefaultSerializedType> >,
+    storage:    Box< KeyValueStore<DefaultHashType, DefaultSerializedType> >,
 }
 
 
@@ -245,14 +242,11 @@ impl<KeyType, ValueType> InMemoryStore<KeyType, ValueType>
 }
 
 impl<KeyType, ValueType>
-KeyValueStore
+KeyValueStore<KeyType, ValueType>
 for InMemoryStore<KeyType, ValueType>
     where KeyType: Eq + Hash + Clone,
           ValueType: Clone + 'static
 {
-    type KeyType = KeyType;
-    type ValueType = ValueType;
-
     fn store(&mut self, key: KeyType, object: ValueType)
         -> Box< Future<Item=(), Error=StorageError> >
     {
