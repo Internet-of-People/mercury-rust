@@ -4,6 +4,8 @@ use std::rc::Rc;
 
 use futures::prelude::*;
 use futures::future;
+use tokio_core::reactor;
+use tokio_postgres;
 
 use common::*;
 use error::*;
@@ -127,6 +129,52 @@ for InMemoryStore<KeyType, ValueType>
 
 
 
+struct PostgresStore
+{
+    reactor_handle: reactor::Handle,
+    postgres_url:   String,
+}
+
+impl PostgresStore
+{
+    fn new(reactor_handle: &reactor::Handle, postgres_url: &str) -> Self
+    {
+        Self{ reactor_handle: reactor_handle.clone(),
+              postgres_url:   postgres_url.to_string() }
+    }
+
+    fn connect(&self) -> Box< Future<Item=tokio_postgres::Connection, Error=tokio_postgres::Error> >
+    {
+        tokio_postgres::Connection::connect( self.postgres_url.as_str(),
+            tokio_postgres::TlsMode::None, &self.reactor_handle)
+    }
+}
+
+impl KeyValueStore<String, Vec<u8>> for PostgresStore
+{
+    fn store(&mut self, key: String, object: Vec<u8>)
+        -> Box< Future<Item=(), Error=StorageError> >
+    {
+        let result = self.connect()
+            .then( |conn| {
+                conn.expect("Connection to database failed")
+                    .prepare("SELECT todo FROM todo") // TODO implement SQL query
+            } )
+            .map( |_| () )
+            .map_err( |(e,c)| StorageError::Other( Box::new(e) ) );
+        Box::new(result)
+    }
+
+    fn lookup(&self, key: String)
+        -> Box< Future<Item=Vec<u8>, Error=StorageError> >
+    {
+        //TODO
+        Box::new( future::err(StorageError::InvalidKey) )
+    }
+}
+
+
+
 #[cfg(test)]
 mod tests
 {
@@ -153,6 +201,8 @@ mod tests
     #[test]
     fn test_storage()
     {
+        // NOTE this works without a tokio::reactor::Core only because
+        //      the storage always returns an already completed future::ok/err result
         let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
         let hash = "key".to_string();
         let mut storage: InMemoryStore<String,Person> = InMemoryStore::new();
@@ -167,6 +217,8 @@ mod tests
     #[test]
     fn test_hashspace()
     {
+        // NOTE this works without a tokio::reactor::Core only because
+        //      all plugins always return an already completed ok/err result
         let store: InMemoryStore<String, Vec<u8>> = InMemoryStore::new();
         let mut hashspace: CompositeHashSpace<Person, Vec<u8>, String> = CompositeHashSpace{
             serializer: Rc::new( SerdeJsonSerializer{} ),

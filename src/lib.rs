@@ -5,6 +5,7 @@ extern crate multihash;
 extern crate serde;
 extern crate serde_json;
 extern crate tokio_core;
+extern crate tokio_postgres;
 
 #[macro_use]
 extern crate serde_derive;
