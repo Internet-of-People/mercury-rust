@@ -23,7 +23,7 @@ impl Error for HashError {
             HashError::UnsupportedType  => "This type is not supported yet",
             HashError::BadInputLength   => "Not matching input length",
             HashError::UnknownCode      => "Found unknown code",
-            HashError::Other(ref err)   => err.description(),
+            HashError::Other(ref e)     => e.description(),
         }
     }
 }
@@ -46,9 +46,9 @@ impl fmt::Display for SerializerError {
 impl Error for SerializerError {
     fn description(&self) -> &str {
         match *self {
-            SerializerError::SerializationError(ref err)    => err.description(),
-            SerializerError::DeserializationError(ref err)  => err.description(),
-            SerializerError::Other(ref err)                 => err.description(),
+            SerializerError::SerializationError(ref e)      => e.description(),
+            SerializerError::DeserializationError(ref e)    => e.description(),
+            SerializerError::Other(ref e)                   => e.description(),
         }
     }
 }
@@ -73,7 +73,28 @@ impl Error for StorageError {
         match *self {
             StorageError::OutOfDiskSpace    => "Run out of disk space",
             StorageError::InvalidKey        => "The given key holds no value",
-            StorageError::Other(ref err)    => err.description(),
+            StorageError::Other(ref e)      => e.description(),
+        }
+    }
+}
+
+
+
+#[derive(Debug)]
+pub enum StringCoderError {
+    Other(Box<Error>),
+}
+
+impl fmt::Display for StringCoderError {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        f.write_str( Error::description(self) )
+    }
+}
+
+impl Error for StringCoderError {
+    fn description(&self) -> &str {
+        match *self {
+            StringCoderError::Other(ref e) => e.description(),
         }
     }
 }
@@ -85,6 +106,7 @@ pub enum HashSpaceError {
     SerializerError(SerializerError),
     HashError(HashError),
     StorageError(StorageError),
+    StringCoderError(StringCoderError),
     Other(Box<Error>),
 }
 
@@ -100,7 +122,8 @@ impl Error for HashSpaceError {
             HashSpaceError::SerializerError(ref e)  => e.description(),
             HashSpaceError::HashError(ref e)        => e.description(),
             HashSpaceError::StorageError(ref e)     => e.description(),
-            HashSpaceError::Other(ref err)          => err.description(),
+            HashSpaceError::StringCoderError(ref e) => e.description(),
+            HashSpaceError::Other(ref e)            => e.description(),
         }
     }
 }
