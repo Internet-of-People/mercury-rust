@@ -1,5 +1,5 @@
-extern crate base64;
 extern crate futures;
+extern crate futures_state_stream;
 extern crate multibase;
 extern crate multihash;
 extern crate serde;

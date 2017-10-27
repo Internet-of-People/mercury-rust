@@ -4,6 +4,8 @@ use std::rc::Rc;
 
 use futures::prelude::*;
 use futures::future;
+use futures_state_stream::StateStream;
+use multibase;
 use tokio_core::reactor;
 use tokio_postgres;
 
@@ -26,7 +28,7 @@ pub trait HashSpace<ObjectType>
 pub trait KeyValueStore<KeyType, ValueType>
 {
     // TODO maybe it would be enough to use references instead of consuming params
-    fn store(&mut self, key: KeyType, object: ValueType)
+    fn store(&mut self, key: KeyType, value: ValueType)
         -> Box< Future<Item=(), Error=StorageError> >;
     fn lookup(&self, key: KeyType)
         -> Box< Future<Item=ValueType, Error=StorageError> >;
@@ -189,26 +191,48 @@ impl PostgresStore
     }
 }
 
-impl KeyValueStore<String, Vec<u8>> for PostgresStore
+impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
 {
-    fn store(&mut self, key: String, object: Vec<u8>)
+    fn store(&mut self, key: Vec<u8>, value: Vec<u8>)
         -> Box< Future<Item=(), Error=StorageError> >
     {
+        let key_str = multibase::encode(multibase::Base64, &key);
         let result = self.connect()
             .then( |conn| {
                 conn.expect("Connection to database failed")
-                    .prepare("SELECT todo FROM todo") // TODO implement SQL query
+                    // TODO parameterize table name (and maybe schema?)
+                    .prepare("INSERT INTO entries (key, value) VALUES ($1, $2)")
             } )
-            .map( |_| () )
-            .map_err( |(e,c)| StorageError::Other( Box::new(e) ) );
+            .and_then( move |(stmt, conn)| {
+                conn.execute(&stmt, &[&key_str, &value])
+            } )
+            .map_err( |(e,_conn)| StorageError::Other( Box::new(e) ) )
+            .map( |_exec_res| () );
         Box::new(result)
     }
 
-    fn lookup(&self, key: String)
+    fn lookup(&self, key: Vec<u8>)
         -> Box< Future<Item=Vec<u8>, Error=StorageError> >
     {
-        //TODO
-        Box::new( future::err(StorageError::InvalidKey) )
+        let key_str = multibase::encode(multibase::Base64, &key);
+        let result = self.connect()
+            .then( |conn| {
+                conn.expect("Connection to database failed")
+                    // TODO parameterize table name (and maybe schema?)
+                    .prepare("SELECT key, value FROM entries WHERE key=$1")
+            } )
+            .and_then( move |(stmt, conn)|
+                conn.query(&stmt, &[&key_str])
+                    .map( |row| {
+                        let value: Vec<u8> = row.get(0);
+                        value
+                    } )
+                    .collect()
+                    .map( |(vec,_state)| vec.concat() )
+            )
+            .map_err( |(e,_conn)| StorageError::Other( Box::new(e) ) );
+        
+        Box::new(result)
     }
 }
 
