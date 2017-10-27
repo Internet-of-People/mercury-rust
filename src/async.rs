@@ -12,19 +12,20 @@ use error::*;
 
 
 
-pub trait HashSpace<ObjectType, HashType>
+pub trait HashSpace<ObjectType>
 {
     fn store(&mut self, object: ObjectType)
-        -> Box< Future<Item=HashType, Error=HashSpaceError> >;
-    fn resolve(&self, hash: HashType)
+        -> Box< Future<Item=String, Error=HashSpaceError> >;
+    fn resolve(&self, hash: &str)
         -> Box< Future<Item=ObjectType, Error=HashSpaceError> >;
-    fn validate(&self, object: &ObjectType, hash: &HashType)
+    fn validate(&self, object: &ObjectType, hash: &str)
         -> Box< Future<Item=bool, Error=HashSpaceError> >;
 }
 
 
 pub trait KeyValueStore<KeyType, ValueType>
 {
+    // TODO maybe it would be enough to use references instead of consuming params
     fn store(&mut self, key: KeyType, object: ValueType)
         -> Box< Future<Item=(), Error=StorageError> >;
     fn lookup(&self, key: KeyType)
@@ -38,17 +39,46 @@ pub struct CompositeHashSpace<ObjectType, SerializedType, HashType>
     serializer: Rc< Serializer<ObjectType, SerializedType> >,
     hasher:     Box< Hasher<SerializedType, HashType> >,
     storage:    Box< KeyValueStore<HashType, SerializedType> >,
+    str_coder:  Box< StringCoder<HashType> >,
 }
 
 
-impl<ObjectType: 'static, SerializedType: 'static, HashType: Clone + 'static>
-HashSpace<ObjectType, HashType>
+impl<ObjectType, SerializedType, HashType>
+CompositeHashSpace<ObjectType, SerializedType, HashType>
+{
+    pub fn new( serializer: Rc< Serializer<ObjectType, SerializedType> >,
+                hasher:     Box< Hasher<SerializedType, HashType> >,
+                storage:    Box< KeyValueStore<HashType, SerializedType> >,
+                str_coder:  Box< StringCoder<HashType> > ) -> Self
+    {
+        Self{ serializer:   serializer,
+              hasher:       hasher,
+              storage:      storage,
+              str_coder:    str_coder, }
+    }
+
+    fn sync_validate(&self, object: &ObjectType, hash_str: &str)
+        -> Result<bool, HashSpaceError>
+    {
+        let hash_bytes = self.str_coder.decode(&hash_str)
+            .map_err( |e| HashSpaceError::StringCoderError(e) )?;
+        let serialized_obj = self.serializer.serialize(&object)
+            .map_err( |e| HashSpaceError::SerializerError(e) )?;
+        let valid = self.hasher.validate(&serialized_obj, &hash_bytes)
+            .map_err( |e| HashSpaceError::HashError(e) )?;
+        Ok(valid)
+    }
+}
+
+
+impl<ObjectType: 'static, SerializedType: 'static, HashType: 'static>
+HashSpace<ObjectType>
 for CompositeHashSpace<ObjectType, SerializedType, HashType>
 {
     fn store(&mut self, object: ObjectType)
-        -> Box< Future<Item=HashType, Error=HashSpaceError> >
+        -> Box< Future<Item=String, Error=HashSpaceError> >
     {
-        let hash_result = self.serializer.serialize(&object)
+        let hash_bytes_result = self.serializer.serialize(&object)
             .map_err( |e| HashSpaceError::SerializerError(e) )
             .and_then( |serialized_obj|
                 self.hasher.get_hash(&serialized_obj)
@@ -56,21 +86,35 @@ for CompositeHashSpace<ObjectType, SerializedType, HashType>
                     .map_err( |e| HashSpaceError::HashError(e) )
             );
 
-        if let Err(e) = hash_result
+        if let Err(e) = hash_bytes_result
             { return Box::new( future::err(e) ); }
-        let (serialized_obj, obj_hash) = hash_result.unwrap();
+        let (serialized_obj, hash_bytes) = hash_bytes_result.unwrap();
 
-        let result = self.storage.store( obj_hash.clone(), serialized_obj )
-            .map( |_| obj_hash )
+        let hash_str_result = self.str_coder.encode(&hash_bytes)
+            .map_err( |e| HashSpaceError::StringCoderError(e) );
+        if let Err(e) = hash_str_result
+            { return Box::new( future::err(e) ); }
+        let hash_str = hash_str_result.unwrap();
+
+        let result = self.storage.store( hash_bytes, serialized_obj )
+            .map( |_| hash_str )
             .map_err( |e| HashSpaceError::StorageError(e) );
         Box::new(result)
     }
 
-    fn resolve(&self, hash: HashType)
+    fn resolve(&self, hash_str: &str)
         -> Box< Future<Item=ObjectType, Error=HashSpaceError> >
     {
+        let hash_bytes_result = self.str_coder.decode(&hash_str)
+            .map_err( |e| HashSpaceError::StringCoderError(e) );
+        let hash_bytes = match hash_bytes_result {
+            Err(e)  => return Box::new( future::err(e) ),
+            Ok(val) => val,
+        };
+
+        // TODO call validate for (serialized_obj,hash_bytes) after load
         let serializer_clone = self.serializer.clone();
-        let result = self.storage.lookup(hash)
+        let result = self.storage.lookup(hash_bytes)
             .map_err( |e| HashSpaceError::StorageError(e) )
             .and_then( move |serialized_obj|
                 serializer_clone.deserialize(&serialized_obj)
@@ -78,15 +122,10 @@ for CompositeHashSpace<ObjectType, SerializedType, HashType>
         Box::new(result)
     }
 
-    fn validate(&self, object: &ObjectType, hash: &HashType)
+    fn validate(&self, object: &ObjectType, hash_str: &str)
         -> Box< Future<Item=bool, Error=HashSpaceError> >
     {
-        let valid = self.serializer.serialize(&object)
-            .map_err( |e| HashSpaceError::SerializerError(e) )
-            .and_then( |serialized_obj|
-                self.hasher.validate(&serialized_obj, &hash)
-                    .map_err( |e| HashSpaceError::HashError(e) ) );
-        Box::new( future::result(valid) )
+        Box::new( future::result(self.sync_validate(&object, &hash_str) ) )
     }
 }
 
@@ -219,17 +258,18 @@ mod tests
     {
         // NOTE this works without a tokio::reactor::Core only because
         //      all plugins always return an already completed ok/err result
-        let store: InMemoryStore<String, Vec<u8>> = InMemoryStore::new();
-        let mut hashspace: CompositeHashSpace<Person, Vec<u8>, String> = CompositeHashSpace{
-            serializer: Rc::new( SerdeJsonSerializer{} ),
-            hasher:     Box::new( MultiHasher::new(multihash::Hash::Keccak512) ),
-            storage:    Box::new(store) };
+        let store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
+        let mut hashspace: CompositeHashSpace<Person, Vec<u8>, Vec<u8>> = CompositeHashSpace::new(
+            Rc::new( SerdeJsonSerializer{} ),
+            Box::new( MultiHasher::new(multihash::Hash::Keccak512) ),
+            Box::new(store),
+            Box::new( MultiBaseStringCoder::new(multibase::Base64) ) );
 
         let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
         let store_res = hashspace.store( object.clone() ).wait();
         assert!( store_res.is_ok() );
         let hash = store_res.unwrap();
-        let lookup_res = hashspace.resolve( hash.clone() ).wait();
+        let lookup_res = hashspace.resolve(&hash).wait();
         assert!( lookup_res.is_ok() );
         assert_eq!( lookup_res.unwrap(), object );
         let validate_res = hashspace.validate(&object, &hash).wait();
