@@ -174,20 +174,33 @@ struct PostgresStore
 {
     reactor_handle: reactor::Handle,
     postgres_url:   String,
+    table:          String,
+    key_col:        String,
+    value_col:      String,
 }
 
 impl PostgresStore
 {
-    fn new(reactor_handle: &reactor::Handle, postgres_url: &str) -> Self
+    fn new(reactor_handle: &reactor::Handle, postgres_url: &str,
+           table: &str, key_col: &str, value_col: &str) -> Self
     {
-        Self{ reactor_handle: reactor_handle.clone(),
-              postgres_url:   postgres_url.to_string() }
+        Self{ reactor_handle:   reactor_handle.clone(),
+              postgres_url:     postgres_url.to_string(),
+              table:            table.to_string(),
+              key_col:          key_col.to_string(),
+              value_col:        value_col.to_string(), }
     }
 
-    fn connect(&self) -> Box< Future<Item=tokio_postgres::Connection, Error=tokio_postgres::Error> >
+    fn prepare(&self, sql_statement: String)
+        -> Box< Future<Item=(tokio_postgres::stmt::Statement,tokio_postgres::Connection), Error=(tokio_postgres::Error,tokio_postgres::Connection)> >
     {
-        tokio_postgres::Connection::connect( self.postgres_url.as_str(),
-            tokio_postgres::TlsMode::None, &self.reactor_handle)
+        let result = tokio_postgres::Connection::connect( self.postgres_url.as_str(),
+                tokio_postgres::TlsMode::None, &self.reactor_handle)
+            .then( move |conn| {
+                conn.expect("Connection to database failed")
+                    .prepare(&sql_statement)
+            } );
+        Box::new(result)
     }
 }
 
@@ -197,12 +210,10 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
         -> Box< Future<Item=(), Error=StorageError> >
     {
         let key_str = multibase::encode(multibase::Base64, &key);
-        let result = self.connect()
-            .then( |conn| {
-                conn.expect("Connection to database failed")
-                    // TODO parameterize table name (and maybe schema?)
-                    .prepare("INSERT INTO entries (key, value) VALUES ($1, $2)")
-            } )
+        // TODO parameterize table name (and maybe schema?)
+        let sql = format!("INSERT INTO {0} ({1}, {2}) VALUES ($1, $2)",
+            self.table, self.key_col, self.value_col);
+        let result = self.prepare(sql)
             .and_then( move |(stmt, conn)| {
                 conn.execute(&stmt, &[&key_str, &value])
             } )
@@ -215,23 +226,23 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
         -> Box< Future<Item=Vec<u8>, Error=StorageError> >
     {
         let key_str = multibase::encode(multibase::Base64, &key);
-        let result = self.connect()
-            .then( |conn| {
-                conn.expect("Connection to database failed")
-                    // TODO parameterize table name (and maybe schema?)
-                    .prepare("SELECT key, value FROM entries WHERE key=$1")
-            } )
+        // TODO parameterize table name (and maybe schema?)
+        let sql = format!("SELECT {1}, {2} FROM {0} WHERE {1}=$1",
+            self.table, self.key_col, self.value_col);
+        let result = self.prepare( sql.to_string() )
             .and_then( move |(stmt, conn)|
                 conn.query(&stmt, &[&key_str])
                     .map( |row| {
-                        let value: Vec<u8> = row.get(0);
+                        let value: Vec<u8> = row.get(1);
                         value
                     } )
                     .collect()
+                    // TODO reducing resulsts by concatenating provides bad results
+                    //      if multiple rows are found in the result set
                     .map( |(vec,_state)| vec.concat() )
             )
             .map_err( |(e,_conn)| StorageError::Other( Box::new(e) ) );
-        
+
         Box::new(result)
     }
 }
@@ -245,7 +256,7 @@ mod tests
 //    use std::time::Duration;
 
 //    use futures::sync::oneshot;
-//    use tokio_core::reactor;
+    use tokio_core::reactor;
 
     use super::*;
     use super::super::*;
@@ -262,7 +273,7 @@ mod tests
 
 
     #[test]
-    fn test_storage()
+    fn test_inmemory_storage()
     {
         // NOTE this works without a tokio::reactor::Core only because
         //      the storage always returns an already completed future::ok/err result
@@ -299,6 +310,31 @@ mod tests
         let validate_res = hashspace.validate(&object, &hash).wait();
         assert!( validate_res.is_ok() );
         assert!( validate_res.unwrap() );
+    }
+
+
+    #[test]
+    fn test_postgres_storage()
+    {
+        // TODO consider if these should also use assert!() calls instead of expect/unwrap
+        let mut reactor = reactor::Core::new()
+            .expect("Failed to initialize the reactor event loop");
+
+        let key = b"key".to_vec();
+        let value = b"value".to_vec();
+        let mut storage = PostgresStore::new(
+            &reactor.handle(), "postgresql://testuser:testpass@localhost/testdb",
+            "StorageTest", "key", "data");
+
+        let store_future = storage.store( key.clone(), value.clone() );
+        let store_res = reactor.run(store_future);
+println!("{:?}", store_res);
+        assert!( store_res.is_ok() );
+
+        let lookup_future = storage.lookup(key);
+        let lookup_res = reactor.run(lookup_future);
+        assert!( lookup_res.is_ok() );
+        assert_eq!( lookup_res.unwrap(), value );
     }
 
 

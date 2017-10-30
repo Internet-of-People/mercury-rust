@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS StorageTest
+(
+    id   BIGSERIAL  PRIMARY KEY,
+    key  TEXT       UNIQUE NOT NULL,
+    data BYTEA      NOT NULL
+);
