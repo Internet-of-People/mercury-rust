@@ -170,7 +170,7 @@ for InMemoryStore<KeyType, ValueType>
 
 
 
-struct PostgresStore
+pub struct PostgresStore
 {
     reactor_handle: reactor::Handle,
     postgres_url:   String,
@@ -181,8 +181,8 @@ struct PostgresStore
 
 impl PostgresStore
 {
-    fn new(reactor_handle: &reactor::Handle, postgres_url: &str,
-           table: &str, key_col: &str, value_col: &str) -> Self
+    pub fn new(reactor_handle: &reactor::Handle, postgres_url: &str,
+               table: &str, key_col: &str, value_col: &str) -> Self
     {
         Self{ reactor_handle:   reactor_handle.clone(),
               postgres_url:     postgres_url.to_string(),
@@ -210,7 +210,6 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
         -> Box< Future<Item=(), Error=StorageError> >
     {
         let key_str = multibase::encode(multibase::Base64, &key);
-        // TODO parameterize table name (and maybe schema?)
         let sql = format!("INSERT INTO {0} ({1}, {2}) VALUES ($1, $2)",
             self.table, self.key_col, self.value_col);
         let result = self.prepare(sql)
@@ -226,7 +225,6 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
         -> Box< Future<Item=Vec<u8>, Error=StorageError> >
     {
         let key_str = multibase::encode(multibase::Base64, &key);
-        // TODO parameterize table name (and maybe schema?)
         let sql = format!("SELECT {1}, {2} FROM {0} WHERE {1}=$1",
             self.table, self.key_col, self.value_col);
         let result = self.prepare( sql.to_string() )
@@ -252,10 +250,6 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
 #[cfg(test)]
 mod tests
 {
-//    use std::thread;
-//    use std::time::Duration;
-
-//    use futures::sync::oneshot;
     use tokio_core::reactor;
 
     use super::*;
@@ -320,15 +314,14 @@ mod tests
         let mut reactor = reactor::Core::new()
             .expect("Failed to initialize the reactor event loop");
 
+        let postgres_url = "postgresql://testuser:testpass@postgres/testdb";
+        let mut storage = PostgresStore::new( &reactor.handle(),
+            postgres_url, "StorageTest", "key", "data");
+
         let key = b"key".to_vec();
         let value = b"value".to_vec();
-        let mut storage = PostgresStore::new(
-            &reactor.handle(), "postgresql://testuser:testpass@localhost/testdb",
-            "StorageTest", "key", "data");
-
         let store_future = storage.store( key.clone(), value.clone() );
         let store_res = reactor.run(store_future);
-println!("{:?}", store_res);
         assert!( store_res.is_ok() );
 
         let lookup_future = storage.lookup(key);
@@ -336,28 +329,4 @@ println!("{:?}", store_res);
         assert!( lookup_res.is_ok() );
         assert_eq!( lookup_res.unwrap(), value );
     }
-
-
-
-//    fn start_reactor_thread() -> reactor::Remote
-//    {
-//        // Run a separate db event loop for potentially long running blocking operations
-//        let (sender, receiver) = oneshot::channel();
-//
-//        thread::spawn( ||
-//        {
-//            // TODO consider if these should also use assert!() calls instead of expect/unwrap
-//            let mut reactor = reactor::Core::new()
-//                .expect("Failed to initialize the reactor event loop");
-//            // Leak out reactor remote handler to be able to spawn tasks for it from the server
-//            sender.send( reactor.remote() ).unwrap();
-//
-//            let timeout = Duration::from_secs(1);
-//            loop { reactor.turn( Some(timeout) ); }
-//        } );
-//
-//        let reactor_proxy = receiver.wait()
-//            .expect("Error implementing db event loop initialization");
-//        reactor_proxy
-//    }
 }

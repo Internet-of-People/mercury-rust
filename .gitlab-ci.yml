@@ -5,7 +5,7 @@
 # Unofficial language image. Look for the different tagged releases at:
 # https://hub.docker.com/r/scorpil/rust/tags/
 # image: "scorpil/rust:stable"
-image: "scorpil/rust:1.20"
+image: "rust"
 
 # Optional: Pick zero or more services to be used on all builds.
 # Only needed when using a docker container to run your tests in.
