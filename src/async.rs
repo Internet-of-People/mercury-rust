@@ -316,17 +316,17 @@ mod tests
 
         let postgres_url = "postgresql://testuser:testpass@postgres/testdb";
         let mut storage = PostgresStore::new( &reactor.handle(),
-            postgres_url, "StorageTest", "key", "data");
+            postgres_url, "storagetest", "key", "data");
 
         let key = b"key".to_vec();
         let value = b"value".to_vec();
         let store_future = storage.store( key.clone(), value.clone() );
         let store_res = reactor.run(store_future);
-        assert!( store_res.is_ok(), "result={:?}", store_res );
+        assert!( store_res.is_ok(), "store failed with {:?}", store_res );
 
         let lookup_future = storage.lookup(key);
         let lookup_res = reactor.run(lookup_future);
-        assert!( lookup_res.is_ok(), "{:?}", lookup_res );
+        assert!( lookup_res.is_ok(), "lookup failed with {:?}", lookup_res );
         assert_eq!( lookup_res.unwrap(), value );
     }
 }
