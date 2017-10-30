@@ -322,11 +322,11 @@ mod tests
         let value = b"value".to_vec();
         let store_future = storage.store( key.clone(), value.clone() );
         let store_res = reactor.run(store_future);
-        assert!( store_res.is_ok() );
+        assert!( store_res.is_ok(), "result={:?}", store_res );
 
         let lookup_future = storage.lookup(key);
         let lookup_res = reactor.run(lookup_future);
-        assert!( lookup_res.is_ok() );
+        assert!( lookup_res.is_ok(), "{:?}", lookup_res );
         assert_eq!( lookup_res.unwrap(), value );
     }
 }
