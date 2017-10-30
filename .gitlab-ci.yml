@@ -35,6 +35,7 @@ test:cargo:
   - du -hs target || true
   - du -hs cargo || true
   - rustc --version && cargo --version      # Print version info for debugging
+  - ./test/createdb.sh
   - time cargo test --verbose --jobs 1 --release # Don't paralize to make errors more readable
   cache:
     paths:
