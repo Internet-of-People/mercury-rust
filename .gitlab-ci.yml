@@ -4,15 +4,16 @@
 # This file is a template, and might need editing before it works on your project.
 # Unofficial language image. Look for the different tagged releases at:
 # https://hub.docker.com/r/scorpil/rust/tags/
-image: "scorpil/rust:stable"
+# image: "scorpil/rust:stable"
+image: "scorpil/rust:1.20"
 
 # Optional: Pick zero or more services to be used on all builds.
 # Only needed when using a docker container to run your tests in.
 # Check out: http://docs.gitlab.com/ce/ci/docker/using_docker_images.html#what-is-a-service
-#services:
+services:
+  - postgres:latest
 #  - mysql:latest
 #  - redis:latest
-#  - postgres:latest
 
 # Optional: Install a C compiler, cmake and git into the container.
 # You will often need this when you (or any of your dependencies) depends on C code.
@@ -24,6 +25,9 @@ image: "scorpil/rust:stable"
 # To ensure that dependencies are cached correctly
 variables:
   CARGO_HOME: $CI_PROJECT_DIR/cargo
+  POSTGRES_DB: testdb
+  POSTGRES_USER: testuser
+  POSTGRES_PASSWORD: testpass
 
 # Use cargo to test the project
 test:cargo:
