@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use super::*;
 use error::*;
 
@@ -24,6 +26,31 @@ pub trait StringCoder<HashType>
     fn encode(&self, hash_bytes: &HashType) -> Result<String, StringCoderError>;
     fn decode(&self, hash_str: &str) -> Result<HashType, StringCoderError>;
 }
+
+
+
+//enum StorageId
+//{
+//    // TODO consider possible values
+//    InMemoryStorage,
+//    PostgresStorage,
+//    IpfsStorage,
+//    StoreJStorage,
+//}
+//
+//pub trait HashSpaceLink
+//{
+//    fn hash(&self) -> &[u8];
+//    fn storage(&self) -> StorageId;
+//}
+//
+//pub trait HashSpaceData
+//{
+//    fn size(&self) -> u64;
+//    fn hash(&self) -> &[u8];
+//    fn data(&self) -> &[u8];
+//    fn links(&self) -> HashMap<String,HashSpaceLink>;
+//}
 
 
 
