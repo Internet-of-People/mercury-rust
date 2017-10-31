@@ -11,7 +11,7 @@ image: "rust"
 # Only needed when using a docker container to run your tests in.
 # Check out: http://docs.gitlab.com/ce/ci/docker/using_docker_images.html#what-is-a-service
 services:
-  - postgres:latest
+  - postgres:alpine
 #  - mysql:latest
 #  - redis:latest
 
