@@ -39,7 +39,7 @@ pub trait KeyValueStore<KeyType, ValueType>
 pub struct CompositeHashSpace<ObjectType, SerializedType, HashType>
 {
     serializer: Rc< Serializer<ObjectType, SerializedType> >,
-    hasher:     Box< Hasher<SerializedType, HashType> >,
+    hasher:     Rc< Hasher<SerializedType, HashType> >,
     storage:    Box< KeyValueStore<HashType, SerializedType> >,
     str_coder:  Box< StringCoder<HashType> >,
 }
@@ -49,7 +49,7 @@ impl<ObjectType, SerializedType, HashType>
 CompositeHashSpace<ObjectType, SerializedType, HashType>
 {
     pub fn new( serializer: Rc< Serializer<ObjectType, SerializedType> >,
-                hasher:     Box< Hasher<SerializedType, HashType> >,
+                hasher:     Rc< Hasher<SerializedType, HashType> >,
                 storage:    Box< KeyValueStore<HashType, SerializedType> >,
                 str_coder:  Box< StringCoder<HashType> > ) -> Self
     {
@@ -73,9 +73,12 @@ CompositeHashSpace<ObjectType, SerializedType, HashType>
 }
 
 
-impl<ObjectType: 'static, SerializedType: 'static, HashType: 'static>
+impl<ObjectType, SerializedType, HashType>
 HashSpace<ObjectType>
 for CompositeHashSpace<ObjectType, SerializedType, HashType>
+where ObjectType: 'static,
+      SerializedType: 'static,
+      HashType: 'static + Clone
 {
     fn store(&mut self, object: ObjectType)
         -> Box< Future<Item=String, Error=HashSpaceError> >
@@ -114,13 +117,21 @@ for CompositeHashSpace<ObjectType, SerializedType, HashType>
             Ok(val) => val,
         };
 
-        // TODO call validate for (serialized_obj,hash_bytes) after load
+        let hash_bytes_clone = hash_bytes.clone();
+        let hasher_clone = self.hasher.clone();
         let serializer_clone = self.serializer.clone();
         let result = self.storage.lookup(hash_bytes)
             .map_err( |e| HashSpaceError::StorageError(e) )
             .and_then( move |serialized_obj|
+                match hasher_clone.validate(&serialized_obj, &hash_bytes_clone) {
+                    Err(e) => Err( HashSpaceError::HashError(e) ),
+                    Ok(v)  => if v { Ok(serialized_obj) }
+                              // TODO consider using a different error code
+                              else { Err( HashSpaceError::StorageError(StorageError::InvalidKey) ) }
+                } )
+            .and_then( move |serialized_obj|
                 serializer_clone.deserialize(&serialized_obj)
-                    .map_err( move |e| HashSpaceError::SerializerError(e) ) );
+                    .map_err(  |e| HashSpaceError::SerializerError(e) ) );
         Box::new(result)
     }
 
@@ -290,7 +301,7 @@ mod tests
         let store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
         let mut hashspace: CompositeHashSpace<Person, Vec<u8>, Vec<u8>> = CompositeHashSpace::new(
             Rc::new( SerdeJsonSerializer{} ),
-            Box::new( MultiHasher::new(multihash::Hash::Keccak512) ),
+            Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
             Box::new(store),
             Box::new( MultiBaseStringCoder::new(multibase::Base64) ) );
 
@@ -314,6 +325,7 @@ mod tests
         let mut reactor = reactor::Core::new()
             .expect("Failed to initialize the reactor event loop");
 
+        // This URL should be assembled from the gitlab-ci.yml
         let postgres_url = "postgresql://testuser:testpass@postgres/testdb";
         let mut storage = PostgresStore::new( &reactor.handle(),
             postgres_url, "storagetest", "key", "data");

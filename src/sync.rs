@@ -57,6 +57,7 @@ for CompositeHashSpace<ObjectType, SerializedType, HashType>
         let valid_hash = self.hasher.validate(&serialized_obj, &hash_bytes)
             .map_err( |e| HashSpaceError::HashError(e) )?;
         if ! valid_hash
+            // TODO consider using a different error code
             { return Err( HashSpaceError::StorageError(StorageError::InvalidKey) ) };
 
         let object = self.serializer.deserialize(&serialized_obj)
