@@ -59,27 +59,6 @@ pub struct Block<DataType, HashType>
 
 
 /*
-enum StorageId
-{
-    TestInMemory,
-    LevelDb,
-    Ipfs,
-    StoreJ,
-    Hydra,
-}
-
-// TODO use this in a HashSpace implementation, probably CompositeHashSpace
-struct MultiHash<ObjectType, StorageId, HashData>
-{
-    serializer: multicodec::Codec,
-    hash_algo:  multihash::Hash,
-    storage_id: StorageId,
-    data:       HashData,
-}
-*/
-
-
-
 //pub struct BlockChain<ObjectType, SerializedType, KeyType>
 //{
 //    serializer: Box< Serializer<ObjectType, SerializedType> >,
