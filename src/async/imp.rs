@@ -132,6 +132,7 @@ mod tests
     use multihash;
     use tokio_core::reactor;
 
+    use common::imp::*;
     use super::*;
 
 

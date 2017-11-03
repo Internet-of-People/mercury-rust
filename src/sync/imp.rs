@@ -46,6 +46,7 @@ mod tests
     use multibase;
 
     use super::*;
+    use common::imp::*;
 
 
     #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
