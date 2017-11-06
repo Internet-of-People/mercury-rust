@@ -3,13 +3,13 @@ use std::time::SystemTime;
 
 
 
-pub trait HashSpaceLink
+pub trait Link
 {
     fn hash(&self) -> &[u8];
     fn storage(&self) -> StorageId;
 }
 
-pub trait HashSpaceData
+pub trait Data
 {
     fn hash(&self) -> &[u8]; // of blob data
     fn blob(&self) -> &[u8];
@@ -20,7 +20,7 @@ pub trait HashSpaceData
 
 pub trait Attribute
 {
-    fn name(&self) -> &str;
+    fn name(&self)  -> &str;
     fn value(&self) -> &AttributeValue;
 }
 
@@ -37,13 +37,14 @@ pub enum StorageId
     Hydra,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, PartialEq)]
 pub struct GpsLocation
 {
     latitude:   f64,
     longitude:  f64,
 }
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum AttributeValue
 {
     BOOLEAN(bool),
@@ -52,9 +53,9 @@ pub enum AttributeValue
     STRING(String),
     LOCATION(GpsLocation),
     TIMESTAMP(SystemTime),
-    LINK( Box<HashSpaceLink> ),
-    ARRAY( Vec< Box<AttributeValue> > ),
-    OBJECT( HashMap< String, Box<AttributeValue> > ),
+//    LINK( Box<Link> ),
+//    ARRAY( Vec< Box<AttributeValue> > ),
+//    OBJECT( HashMap< String, Box<AttributeValue> > ),
 }
 
 
@@ -67,30 +68,70 @@ mod tests
     //use async::imp::*;
 
 
-    // TODO
-    //#[derive(Serialize, Deserialize)]
-    struct MetaData
+
+    #[derive(Debug, Serialize, Deserialize)]
+    struct MetaAttr
     {
-        blob:       Vec<u8>,
-        hash:       Vec<u8>,
-        attributes: Vec< Box<Attribute> >,
+        name:   String,
+        value:  AttributeValue,
     }
 
-    impl HashSpaceData for MetaData
+    impl MetaAttr
+    {
+        pub fn new(name: &str, value: AttributeValue) -> Self
+            { Self{ name: name.to_owned(), value: value } }
+    }
+
+    impl Attribute for MetaAttr
+    {
+        fn name(&self)  -> &str             { &self.name }
+        fn value(&self) -> &AttributeValue  { &self.value }
+    }
+
+
+
+    //#[derive(Debug, Serialize, Deserialize)]
+    struct MetaData
+    {
+        blob:   Vec<u8>,
+        hash:   Vec<u8>,
+        attrs:  Vec< Box<Attribute> >,
+    }
+
+    impl MetaData
+    {
+        pub fn new(blob: Vec<u8>, hash: Vec<u8>,
+                   attrs: Vec< Box<Attribute> >) -> Self
+            { Self{ blob: blob, hash: hash, attrs: attrs } }
+    }
+
+    impl Data for MetaData
     {
         fn hash(&self) -> &[u8] { self.hash.as_ref() }
         fn blob(&self) -> &[u8] { self.blob.as_ref() }
 
         fn attributes<'a>(&'a self) -> Box< Iterator< Item = &'a Box<Attribute + 'a> > + 'a >
-        {
-            Box::new( self.attributes.iter() )
-        }
+            { Box::new( self.attrs.iter() ) }
     }
+
 
 
     #[test]
     fn test_metadata()
     {
-        // TODO
+        let attrs = vec!(
+            Box::new( MetaAttr::new( "test", AttributeValue::BOOLEAN(true) ) ) as Box<Attribute>,
+            Box::new( MetaAttr::new( "timestamp", AttributeValue::TIMESTAMP( SystemTime::now() ) ) ) as Box<Attribute>
+        );
+        let blob = b"1234567890abcdef".to_vec();
+        let hash = b"qwerty".to_vec();
+        let metadata = MetaData::new(blob, hash, attrs);
+
+        let test_attr : Vec< &Box<Attribute> > = metadata.attributes()
+            .filter( |attr| attr.name() == "test" )
+            .collect();
+        assert_eq!( test_attr.len(), 1 );
+        assert_eq!( test_attr.get(0).unwrap().name(), "test" );
+        assert_eq!( *test_attr.get(0).unwrap().value(), AttributeValue::BOOLEAN(true) );
     }
 }
