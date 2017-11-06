@@ -13,7 +13,7 @@ pub trait HashSpaceData
 {
     fn hash(&self) -> &[u8]; // of blob data
     fn blob(&self) -> &[u8];
-    fn attributes(&self) -> Box< Iterator< Item = Box<Attribute> > >;
+    fn attributes<'a>(&'a self) -> Box< Iterator< Item = &'a Box<Attribute + 'a> > + 'a >;
     // TODO add multicodec query here
     // fn format(&self) -> FormatId;
 }
@@ -63,8 +63,8 @@ pub enum AttributeValue
 mod tests
 {
     use super::*;
-    use common::imp::*;
-    use async::imp::*;
+    //use common::imp::*;
+    //use async::imp::*;
 
 
     // TODO
@@ -76,14 +76,16 @@ mod tests
         attributes: Vec< Box<Attribute> >,
     }
 
-//    impl HashSpaceData for MetaData
-//    {
-//        fn hash(&self) -> &[u8] { self.hash.as_ref() }
-//        fn blob(&self) -> &[u8] { self.blob.as_ref() }
-//
-//        fn attributes(&self) -> Box< Iterator< Item = Box<Attribute> > >
-//            { Box::new( &self.attributes.iter() ) }
-//    }
+    impl HashSpaceData for MetaData
+    {
+        fn hash(&self) -> &[u8] { self.hash.as_ref() }
+        fn blob(&self) -> &[u8] { self.blob.as_ref() }
+
+        fn attributes<'a>(&'a self) -> Box< Iterator< Item = &'a Box<Attribute + 'a> > + 'a >
+        {
+            Box::new( self.attributes.iter() )
+        }
+    }
 
 
     #[test]
