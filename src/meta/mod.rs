@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::time::SystemTime;
 
 
@@ -13,7 +12,7 @@ pub trait Data
 {
     fn hash(&self) -> &[u8]; // of blob data
     fn blob(&self) -> &[u8];
-    fn attributes<'a>(&'a self) -> Box< Iterator< Item = &'a (Attribute + 'a) > + 'a >;
+    fn attributes<'a>(&'a self) -> Box< Iterator< Item = &'a Attribute> + 'a >;
     // TODO add multicodec query here
     // fn format(&self) -> FormatId;
 }
@@ -45,7 +44,7 @@ pub struct GpsLocation
 }
 
 #[derive(Debug, PartialEq, Serialize, Deserialize)]
-pub enum AttributeValue
+pub enum AttributeValue//<'a>
 {
     BOOLEAN(bool),
     INT(i64),
@@ -53,9 +52,9 @@ pub enum AttributeValue
     STRING(String),
     LOCATION(GpsLocation),
     TIMESTAMP(SystemTime),
-//    LINK( Box<Link> ),
-//    ARRAY( Vec< Box<AttributeValue> > ),
-//    OBJECT( HashMap< String, Box<AttributeValue> > ),
+//    LINK( &'a Link ),
+//    ARRAY( &'a [&'a Attribute] ),
+//    OBJECT( &'a Iterator<Item=&'a Attribute> ),
 }
 
 
@@ -110,11 +109,10 @@ mod tests
         fn hash(&self) -> &[u8] { self.hash.as_ref() }
         fn blob(&self) -> &[u8] { self.blob.as_ref() }
 
-        fn attributes<'a>(&'a self) -> Box< Iterator< Item = &'a (Attribute + 'a) > + 'a >
+        fn attributes<'a>(&'a self) -> Box< Iterator<Item = &'a Attribute> + 'a >
         {
             let result = self.attrs.iter().map( |meta| meta as &Attribute );
             Box::new(result)
-
         }
     }
 
