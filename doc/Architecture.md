@@ -8,8 +8,8 @@ hashes are also used to define graph edges.
 There are many systems following this principle like
 Git, Magnet/Torrent, ZeroNet, Ipfs or StoreJ.
    
-This library aims to implement universal Merkle-DAG access that enables
- - a hashgraph-agnostic link format
+This library aims to implement protocol-independent Merkle-DAG access that enables
+ - a universal link format
  - links **between** different Merkle-DAG implementations
 
 
@@ -21,7 +21,7 @@ that allows managing nodes of a Merkle-DAG.
 We have both a synchronous and an asynchronous version to suit your needs.
 It collects the following node operations:
  - `store` an object (i.e. create a node) and receive a hash that references it
- - `resolve` a hash to fetch the object from which it was hashed
+ - `resolve` a hash to look up the object with this hash
  - `validate` a hash to an object to detect errors or tampering
 
 Most `HashSpace` implementations are not very special and thus can be
@@ -42,18 +42,18 @@ and be future-proof, our library uses the
 multiformat cargos that include all relevant encoding and hash algorithms.
 
 
+Metadata
+========
+
+Stored data is much more useful and easily handled when paired with metadata
+that describes the stored raw binary data and provides semantic links to other data entries.
+
+TODO how to represent metadata? Rust traits with `Box` make it hard to serialize and hash.
+
+
 Composite objects
 =================
 
 TODO We should be able to create composite objects from an arbitrary number of subobjects,
 i.e. enable easy creation of local Merkle-trees like a Torrent file. How to do it?
 Rust traits with `Box` makes them hard to serialize and hash. 
-
-
-Metadata
-========
-
-Stored binary data is much more useful and easily handled when paired with metadata
-that describes the stored raw data and also shows other entries it is related to.
-
-TODO how to represent metadata? Rust traits with `Box` make it hard to serialize and hash.

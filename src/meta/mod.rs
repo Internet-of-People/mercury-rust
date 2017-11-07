@@ -13,7 +13,7 @@ pub trait Data
 {
     fn hash(&self) -> &[u8]; // of blob data
     fn blob(&self) -> &[u8];
-    fn attributes<'a>(&'a self) -> Box< Iterator< Item = &'a Box<Attribute + 'a> > + 'a >;
+    fn attributes<'a>(&'a self) -> Box< Iterator< Item = &'a (Attribute + 'a) > + 'a >;
     // TODO add multicodec query here
     // fn format(&self) -> FormatId;
 }
@@ -95,13 +95,13 @@ mod tests
     {
         blob:   Vec<u8>,
         hash:   Vec<u8>,
-        attrs:  Vec< Box<Attribute> >,
+        attrs:  Vec<MetaAttr>,
     }
 
     impl MetaData
     {
         pub fn new(blob: Vec<u8>, hash: Vec<u8>,
-                   attrs: Vec< Box<Attribute> >) -> Self
+                   attrs: Vec<MetaAttr>) -> Self
             { Self{ blob: blob, hash: hash, attrs: attrs } }
     }
 
@@ -110,8 +110,12 @@ mod tests
         fn hash(&self) -> &[u8] { self.hash.as_ref() }
         fn blob(&self) -> &[u8] { self.blob.as_ref() }
 
-        fn attributes<'a>(&'a self) -> Box< Iterator< Item = &'a Box<Attribute + 'a> > + 'a >
-            { Box::new( self.attrs.iter() ) }
+        fn attributes<'a>(&'a self) -> Box< Iterator< Item = &'a (Attribute + 'a) > + 'a >
+        {
+            let result = self.attrs.iter().map( |meta| meta as &Attribute );
+            Box::new(result)
+
+        }
     }
 
 
@@ -120,14 +124,14 @@ mod tests
     fn test_metadata()
     {
         let attrs = vec!(
-            Box::new( MetaAttr::new( "test", AttributeValue::BOOLEAN(true) ) ) as Box<Attribute>,
-            Box::new( MetaAttr::new( "timestamp", AttributeValue::TIMESTAMP( SystemTime::now() ) ) ) as Box<Attribute>
+            MetaAttr::new( "test", AttributeValue::BOOLEAN(true) ),
+            MetaAttr::new( "timestamp", AttributeValue::TIMESTAMP( SystemTime::now() ) ),
         );
         let blob = b"1234567890abcdef".to_vec();
         let hash = b"qwerty".to_vec();
         let metadata = MetaData::new(blob, hash, attrs);
 
-        let test_attr : Vec< &Box<Attribute> > = metadata.attributes()
+        let test_attr : Vec<&Attribute> = metadata.attributes()
             .filter( |attr| attr.name() == "test" )
             .collect();
         assert_eq!( test_attr.len(), 1 );
