@@ -33,6 +33,8 @@ pub enum AttributeValue<'a>
     Location(GpsLocation),
     String(&'a str),
     Link(&'a Link),
+//    Array(Box< 'a + Iterator< Item = AttributeValue<'a> > >),
+//    Object(Box< 'a + Iterator<Item = &'a Attribute> >),
     Array(&'a Iterator< Item = AttributeValue<'a> >),
     Object(&'a Iterator<Item = &'a Attribute>),
 }
