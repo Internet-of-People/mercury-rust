@@ -29,12 +29,12 @@ pub enum AttributeValue<'a>
     Boolean(bool),
     Integer(i64),
     Float(f64),
+    Location(GpsLocation),
     String(&'a str),
-    Location(&'a GpsLocation),
     Timestamp(&'a SystemTime),
     Link(&'a Link),
-//    Array(&'a Iterator<Item = AttributeValue<'a>>),
-//    Object(&'a Iterator<Item = &'a Attribute>),
+    Array(&'a Iterator< Item = AttributeValue<'a> >),
+    Object(&'a Iterator<Item = &'a Attribute>),
 }
 
 
@@ -50,7 +50,7 @@ pub enum StorageId
     Hydra,
 }
 
-#[derive(Debug, Serialize, Deserialize, PartialEq)]
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GpsLocation
 {
     latitude:   f64,
@@ -94,8 +94,8 @@ mod tests
         BOOL(bool),
         INT(i64),
         FLOAT(f64),
-        STRING(String),
         LOCATION(GpsLocation),
+        STRING(String),
         TIMESTAMP(SystemTime),
         LINK(MetaLink),
 //        ARRAY( Vec<MetaAttrVal> ),
@@ -110,8 +110,8 @@ mod tests
                 MetaAttrVal::BOOL(v)            => AttributeValue::Boolean(v),
                 MetaAttrVal::INT(v)             => AttributeValue::Integer(v),
                 MetaAttrVal::FLOAT(v)           => AttributeValue::Float(v),
+                MetaAttrVal::LOCATION(v)        => AttributeValue::Location(v),
                 MetaAttrVal::STRING(ref v)      => AttributeValue::String(&v),
-                MetaAttrVal::LOCATION(ref v)    => AttributeValue::Location(&v),
                 MetaAttrVal::TIMESTAMP(ref v)   => AttributeValue::Timestamp(&v),
                 MetaAttrVal::LINK(ref v)        => AttributeValue::Link(v),
 //                MetaAttrVal::ARRAY(ref v)       => AttributeValue::Array( &v.iter().map( |m| m.to_attr_val() ) ),
