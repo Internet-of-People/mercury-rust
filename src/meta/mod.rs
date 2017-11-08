@@ -33,10 +33,8 @@ pub enum AttributeValue<'a>
     Location(GpsLocation),
     String(&'a str),
     Link(&'a Link),
-//    Array(Box< 'a + Iterator< Item = AttributeValue<'a> > >),
-//    Object(Box< 'a + Iterator<Item = &'a Attribute> >),
-    Array(&'a Iterator< Item = AttributeValue<'a> >),
-    Object(&'a Iterator<Item = &'a Attribute>),
+    Array(Box< 'a + Iterator< Item = AttributeValue<'a> > >),
+    Object(Box< 'a + Iterator<Item = &'a Attribute> >),
 }
 
 
@@ -100,8 +98,8 @@ mod tests
         LOCATION(GpsLocation),
         STRING(String),
         LINK(MetaLink),
-//        ARRAY( Vec<MetaAttrVal> ),
-//        OBJECT( Vec<MetaAttr> ),
+        ARRAY( Vec<MetaAttrVal> ),
+        OBJECT( Vec<MetaAttr> ),
     }
 
     impl MetaAttrVal
@@ -116,8 +114,10 @@ mod tests
                 MetaAttrVal::LOCATION(v)        => AttributeValue::Location(v),
                 MetaAttrVal::STRING(ref v)      => AttributeValue::String(&v),
                 MetaAttrVal::LINK(ref v)        => AttributeValue::Link(v),
-//                MetaAttrVal::ARRAY(ref v)       => AttributeValue::Array( &v.iter().map( |m| m.to_attr_val() ) ),
-//                MetaAttrVal::OBJECT(ref v)      => AttributeValue::Object( &v.iter().map( |m| m as &Attribute) ),
+                MetaAttrVal::ARRAY(ref v)       => AttributeValue::Array(
+                    Box::new( v.iter().map( |m| m.to_attr_val() ) ) ),
+                MetaAttrVal::OBJECT(ref v)      => AttributeValue::Object(
+                    Box::new( v.iter().map( |m| m as &Attribute) ) ),
             }
         }
     }
@@ -179,25 +179,83 @@ mod tests
     #[test]
     fn test_metadata()
     {
+        let spoon = "There is no Rust";
+        let answer = 42;
+        let pi = 3.14159265358979;
+
         let linkhash = b"Far far away in another storage network".to_vec();
+        let famous = vec!(
+            MetaAttrVal::STRING( spoon.to_owned() ),
+            MetaAttrVal::INT(answer),
+            MetaAttrVal::FLOAT(pi),
+        );
+        let color = vec!(
+            MetaAttr::new( "red", MetaAttrVal::INT(90) ),
+            MetaAttr::new( "green", MetaAttrVal::INT(60) ),
+            MetaAttr::new( "blue", MetaAttrVal::INT(90) ),
+        );
         let attrs = vec!(
             MetaAttr::new( "works", MetaAttrVal::BOOL(true) ),
             MetaAttr::new( "timestamp", MetaAttrVal::TIMESTAMP( SystemTime::now() ) ),
             MetaAttr::new( "link", MetaAttrVal::LINK( MetaLink::new(linkhash, StorageId::InMemory) ) ),
+            MetaAttr::new( "famous", MetaAttrVal::ARRAY(famous) ),
+            MetaAttr::new( "color", MetaAttrVal::OBJECT(color) ),
         );
         let blob = b"1234567890abcdef".to_vec();
         let hash = b"qwerty".to_vec();
         let metadata = MetaData::new(blob, hash, attrs);
 
-        let test_attr : Vec<&Attribute> = metadata.attributes()
-            .filter( |attr| attr.name() == "works" )
-            .collect();
-        assert_eq!( test_attr.len(), 1 );
-        assert_eq!( test_attr.get(0).unwrap().name(), "works" );
+        {
+            // Test works bool attribute
+            let works_attrs: Vec<&Attribute> = metadata.attributes()
+                .filter(|attr| attr.name() == "works")
+                .collect();
+            assert_eq!(works_attrs.len(), 1);
+            let works_attr = works_attrs.get(0).unwrap();
 
-        match test_attr.get(0).unwrap().value() {
-            AttributeValue::Boolean(v) => assert!(v),
-            _ => assert!(false),
+            assert_eq!(works_attr.name(), "works");
+            let works_val = match works_attr.value() {
+                AttributeValue::Boolean(v) => v,
+                _ => panic!("Unexpected attribute type"),
+            };
+            assert!(works_val);
+        }
+
+        {
+            // Test color object attribute
+            let fame_attrs: Vec<&Attribute> = metadata.attributes()
+                .filter(|attr| attr.name() == "famous")
+                .collect();
+            assert_eq!(fame_attrs.len(), 1);
+            let fame_attr = fame_attrs.get(0).unwrap();
+
+            assert_eq!(fame_attr.name(), "famous");
+            let fame_value: Vec<AttributeValue> = match fame_attr.value() {
+                AttributeValue::Array(v) => v.collect(),
+                _ => panic!("Unexpected attribute type"),
+            };
+            assert_eq!( fame_value.len(), 3 );
+// TODO implement asserts for array element values
+//            assert_eq!( fame_value[0], AttributeValue::String(spoon) );
+//            assert_eq!( fame_value[1], AttributeValue::Integer(answer) );
+//            assert_eq!( fame_value[2], AttributeValue::Float(pi) );
+        }
+
+        {
+            // Test color object attribute
+            let color_attrs: Vec<&Attribute> = metadata.attributes()
+                .filter(|attr| attr.name() == "color")
+                .collect();
+            assert_eq!(color_attrs.len(), 1);
+            let color_attr = color_attrs.get(0).unwrap();
+
+            assert_eq!(color_attr.name(), "color");
+            let color_value = match color_attr.value() {
+                AttributeValue::Object(v) => v,
+                _ => panic!("Unexpected attribute type"),
+            };
+
+// TODO write asserts for color fields
         }
     }
 }
