@@ -12,9 +12,44 @@ pub trait Data
 {
     fn hash(&self) -> &[u8]; // of blob data
     fn blob(&self) -> &[u8];
-    fn attributes<'a>(&'a self) -> Box< Iterator<Item = &'a Attribute> + 'a >;
+    fn attributes<'a>(&'a self) -> Box< 'a + Iterator<Item = &'a Attribute> >;
     // TODO add multicodec query here
     // fn format(&self) -> FormatId;
+
+    // TODO implement these convenience functions outside this trait
+    fn first_attrval_by_name<'a>(&'a self, name: &str)
+            -> Option< AttributeValue<'a> >
+        { self.iter_first_attrval_by_name( self.attributes(), name ) }
+
+    fn first_attrval_by_path<'a>(&'a self, path: &[&str])
+            -> Option< AttributeValue<'a> >
+        { self.iter_first_attrval_by_path( self.attributes(), path ) }
+
+    fn iter_first_attrval_by_name<'a>(&'a self, iter: Box< 'a + Iterator<Item = &'a Attribute> >, name: &str)
+        -> Option< AttributeValue<'a> >
+    {
+        iter.filter( |attr| attr.name() == name )
+            .nth(0)
+            .map( |attr| attr.value() )
+    }
+
+    fn iter_first_attrval_by_path<'a>(&'a self, iter: Box< 'a + Iterator<Item = &'a Attribute> >, path: &[&str])
+        -> Option< AttributeValue<'a> >
+    {
+        if path.len() == 0
+            { return None; }
+
+        let first_attrval = self.iter_first_attrval_by_name( iter, path[0] );
+        if path.len() == 1
+            { return first_attrval; }
+
+        if let None = first_attrval
+            { return None; }
+        match first_attrval.unwrap() {
+            AttributeValue::Object(attrs) => self.iter_first_attrval_by_path( attrs, &path[1..] ),
+            _ => None,
+        }
+    }
 }
 
 pub trait Attribute
@@ -206,56 +241,50 @@ mod tests
         let metadata = MetaData::new(blob, hash, attrs);
 
         {
-            // Test works bool attribute
-            let works_attrs: Vec<&Attribute> = metadata.attributes()
-                .filter(|attr| attr.name() == "works")
-                .collect();
-            assert_eq!(works_attrs.len(), 1);
-            let works_attr = works_attrs.get(0).unwrap();
-
-            assert_eq!(works_attr.name(), "works");
-            let works_val = match works_attr.value() {
-                AttributeValue::Boolean(v) => v,
+            // Test simple bool attribute
+            let works_attrval = metadata.first_attrval_by_name("works");
+            assert!( works_attrval.is_some() );
+            match works_attrval.unwrap() {
+                AttributeValue::Boolean(v) => assert!(v),
                 _ => panic!("Unexpected attribute type"),
             };
-            assert!(works_val);
+        }
+
+        {
+            // Test array attribute
+            let fame_attrval = metadata.first_attrval_by_name("famous");
+            assert!( fame_attrval.is_some() );
+            match fame_attrval.unwrap() {
+                AttributeValue::Array(v) => {
+                    let arr: Vec<AttributeValue> = v.collect();
+                    assert_eq!( arr.len(), 3 );
+                    match arr[0] {
+                        AttributeValue::String(val) => assert_eq!(val, spoon),
+                        _ => panic!("Unexpected attribute type"),
+                    };
+                    match arr[1] {
+                        AttributeValue::Integer(val) => assert_eq!(val, answer),
+                        _ => panic!("Unexpected attribute type"),
+                    };
+                    match arr[2] {
+                        AttributeValue::Float(val) => assert_eq!(val, pi),
+                        _ => panic!("Unexpected attribute type"),
+                    }
+                },
+                _ => panic!("Unexpected attribute type"),
+            };
         }
 
         {
             // Test color object attribute
-            let fame_attrs: Vec<&Attribute> = metadata.attributes()
-                .filter(|attr| attr.name() == "famous")
-                .collect();
-            assert_eq!(fame_attrs.len(), 1);
-            let fame_attr = fame_attrs.get(0).unwrap();
+            let color_red_attrval = metadata.first_attrval_by_path( &["color", "red"] );
+            assert!( color_red_attrval.is_some() );
 
-            assert_eq!(fame_attr.name(), "famous");
-            let fame_value: Vec<AttributeValue> = match fame_attr.value() {
-                AttributeValue::Array(v) => v.collect(),
+            let val = match color_red_attrval.unwrap() {
+                AttributeValue::Integer(val) => val,
                 _ => panic!("Unexpected attribute type"),
             };
-            assert_eq!( fame_value.len(), 3 );
-// TODO implement asserts for array element values
-//            assert_eq!( fame_value[0], AttributeValue::String(spoon) );
-//            assert_eq!( fame_value[1], AttributeValue::Integer(answer) );
-//            assert_eq!( fame_value[2], AttributeValue::Float(pi) );
-        }
-
-        {
-            // Test color object attribute
-            let color_attrs: Vec<&Attribute> = metadata.attributes()
-                .filter(|attr| attr.name() == "color")
-                .collect();
-            assert_eq!(color_attrs.len(), 1);
-            let color_attr = color_attrs.get(0).unwrap();
-
-            assert_eq!(color_attr.name(), "color");
-            let color_value = match color_attr.value() {
-                AttributeValue::Object(v) => v,
-                _ => panic!("Unexpected attribute type"),
-            };
-
-// TODO write asserts for color fields
+            assert_eq!(val, 90)
         }
     }
 }
