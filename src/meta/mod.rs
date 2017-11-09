@@ -243,7 +243,6 @@ mod tests
         {
             // Test simple bool attribute
             let works_attrval = metadata.first_attrval_by_name("works");
-            assert!( works_attrval.is_some() );
             match works_attrval.unwrap() {
                 AttributeValue::Boolean(v) => assert!(v),
                 _ => panic!("Unexpected attribute type"),
@@ -253,7 +252,6 @@ mod tests
         {
             // Test array attribute
             let fame_attrval = metadata.first_attrval_by_name("famous");
-            assert!( fame_attrval.is_some() );
             match fame_attrval.unwrap() {
                 AttributeValue::Array(v) => {
                     let arr: Vec<AttributeValue> = v.collect();
@@ -278,13 +276,16 @@ mod tests
         {
             // Test color object attribute
             let color_red_attrval = metadata.first_attrval_by_path( &["color", "red"] );
-            assert!( color_red_attrval.is_some() );
-
-            let val = match color_red_attrval.unwrap() {
-                AttributeValue::Integer(val) => val,
+            match color_red_attrval.unwrap() {
+                AttributeValue::Integer(val) => assert_eq!(val, 90),
                 _ => panic!("Unexpected attribute type"),
             };
-            assert_eq!(val, 90)
+
+            let color_green_attrval = metadata.first_attrval_by_path( &["color", "green"] );
+            match color_green_attrval.unwrap() {
+                AttributeValue::Integer(val) => assert_eq!(val, 60),
+                _ => panic!("Unexpected attribute type"),
+            };
         }
     }
 }
