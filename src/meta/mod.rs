@@ -1,17 +1,15 @@
 use std::time::SystemTime;
 
+use common::{Blob, Link};
 
 
-pub trait Link
+
+pub trait Data: Blob
 {
-    fn hash(&self) -> &[u8];
-    fn storage(&self) -> StorageId;
-}
+    // Inherited from common::Data
+    // fn blob(&self) -> &[u8];
 
-pub trait Data
-{
     fn hash(&self) -> &[u8]; // of blob data
-    fn blob(&self) -> &[u8];
     fn attributes<'a>(&'a self) -> Box< 'a + Iterator<Item = &'a Attribute> >;
     // TODO add multicodec query here
     // fn format(&self) -> FormatId;
@@ -75,17 +73,6 @@ pub enum AttributeValue<'a>
 }
 
 
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
-pub enum StorageId
-{
-    // TODO consider possible values
-    InMemory,
-    Postgres,
-    LevelDb,
-    Ipfs,
-    StoreJ,
-    Hydra,
-}
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 pub struct GpsLocation
@@ -101,8 +88,7 @@ pub struct GpsLocation
 mod tests
 {
     use super::*;
-    //use common::imp::*;
-    //use async::imp::*;
+    use common::StorageId;
 
 
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -199,10 +185,14 @@ mod tests
             { Self{ blob: blob, hash: hash, attrs: attrs } }
     }
 
+    impl common::Blob for MetaData
+    {
+        fn blob(&self) -> &[u8] { self.blob.as_ref() }
+    }
+
     impl Data for MetaData
     {
         fn hash(&self) -> &[u8] { self.hash.as_ref() }
-        fn blob(&self) -> &[u8] { self.blob.as_ref() }
 
         fn attributes<'a>(&'a self) -> Box< Iterator<Item = &'a Attribute> + 'a >
         {

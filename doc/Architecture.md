@@ -28,12 +28,14 @@ Most `HashSpace` implementations are not very special and thus can be
 separated into further responsibilities. `CompositeHashSpace`
 implements a `HashSpace` by delegating tasks to the following interfaces,
 effectively delaying such implementation decisions and improving modularity:
- - `Serializer` en/decodes raw in-memory objects to/from a storage format, e.g. bson or protobuf
- - `Hasher` creates and validate hashes of serialized objects, e.g. sha2
- - `KeyValueStore` provides a potentially distributed HashMap,
-    i.e. binds (stores and resolves) an arbitrary key (hash) with a value (object),
-    e.g. in-memory, to a local DB or to a DHT
- - `StringCoder` en/decodes binary data (hash) to/from a more human-friendly format, e.g. base64
+ - `Serializer` en/decodes raw in-memory objects to/from a storage format,
+    e.g. bson or protobuf
+ - `Hasher` creates and validates hashes of serialized objects, e.g. sha2
+ - `KeyValueStore` provides a (potentially distributed) HashMap. In other words
+    it binds (stores and resolves) an arbitrary key (hash) to a value (object).
+    E.g. it can use an in-memory map, local disk, sharded No/Sql or a DHT
+ - `StringCoder` en/decodes binary data (hash) to/from a more human-friendly format,
+    e.g. base64
 
 To be maintainable, handle any hash and link formats
 and be future-proof, our library uses the

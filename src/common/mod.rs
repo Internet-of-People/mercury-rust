@@ -4,6 +4,33 @@ pub mod imp;
 
 
 
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
+pub enum StorageId
+{
+    // TODO consider possible values
+    InMemory,
+    Postgres,
+    LevelDb,
+    Ipfs,
+    StoreJ,
+    Hydra,
+}
+
+
+
+pub trait Link
+{
+    fn hash(&self) -> &[u8]; // of linked data
+    fn storage(&self) -> StorageId;
+}
+
+pub trait Blob
+{
+    fn blob(&self) -> &[u8];
+}
+
+
+
 pub trait Serializer<ObjectType, SerializedType>
 {
     // TODO error handling: these two operations could return different error types
