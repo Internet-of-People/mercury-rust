@@ -135,7 +135,7 @@ mod tests
                 MetaAttrVal::FLOAT(v)           => AttributeValue::Float(v),
                 MetaAttrVal::TIMESTAMP(v)       => AttributeValue::Timestamp(v),
                 MetaAttrVal::LOCATION(v)        => AttributeValue::Location(v),
-                MetaAttrVal::STRING(ref v)      => AttributeValue::String(&v),
+                MetaAttrVal::STRING(ref v)      => AttributeValue::String(v),
                 MetaAttrVal::LINK(ref v)        => AttributeValue::Link(v),
                 MetaAttrVal::ARRAY(ref v)       => AttributeValue::Array(
                     Box::new( v.iter().map( |m| m.to_attr_val() ) ) ),
@@ -185,7 +185,7 @@ mod tests
             { Self{ blob: blob, hash: hash, attrs: attrs } }
     }
 
-    impl common::Blob for MetaData
+    impl Blob for MetaData
     {
         fn blob(&self) -> &[u8] { self.blob.as_ref() }
     }
