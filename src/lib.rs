@@ -12,6 +12,7 @@ extern crate serde_derive;
 
 pub mod error;
 pub mod common;
+pub mod merkle;
 pub mod meta;
 pub mod sync;
 pub mod async;

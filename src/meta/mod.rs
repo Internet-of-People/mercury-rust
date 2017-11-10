@@ -59,6 +59,8 @@ pub trait Attribute
 }
 
 
+// TODO this currently cannot easily be made PartialEq because of refs/boxes.
+//      Now we need match to compare/extract values, it could be more convenient.
 pub enum AttributeValue<'a>
 {
     Boolean(bool),
@@ -286,6 +288,9 @@ mod tests
                 AttributeValue::Integer(val) => assert_eq!(val, 60),
                 _ => panic!("Unexpected attribute type"),
             };
+
+            let color_purple_attrval = metadata.first_attrval_by_path( &["color", "purple"] );
+            assert!( color_purple_attrval.is_none() );
         }
     }
 }

@@ -39,21 +39,52 @@ To be maintainable, handle any hash and link formats
 and be future-proof, our library uses the
 [multibase](https://github.com/multiformats/rust-multibase) and 
 [multihash](https://github.com/multiformats/rust-multihash)
-multiformat cargos that include all relevant encoding and hash algorithms.
+multiformat cargos that include all relevant encoding and hash algorithms. 
+
+TODO To shorten load time we plan to enable caching by implementing
+a special composite storage `CachingKeyValueStore`.
+It can contain and consult a chain of storages ordered by their access times,
+e.g. an in-memory auto-pruning cache store as first entry.
+When storing it should store the entry in all storages of the chain.
+When loading it should grab the first successfully resolved entry from any store
+and store it in the fastest (or all faster?) stores before returning it.   
 
 
 Metadata
 ========
 
 Stored data is much more useful and easily handled when paired with metadata
-that describes the stored raw binary data and provides semantic links to other data entries.
+that describes the stored raw binary data and its relation to other data entries.
 
-TODO how to represent metadata? Rust traits with `Box` make it hard to serialize and hash.
+Metadata is accessible through the `meta::Attribute` trait that consists of
+a name and a strongly typed value. Note that this can be a composite value
+(i.e. array or object) that contains further attributes or a link
+that points to other entries.
+
+A `meta::Data` entry provides an iterator for its attributes and
+some convenience functions for easier attribute lookups.
 
 
-Composite objects
-=================
+Merkle-trees
+============
 
-TODO We should be able to create composite objects from an arbitrary number of subobjects,
-i.e. enable easy creation of local Merkle-trees like a Torrent file. How to do it?
-Rust traits with `Box` makes them hard to serialize and hash. 
+A Merkle tree is a special form of a Merkle-DAG.
+It is a directed graph with a tree structure that
+starts from a single root node and has edges
+from parent nodes to their immediate child nodes.
+Only leaf nodes contain relevant binary data (and a calculated hash),
+parent nodes just aggregate their own hash from the set of hashes of their
+child nodes. This makes it easy to validate and modify the structure:
+only hashes the changed branch has to be recalculated towards
+the root, the rest of the tree can remains untouched.
+This aggregation is used from transactions to blocks in blockchains,
+from files to torrents in the torrent network or
+from changed files to commit hashes in git.  
+
+TODO We should be able to easily create local composite objects
+from any number of subobjects as a Merkle-tree.
+This would enable having "relative" links to fragments of the entry
+and enable features like MAST-based (Merkle Abstract Syntax Tree)
+smart contracts.
+
+
