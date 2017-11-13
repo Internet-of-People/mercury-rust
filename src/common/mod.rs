@@ -48,8 +48,8 @@ pub trait Serializer<ObjectType, SerializedType>
 {
     // TODO error handling: these two operations could return different error types
     //      (SerErr/DeserErr), consider if that might be clearer
-    fn serialize(&self, object: &ObjectType) -> Result<SerializedType, SerializerError>;
-    fn deserialize(&self, serialized_object: &SerializedType) -> Result<ObjectType, SerializerError>;
+    fn serialize(&self, object: ObjectType) -> Result<SerializedType, SerializerError>;
+    fn deserialize(&self, serialized_object: SerializedType) -> Result<ObjectType, SerializerError>;
 }
 
 pub trait Hasher<ObjectType, HashType>

@@ -1,3 +1,4 @@
+//use std::collections::HashMap;
 use std::rc::Rc;
 
 use futures::prelude::*;
@@ -10,14 +11,32 @@ pub mod imp;
 
 
 
+//pub struct HashWeb
+//{
+//    spaces: HashMap< StorageId, HashSpace< Rc<Data> > >,
+//}
+//
+//impl HashWeb
+//{
+//    pub fn resolve(&self, link: &Link) -> Result< Rc<Data>, HashSpaceError >
+//    {
+//        match self.spaces.get( link.storage() ) {
+//            None => Err( HashSpaceError::Other( Box::new(TODO) ) ),
+//            Some()
+//        }
+//    }
+//}
+
+
+
 pub trait HashSpace<ObjectType>
 {
     fn store(&mut self, object: ObjectType)
         -> Box< Future<Item=String, Error=HashSpaceError> >;
     fn resolve(&self, hash: &str)
         -> Box< Future<Item=ObjectType, Error=HashSpaceError> >;
-    fn validate(&self, object: &ObjectType, hash: &str)
-        -> Box< Future<Item=bool, Error=HashSpaceError> >;
+//    fn validate(&self, object: &ObjectType, hash: &str)
+//        -> Box< Future<Item=bool, Error=HashSpaceError> >;
 }
 
 
@@ -55,17 +74,17 @@ CompositeHashSpace<ObjectType, SerializedType, HashType>
             str_coder:    str_coder, }
     }
 
-    fn sync_validate(&self, object: &ObjectType, hash_str: &str)
-        -> Result<bool, HashSpaceError>
-    {
-        let hash_bytes = self.str_coder.decode(&hash_str)
-            .map_err( |e| HashSpaceError::StringCoderError(e) )?;
-        let serialized_obj = self.serializer.serialize(&object)
-            .map_err( |e| HashSpaceError::SerializerError(e) )?;
-        let valid = self.hasher.validate(&serialized_obj, &hash_bytes)
-            .map_err( |e| HashSpaceError::HashError(e) )?;
-        Ok(valid)
-    }
+//    fn sync_validate(&self, object: &ObjectType, hash_str: &str)
+//        -> Result<bool, HashSpaceError>
+//    {
+//        let hash_bytes = self.str_coder.decode(&hash_str)
+//            .map_err( |e| HashSpaceError::StringCoderError(e) )?;
+//        let serialized_obj = self.serializer.serialize(object)
+//            .map_err( |e| HashSpaceError::SerializerError(e) )?;
+//        let valid = self.hasher.validate(&serialized_obj, &hash_bytes)
+//            .map_err( |e| HashSpaceError::HashError(e) )?;
+//        Ok(valid)
+//    }
 }
 
 
@@ -79,7 +98,7 @@ for CompositeHashSpace<ObjectType, SerializedType, HashType>
     fn store(&mut self, object: ObjectType)
         -> Box< Future<Item=String, Error=HashSpaceError> >
     {
-        let hash_bytes_result = self.serializer.serialize(&object)
+        let hash_bytes_result = self.serializer.serialize(object)
             .map_err( |e| HashSpaceError::SerializerError(e) )
             .and_then( |serialized_obj|
                 self.hasher.get_hash(&serialized_obj)
@@ -126,14 +145,14 @@ for CompositeHashSpace<ObjectType, SerializedType, HashType>
                         else { Err( HashSpaceError::StorageError(StorageError::InvalidKey) ) }
                 } )
             .and_then( move |serialized_obj|
-                serializer_clone.deserialize(&serialized_obj)
+                serializer_clone.deserialize(serialized_obj)
                     .map_err(  |e| HashSpaceError::SerializerError(e) ) );
         Box::new(result)
     }
 
-    fn validate(&self, object: &ObjectType, hash_str: &str)
-        -> Box< Future<Item=bool, Error=HashSpaceError> >
-    {
-        Box::new( future::result(self.sync_validate(&object, &hash_str) ) )
-    }
+//    fn validate(&self, object: &ObjectType, hash_str: &str)
+//        -> Box< Future<Item=bool, Error=HashSpaceError> >
+//    {
+//        Box::new( future::result(self.sync_validate(&object, &hash_str) ) )
+//    }
 }

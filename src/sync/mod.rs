@@ -9,7 +9,7 @@ pub trait HashSpace<ObjectType>
 {
     fn store(&mut self, object: ObjectType) -> Result<String, HashSpaceError>;
     fn resolve(&self, hash: &str) -> Result<ObjectType, HashSpaceError>;
-    fn validate(&self, object: &ObjectType, hash: &str) -> Result<bool, HashSpaceError>;
+//    fn validate(&self, object: &ObjectType, hash: &str) -> Result<bool, HashSpaceError>;
 }
 
 
@@ -36,7 +36,7 @@ for CompositeHashSpace<ObjectType, SerializedType, HashType>
 {
     fn store(&mut self, object: ObjectType) -> Result<String, HashSpaceError>
     {
-        let serialized_obj = self.serializer.serialize(&object)
+        let serialized_obj = self.serializer.serialize(object)
             .map_err( |e| HashSpaceError::SerializerError(e) )?;
         let obj_hash = self.hasher.get_hash(&serialized_obj)
             .map_err( |e| HashSpaceError::HashError(e) )?;
@@ -59,19 +59,19 @@ for CompositeHashSpace<ObjectType, SerializedType, HashType>
             // TODO consider using a different error code
             { return Err( HashSpaceError::StorageError(StorageError::InvalidKey) ) };
 
-        let object = self.serializer.deserialize(&serialized_obj)
+        let object = self.serializer.deserialize(serialized_obj)
             .map_err( |e| HashSpaceError::SerializerError(e) )?;
         Ok(object)
     }
 
-    fn validate(&self, object: &ObjectType, hash_str: &str) -> Result<bool, HashSpaceError>
-    {
-        let hash_bytes = self.str_coder.decode(&hash_str)
-            .map_err( |e| HashSpaceError::StringCoderError(e) )?;
-        let serialized_obj = self.serializer.serialize(&object)
-            .map_err( |e| HashSpaceError::SerializerError(e) )?;
-        let valid = self.hasher.validate(&serialized_obj, &hash_bytes)
-            .map_err( |e| HashSpaceError::HashError(e) )?;
-        Ok(valid)
-    }
+//    fn validate(&self, object: &ObjectType, hash_str: &str) -> Result<bool, HashSpaceError>
+//    {
+//        let hash_bytes = self.str_coder.decode(&hash_str)
+//            .map_err( |e| HashSpaceError::StringCoderError(e) )?;
+//        let serialized_obj = self.serializer.serialize(object)
+//            .map_err( |e| HashSpaceError::SerializerError(e) )?;
+//        let valid = self.hasher.validate(&serialized_obj, &hash_bytes)
+//            .map_err( |e| HashSpaceError::HashError(e) )?;
+//        Ok(valid)
+//    }
 }

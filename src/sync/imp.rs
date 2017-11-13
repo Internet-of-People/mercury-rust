@@ -88,8 +88,8 @@ mod tests
         let lookup_res = hashspace.resolve(&hash);
         assert!( lookup_res.is_ok() );
         assert_eq!( lookup_res.unwrap(), object );
-        let validate_res = hashspace.validate(&object, &hash);
-        assert!( validate_res.is_ok() );
-        assert!( validate_res.unwrap() );
+//        let validate_res = hashspace.validate(&object, &hash);
+//        assert!( validate_res.is_ok() );
+//        assert!( validate_res.unwrap() );
     }
 }

@@ -78,6 +78,17 @@ impl Hasher<Vec<u8>, Vec<u8>> for MultiHasher
 
 
 
+pub struct IdentitySerializer;
+
+impl Serializer<Vec<u8>, Vec<u8>> for IdentitySerializer
+{
+    fn serialize(&self, object: Vec<u8>) -> Result<Vec<u8>, SerializerError>
+        { Ok(object) }
+    fn deserialize(&self, serialized_object: Vec<u8>) -> Result<Vec<u8>, SerializerError>
+        { Ok(serialized_object) }
+}
+
+
 
 // TODO this struct should be independent of the serialization format (e.g. JSON):
 //      Maybe should contain Box<serde::ser::De/Serializer> data members
@@ -93,16 +104,16 @@ impl SerdeJsonSerializer
 impl<ObjectType> Serializer<ObjectType, Vec<u8>> for SerdeJsonSerializer
     where ObjectType: serde::Serialize + serde::de::DeserializeOwned
 {
-    fn serialize(&self, object: &ObjectType) -> Result<Vec<u8>, SerializerError>
+    fn serialize(&self, object: ObjectType) -> Result<Vec<u8>, SerializerError>
     {
         serde_json::to_string(&object)
             .map( |str| str.into_bytes() )
             .map_err(SerdeJsonSerializer::to_serializer_error)
     }
 
-    fn deserialize(&self, serialized_object: &Vec<u8>) -> Result<ObjectType, SerializerError>
+    fn deserialize(&self, serialized_object: Vec<u8>) -> Result<ObjectType, SerializerError>
     {
-        let json_string = String::from_utf8(serialized_object.clone() )
+        let json_string = String::from_utf8(serialized_object)
             .map_err(|e| SerializerError::DeserializationError( Box::new(e) ) )?;
         serde_json::from_str(& json_string)
             .map_err(SerdeJsonSerializer::to_serializer_error)
@@ -160,9 +171,9 @@ mod tests
     {
         let serializer = SerdeJsonSerializer;
         let orig_obj = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
-        let ser_obj = serializer.serialize(&orig_obj);
+        let ser_obj = serializer.serialize( orig_obj.clone() );
         assert!( ser_obj.is_ok() );
-        let deser_res = serializer.deserialize( &ser_obj.unwrap() );
+        let deser_res = serializer.deserialize( ser_obj.unwrap() );
         assert!( deser_res.is_ok() );
         assert_eq!( orig_obj, deser_res.unwrap() );
     }
