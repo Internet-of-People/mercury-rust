@@ -9,45 +9,17 @@ pub trait Data: Blob
     // Inherited from common::Data
     // fn blob(&self) -> &[u8];
 
-    fn hash(&self) -> &[u8]; // of blob data
     fn attributes<'a>(&'a self) -> Box< 'a + Iterator<Item = &'a Attribute> >;
     // TODO add multicodec query here
     // fn format(&self) -> FormatId;
 
-    // TODO implement these convenience functions outside this trait
     fn first_attrval_by_name<'a>(&'a self, name: &str)
             -> Option< AttributeValue<'a> >
-        { self.iter_first_attrval_by_name( self.attributes(), name ) }
+        { iter_first_attrval_by_name( self.attributes(), name ) }
 
     fn first_attrval_by_path<'a>(&'a self, path: &[&str])
             -> Option< AttributeValue<'a> >
-        { self.iter_first_attrval_by_path( self.attributes(), path ) }
-
-    fn iter_first_attrval_by_name<'a>(&'a self, iter: Box< 'a + Iterator<Item = &'a Attribute> >, name: &str)
-        -> Option< AttributeValue<'a> >
-    {
-        iter.filter( |attr| attr.name() == name )
-            .nth(0)
-            .map( |attr| attr.value() )
-    }
-
-    fn iter_first_attrval_by_path<'a>(&'a self, iter: Box< 'a + Iterator<Item = &'a Attribute> >, path: &[&str])
-        -> Option< AttributeValue<'a> >
-    {
-        if path.len() == 0
-            { return None; }
-
-        let first_attrval = self.iter_first_attrval_by_name( iter, path[0] );
-        if path.len() == 1
-            { return first_attrval; }
-
-        if let None = first_attrval
-            { return None; }
-        match first_attrval.unwrap() {
-            AttributeValue::Object(attrs) => self.iter_first_attrval_by_path( attrs, &path[1..] ),
-            _ => None,
-        }
-    }
+        { iter_first_attrval_by_path( self.attributes(), path ) }
 }
 
 pub trait Attribute
@@ -81,6 +53,33 @@ pub struct GpsLocation
     longitude:  f64,
 }
 
+
+
+fn iter_first_attrval_by_name<'a>(iter: Box< 'a + Iterator<Item = &'a Attribute> >, name: &str)
+    -> Option< AttributeValue<'a> >
+{
+    iter.filter( |attr| attr.name() == name )
+        .nth(0)
+        .map( |attr| attr.value() )
+}
+
+fn iter_first_attrval_by_path<'a>(iter: Box< 'a + Iterator<Item = &'a Attribute> >, path: &[&str])
+    -> Option< AttributeValue<'a> >
+{
+    if path.len() == 0
+        { return None; }
+
+    let first_attrval = iter_first_attrval_by_name( iter, path[0] );
+    if path.len() == 1
+        { return first_attrval; }
+
+    if let None = first_attrval
+        { return None; }
+    match first_attrval.unwrap() {
+        AttributeValue::Object(attrs) => iter_first_attrval_by_path( attrs, &path[1..] ),
+        _ => None,
+    }
+}
 
 
 
@@ -192,8 +191,6 @@ mod tests
 
     impl Data for MetaData
     {
-        fn hash(&self) -> &[u8] { self.hash.as_ref() }
-
         fn attributes<'a>(&'a self) -> Box< Iterator<Item = &'a Attribute> + 'a >
         {
             let result = self.attrs.iter().map( |meta| meta as &Attribute );
