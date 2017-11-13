@@ -10,9 +10,8 @@ pub trait Data: Blob
     // fn blob(&self) -> &[u8];
 
     fn attributes<'a>(&'a self) -> Box< 'a + Iterator<Item = &'a Attribute> >;
-    // TODO add multicodec query here
-    // fn format(&self) -> FormatId;
 
+    // Convenience function to access attributes by name/path
     fn first_attrval_by_name<'a>(&'a self, name: &str)
             -> Option< AttributeValue<'a> >
         { iter_first_attrval_by_name( self.attributes(), name ) }
@@ -22,9 +21,10 @@ pub trait Data: Blob
         { iter_first_attrval_by_path( self.attributes(), path ) }
 }
 
+
 pub trait Attribute
 {
-    fn name(&self)  -> &str;
+    fn name(&self) -> &str;
     fn value<'a>(&'a self) -> AttributeValue<'a>;
 }
 
@@ -87,7 +87,7 @@ fn iter_first_attrval_by_path<'a>(iter: Box< 'a + Iterator<Item = &'a Attribute>
 mod tests
 {
     use super::*;
-    use common::StorageId;
+    use common::{FormatId, StorageId};
 
 
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -95,18 +95,20 @@ mod tests
     {
         hash:    Vec<u8>,
         storage: StorageId,
+        format:  FormatId,
     }
 
     impl MetaLink
     {
-        fn new(hash: Vec<u8>, storage: StorageId) -> Self
-            { Self{hash: hash, storage: storage} }
+        fn new(hash: Vec<u8>, storage: StorageId, format: FormatId) -> Self
+            { Self{hash: hash, storage: storage, format: format} }
     }
 
     impl Link for MetaLink
     {
         fn hash(&self)    -> &[u8]      { self.hash.as_ref() }
         fn storage(&self) -> StorageId  { self.storage }
+        fn format(&self)  -> FormatId   { self.format }
     }
 
 
@@ -221,7 +223,7 @@ mod tests
         let attrs = vec!(
             MetaAttr::new( "works", MetaAttrVal::BOOL(true) ),
             MetaAttr::new( "timestamp", MetaAttrVal::TIMESTAMP( SystemTime::now() ) ),
-            MetaAttr::new( "link", MetaAttrVal::LINK( MetaLink::new(linkhash, StorageId::InMemory) ) ),
+            MetaAttr::new( "link", MetaAttrVal::LINK( MetaLink::new(linkhash, StorageId::Torrent, FormatId::Torrent) ) ),
             MetaAttr::new( "famous", MetaAttrVal::ARRAY(famous) ),
             MetaAttr::new( "color", MetaAttrVal::OBJECT(color) ),
         );

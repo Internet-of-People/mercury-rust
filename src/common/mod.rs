@@ -4,6 +4,20 @@ pub mod imp;
 
 
 
+pub trait Link
+{
+    fn hash(&self) -> &[u8]; // of linked data
+    fn storage(&self) -> StorageId;
+    fn format(&self) -> FormatId;
+}
+
+pub trait Blob
+{
+    fn blob(&self) -> &[u8];
+}
+
+
+
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
 pub enum StorageId
 {
@@ -11,22 +25,21 @@ pub enum StorageId
     InMemory,
     Postgres,
     LevelDb,
+    Torrent,
     Ipfs,
     StoreJ,
     Hydra,
 }
 
 
-
-pub trait Link
+#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
+pub enum FormatId
 {
-    fn hash(&self) -> &[u8]; // of linked data
-    fn storage(&self) -> StorageId;
-}
-
-pub trait Blob
-{
-    fn blob(&self) -> &[u8];
+    Torrent,
+    Ipfs,
+    Git,
+    StoreJ,
+    // TODO what others? ...
 }
 
 
@@ -41,8 +54,6 @@ pub trait Serializer<ObjectType, SerializedType>
 
 pub trait Hasher<ObjectType, HashType>
 {
-    // TODO should (maybe in a different trait?) differentiate between
-    //      calculated binary hash and its multibase string representation
     fn get_hash(&self, object: &ObjectType) -> Result<HashType, HashError>;
     fn validate(&self, object: &ObjectType, hash: &HashType) -> Result<bool, HashError>;
 }
