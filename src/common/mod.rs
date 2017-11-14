@@ -27,7 +27,7 @@ pub type StorageId = String;
 pub trait Link
 {
     fn storage(&self) -> &StorageId;
-    fn hash(&self)    -> &[u8];         // of linked data under specified storage
+    fn hash(&self)    -> &str;          // of linked data under specified storage
     fn sublink(&self) -> Option<&Link>; // relative path, analogue to URL resource
 }
 

@@ -75,19 +75,19 @@ mod tests
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
     struct MetaLink
     {
-        hash:    Vec<u8>,
+        hash:    String,
         storage: StorageId,
     }
 
     impl MetaLink
     {
-        fn new(hash: Vec<u8>, storage: StorageId) -> Self
+        fn new(hash: String, storage: StorageId) -> Self
             { Self{hash: hash, storage: storage} }
     }
 
     impl Link for MetaLink
     {
-        fn hash(&self)    -> &[u8]          { self.hash.as_ref() }
+        fn hash(&self)    -> &str           { self.hash.as_ref() }
         fn storage(&self) -> &StorageId     { &self.storage }
         fn sublink(&self) -> Option<&Link>  { None }
     }
@@ -187,7 +187,7 @@ mod tests
         let answer = 42;
         let pi = 3.14159265358979;
 
-        let linkhash = b"Far far away in another storage network".to_vec();
+        let linkhash = "Far far away in another storage network".to_owned();
         let famous = vec!(
             MetaAttrVal::STRING( spoon.to_owned() ),
             MetaAttrVal::INT(answer),
