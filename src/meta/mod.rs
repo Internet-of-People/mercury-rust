@@ -1,25 +1,7 @@
 use std::time::SystemTime;
 
-use common::{Blob, Link};
+use common::Link;
 
-
-
-pub trait Data: Blob
-{
-    // Inherited from common::Data
-    // fn blob(&self) -> &[u8];
-
-    fn attributes<'a>(&'a self) -> Box< 'a + Iterator<Item = &'a Attribute> >;
-
-    // Convenience function to access attributes by name/path
-    fn first_attrval_by_name<'a>(&'a self, name: &str)
-            -> Option< AttributeValue<'a> >
-        { iter_first_attrval_by_name( self.attributes(), name ) }
-
-    fn first_attrval_by_path<'a>(&'a self, path: &[&str])
-            -> Option< AttributeValue<'a> >
-        { iter_first_attrval_by_path( self.attributes(), path ) }
-}
 
 
 pub trait Attribute
@@ -55,7 +37,7 @@ pub struct GpsLocation
 
 
 
-fn iter_first_attrval_by_name<'a>(iter: Box< 'a + Iterator<Item = &'a Attribute> >, name: &str)
+pub fn iter_first_attrval_by_name<'a>(iter: Box< 'a + Iterator<Item = &'a Attribute> >, name: &str)
     -> Option< AttributeValue<'a> >
 {
     iter.filter( |attr| attr.name() == name )
@@ -63,7 +45,7 @@ fn iter_first_attrval_by_name<'a>(iter: Box< 'a + Iterator<Item = &'a Attribute>
         .map( |attr| attr.value() )
 }
 
-fn iter_first_attrval_by_path<'a>(iter: Box< 'a + Iterator<Item = &'a Attribute> >, path: &[&str])
+pub fn iter_first_attrval_by_path<'a>(iter: Box< 'a + Iterator<Item = &'a Attribute> >, path: &[&str])
     -> Option< AttributeValue<'a> >
 {
     if path.len() == 0
@@ -87,7 +69,7 @@ fn iter_first_attrval_by_path<'a>(iter: Box< 'a + Iterator<Item = &'a Attribute>
 mod tests
 {
     use super::*;
-    use common::{FormatId, StorageId};
+    use common::{Data, FormatId, StorageId};
 
 
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -186,13 +168,10 @@ mod tests
             { Self{ blob: blob, hash: hash, attrs: attrs } }
     }
 
-    impl Blob for MetaData
-    {
-        fn blob(&self) -> &[u8] { self.blob.as_ref() }
-    }
-
     impl Data for MetaData
     {
+        fn blob(&self) -> &[u8] { self.blob.as_ref() }
+
         fn attributes<'a>(&'a self) -> Box< Iterator<Item = &'a Attribute> + 'a >
         {
             let result = self.attrs.iter().map( |meta| meta as &Attribute );

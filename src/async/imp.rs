@@ -12,6 +12,43 @@ use async::*;
 
 
 
+//// Un/Pack storable binary user data and metadata from/to a binary package frame, e.g. ipfs
+//pub trait PackageHandler<SerializedType: meta::Data, PackageType>
+//{
+//    fn link_prefix(&self) -> &str;
+//    fn pack(&self, data: SerializedType, attributes: Box< Iterator<&Attribute> >)
+//            -> Result<PackageType, HashSpaceError>;
+//    fn unpack(&self, package: PackageType) -> Result<SerializedType, HashSpaceError>;
+//}
+//
+//
+//pub struct HashWeb
+//{
+//    spaces: HashMap< StorageId, Box< HashSpace< Rc<Vec<u8>> > > >,
+//}
+//
+//
+//impl HashWeb
+//{
+//    pub fn new(spaces: HashMap< StorageId, Box< HashSpace< Rc<Vec<u8>> > > >) -> Self
+//        { HashWeb{spaces: spaces} }
+//
+//
+//    pub fn resolve(&self, link: &Link) -> Box< Future<Item = Rc<Data>, Error = HashSpaceError > >
+//    {
+//        let storage_res = self.spaces.get( &link.storage() )
+//            .ok_or( HashSpaceError::UnsupportedStorage( link.storage() ) );
+//        let storage = match storage_res {
+//            Ok(ref storage) => &storage,
+//            Err(e) => return Box::new( future::err(e) ),
+//        };
+//        let data = storage.resolve( &link.hash() );
+//        data
+//    }
+//}
+
+
+
 pub struct InMemoryStore<KeyType, ValueType>
 {
     map: HashMap<KeyType, ValueType>,
@@ -26,13 +63,13 @@ impl<KeyType, ValueType> InMemoryStore<KeyType, ValueType>
 impl<KeyType, ValueType>
 KeyValueStore<KeyType, ValueType>
 for InMemoryStore<KeyType, ValueType>
-    where KeyType: Eq + Hash + Clone,
+    where KeyType: Eq + Hash,
           ValueType: Clone + 'static
 {
     fn store(&mut self, key: KeyType, object: ValueType)
         -> Box< Future<Item=(), Error=StorageError> >
     {
-        self.map.insert(key.to_owned(), object );
+        self.map.insert(key, object );
         Box::new( future::ok(() ) )
     }
 

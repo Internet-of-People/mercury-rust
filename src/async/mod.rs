@@ -1,4 +1,3 @@
-//use std::collections::HashMap;
 use std::rc::Rc;
 
 use futures::prelude::*;
@@ -8,24 +7,6 @@ use common::*;
 use error::*;
 
 pub mod imp;
-
-
-
-//pub struct HashWeb
-//{
-//    spaces: HashMap< StorageId, HashSpace< Rc<Data> > >,
-//}
-//
-//impl HashWeb
-//{
-//    pub fn resolve(&self, link: &Link) -> Result< Rc<Data>, HashSpaceError >
-//    {
-//        match self.spaces.get( link.storage() ) {
-//            None => Err( HashSpaceError::Other( Box::new(TODO) ) ),
-//            Some()
-//        }
-//    }
-//}
 
 
 
@@ -69,9 +50,9 @@ CompositeHashSpace<ObjectType, SerializedType, HashType>
                 str_coder:  Box< StringCoder<HashType> > ) -> Self
     {
         Self{ serializer:   serializer,
-            hasher:       hasher,
-            storage:      storage,
-            str_coder:    str_coder, }
+              hasher:       hasher,
+              storage:      storage,
+              str_coder:    str_coder, }
     }
 
 //    fn sync_validate(&self, object: &ObjectType, hash_str: &str)

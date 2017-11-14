@@ -61,7 +61,8 @@ that describes the stored raw binary data and its relation to other data entries
 Metadata is accessible through the `meta::Attribute` trait that consists of
 a name and a strongly typed value. Note that this can be a composite value
 (i.e. array or object) that contains further attributes or a link
-that points to other entries.
+that points to other entries. Edges of the Merkle-DAG are defined
+by these link attributes. 
 
 A `meta::Data` entry provides an iterator for its attributes and
 some convenience functions for easier attribute lookups.
