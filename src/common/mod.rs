@@ -6,11 +6,29 @@ pub mod imp;
 
 
 
+pub type StorageId = String;
+
+//#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+//pub enum StorageId
+//{
+//    // TODO consider possible values
+//    Relative,
+//    Postgres,
+//    LevelDb,
+//    Magnet,
+//    Torrent,
+//    Ipfs,
+//    StoreJ,
+//    Git,
+//    Hydra,
+//}
+
+
 pub trait Link
 {
-    fn hash(&self) -> &[u8]; // of linked data
-    fn storage(&self) -> StorageId;
-    fn format(&self) -> FormatId;
+    fn storage(&self) -> &StorageId;
+    fn hash(&self)    -> &[u8];         // of linked data under specified storage
+    fn sublink(&self) -> Option<&Link>; // relative path, analogue to URL resource
 }
 
 
@@ -28,32 +46,6 @@ pub trait Data
     fn first_attrval_by_path<'a>(&'a self, path: &[&str])
             -> Option< AttributeValue<'a> >
         { meta::iter_first_attrval_by_path( self.attributes(), path ) }
-}
-
-
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum StorageId
-{
-    // TODO consider possible values
-    InMemory,
-    Postgres,
-    LevelDb,
-    Torrent,
-    Ipfs,
-    StoreJ,
-    Hydra,
-}
-
-
-#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-pub enum FormatId
-{
-    Torrent,
-    Ipfs,
-    Git,
-    StoreJ,
-    // TODO what others? ...
 }
 
 

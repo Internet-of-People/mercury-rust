@@ -9,28 +9,19 @@ use tokio_core::reactor;
 use tokio_postgres;
 
 use async::*;
+use common::StorageId;
 
 
 
-//// Un/Pack storable binary user data and metadata from/to a binary package frame, e.g. ipfs
-//pub trait PackageHandler<SerializedType: meta::Data, PackageType>
-//{
-//    fn link_prefix(&self) -> &str;
-//    fn pack(&self, data: SerializedType, attributes: Box< Iterator<&Attribute> >)
-//            -> Result<PackageType, HashSpaceError>;
-//    fn unpack(&self, package: PackageType) -> Result<SerializedType, HashSpaceError>;
-//}
-//
-//
-//pub struct HashWeb
-//{
-//    spaces: HashMap< StorageId, Box< HashSpace< Rc<Vec<u8>> > > >,
-//}
-//
-//
+pub struct HashWeb
+{
+    spaces: HashMap< StorageId, Box< HashSpace< Rc<Vec<u8>>, String > > >,
+}
+
+
 //impl HashWeb
 //{
-//    pub fn new(spaces: HashMap< StorageId, Box< HashSpace< Rc<Vec<u8>> > > >) -> Self
+//    pub fn new(spaces: HashMap< StorageId, Box< HashSpace< Rc<Vec<u8>>, String > > >) -> Self
 //        { HashWeb{spaces: spaces} }
 //
 //

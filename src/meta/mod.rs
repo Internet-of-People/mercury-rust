@@ -69,7 +69,7 @@ pub fn iter_first_attrval_by_path<'a>(iter: Box< 'a + Iterator<Item = &'a Attrib
 mod tests
 {
     use super::*;
-    use common::{Data, FormatId, StorageId};
+    use common::{Data, StorageId};
 
 
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
@@ -77,20 +77,19 @@ mod tests
     {
         hash:    Vec<u8>,
         storage: StorageId,
-        format:  FormatId,
     }
 
     impl MetaLink
     {
-        fn new(hash: Vec<u8>, storage: StorageId, format: FormatId) -> Self
-            { Self{hash: hash, storage: storage, format: format} }
+        fn new(hash: Vec<u8>, storage: StorageId) -> Self
+            { Self{hash: hash, storage: storage} }
     }
 
     impl Link for MetaLink
     {
-        fn hash(&self)    -> &[u8]      { self.hash.as_ref() }
-        fn storage(&self) -> StorageId  { self.storage }
-        fn format(&self)  -> FormatId   { self.format }
+        fn hash(&self)    -> &[u8]          { self.hash.as_ref() }
+        fn storage(&self) -> &StorageId     { &self.storage }
+        fn sublink(&self) -> Option<&Link>  { None }
     }
 
 
@@ -202,7 +201,7 @@ mod tests
         let attrs = vec!(
             MetaAttr::new( "works", MetaAttrVal::BOOL(true) ),
             MetaAttr::new( "timestamp", MetaAttrVal::TIMESTAMP( SystemTime::now() ) ),
-            MetaAttr::new( "link", MetaAttrVal::LINK( MetaLink::new(linkhash, StorageId::Torrent, FormatId::Torrent) ) ),
+            MetaAttr::new( "link", MetaAttrVal::LINK( MetaLink::new( linkhash, "magnet".to_owned() ) ) ),
             MetaAttr::new( "famous", MetaAttrVal::ARRAY(famous) ),
             MetaAttr::new( "color", MetaAttrVal::OBJECT(color) ),
         );

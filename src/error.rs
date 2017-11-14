@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt;
 
-use common::{FormatId, StorageId};
+use common::StorageId;
 
 
 
@@ -109,9 +109,7 @@ pub enum HashSpaceError {
     HashError(HashError),
     StorageError(StorageError),
     StringCoderError(StringCoderError),
-    UnknownFormat(String),
-    UnknownStorage(String),
-    UnsupportedFormat(FormatId),
+    UnknownStorage(StorageId),
     UnsupportedStorage(StorageId),
     Other(Box<Error>),
 }
@@ -129,10 +127,8 @@ impl Error for HashSpaceError {
             HashSpaceError::HashError(ref e)        => e.description(),
             HashSpaceError::StorageError(ref e)     => e.description(),
             HashSpaceError::StringCoderError(ref e) => e.description(),
-            HashSpaceError::UnknownFormat(ref _f)   => "Unknown binary format: {:?}",
             HashSpaceError::UnknownStorage(ref _s)  => "Unknown storage identifier: {:?}",
-            HashSpaceError::UnsupportedFormat(_f)   => "Format is not supporteD: {:?}",
-            HashSpaceError::UnsupportedStorage(_s)  => "Storage is not supporteD: {:?}",
+            HashSpaceError::UnsupportedStorage(ref _s) => "Storage is not supporteD: {:?}",
             HashSpaceError::Other(ref e)            => e.description(),
         }
     }
