@@ -34,44 +34,54 @@ impl Link for HashWebLink
 
 
 
-pub struct HashWeb<ObjectType, ReadableHashType>
+pub struct HashWeb<ObjectType>
 {
-    hashspaces: HashMap<HashSpaceId, Box< HashSpace<ObjectType, ReadableHashType > > >,
+    hashspaces: HashMap<HashSpaceId, Box< HashSpace<ObjectType, String> > >,
     default:    HashSpaceId,
 }
 
 
-impl<ObjectType, ReadableHashType> HashWeb<ObjectType, ReadableHashType>
+impl<ObjectType> HashWeb<ObjectType>
 {
-    pub fn new(hashspaces: HashMap<HashSpaceId, Box< HashSpace<ObjectType, ReadableHashType> > >,
+    pub fn new(hashspaces: HashMap<HashSpaceId, Box< HashSpace<ObjectType, String> > >,
                default: HashSpaceId) -> Self
         { HashWeb { hashspaces: hashspaces, default: default } }
 }
 
 
-//impl<ObjectType>
-//HashSpace<ObjectType, Box<Link>>
-//for HashWeb<ObjectType, Box<Link>>
-//{
-//    fn store(&mut self, object: ObjectType)
-//         -> Box< Future<Item=Box<Link>, Error=HashSpaceError> >
-//    {
-//        let storage_res = self.hashspaces.get( &link.hashspace() )
-//            .ok_or( HashSpaceError::UnsupportedStorage( link.storage() ) );
-//    }
-//
-//    fn resolve(&self, link: Box<Link>) -> Box< Future<Item = ObjectType, Error = HashSpaceError > >
-//    {
-//        let storage_res = self.hashspaces.get( &link.hashspace() )
-//            .ok_or( HashSpaceError::UnsupportedStorage( link.storage() ) );
-//        let storage = match storage_res {
-//            Ok(ref storage) => &storage,
-//            Err(e) => return Box::new( future::err(e) ),
-//        };
-//        let data = storage.resolve( &link.hash() );
-//        Box::new(data)
-//    }
-//}
+impl<ObjectType>
+HashSpace<ObjectType, HashWebLink>
+for HashWeb<ObjectType>
+where ObjectType: 'static
+{
+    fn store(&mut self, object: ObjectType)
+         -> Box< Future<Item=HashWebLink, Error=HashSpaceError> >
+    {
+        let mut hashspace_res = self.hashspaces.get_mut(&self.default)
+            .ok_or( HashSpaceError::UnsupportedStorage( self.default.clone() ) );
+        let hashspace = match hashspace_res {
+            Ok(ref mut space) => space,
+            Err(e) => return Box::new( future::err(e) ),
+        };
+        let default_hashspace_clone = self.default.clone();
+        let result = hashspace.store(object)
+            .map( move |hash| HashWebLink::new(default_hashspace_clone, &hash) );
+        Box::new(result)
+    }
+
+    fn resolve(&self, link: &HashWebLink)
+        -> Box< Future<Item = ObjectType, Error = HashSpaceError > >
+    {
+        let hashspace_res = self.hashspaces.get( link.hashspace() )
+            .ok_or( HashSpaceError::UnsupportedStorage( link.hashspace().to_owned() ) );
+        let hashspace = match hashspace_res {
+            Ok(ref space) => space,
+            Err(e) => return Box::new( future::err(e) ),
+        };
+        let data = hashspace.resolve( &link.hash().to_owned() );
+        Box::new(data)
+    }
+}
 
 
 
