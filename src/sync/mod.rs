@@ -5,10 +5,10 @@ pub mod imp;
 
 
 
-pub trait HashSpace<ObjectType>
+pub trait HashSpace<ObjectType, ReadableHashType>
 {
-    fn store(&mut self, object: ObjectType) -> Result<String, HashSpaceError>;
-    fn resolve(&self, hash: &str) -> Result<ObjectType, HashSpaceError>;
+    fn store(&mut self, object: ObjectType) -> Result<ReadableHashType, HashSpaceError>;
+    fn resolve(&self, hash: &ReadableHashType) -> Result<ObjectType, HashSpaceError>;
 //    fn validate(&self, object: &ObjectType, hash: &str) -> Result<bool, HashSpaceError>;
 }
 
@@ -21,35 +21,35 @@ pub trait KeyValueStore<KeyType, ValueType>
 }
 
 
-pub struct CompositeHashSpace<ObjectType, SerializedType, HashType>
+pub struct ModularHashSpace<ObjectType, SerializedType, BinaryHashType, ReadableHashType>
 {
     serializer: Box< Serializer<ObjectType, SerializedType> >,
-    hasher:     Box< Hasher<SerializedType, HashType> >,
-    storage:    Box< KeyValueStore<HashType, SerializedType> >,
-    str_coder:  Box< StringCoder<HashType> >,
+    hasher:     Box< Hasher<SerializedType, BinaryHashType> >,
+    storage:    Box< KeyValueStore<BinaryHashType, SerializedType> >,
+    hash_coder: Box< HashCoder<BinaryHashType, ReadableHashType> >,
 }
 
 
-impl <ObjectType, SerializedType, HashType>
-HashSpace<ObjectType>
-for CompositeHashSpace<ObjectType, SerializedType, HashType>
+impl <ObjectType, SerializedType, BinaryHashType, ReadableHashType>
+HashSpace<ObjectType, ReadableHashType>
+for ModularHashSpace<ObjectType, SerializedType, BinaryHashType, ReadableHashType>
 {
-    fn store(&mut self, object: ObjectType) -> Result<String, HashSpaceError>
+    fn store(&mut self, object: ObjectType) -> Result<ReadableHashType, HashSpaceError>
     {
         let serialized_obj = self.serializer.serialize(object)
             .map_err( |e| HashSpaceError::SerializerError(e) )?;
-        let obj_hash = self.hasher.get_hash(&serialized_obj)
+        let hash_bytes = self.hasher.get_hash(&serialized_obj)
             .map_err( |e| HashSpaceError::HashError(e) )?;
-        self.storage.store( &obj_hash, serialized_obj )
+        self.storage.store( &hash_bytes, serialized_obj )
             .map_err( |e| HashSpaceError::StorageError(e) )?;
-        let hash_str = self.str_coder.encode(&obj_hash)
+        let hash_str = self.hash_coder.encode(&hash_bytes)
             .map_err( |e| HashSpaceError::StringCoderError(e) )?;
         Ok(hash_str)
     }
 
-    fn resolve(&self, hash_str: &str) -> Result<ObjectType, HashSpaceError>
+    fn resolve(&self, hash_str: &ReadableHashType) -> Result<ObjectType, HashSpaceError>
     {
-        let hash_bytes = self.str_coder.decode(&hash_str)
+        let hash_bytes = self.hash_coder.decode(&hash_str)
             .map_err( |e| HashSpaceError::StringCoderError(e) )?;
         let serialized_obj = self.storage.lookup(&hash_bytes)
             .map_err( |e| HashSpaceError::StorageError(e) )?;

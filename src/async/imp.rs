@@ -204,11 +204,11 @@ mod tests
         // NOTE this works without a tokio::reactor::Core only because
         //      all plugins always return an already completed ok/err result
         let store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
-        let mut hashspace: CompositeHashSpace<Person, Vec<u8>, Vec<u8>> = CompositeHashSpace::new(
+        let mut hashspace: ModularHashSpace<Person, Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
             Rc::new( SerdeJsonSerializer{} ),
             Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
             Box::new(store),
-            Box::new( MultiBaseStringCoder::new(multibase::Base64) ) );
+            Box::new( MultiBaseHashCoder::new(multibase::Base64) ) );
 
         let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
         let store_res = hashspace.store( object.clone() ).wait();

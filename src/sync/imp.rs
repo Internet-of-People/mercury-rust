@@ -75,11 +75,11 @@ mod tests
     fn test_hashspace()
     {
         let store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
-        let mut hashspace: CompositeHashSpace<Person, Vec<u8>, Vec<u8>> = CompositeHashSpace{
+        let mut hashspace: ModularHashSpace<Person, Vec<u8>, Vec<u8>, String> = ModularHashSpace {
             serializer: Box::new( SerdeJsonSerializer{} ),
             hasher:     Box::new( MultiHasher::new(multihash::Hash::Keccak512) ),
             storage:    Box::new(store),
-            str_coder:  Box::new( MultiBaseStringCoder::new(multibase::Base64) ) };
+            hash_coder:  Box::new( MultiBaseHashCoder::new(multibase::Base64) ) };
 
         let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
         let store_res = hashspace.store( object.clone() );

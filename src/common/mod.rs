@@ -76,9 +76,11 @@ pub trait Hasher<ObjectType, HashType>
 }
 
 // Provide human-readable (e.g. Base64) representation of (binary) hashes
-pub trait StringCoder<HashType>
+pub trait HashCoder<BinaryHashType, ReadableHashType>
 {
-    fn encode(&self, hash_bytes: &HashType) -> Result<String, StringCoderError>;
-    fn decode(&self, hash_str: &str) -> Result<HashType, StringCoderError>;
+    fn encode(&self, hash_bytes: &BinaryHashType)
+        -> Result<ReadableHashType, StringCoderError>;
+    fn decode(&self, hash_str: &ReadableHashType)
+        -> Result<BinaryHashType, StringCoderError>;
 }
 

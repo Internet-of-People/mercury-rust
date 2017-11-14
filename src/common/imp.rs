@@ -122,18 +122,18 @@ impl<ObjectType> Serializer<ObjectType, Vec<u8>> for SerdeJsonSerializer
 
 
 
-pub struct MultiBaseStringCoder
+pub struct MultiBaseHashCoder
 {
     base_algorithm: multibase::Base,
 }
 
-impl MultiBaseStringCoder
+impl MultiBaseHashCoder
 {
     pub fn new(base_algorithm: multibase::Base) -> Self
-    { Self{base_algorithm: base_algorithm} }
+        { Self{base_algorithm: base_algorithm} }
 }
 
-impl StringCoder<Vec<u8>> for MultiBaseStringCoder
+impl HashCoder<Vec<u8>, String> for MultiBaseHashCoder
 {
     fn encode(&self, hash_bytes: &Vec<u8>) -> Result<String, StringCoderError>
     {
@@ -141,7 +141,7 @@ impl StringCoder<Vec<u8>> for MultiBaseStringCoder
         Ok(hash_str)
     }
 
-    fn decode(&self, hash_str: &str) -> Result<Vec<u8>, StringCoderError>
+    fn decode(&self, hash_str: &String) -> Result<Vec<u8>, StringCoderError>
     {
         multibase::decode(&hash_str)
             .map( |(_,bytes)| bytes )
@@ -191,10 +191,10 @@ mod tests
 
 
     #[test]
-    fn test_string_coder()
+    fn test_hash_coder()
     {
         let hash_bytes = vec![1, 2, 3, 4, 5, 6, 7, 8, 9];
-        let coder = MultiBaseStringCoder::new(multibase::Base64);
+        let coder = MultiBaseHashCoder::new(multibase::Base64);
         let hash_str = coder.encode(&hash_bytes);
         assert!( hash_str.is_ok() );
         let decode_res = coder.decode( &hash_str.unwrap() );

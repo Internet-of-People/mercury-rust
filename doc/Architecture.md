@@ -25,7 +25,7 @@ It collects the following node operations:
  - `validate` a hash to an object to detect errors or tampering
 
 Most `HashSpace` implementations are not very special and thus can be
-separated into further responsibilities. `CompositeHashSpace`
+separated into further responsibilities. `ModularHashSpace`
 implements a `HashSpace` by delegating tasks to the following interfaces,
 effectively delaying such implementation decisions and improving modularity:
  - `Serializer` en/decodes raw in-memory objects to/from a storage format,
@@ -34,7 +34,7 @@ effectively delaying such implementation decisions and improving modularity:
  - `KeyValueStore` provides a (potentially distributed) HashMap. In other words
     it binds (stores and resolves) an arbitrary key (hash) to a value (object).
     E.g. it can use an in-memory map, local disk, sharded No/Sql or a DHT
- - `StringCoder` en/decodes binary data (hash) to/from a more human-friendly format,
+ - `HashCoder` en/decodes binary data (hash) to/from a more human-friendly format,
     e.g. base64
 
 To be maintainable, handle any hash and link formats

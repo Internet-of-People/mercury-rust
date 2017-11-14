@@ -10,11 +10,11 @@ pub mod imp;
 
 
 
-pub trait HashSpace<ObjectType>
+pub trait HashSpace<ObjectType, ReadableHashType>
 {
     fn store(&mut self, object: ObjectType)
-        -> Box< Future<Item=String, Error=HashSpaceError> >;
-    fn resolve(&self, hash: &str)
+        -> Box< Future<Item=ReadableHashType, Error=HashSpaceError> >;
+    fn resolve(&self, hash: &ReadableHashType)
         -> Box< Future<Item=ObjectType, Error=HashSpaceError> >;
 //    fn validate(&self, object: &ObjectType, hash: &str)
 //        -> Box< Future<Item=bool, Error=HashSpaceError> >;
@@ -32,27 +32,27 @@ pub trait KeyValueStore<KeyType, ValueType>
 
 
 
-pub struct CompositeHashSpace<ObjectType, SerializedType, HashType>
+pub struct ModularHashSpace<ObjectType, SerializedType, BinaryHashType, ReadableHashType>
 {
     serializer: Rc< Serializer<ObjectType, SerializedType> >,
-    hasher:     Rc< Hasher<SerializedType, HashType> >,
-    storage:    Box< KeyValueStore<HashType, SerializedType> >,
-    str_coder:  Box< StringCoder<HashType> >,
+    hasher:     Rc< Hasher<SerializedType, BinaryHashType> >,
+    storage:    Box< KeyValueStore<BinaryHashType, SerializedType> >,
+    hash_coder: Box< HashCoder<BinaryHashType, ReadableHashType> >,
 }
 
 
-impl<ObjectType, SerializedType, HashType>
-CompositeHashSpace<ObjectType, SerializedType, HashType>
+impl<ObjectType, SerializedType, BinaryHashType, ReadableHashType>
+ModularHashSpace<ObjectType, SerializedType, BinaryHashType, ReadableHashType>
 {
-    pub fn new( serializer: Rc< Serializer<ObjectType, SerializedType> >,
-                hasher:     Rc< Hasher<SerializedType, HashType> >,
-                storage:    Box< KeyValueStore<HashType, SerializedType> >,
-                str_coder:  Box< StringCoder<HashType> > ) -> Self
+    pub fn new(serializer: Rc< Serializer<ObjectType, SerializedType> >,
+               hasher:     Rc< Hasher<SerializedType, BinaryHashType> >,
+               storage:    Box< KeyValueStore<BinaryHashType, SerializedType> >,
+               hash_coder:  Box< HashCoder<BinaryHashType, ReadableHashType> > ) -> Self
     {
         Self{ serializer:   serializer,
               hasher:       hasher,
               storage:      storage,
-              str_coder:    str_coder, }
+              hash_coder:   hash_coder, }
     }
 
 //    fn sync_validate(&self, object: &ObjectType, hash_str: &str)
@@ -69,15 +69,16 @@ CompositeHashSpace<ObjectType, SerializedType, HashType>
 }
 
 
-impl<ObjectType, SerializedType, HashType>
-HashSpace<ObjectType>
-for CompositeHashSpace<ObjectType, SerializedType, HashType>
+impl<ObjectType, SerializedType, BinaryHashType, ReadableHashType>
+HashSpace<ObjectType, ReadableHashType>
+for ModularHashSpace<ObjectType, SerializedType, BinaryHashType, ReadableHashType>
     where ObjectType: 'static,
           SerializedType: 'static,
-          HashType: 'static + Clone
+          BinaryHashType: 'static + Clone,
+          ReadableHashType: 'static
 {
     fn store(&mut self, object: ObjectType)
-        -> Box< Future<Item=String, Error=HashSpaceError> >
+        -> Box< Future<Item=ReadableHashType, Error=HashSpaceError> >
     {
         let hash_bytes_result = self.serializer.serialize(object)
             .map_err( |e| HashSpaceError::SerializerError(e) )
@@ -91,7 +92,7 @@ for CompositeHashSpace<ObjectType, SerializedType, HashType>
             { return Box::new( future::err(e) ); }
         let (serialized_obj, hash_bytes) = hash_bytes_result.unwrap();
 
-        let hash_str_result = self.str_coder.encode(&hash_bytes)
+        let hash_str_result = self.hash_coder.encode(&hash_bytes)
             .map_err( |e| HashSpaceError::StringCoderError(e) );
         if let Err(e) = hash_str_result
             { return Box::new( future::err(e) ); }
@@ -103,10 +104,11 @@ for CompositeHashSpace<ObjectType, SerializedType, HashType>
         Box::new(result)
     }
 
-    fn resolve(&self, hash_str: &str)
+
+    fn resolve(&self, hash_str: &ReadableHashType)
         -> Box< Future<Item=ObjectType, Error=HashSpaceError> >
     {
-        let hash_bytes_result = self.str_coder.decode(&hash_str)
+        let hash_bytes_result = self.hash_coder.decode(&hash_str)
             .map_err( |e| HashSpaceError::StringCoderError(e) );
         let hash_bytes = match hash_bytes_result {
             Err(e)  => return Box::new( future::err(e) ),
