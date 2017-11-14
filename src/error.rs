@@ -1,7 +1,7 @@
 use std::error::Error;
 use std::fmt;
 
-use common::StorageId;
+use common::HashSpaceId;
 
 
 
@@ -109,8 +109,8 @@ pub enum HashSpaceError {
     HashError(HashError),
     StorageError(StorageError),
     StringCoderError(StringCoderError),
-    UnknownStorage(StorageId),
-    UnsupportedStorage(StorageId),
+    UnknownStorage(HashSpaceId),
+    UnsupportedStorage(HashSpaceId),
     Other(Box<Error>),
 }
 

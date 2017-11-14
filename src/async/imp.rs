@@ -9,32 +9,67 @@ use tokio_core::reactor;
 use tokio_postgres;
 
 use async::*;
-use common::StorageId;
+use common::{Link, HashSpaceId};
 
 
 
-pub struct HashWeb
+pub struct HashWebLink
 {
-    spaces: HashMap< StorageId, Box< HashSpace< Rc<Vec<u8>>, String > > >,
+    hashspace:  HashSpaceId,
+    hash:       String,
+}
+
+impl HashWebLink
+{
+    pub fn new(hashspace: HashSpaceId, hash: &String) -> Self
+        { Self{ hashspace: hashspace, hash: hash.to_owned() } }
+}
+
+impl Link for HashWebLink
+{
+    fn hashspace(&self) -> &HashSpaceId   { &self.hashspace }
+    fn hash(&self)      -> &str           { self.hash.as_ref() }
+    fn sublink(&self)   -> Option<&Link>  { None } // TODO this should be implemented properly
 }
 
 
-//impl HashWeb
+
+pub struct HashWeb<ObjectType, ReadableHashType>
+{
+    hashspaces: HashMap<HashSpaceId, Box< HashSpace<ObjectType, ReadableHashType > > >,
+    default:    HashSpaceId,
+}
+
+
+impl<ObjectType, ReadableHashType> HashWeb<ObjectType, ReadableHashType>
+{
+    pub fn new(hashspaces: HashMap<HashSpaceId, Box< HashSpace<ObjectType, ReadableHashType> > >,
+               default: HashSpaceId) -> Self
+        { HashWeb { hashspaces: hashspaces, default: default } }
+}
+
+
+//impl<ObjectType>
+//HashSpace<ObjectType, Box<Link>>
+//for HashWeb<ObjectType, Box<Link>>
 //{
-//    pub fn new(spaces: HashMap< StorageId, Box< HashSpace< Rc<Vec<u8>>, String > > >) -> Self
-//        { HashWeb{spaces: spaces} }
-//
-//
-//    pub fn resolve(&self, link: &Link) -> Box< Future<Item = Rc<Data>, Error = HashSpaceError > >
+//    fn store(&mut self, object: ObjectType)
+//         -> Box< Future<Item=Box<Link>, Error=HashSpaceError> >
 //    {
-//        let storage_res = self.spaces.get( &link.storage() )
+//        let storage_res = self.hashspaces.get( &link.hashspace() )
+//            .ok_or( HashSpaceError::UnsupportedStorage( link.storage() ) );
+//    }
+//
+//    fn resolve(&self, link: Box<Link>) -> Box< Future<Item = ObjectType, Error = HashSpaceError > >
+//    {
+//        let storage_res = self.hashspaces.get( &link.hashspace() )
 //            .ok_or( HashSpaceError::UnsupportedStorage( link.storage() ) );
 //        let storage = match storage_res {
 //            Ok(ref storage) => &storage,
 //            Err(e) => return Box::new( future::err(e) ),
 //        };
 //        let data = storage.resolve( &link.hash() );
-//        data
+//        Box::new(data)
 //    }
 //}
 

@@ -6,10 +6,10 @@ pub mod imp;
 
 
 
-pub type StorageId = String;
+pub type HashSpaceId = String;
 
 //#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-//pub enum StorageId
+//pub enum HashSpaceId
 //{
 //    // TODO consider possible values
 //    Relative,
@@ -26,9 +26,9 @@ pub type StorageId = String;
 
 pub trait Link
 {
-    fn storage(&self) -> &StorageId;
-    fn hash(&self)    -> &str;          // of linked data under specified storage
-    fn sublink(&self) -> Option<&Link>; // relative path, analogue to URL resource
+    fn hashspace(&self) -> &HashSpaceId;
+    fn hash(&self)      -> &str;          // of linked data under specified hashspace
+    fn sublink(&self)   -> Option<&Link>; // relative path, analogue to URL resource
 }
 
 

@@ -69,27 +69,27 @@ pub fn iter_first_attrval_by_path<'a>(iter: Box< 'a + Iterator<Item = &'a Attrib
 mod tests
 {
     use super::*;
-    use common::{Data, StorageId};
+    use common::{Data, HashSpaceId};
 
 
     #[derive(Debug, PartialEq, Serialize, Deserialize)]
     struct MetaLink
     {
-        hash:    String,
-        storage: StorageId,
+        hashspace:  HashSpaceId,
+        hash:       String,
     }
 
     impl MetaLink
     {
-        fn new(hash: String, storage: StorageId) -> Self
-            { Self{hash: hash, storage: storage} }
+        fn new(hashspace: HashSpaceId, hash: String) -> Self
+            { Self{hashspace: hashspace, hash: hash} }
     }
 
     impl Link for MetaLink
     {
-        fn hash(&self)    -> &str           { self.hash.as_ref() }
-        fn storage(&self) -> &StorageId     { &self.storage }
-        fn sublink(&self) -> Option<&Link>  { None }
+        fn hashspace(&self) -> &HashSpaceId   { &self.hashspace }
+        fn hash(&self)      -> &str           { self.hash.as_ref() }
+        fn sublink(&self)   -> Option<&Link>  { None }
     }
 
 
@@ -201,7 +201,7 @@ mod tests
         let attrs = vec!(
             MetaAttr::new( "works", MetaAttrVal::BOOL(true) ),
             MetaAttr::new( "timestamp", MetaAttrVal::TIMESTAMP( SystemTime::now() ) ),
-            MetaAttr::new( "link", MetaAttrVal::LINK( MetaLink::new( linkhash, "magnet".to_owned() ) ) ),
+            MetaAttr::new( "link", MetaAttrVal::LINK( MetaLink::new( "magnet".to_owned(), linkhash ) ) ),
             MetaAttr::new( "famous", MetaAttrVal::ARRAY(famous) ),
             MetaAttr::new( "color", MetaAttrVal::OBJECT(color) ),
         );
