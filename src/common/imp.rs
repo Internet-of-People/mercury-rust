@@ -8,6 +8,27 @@ use common::*;
 
 
 
+pub struct HashWebLink
+{
+    hashspace:  HashSpaceId,
+    hash:       String,
+}
+
+impl HashWebLink
+{
+    pub fn new(hashspace: HashSpaceId, hash: &String) -> Self
+    { Self{ hashspace: hashspace, hash: hash.to_owned() } }
+}
+
+impl Link for HashWebLink
+{
+    fn hashspace(&self) -> &HashSpaceId   { &self.hashspace }
+    fn hash(&self)      -> &str           { self.hash.as_ref() }
+    fn sublink(&self)   -> Option<&Link>  { None } // TODO this should be implemented properly
+}
+
+
+
 pub struct MultiHasher
 {
     hash_algorithm: multihash::Hash,

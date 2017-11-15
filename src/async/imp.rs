@@ -10,27 +10,7 @@ use tokio_postgres;
 
 use async::*;
 use common::{Link, HashSpaceId};
-
-
-
-pub struct HashWebLink
-{
-    hashspace:  HashSpaceId,
-    hash:       String,
-}
-
-impl HashWebLink
-{
-    pub fn new(hashspace: HashSpaceId, hash: &String) -> Self
-        { Self{ hashspace: hashspace, hash: hash.to_owned() } }
-}
-
-impl Link for HashWebLink
-{
-    fn hashspace(&self) -> &HashSpaceId   { &self.hashspace }
-    fn hash(&self)      -> &str           { self.hash.as_ref() }
-    fn sublink(&self)   -> Option<&Link>  { None } // TODO this should be implemented properly
-}
+use common::imp::HashWebLink;
 
 
 
@@ -235,31 +215,6 @@ mod tests
 
 
     #[test]
-    fn test_hashspace()
-    {
-        // NOTE this works without a tokio::reactor::Core only because
-        //      all plugins always return an already completed ok/err result
-        let store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
-        let mut hashspace: ModularHashSpace<Person, Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
-            Rc::new( SerdeJsonSerializer{} ),
-            Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
-            Box::new(store),
-            Box::new( MultiBaseHashCoder::new(multibase::Base64) ) );
-
-        let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
-        let store_res = hashspace.store( object.clone() ).wait();
-        assert!( store_res.is_ok() );
-        let hash = store_res.unwrap();
-        let lookup_res = hashspace.resolve(&hash).wait();
-        assert!( lookup_res.is_ok() );
-        assert_eq!( lookup_res.unwrap(), object );
-//        let validate_res = hashspace.validate(&object, &hash).wait();
-//        assert!( validate_res.is_ok() );
-//        assert!( validate_res.unwrap() );
-    }
-
-
-    #[test]
     fn test_postgres_storage()
     {
         // TODO consider if these should also use assert!() calls instead of expect/unwrap
@@ -281,5 +236,71 @@ mod tests
         let lookup_res = reactor.run(lookup_future);
         assert!( lookup_res.is_ok(), "lookup failed with {:?}", lookup_res );
         assert_eq!( lookup_res.unwrap(), value );
+    }
+
+
+    #[test]
+    fn test_hashspace()
+    {
+        // NOTE this works without a tokio::reactor::Core only because
+        //      all plugins always return an already completed ok/err result
+        let store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
+        let mut hashspace: ModularHashSpace<Person, Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
+            Rc::new( SerdeJsonSerializer{} ),
+            Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
+            Box::new(store),
+            Box::new( MultiBaseHashCoder::new(multibase::Base64) ) );
+
+        let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
+        let store_res = hashspace.store( object.clone() ).wait();
+        assert!( store_res.is_ok() );
+        let hash = store_res.unwrap();
+        let lookup_res = hashspace.resolve(&hash).wait();
+        assert!( lookup_res.is_ok() );
+        assert_eq!( lookup_res.unwrap(), object );
+        //        let validate_res = hashspace.validate(&object, &hash).wait();
+        //        assert!( validate_res.is_ok() );
+        //        assert!( validate_res.unwrap() );
+    }
+
+
+    #[test]
+    fn test_hashweb()
+    {
+        let cache_store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
+        let mut cache_space: ModularHashSpace<Vec<u8>, Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
+            Rc::new( IdentitySerializer{} ),
+            Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
+            Box::new(cache_store),
+            Box::new( MultiBaseHashCoder::new(multibase::Base64) ) );
+
+        // TODO consider if these should also use assert!() calls instead of expect/unwrap
+        let mut reactor = reactor::Core::new()
+            .expect("Failed to initialize the reactor event loop");
+
+        // This URL should be assembled from the gitlab-ci.yml
+        let postgres_url = "postgresql://testuser:testpass@postgres/testdb";
+        let mut postgres_storage = PostgresStore::new( &reactor.handle(),
+            postgres_url, "storagetest", "key", "data");
+        let mut postgres_space: ModularHashSpace< Vec<u8>, Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
+            Rc::new( IdentitySerializer{} ),
+            Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
+            Box::new(postgres_storage),
+            Box::new( MultiBaseHashCoder::new(multibase::Base64) ) );
+
+        let default_space = "cache".to_owned();
+        let mut spaces: HashMap< String, Box< HashSpace< Vec<u8>, String > > > = HashMap::new();
+        spaces.insert( default_space.clone(), Box::new(cache_space) );
+        spaces.insert( "postgres".to_owned(), Box::new(postgres_space) );
+        let mut hashweb = HashWeb::new( spaces, default_space.clone() );
+
+        let content = b"There's over a dozen netrunners Netwatch Cops would love to brain burn and Rache Bartmoss is at least two of them".to_vec();
+        let link_future = hashweb.store( content.clone() );
+        let link = reactor.run(link_future).unwrap();
+        assert_eq!( *link.hashspace(), default_space );
+
+        let bytes_future = hashweb.resolve(&link);
+        let bytes = reactor.run(bytes_future).unwrap();
+        assert_eq!( bytes, content);
     }
 }
