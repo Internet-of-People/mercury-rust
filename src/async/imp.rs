@@ -64,16 +64,19 @@ where ObjectType: 'static
     }
 
 
-//    fn validate(&self, object: &ObjectType, link: &HashWebLink)
-//        -> Box< Future<Item=bool, Error=HashSpaceError> >
-//    {
-//        let hashspace = match self.hashspace( link.hashspace() ) {
-//            Ok(ref space) => space,
-//            Err(e) => return Box::new( future::err(e) ),
-//        };
-//        let result = hashspace.validate( object, &link.hash().to_owned() );
-//        Box::new(result)
-//    }
+    fn validate(&self, object: &ObjectType, link: &HashWebLink)
+        -> Box< Future<Item=bool, Error=HashSpaceError> >
+    {
+        let hashspace_res = self.hashspaces.get( link.hashspace() )
+            .ok_or( HashSpaceError::UnsupportedHashSpace( link.hashspace().to_owned() ) );
+        let hashspace = match hashspace_res {
+            Ok(ref space) => space,
+            Err(e) => return Box::new( future::err(e) ),
+        };
+        // TODO to_string() is unnecessary below, find out how to transform signatures so as it's not needed
+        let result = hashspace.validate( object, &link.hash().to_string() );
+        Box::new(result)
+    }
 }
 
 
@@ -258,22 +261,23 @@ mod tests
         // NOTE this works without a tokio::reactor::Core only because
         //      all plugins always return an already completed ok/err result
         let store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
-        let mut hashspace: ModularHashSpace<Person, Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
-            Rc::new( SerdeJsonSerializer{} ),
+        let mut hashspace: ModularHashSpace<Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
+//            Rc::new( SerdeJsonSerializer{} ),
             Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
             Box::new(store),
             Box::new( MultiBaseHashCoder::new(multibase::Base64) ) );
 
-        let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
+//        let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
+        let object = b"What do you get if you multiply six by nine?".to_vec();
         let store_res = hashspace.store( object.clone() ).wait();
         assert!( store_res.is_ok() );
         let hash = store_res.unwrap();
         let lookup_res = hashspace.resolve(&hash).wait();
         assert!( lookup_res.is_ok() );
         assert_eq!( lookup_res.unwrap(), object );
-//        let validate_res = hashspace.validate(&object, &hash).wait();
-//        assert!( validate_res.is_ok() );
-//        assert!( validate_res.unwrap() );
+        let validate_res = hashspace.validate(&object, &hash).wait();
+        assert!( validate_res.is_ok() );
+        assert!( validate_res.unwrap() );
     }
 
 
@@ -281,8 +285,8 @@ mod tests
     fn test_hashweb()
     {
         let cache_store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
-        let cache_space: ModularHashSpace<Vec<u8>, Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
-            Rc::new( IdentitySerializer{} ),
+        let cache_space: ModularHashSpace<Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
+//            Rc::new( IdentitySerializer{} ),
             Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
             Box::new(cache_store),
             Box::new( MultiBaseHashCoder::new(multibase::Base64) ) );
@@ -295,8 +299,8 @@ mod tests
         let postgres_url = "postgresql://testuser:testpass@postgres/testdb";
         let postgres_storage = PostgresStore::new( &reactor.handle(),
             postgres_url, "storagetest", "key", "data");
-        let postgres_space: ModularHashSpace< Vec<u8>, Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
-            Rc::new( IdentitySerializer{} ),
+        let postgres_space: ModularHashSpace< Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
+//            Rc::new( IdentitySerializer{} ),
             Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
             Box::new(postgres_storage),
             Box::new( MultiBaseHashCoder::new(multibase::Base64) ) );
