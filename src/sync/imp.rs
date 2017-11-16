@@ -75,13 +75,14 @@ mod tests
     fn test_hashspace()
     {
         let store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
-        let mut hashspace: ModularHashSpace<Person, Vec<u8>, Vec<u8>, String> = ModularHashSpace {
-            serializer: Box::new( SerdeJsonSerializer{} ),
+        let mut hashspace: ModularHashSpace<Vec<u8>, Vec<u8>, String> = ModularHashSpace {
+            //serializer: Box::new( SerdeJsonSerializer{} ),
             hasher:     Box::new( MultiHasher::new(multihash::Hash::Keccak512) ),
             storage:    Box::new(store),
             hash_coder:  Box::new( MultiBaseHashCoder::new(multibase::Base64) ) };
 
-        let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
+        //let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
+        let object = b"Don't nobody touch nothing".to_vec();
         let store_res = hashspace.store( object.clone() );
         assert!( store_res.is_ok() );
         let hash = store_res.unwrap();

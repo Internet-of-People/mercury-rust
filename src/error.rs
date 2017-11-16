@@ -105,7 +105,7 @@ impl Error for StringCoderError {
 
 #[derive(Debug)]
 pub enum HashSpaceError {
-    SerializerError(SerializerError),
+//    SerializerError(SerializerError),
     HashError(HashError),
     StorageError(StorageError),
     StringCoderError(StringCoderError),
@@ -123,7 +123,7 @@ impl fmt::Display for HashSpaceError {
 impl Error for HashSpaceError {
     fn description(&self) -> &str {
         match *self {
-            HashSpaceError::SerializerError(ref e)  => e.description(),
+//            HashSpaceError::SerializerError(ref e)  => e.description(),
             HashSpaceError::HashError(ref e)        => e.description(),
             HashSpaceError::StorageError(ref e)     => e.description(),
             HashSpaceError::StringCoderError(ref e) => e.description(),

@@ -31,8 +31,8 @@ Most `HashSpace` implementations are not very special and thus can be
 separated into further responsibilities. `ModularHashSpace`
 implements a `HashSpace` by delegating tasks to the following interfaces,
 effectively delaying such implementation decisions and improving modularity:
- - `Serializer` en/decodes raw in-memory objects to/from a storage format,
-    e.g. bson or protobuf
+[comment] # (- `Serializer` en/decodes raw in-memory objects to/from a storage format,
+    e.g. bson or protobuf)
  - `Hasher` creates and validates hashes of serialized objects, e.g. sha2
  - `KeyValueStore` provides a (potentially distributed) HashMap. In other words
     it binds (stores and resolves) an arbitrary key (hash) to a value (object).
@@ -45,6 +45,8 @@ and be future-proof, our library uses the
 [multibase](https://github.com/multiformats/rust-multibase) and 
 [multihash](https://github.com/multiformats/rust-multihash)
 multiformat cargos that include all relevant encoding and hash algorithms. 
+
+TODO describe `HashWeb`
 
 TODO To shorten load time we plan to enable caching by implementing
 a special composite storage `CachingKeyValueStore`.
