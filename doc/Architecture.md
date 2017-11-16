@@ -12,6 +12,9 @@ This library aims to implement protocol-independent Merkle-DAG access that enabl
  - a universal link format
  - links **between** different Merkle-DAG implementations
 
+In our terminology below, a **hashspace** is a Merkle-DAG (e.g. Ipfs) and
+the **hashweb** is our derived Merkle-DAG construct that can connect them all.
+
 
 Basics
 ======
@@ -52,20 +55,47 @@ When loading it should grab the first successfully resolved entry from any store
 and store it in the fastest (or all faster?) stores before returning it.   
 
 
-Metadata
-========
+Attributes
+==========
 
-Stored data is much more useful and easily handled when paired with metadata
-that describes the stored raw binary data and its relation to other data entries.
+Stored binary data is much more useful when paired with (at least partial)
+semantic understanding of what that data means and how it is related
+to other data entries.
 
-Metadata is accessible through the `meta::Attribute` trait that consists of
-a name and a strongly typed value. Note that this can be a composite value
-(i.e. array or object) that contains further attributes or a link
-that points to other entries. Edges of the Merkle-DAG are defined
-by these link attributes. 
+This (meta)data is accessible through the `meta::Attribute` interface
+that consists of a name and a strongly typed value.
+Attribute values can be primitive (like number or timestamp), composite
+(i.e. array or object that contain further attributes) or
+a link to some other node.
 
-A `meta::Data` entry provides an iterator for its attributes and
-some convenience functions for easier attribute lookups.
+The `common::Data` interface provides both the raw binary blob and an iterator
+for its attributes with some convenience functions for easier attribute lookups.
+
+
+Address resolution
+==================
+
+Edges of the Merkle-DAG are defined by the link-typed (i.e. node id)
+attributes of the binary data stored in each node.
+A link is a node identifier that points to some other entry,
+having the format of a `(hashspace_id, hash)` pair where
+hashspace_id determines the protocol how data can be resolved from a hash.
+
+Full addresses have a human-readable format of
+`hashspace_id/data_hash[#binary_format_id/path/to/a/link/attribute]*`.
+The mandatory link (hashspace id and hash) identifies
+an initial node in the graph. Link resolution starts by loading and validating
+the binary data of this node.
+
+After this mandatory start, the optional relative address
+(a series of format id and attribute path pairs) of the link is evaluated.
+To do so, the verified binary data is interpreted according the given format,
+filling in all attributes during the process, including links to further nodes.
+(The process is format-dependent thus specified separately for each format.)
+If the attribute path refers to a link attribute, it is followed and
+binary data of the referenced node is fetched.
+While the relative address continues with another (format,path) pair,
+the process is repeated.
 
 
 Merkle-trees
