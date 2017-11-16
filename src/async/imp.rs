@@ -38,7 +38,7 @@ where ObjectType: 'static
          -> Box< Future<Item=HashWebLink, Error=HashSpaceError> >
     {
         let mut hashspace_res = self.hashspaces.get_mut(&self.default)
-            .ok_or( HashSpaceError::UnsupportedStorage( self.default.to_owned() ) );;
+            .ok_or( HashSpaceError::UnsupportedHashSpace( self.default.to_owned() ) );;
         let hashspace = match hashspace_res {
             Ok(ref mut space) => space,
             Err(e) => return Box::new( future::err(e) ),
@@ -54,7 +54,7 @@ where ObjectType: 'static
         -> Box< Future<Item = ObjectType, Error = HashSpaceError > >
     {
         let hashspace_res = self.hashspaces.get( link.hashspace() )
-            .ok_or( HashSpaceError::UnsupportedStorage( link.hashspace().to_owned() ) );
+            .ok_or( HashSpaceError::UnsupportedHashSpace( link.hashspace().to_owned() ) );
         let hashspace = match hashspace_res {
             Ok(ref space) => space,
             Err(e) => return Box::new( future::err(e) ),

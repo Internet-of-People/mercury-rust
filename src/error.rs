@@ -109,8 +109,8 @@ pub enum HashSpaceError {
     HashError(HashError),
     StorageError(StorageError),
     StringCoderError(StringCoderError),
-    UnknownStorage(HashSpaceId),
-    UnsupportedStorage(HashSpaceId),
+    UnknownHashSpace(HashSpaceId),
+    UnsupportedHashSpace(HashSpaceId),
     Other(Box<Error>),
 }
 
@@ -127,8 +127,8 @@ impl Error for HashSpaceError {
             HashSpaceError::HashError(ref e)        => e.description(),
             HashSpaceError::StorageError(ref e)     => e.description(),
             HashSpaceError::StringCoderError(ref e) => e.description(),
-            HashSpaceError::UnknownStorage(ref _s)  => "Unknown storage identifier: {:?}",
-            HashSpaceError::UnsupportedStorage(ref _s) => "Storage is not supporteD: {:?}",
+            HashSpaceError::UnknownHashSpace(ref _s) => "Unknown hashspace identifier: {:?}",
+            HashSpaceError::UnsupportedHashSpace(ref _s) => "Hashspace is not supporteD: {:?}",
             HashSpaceError::Other(ref e)            => e.description(),
         }
     }
