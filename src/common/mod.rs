@@ -28,7 +28,6 @@ pub trait Link
 {
     fn hashspace(&self) -> &HashSpaceId;
     fn hash(&self)      -> &str;          // of linked data under specified hashspace
-    fn sublink(&self)   -> Option<&Link>; // relative path, analogue to URL resource
 }
 
 

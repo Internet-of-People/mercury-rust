@@ -24,7 +24,6 @@ impl Link for HashWebLink
 {
     fn hashspace(&self) -> &HashSpaceId   { &self.hashspace }
     fn hash(&self)      -> &str           { self.hash.as_ref() }
-    fn sublink(&self)   -> Option<&Link>  { None } // TODO this should be implemented properly
 }
 
 

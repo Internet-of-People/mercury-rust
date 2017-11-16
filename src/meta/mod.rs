@@ -89,7 +89,6 @@ mod tests
     {
         fn hashspace(&self) -> &HashSpaceId   { &self.hashspace }
         fn hash(&self)      -> &str           { self.hash.as_ref() }
-        fn sublink(&self)   -> Option<&Link>  { None }
     }
 
 
