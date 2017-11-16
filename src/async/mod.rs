@@ -16,7 +16,7 @@ pub trait HashSpace<ObjectType, ReadableHashType>
         -> Box< Future<Item=ReadableHashType, Error=HashSpaceError> >;
     fn resolve(&self, hash: &ReadableHashType)
         -> Box< Future<Item=ObjectType, Error=HashSpaceError> >;
-//    fn validate(&self, object: &ObjectType, hash: &str)
+//    fn validate(&self, object: &ObjectType, hash: &ReadableHashType)
 //        -> Box< Future<Item=bool, Error=HashSpaceError> >;
 }
 
@@ -55,10 +55,10 @@ ModularHashSpace<ObjectType, SerializedType, BinaryHashType, ReadableHashType>
               hash_coder:   hash_coder, }
     }
 
-//    fn sync_validate(&self, object: &ObjectType, hash_str: &str)
+//    fn sync_validate(&self, object: &ObjectType, readable_hash: &ReadableHashType)
 //        -> Result<bool, HashSpaceError>
 //    {
-//        let hash_bytes = self.str_coder.decode(&hash_str)
+//        let hash_bytes = self.hash_coder.decode(&readable_hash)
 //            .map_err( |e| HashSpaceError::StringCoderError(e) )?;
 //        let serialized_obj = self.serializer.serialize(object)
 //            .map_err( |e| HashSpaceError::SerializerError(e) )?;
@@ -133,9 +133,9 @@ for ModularHashSpace<ObjectType, SerializedType, BinaryHashType, ReadableHashTyp
         Box::new(result)
     }
 
-//    fn validate(&self, object: &ObjectType, hash_str: &str)
+//    fn validate(&self, object: &ObjectType, hash_str: &ReadableHashType)
 //        -> Box< Future<Item=bool, Error=HashSpaceError> >
 //    {
-//        Box::new( future::result(self.sync_validate(&object, &hash_str) ) )
+//        Box::new( future::result( self.sync_validate( &object, &hash_str) ) )
 //    }
 }

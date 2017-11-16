@@ -16,14 +16,14 @@ use common::imp::HashWebLink;
 
 pub struct HashWeb<ObjectType>
 {
-    hashspaces: HashMap<HashSpaceId, Box< HashSpace<ObjectType, String> > >,
+    hashspaces: HashMap< HashSpaceId, Box< HashSpace<ObjectType, String> > >,
     default:    HashSpaceId,
 }
 
 
 impl<ObjectType> HashWeb<ObjectType>
 {
-    pub fn new(hashspaces: HashMap<HashSpaceId, Box< HashSpace<ObjectType, String> > >,
+    pub fn new(hashspaces: HashMap< HashSpaceId, Box< HashSpace<ObjectType, String> > >,
                default: HashSpaceId) -> Self
         { HashWeb { hashspaces: hashspaces, default: default } }
 }
@@ -38,7 +38,7 @@ where ObjectType: 'static
          -> Box< Future<Item=HashWebLink, Error=HashSpaceError> >
     {
         let mut hashspace_res = self.hashspaces.get_mut(&self.default)
-            .ok_or( HashSpaceError::UnsupportedStorage( self.default.clone() ) );
+            .ok_or( HashSpaceError::UnsupportedStorage( self.default.to_owned() ) );;
         let hashspace = match hashspace_res {
             Ok(ref mut space) => space,
             Err(e) => return Box::new( future::err(e) ),
@@ -48,6 +48,7 @@ where ObjectType: 'static
             .map( move |hash| HashWebLink::new(default_hashspace_clone, &hash) );
         Box::new(result)
     }
+
 
     fn resolve(&self, link: &HashWebLink)
         -> Box< Future<Item = ObjectType, Error = HashSpaceError > >
@@ -61,6 +62,18 @@ where ObjectType: 'static
         let data = hashspace.resolve( &link.hash().to_owned() );
         Box::new(data)
     }
+
+
+//    fn validate(&self, object: &ObjectType, link: &HashWebLink)
+//        -> Box< Future<Item=bool, Error=HashSpaceError> >
+//    {
+//        let hashspace = match self.hashspace( link.hashspace() ) {
+//            Ok(ref space) => space,
+//            Err(e) => return Box::new( future::err(e) ),
+//        };
+//        let result = hashspace.validate( object, &link.hash().to_owned() );
+//        Box::new(result)
+//    }
 }
 
 
@@ -258,9 +271,9 @@ mod tests
         let lookup_res = hashspace.resolve(&hash).wait();
         assert!( lookup_res.is_ok() );
         assert_eq!( lookup_res.unwrap(), object );
-        //        let validate_res = hashspace.validate(&object, &hash).wait();
-        //        assert!( validate_res.is_ok() );
-        //        assert!( validate_res.unwrap() );
+//        let validate_res = hashspace.validate(&object, &hash).wait();
+//        assert!( validate_res.is_ok() );
+//        assert!( validate_res.unwrap() );
     }
 
 
@@ -268,7 +281,7 @@ mod tests
     fn test_hashweb()
     {
         let cache_store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
-        let mut cache_space: ModularHashSpace<Vec<u8>, Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
+        let cache_space: ModularHashSpace<Vec<u8>, Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
             Rc::new( IdentitySerializer{} ),
             Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
             Box::new(cache_store),
@@ -280,9 +293,9 @@ mod tests
 
         // This URL should be assembled from the gitlab-ci.yml
         let postgres_url = "postgresql://testuser:testpass@postgres/testdb";
-        let mut postgres_storage = PostgresStore::new( &reactor.handle(),
+        let postgres_storage = PostgresStore::new( &reactor.handle(),
             postgres_url, "storagetest", "key", "data");
-        let mut postgres_space: ModularHashSpace< Vec<u8>, Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
+        let postgres_space: ModularHashSpace< Vec<u8>, Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
             Rc::new( IdentitySerializer{} ),
             Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
             Box::new(postgres_storage),
