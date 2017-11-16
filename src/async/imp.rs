@@ -11,6 +11,7 @@ use tokio_postgres;
 use async::*;
 use common::{Link, HashSpaceId};
 use common::imp::HashWebLink;
+use format::*;
 
 
 
@@ -45,7 +46,7 @@ where ObjectType: 'static
         };
         let default_hashspace_clone = self.default.clone();
         let result = hashspace.store(object)
-            .map( move |hash| HashWebLink::new(default_hashspace_clone, &hash) );
+            .map( move |hash| HashWebLink::new(&default_hashspace_clone, &hash) );
         Box::new(result)
     }
 
@@ -76,6 +77,40 @@ where ObjectType: 'static
         // TODO to_string() is unnecessary below, find out how to transform signatures so as it's not needed
         let result = hashspace.validate( object, &link.hash().to_string() );
         Box::new(result)
+    }
+}
+
+
+
+pub struct AddressResolver<ObjectType>
+{
+    formats: FormatRegistry,
+    hashweb: HashWeb<ObjectType>,
+}
+
+
+pub enum AddressResolverError
+{
+    TodoImplementThis, // TODO
+}
+
+impl<ObjectType> AddressResolver<ObjectType>
+where ObjectType: 'static
+{
+    pub fn new(formats: FormatRegistry, hashweb: HashWeb<ObjectType>) -> Self
+        { Self{ formats: formats, hashweb: hashweb } }
+
+    pub fn resolve_address(&self, address: &str) -> Box< Future<Item=Box<Data>, Error=AddressResolverError> >
+    {
+        let (link_str, address_tail) = address.split_at(
+            address.find('#').unwrap_or( address.len() ) );
+        let (hashspace_id, hash) = link_str.split_at(
+            link_str.find('/').unwrap_or( link_str.len() ) );
+        let link = HashWebLink::new(&hashspace_id.to_string(), &hash);
+
+        let result = self.hashweb.resolve(&link);
+
+        Box::new( future::err(AddressResolverError::TodoImplementThis) )
     }
 }
 

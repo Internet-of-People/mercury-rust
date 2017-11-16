@@ -16,8 +16,9 @@ pub struct HashWebLink
 
 impl HashWebLink
 {
-    pub fn new(hashspace: HashSpaceId, hash: &String) -> Self
-    { Self{ hashspace: hashspace, hash: hash.to_owned() } }
+    // TODO solve using &str instead of &String
+    pub fn new(hashspace: &HashSpaceId, hash: &str) -> Self
+        { Self{ hashspace: hashspace.to_owned(), hash: hash.to_owned() } }
 }
 
 impl Link for HashWebLink
