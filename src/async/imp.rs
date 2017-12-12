@@ -12,6 +12,7 @@ use async::*;
 use common::{Link, HashSpaceId};
 use common::imp::HashWebLink;
 use format::*;
+use meta::AttributeValue;
 
 
 
@@ -52,7 +53,7 @@ where ObjectType: 'static
 
 
     fn resolve(&self, link: &HashWebLink)
-        -> Box< Future<Item = ObjectType, Error = HashSpaceError > >
+        -> Box< Future<Item = ObjectType, Error = HashSpaceError> >
     {
         let hashspace_res = self.hashspaces.get( link.hashspace() )
             .ok_or( HashSpaceError::UnsupportedHashSpace( link.hashspace().to_owned() ) );
@@ -82,36 +83,79 @@ where ObjectType: 'static
 
 
 
-pub struct AddressResolver<ObjectType>
+pub struct AddressResolver
 {
-    formats: FormatRegistry,
-    hashweb: HashWeb<ObjectType>,
+    hashweb:            HashWeb< Vec<u8> >,
+    format_registry:    FormatRegistry,
 }
 
 
 pub enum AddressResolverError
 {
-    TodoImplementThis, // TODO
+//    HashSpaceError(HashSpaceError),
+    UnknownFormat(String),
 }
 
-impl<ObjectType> AddressResolver<ObjectType>
-where ObjectType: 'static
+impl AddressResolver
 {
-    pub fn new(formats: FormatRegistry, hashweb: HashWeb<ObjectType>) -> Self
-        { Self{ formats: formats, hashweb: hashweb } }
+    pub fn new(formats: FormatRegistry, hashweb: HashWeb< Vec<u8> >) -> Self
+        { Self{ format_registry: formats, hashweb: hashweb } }
 
-    pub fn resolve_address(&self, address: &str) -> Box< Future<Item=Box<Data>, Error=AddressResolverError> >
+
+//    pub fn resolve(&self, address: &str)
+//        -> Box< Future<Item=Vec<u8>, Error=AddressResolverError> >
+//    {
+//        let (abs_link_str, path_str) = address.split_at(
+//            address.find('#').unwrap_or( address.len() ) );
+//    }
+
+
+//    fn resolve_path(&self, data: Vec<u8>, path: &str)
+//                    -> Box< Future<Item=Box<AttributeValue>, Error=AddressResolverError> >
+//    {
+//        while ! path.is_empty()
+//        {
+//            let (rel_address, path) = path.split_at(
+//                path.find('#').unwrap_or( path.len() ) );
+//
+//            TODO
+//        }
+//
+//        // TODO address tail;
+//
+//        Box::new( future::err(AddressResolverError::TodoImplementThis) )
+//    }
+
+
+    fn resolve_absolute(&self, abs_address: &str)
+        -> Box< Future<Item=Vec<u8>, Error=HashSpaceError> >
     {
-        let (link_str, address_tail) = address.split_at(
-            address.find('#').unwrap_or( address.len() ) );
-        let (hashspace_id, hash) = link_str.split_at(
-            link_str.find('/').unwrap_or( link_str.len() ) );
-        let link = HashWebLink::new(&hashspace_id.to_string(), &hash);
-
-        let result = self.hashweb.resolve(&link);
-
-        Box::new( future::err(AddressResolverError::TodoImplementThis) )
+        let (hashspace_id, hash) = abs_address.split_at(
+            abs_address.find('/').unwrap_or( abs_address.len() ) );
+        let abs_link = HashWebLink::new(&hashspace_id.to_string(), &hash);
+        let resolved_data = self.hashweb.resolve(&abs_link);
+        Box::new(resolved_data)
     }
+
+
+//    // TODO should we return error instead?
+//    fn resolve_relative(&self, data: &[u8], rel_address: &str) -> Option<AttributeValue>
+//    {
+//        let (format_id, attr_name) = rel_address.split_at(
+//            rel_address.find('/').unwrap_or( rel_address.len() ) );
+//
+//        let parser = match self.format_registry.formats().get(format_id) {
+//            Some(parser) => parser,
+//            None => return None,
+//        };
+//
+//        let parse_res = parser.parse(data);
+//        let parsed_data = match parse_res {
+//            Ok(data) => data,
+//            Err(_e) => return None,
+//        };
+//        parsed_data.first_attrval_by_name(attr_name)
+//    }
 }
 
 

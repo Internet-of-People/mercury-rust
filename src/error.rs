@@ -133,3 +133,10 @@ impl Error for HashSpaceError {
         }
     }
 }
+
+
+
+#[derive(Debug)]
+pub enum FormatError {
+    TODO // TODO
+}
