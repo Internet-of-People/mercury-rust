@@ -139,22 +139,16 @@ impl AddressResolver
 
 
 //    // TODO should we return error instead?
-//    fn resolve_relative(&self, data: &[u8], rel_address: &str) -> Option<AttributeValue>
+//    fn resolve_relative<'a,'v>(&'a self, data: &[u8], rel_address: &str)
+//        -> Option< (Box<Data + 'static>, AttributeValue<'v>) >
+//        //-> Option< AttributeValue<'v> >
 //    {
 //        let (format_id, attr_name) = rel_address.split_at(
 //            rel_address.find('/').unwrap_or( rel_address.len() ) );
-//
-//        let parser = match self.format_registry.formats().get(format_id) {
-//            Some(parser) => parser,
-//            None => return None,
-//        };
-//
-//        let parse_res = parser.parse(data);
-//        let parsed_data = match parse_res {
-//            Ok(data) => data,
-//            Err(_e) => return None,
-//        };
-//        parsed_data.first_attrval_by_name(attr_name)
+//        let parser = self.format_registry.formats().get(format_id)?;
+//        let parsed_data = parser.parse(data).ok()?;
+//        let attr_opt = parsed_data.first_attrval_by_name(attr_name);
+//        attr_opt.map( move |attrval| (parsed_data, attrval) )
 //    }
 }
 

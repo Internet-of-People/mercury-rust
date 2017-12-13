@@ -22,5 +22,6 @@ impl FormatRegistry
 
 pub trait FormatParser
 {
-    fn parse<'a>(&self, blob: &'a [u8]) -> Result< Box<Data + 'a>, FormatError >;
+    fn parse(&self, blob: &[u8])
+        -> Result< Box<Data + 'static>, FormatError >;
 }
