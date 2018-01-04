@@ -90,16 +90,36 @@ pub struct AddressResolver
 }
 
 
-pub enum AddressResolverError
-{
-//    HashSpaceError(HashSpaceError),
-    UnknownFormat(String),
-}
 
 impl AddressResolver
 {
     pub fn new(formats: FormatRegistry, hashweb: HashWeb< Vec<u8> >) -> Self
         { Self{ format_registry: formats, hashweb: hashweb } }
+
+
+    pub fn resolve_hashlink(&self, hashlink: &str)
+        -> Box< Future<Item=Vec<u8>, Error=HashSpaceError> >
+    {
+        let split_pos = hashlink.find('/').unwrap_or( hashlink.len() );
+        let (hashspace_id, hash) = hashlink.split_at(split_pos);
+        let abs_link = HashWebLink::new(&hashspace_id.to_string(), &hash);
+        let resolved_data = self.hashweb.resolve(&abs_link);
+        Box::new(resolved_data)
+    }
+
+
+//    pub fn resolve_attr_links<'a,'d, 's:'d>(&'s self, data: &'d [u8], attr_spec: &'a str)
+//        //-> Option< (Box< Data<'d> + 'd >, AttributeValue<'d>) >
+//        -> Result< Box<Data<'d> + 'd>, AddressResolutionError >
+//    {
+//        let (format_id, attr_path_str) = attr_spec.split_at(
+//            attr_spec.find('/').unwrap_or( attr_spec.len() ) );
+//        let parsed_data = self.format_registry.resolve_format(format_id, data)?;
+//        let attr_path: Vec<&str> = attr_path_str.split('/').collect();
+//        let attr_opt = parsed_data.first_attrval_by_path( attr_path.as_slice() )
+//            .ok_or( AddressResolutionError::AttributeNotFound( attr_path_str.to_owned() ) );
+//        attr_opt
+//    }
 
 
 //    pub fn resolve(&self, address: &str)
@@ -124,31 +144,6 @@ impl AddressResolver
 //        // TODO address tail;
 //
 //        Box::new( future::err(AddressResolverError::TodoImplementThis) )
-//    }
-
-
-    fn resolve_absolute(&self, abs_address: &str)
-        -> Box< Future<Item=Vec<u8>, Error=HashSpaceError> >
-    {
-        let (hashspace_id, hash) = abs_address.split_at(
-            abs_address.find('/').unwrap_or( abs_address.len() ) );
-        let abs_link = HashWebLink::new(&hashspace_id.to_string(), &hash);
-        let resolved_data = self.hashweb.resolve(&abs_link);
-        Box::new(resolved_data)
-    }
-
-
-//    // TODO should we return error instead?
-//    fn resolve_relative<'a,'v>(&'a self, data: &[u8], rel_address: &str)
-//        -> Option< (Box<Data + 'static>, AttributeValue<'v>) >
-//        //-> Option< AttributeValue<'v> >
-//    {
-//        let (format_id, attr_name) = rel_address.split_at(
-//            rel_address.find('/').unwrap_or( rel_address.len() ) );
-//        let parser = self.format_registry.formats().get(format_id)?;
-//        let parsed_data = parser.parse(data).ok()?;
-//        let attr_opt = parsed_data.first_attrval_by_name(attr_name);
-//        attr_opt.map( move |attrval| (parsed_data, attrval) )
 //    }
 }
 

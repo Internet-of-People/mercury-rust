@@ -136,7 +136,18 @@ impl Error for HashSpaceError {
 
 
 
+// TODO implement Display and Error for errors below
 #[derive(Debug)]
-pub enum FormatError {
-    TODO // TODO
+pub enum FormatParserError
+{
+    TODO, // TODO what kind of errors are needed here?
+}
+
+#[derive(Debug)]
+pub enum AddressResolutionError
+{
+    HashSpaceError(HashSpaceError),
+    AttributeNotFound(String),
+    UnknownFormat(String),
+    FormatParserError(FormatParserError),
 }

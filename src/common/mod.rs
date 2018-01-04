@@ -32,17 +32,17 @@ pub trait Link
 
 
 
-pub trait Data
+pub trait Data<'a>
 {
-    fn blob(&self) -> &[u8];
-    fn attributes<'a>(&'a self) -> Box< 'a + Iterator<Item = &'a Attribute> >;
+    fn blob(&'a self) -> &'a [u8];
+    fn attributes(&'a self) -> Box< 'a + Iterator<Item = &'a Attribute> >;
 
     // Convenience function to access attributes by name/path
-    fn first_attrval_by_name<'a>(&'a self, name: &str)
+    fn first_attrval_by_name<'n>(&'a self, name: &'n str)
             -> Option< AttributeValue<'a> >
         { meta::iter_first_attrval_by_name( self.attributes(), name ) }
 
-    fn first_attrval_by_path<'a>(&'a self, path: &[&str])
+    fn first_attrval_by_path<'n>(&'a self, path: &'n [&'n str])
             -> Option< AttributeValue<'a> >
         { meta::iter_first_attrval_by_path( self.attributes(), path ) }
 }
