@@ -21,7 +21,7 @@ impl HashWebLink
         { Self{ hashspace: hashspace.to_owned(), hash: hash.to_owned() } }
 }
 
-impl Link for HashWebLink
+impl HashLink for HashWebLink
 {
     fn hashspace(&self) -> &HashSpaceId   { &self.hashspace }
     fn hash(&self)      -> &str           { self.hash.as_ref() }

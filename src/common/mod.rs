@@ -24,7 +24,7 @@ pub type HashSpaceId = String;
 //}
 
 
-pub trait Link
+pub trait HashLink
 {
     fn hashspace(&self) -> &HashSpaceId;
     fn hash(&self)      -> &str;          // of linked data under specified hashspace

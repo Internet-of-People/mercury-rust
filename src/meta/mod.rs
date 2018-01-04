@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use common::Link;
+use common::HashLink;
 
 
 
@@ -21,7 +21,8 @@ pub enum AttributeValue<'a>
     Timestamp(SystemTime),
     Location(GpsLocation),
     String(&'a str),
-    Link(&'a Link),
+    Blob(&'a [u8]),
+    Link(&'a HashLink),
     Array(Box< 'a + Iterator< Item = AttributeValue<'a> > >),
     Object(Box< 'a + Iterator<Item = &'a Attribute> >),
 }
@@ -85,7 +86,7 @@ mod tests
             { Self{hashspace: hashspace, hash: hash} }
     }
 
-    impl Link for MetaLink
+    impl HashLink for MetaLink
     {
         fn hashspace(&self) -> &HashSpaceId   { &self.hashspace }
         fn hash(&self)      -> &str           { self.hash.as_ref() }
@@ -101,6 +102,7 @@ mod tests
         TIMESTAMP(SystemTime),
         LOCATION(GpsLocation),
         STRING(String),
+        BLOB(Vec<u8>),
         LINK(MetaLink),
         ARRAY( Vec<MetaAttrVal> ),
         OBJECT( Vec<MetaAttr> ),
@@ -117,6 +119,7 @@ mod tests
                 MetaAttrVal::TIMESTAMP(v)       => AttributeValue::Timestamp(v),
                 MetaAttrVal::LOCATION(v)        => AttributeValue::Location(v),
                 MetaAttrVal::STRING(ref v)      => AttributeValue::String(v),
+                MetaAttrVal::BLOB(ref v)        => AttributeValue::Blob(v),
                 MetaAttrVal::LINK(ref v)        => AttributeValue::Link(v),
                 MetaAttrVal::ARRAY(ref v)       => AttributeValue::Array(
                     Box::new( v.iter().map( |m| m.to_attr_val() ) ) ),

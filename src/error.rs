@@ -148,6 +148,7 @@ pub enum AddressResolutionError
 {
     HashSpaceError(HashSpaceError),
     AttributeNotFound(String),
+    WrongAttributeType,
     UnknownFormat(String),
     FormatParserError(FormatParserError),
 }
