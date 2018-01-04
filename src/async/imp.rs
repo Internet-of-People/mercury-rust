@@ -97,7 +97,7 @@ impl AddressResolver
         { Self{ format_registry: formats, hashweb: hashweb } }
 
 
-    pub fn resolve_hashlink(&self, hashlink: &str)
+    fn resolve_hashlink(&self, hashlink: &str)
         -> Box< Future<Item=Vec<u8>, Error=HashSpaceError> >
     {
         let split_pos = hashlink.find('/').unwrap_or( hashlink.len() );
