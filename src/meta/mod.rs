@@ -1,6 +1,6 @@
 use std::time::SystemTime;
 
-use common::HashLink;
+use common::HashWebLink;
 
 
 
@@ -22,7 +22,7 @@ pub enum AttributeValue<'a>
     Location(GpsLocation),
     String(&'a str),
     Blob(&'a [u8]),
-    Link(&'a HashLink),
+    Link(&'a HashWebLink),
     Array(Box< 'a + Iterator< Item = AttributeValue<'a> > >),
     Object(Box< 'a + Iterator<Item = &'a Attribute> >),
 }

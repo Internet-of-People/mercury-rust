@@ -24,10 +24,28 @@ pub type HashSpaceId = String;
 //}
 
 
-pub trait HashLink
+//pub trait HashLink
+//{
+//    fn hashspace(&self) -> &HashSpaceId;
+//    fn hash(&self)      -> &str;          // of linked data under specified hashspace
+//}
+
+
+
+pub struct HashWebLink
 {
-    fn hashspace(&self) -> &HashSpaceId;
-    fn hash(&self)      -> &str;          // of linked data under specified hashspace
+    hashspace:  HashSpaceId,
+    hash:       String,
+}
+
+impl HashWebLink
+{
+    // TODO solve using &str instead of &String
+    pub fn new(hashspace: &HashSpaceId, hash: &str) -> Self
+        { Self{ hashspace: hashspace.to_owned(), hash: hash.to_owned() } }
+
+    pub fn hashspace(&self) -> &HashSpaceId { &self.hashspace }
+    pub fn hash(&self)      -> &str         {  self.hash.as_ref() }
 }
 
 
