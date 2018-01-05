@@ -32,6 +32,7 @@ pub type HashSpaceId = String;
 
 
 
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct HashWebLink
 {
     hashspace:  HashSpaceId,

@@ -70,27 +70,7 @@ pub fn iter_first_attrval_by_path<'a>(iter: Box< 'a + Iterator<Item = &'a Attrib
 mod tests
 {
     use super::*;
-    use common::{Data, HashSpaceId};
-
-
-    #[derive(Debug, PartialEq, Serialize, Deserialize)]
-    struct MetaLink
-    {
-        hashspace:  HashSpaceId,
-        hash:       String,
-    }
-
-    impl MetaLink
-    {
-        fn new(hashspace: HashSpaceId, hash: String) -> Self
-            { Self{hashspace: hashspace, hash: hash} }
-    }
-
-    impl HashLink for MetaLink
-    {
-        fn hashspace(&self) -> &HashSpaceId   { &self.hashspace }
-        fn hash(&self)      -> &str           { self.hash.as_ref() }
-    }
+    use common::Data;
 
 
     #[derive(Debug, Serialize, Deserialize, PartialEq)]
@@ -102,8 +82,8 @@ mod tests
         TIMESTAMP(SystemTime),
         LOCATION(GpsLocation),
         STRING(String),
-        BLOB(Vec<u8>),
-        LINK(MetaLink),
+        LINK(HashWebLink),
+        BLOB( Vec<u8> ),
         ARRAY( Vec<MetaAttrVal> ),
         OBJECT( Vec<MetaAttr> ),
     }
@@ -203,7 +183,7 @@ mod tests
         let attrs = vec!(
             MetaAttr::new( "works", MetaAttrVal::BOOL(true) ),
             MetaAttr::new( "timestamp", MetaAttrVal::TIMESTAMP( SystemTime::now() ) ),
-            MetaAttr::new( "link", MetaAttrVal::LINK( MetaLink::new( "magnet".to_owned(), linkhash ) ) ),
+            MetaAttr::new( "link", MetaAttrVal::LINK( HashWebLink::new( &"magnet".to_owned(), linkhash.as_str() ) ) ),
             MetaAttr::new( "famous", MetaAttrVal::ARRAY(famous) ),
             MetaAttr::new( "color", MetaAttrVal::OBJECT(color) ),
         );
