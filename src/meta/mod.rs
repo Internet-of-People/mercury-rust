@@ -155,7 +155,7 @@ mod tests
     {
         fn blob(&self) -> &[u8] { self.blob.as_ref() }
 
-        fn attributes<'a>(&'a self) -> Box< Iterator<Item = &'a Attribute> + 'a >
+        fn attributes<'a>(&'a self) -> Box< Iterator<Item = &Attribute> + 'a >
         {
             let result = self.attrs.iter().map( |meta| meta as &Attribute );
             Box::new(result)

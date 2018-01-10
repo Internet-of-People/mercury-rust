@@ -15,7 +15,7 @@ pub struct FormatRegistry
 impl FormatRegistry
 {
     // TODO should we return error instead?
-    pub fn resolve_format<'s,'a,'d>(&'s self, format_id: &'a str, data: &'d [u8])
+    pub fn resolve_format<'d>(&self, format_id: &'d str, data: &'d [u8])
         -> Result< Box<Data + 'd>, AddressResolutionError >
     {
         let parser = self.formats.get(format_id)
@@ -30,6 +30,6 @@ impl FormatRegistry
 
 pub trait FormatParser
 {
-    fn parse<'s,'b>(&'s self, blob: &'b [u8])
+    fn parse<'b>(&self, blob: &'b [u8])
         -> Result< Box<Data + 'b>, FormatParserError >;
 }
