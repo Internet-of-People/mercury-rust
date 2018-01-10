@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::hash::Hash;
+use std::rc::Rc;
 
 use futures::prelude::*;
 use futures::future;
@@ -22,11 +23,31 @@ pub struct HashWeb<ObjectType>
 }
 
 
-impl<ObjectType> HashWeb<ObjectType>
+impl<ObjectType: 'static> HashWeb<ObjectType>
 {
     pub fn new(hashspaces: HashMap< HashSpaceId, Box< HashSpace<ObjectType, String> > >,
                default: HashSpaceId) -> Self
         { HashWeb { hashspaces: hashspaces, default: default } }
+
+
+    // Expected hashlink format: hashspaceId/hash
+    pub fn resolve_hashlink<'s,'h>(&'s self, hashlink_str: &'h str)
+        -> Box< Future<Item=ObjectType, Error=AddressResolutionError> >
+    {
+        // Ignore starting slash
+        let address = if hashlink_str.starts_with('/') { &hashlink_str[1..] } else { hashlink_str };
+
+        // Split hashspaceId and hash parts
+        let slash_pos = address.find('/').unwrap_or( address.len() );
+        let (hashspace_id, slashed_hash) = hashlink_str.split_at(slash_pos);
+        let hash = &slashed_hash[1..]; // Ignore starting slash
+
+        // Perform link resolution
+        let hashlink = HashWebLink::new( &hashspace_id.to_string(), hash );
+        let resolved_data_fut = self.resolve(&hashlink)
+            .map_err( |e| AddressResolutionError::HashSpaceError(e) );
+        Box::new(resolved_data_fut)
+    }
 }
 
 
@@ -51,13 +72,13 @@ where ObjectType: 'static
     }
 
 
-    fn resolve(&self, link: &HashWebLink)
+    fn resolve<'s,'l>(&'s self, link: &'l HashWebLink)
         -> Box< Future<Item = ObjectType, Error = HashSpaceError> >
     {
         let hashspace_res = self.hashspaces.get( link.hashspace() )
             .ok_or( HashSpaceError::UnsupportedHashSpace( link.hashspace().to_owned() ) );
         let hashspace = match hashspace_res {
-            Ok(ref space) => space,
+            Ok(space) => space,
             Err(e) => return Box::new( future::err(e) ),
         };
         let data = hashspace.resolve( &link.hash().to_owned() );
@@ -84,47 +105,62 @@ where ObjectType: 'static
 
 pub struct AddressResolver
 {
-    hashweb:            HashWeb< Vec<u8> >,
-    format_registry:    FormatRegistry,
+    hashweb:            Rc< HashWeb< Vec<u8> > >,
+    format_registry:    Rc<FormatRegistry>,
 }
 
 
 
-type BlobFuture = Box< Future<Item=Vec<u8>, Error=AddressResolutionError> >;
+//type FutureBlob = Box< Future<Item=Vec<u8>, Error=AddressResolutionError> >;
 
 impl AddressResolver
 {
     pub fn new(formats: FormatRegistry, hashweb: HashWeb< Vec<u8> >) -> Self
-        { Self{ format_registry: formats, hashweb: hashweb } }
+        { Self{ format_registry: Rc::new(formats), hashweb: Rc::new(hashweb) } }
 
 
     // Address format expected by the parser, optionally with a starting /
     // hashspaceId/hash#formatId@path/to/hashlink/attribute&formatId@path/to/another/attribute
     //  ^^ hashlink ^^ # ^^^^^ (link) attr specifier ^^^^^ & ^^^^^^ attribute specifier ^^^^^
-    pub fn resolve_blob(&self, address: &str) -> BlobFuture
-        // -> Box< Future<Item=Vec<u8>, Error=AddressResolutionError> >
+    pub fn resolve_blob<'s,'a>(&'s self, address: &'a str)
+        -> Box< Future<Item=Vec<u8>, Error=AddressResolutionError> >
+        // -> FutureBlob
     {
         // Separate starting hashlink part from attributes
         let attr_separ_idx = address.find('#').unwrap_or( address.len() );
         let (hashlink_str, hashed_attr_specs_str) = address.split_at(attr_separ_idx);
 
         // Resolve hashlink into binary blob
-        let mut blob_fut: Box< Future<Item=Vec<u8>, Error=AddressResolutionError> > = Box::new(
-            self.resolve_hashlink(hashlink_str)
-                .map_err( |e| AddressResolutionError::HashSpaceError(e) ) );
+        let mut blob_fut: Box< Future<Item=Vec<u8>, Error=AddressResolutionError> > =
+            Box::new( self.hashweb.resolve_hashlink(hashlink_str) );
 
         // Separate (possibly many) attribute references
         let attr_specs_str = &hashed_attr_specs_str[1..];
         let attribute_specs: Vec<&str> = attr_specs_str[1..].split('&').collect();
         for attr_spec in attribute_specs
         {
-            // Separate format and attribute path
-            let format_sep_idx = attr_spec.find('@').unwrap_or( attr_spec.len() );
-            let (format_id, prefixed_attr_path_str) = attr_spec.split_at(format_sep_idx);
+            let formats_clone = self.format_registry.clone();
+            let hashweb_clone = self.hashweb.clone();
+            let attrspec_clone = attr_spec.to_owned();
+            blob_fut = Box::new( blob_fut.and_then( move |blob| {
+                let hashlink_res = resolve_attr_link(formats_clone, &blob, &attrspec_clone);
+                match hashlink_res {
+                    Err(e) => Box::new( future::err(e) )
+                        as Box< Future<Item=Vec<u8>, Error=AddressResolutionError> >,
+                    Ok(hashlink) => {
+                        let resolved_link_fut = hashweb_clone.resolve(&hashlink)
+                            .map_err( |e| AddressResolutionError::HashSpaceError(e) );
+                        Box::new(resolved_link_fut) as Box< Future<Item=Vec<u8>, Error=AddressResolutionError> >
+                    }
+                }
+            } ) );
 
-            let attr_path_str = &prefixed_attr_path_str[1..];
-            let attr_path: Vec<&str> = attr_path_str.split('/').collect();
-
+//            // Separate format and attribute path
+//            let format_sep_idx = attr_spec.find('@').unwrap_or( attr_spec.len() );
+//            let (format_id, prefixed_attr_path_str) = attr_spec.split_at(format_sep_idx);
+//            let attr_path_str = &prefixed_attr_path_str[1..];
+//
+//            let attr_path: Vec<&str> = attr_path_str.split('/').collect();
 //            blob_fut = Box::new( blob_fut.and_then( move |blob|
 //            {
 //                // Parse binary data as specified format to gain attributes
@@ -153,41 +189,47 @@ impl AddressResolver
 
         Box::new(blob_fut)
     }
+}
 
 
-    // Expected hashlink format: hashspaceId/hash
-    fn resolve_hashlink(&self, hashlink_str: &str)
-        -> Box< Future<Item=Vec<u8>, Error=HashSpaceError> >
-    {
-        // Ignore starting slash
-        let address = if hashlink_str.starts_with('/') { &hashlink_str[1..] } else { hashlink_str };
 
-        // Split hashspaceId and hash parts
-        let slash_pos = address.find('/').unwrap_or( address.len() );
-        let (hashspace_id, slashed_hash) = hashlink_str.split_at(slash_pos);
-        let hash = &slashed_hash[1..]; // Ignore starting slash
+fn wtf<'a,'p>(parsed_data: Box<Data<'a> + 'a>, prefixed_attr_path_str: &'p str)
+    -> Result<HashWebLink, AddressResolutionError>
+{
+    let attr_path_str = &prefixed_attr_path_str[1..];
+    let attr_path: Vec<&str> = attr_path_str.split('/').collect();
+    let attr_res = parsed_data.first_attrval_by_path( attr_path.as_slice() )
+        .ok_or( AddressResolutionError::AttributeNotFound( attr_path_str.to_owned() ) );
 
-        // Perform link resolution
-        let hashlink = HashWebLink::new( &hashspace_id.to_string(), hash );
-        let resolved_data = self.hashweb.resolve(&hashlink);
-        Box::new(resolved_data)
+    match attr_res {
+        Ok( AttributeValue::Link(v) ) => Ok( v.clone() ),
+        Ok(_) => Err(AddressResolutionError::WrongAttributeType),
+        Err(e) => Err(e),
     }
+}
 
+// Expected attribute specifier format: formatId@path/to/hashlink/attribute
+fn resolve_attr_link<'a,'d>(formats: Rc<FormatRegistry>,
+                            data: &'d Vec<u8>, attr_spec: &'a str)
+//    -> Box< Future<Item=Vec<u8>, Error=AddressResolutionError> >
+    -> Result<HashWebLink, AddressResolutionError>
+{
+    // Separate format and attribute path
+    let format_sep_idx = attr_spec.find('@').unwrap_or( attr_spec.len() );
+    let (format_id, prefixed_attr_path_str) = attr_spec.split_at(format_sep_idx);
 
-//    fn resolve_attr_spec<'a,'d, 's:'d>(&'s self, data: &'d [u8], attr_spec: &'a str)
-//        -> Result< AttributeValue<'d>, AddressResolutionError >
-//    {
-//        // Separate format and attribute path
-//        let format_sep_idx = attr_spec.find('@').unwrap_or( attr_spec.len() );
-//        let (format_id, prefixed_attr_path_str) = attr_spec.split_at(format_sep_idx);
+    let parsed_data = formats.resolve_format( format_id, data.as_slice() )?;
+    wtf(parsed_data, prefixed_attr_path_str)
+
+//    let attr_path_str = &prefixed_attr_path_str[1..];
+//    let attr_path: Vec<&str> = attr_path_str.split('/').collect();
+//    let attr_res = parsed_data.first_attrval_by_path( attr_path.as_slice() )
+//        .ok_or( AddressResolutionError::AttributeNotFound( attr_path_str.to_owned() ) );
 //
-//        let parsed_data = self.format_registry.resolve_format(format_id, data)?;
-//
-//        let attr_path_str = &prefixed_attr_path_str[1..];
-//        let attr_path: Vec<&str> = attr_path_str.split('/').collect();
-//        let result = parsed_data.first_attrval_by_path( attr_path.as_slice() )
-//            .ok_or( AddressResolutionError::AttributeNotFound( attr_path_str.to_owned() ) );
-//        result
+//    match attr_res {
+//        Ok( AttributeValue::Link(v) ) => Ok( v.clone() ),
+//        Ok(_) => Err(AddressResolutionError::WrongAttributeType),
+//        Err(e) => Err(e),
 //    }
 }
 

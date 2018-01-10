@@ -32,7 +32,7 @@ pub type HashSpaceId = String;
 
 
 
-#[derive(Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HashWebLink
 {
     hashspace:  HashSpaceId,
@@ -53,15 +53,15 @@ impl HashWebLink
 
 pub trait Data<'a>
 {
-    fn blob(&'a self) -> &'a [u8];
-    fn attributes(&'a self) -> Box< 'a + Iterator<Item = &'a Attribute> >;
+    fn blob<'s>(&'s self) -> &'a [u8];
+    fn attributes<'s>(&'s self) -> Box< 'a + Iterator<Item = &'a Attribute> >;
 
     // Convenience function to access attributes by name/path
-    fn first_attrval_by_name<'n>(&'a self, name: &'n str)
+    fn first_attrval_by_name<'s,'n>(&'s self, name: &'n str)
             -> Option< AttributeValue<'a> >
         { meta::iter_first_attrval_by_name( self.attributes(), name ) }
 
-    fn first_attrval_by_path<'n>(&'a self, path: &'n [&'n str])
+    fn first_attrval_by_path<'s,'n>(&'s self, path: &'n [&'n str])
             -> Option< AttributeValue<'a> >
         { meta::iter_first_attrval_by_path( self.attributes(), path ) }
 }

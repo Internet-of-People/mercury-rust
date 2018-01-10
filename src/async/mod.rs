@@ -14,9 +14,9 @@ pub trait HashSpace<ObjectType, ReadableHashType>
 {
     fn store(&mut self, object: ObjectType)
         -> Box< Future<Item=ReadableHashType, Error=HashSpaceError> >;
-    fn resolve(&self, hash: &ReadableHashType)
+    fn resolve<'s,'h>(&'s self, hash: &'s ReadableHashType)
         -> Box< Future<Item=ObjectType, Error=HashSpaceError> >;
-    fn validate(&self, object: &ObjectType, hash: &ReadableHashType)
+    fn validate<'s,'o,'h>(&'s self, object: &'o ObjectType, hash: &'h ReadableHashType)
         -> Box< Future<Item=bool, Error=HashSpaceError> >;
 }
 

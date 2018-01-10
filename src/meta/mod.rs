@@ -38,7 +38,8 @@ pub struct GpsLocation
 
 
 
-pub fn iter_first_attrval_by_name<'a>(iter: Box< 'a + Iterator<Item = &'a Attribute> >, name: &str)
+pub fn iter_first_attrval_by_name<'a,'n>(
+            iter: Box< 'a + Iterator<Item = &'a Attribute> >, name: &'n str)
     -> Option< AttributeValue<'a> >
 {
     iter.filter( |attr| attr.name() == name )
@@ -46,7 +47,8 @@ pub fn iter_first_attrval_by_name<'a>(iter: Box< 'a + Iterator<Item = &'a Attrib
         .map( |attr| attr.value() )
 }
 
-pub fn iter_first_attrval_by_path<'a>(iter: Box< 'a + Iterator<Item = &'a Attribute> >, path: &[&str])
+pub fn iter_first_attrval_by_path<'a,'p>(
+            iter: Box< 'a + Iterator<Item = &'a Attribute> >, path: &'p[&'p str])
     -> Option< AttributeValue<'a> >
 {
     if path.len() == 0
