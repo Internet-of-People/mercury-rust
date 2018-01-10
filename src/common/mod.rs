@@ -51,17 +51,17 @@ impl HashWebLink
 
 
 
-pub trait Data<'a>
+pub trait Data
 {
-    fn blob<'s>(&'s self) -> &'a [u8];
-    fn attributes<'s>(&'s self) -> Box< 'a + Iterator<Item = &'a Attribute> >;
+    fn blob(&self) -> &[u8];
+    fn attributes<'a>(&'a self) -> Box< 'a + Iterator<Item = &'a Attribute> >;
 
     // Convenience function to access attributes by name/path
-    fn first_attrval_by_name<'s,'n>(&'s self, name: &'n str)
+    fn first_attrval_by_name<'a,'n>(&'a self, name: &'n str)
             -> Option< AttributeValue<'a> >
         { meta::iter_first_attrval_by_name( self.attributes(), name ) }
 
-    fn first_attrval_by_path<'s,'n>(&'s self, path: &'n [&'n str])
+    fn first_attrval_by_path<'a,'n>(&'a self, path: &'n [&'n str])
             -> Option< AttributeValue<'a> >
         { meta::iter_first_attrval_by_path( self.attributes(), path ) }
 }

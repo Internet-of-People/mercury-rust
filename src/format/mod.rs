@@ -16,7 +16,7 @@ impl FormatRegistry
 {
     // TODO should we return error instead?
     pub fn resolve_format<'s,'a,'d>(&'s self, format_id: &'a str, data: &'d [u8])
-        -> Result< Box< Data<'d> + 'd >, AddressResolutionError >
+        -> Result< Box<Data + 'd>, AddressResolutionError >
     {
         let parser = self.formats.get(format_id)
             .ok_or( AddressResolutionError::UnknownFormat( format_id.to_owned() ) )?;
@@ -31,5 +31,5 @@ impl FormatRegistry
 pub trait FormatParser
 {
     fn parse<'s,'b>(&'s self, blob: &'b [u8])
-        -> Result< Box<Data<'b> + 'b>, FormatParserError >;
+        -> Result< Box<Data + 'b>, FormatParserError >;
 }

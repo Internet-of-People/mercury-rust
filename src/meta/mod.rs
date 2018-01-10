@@ -151,11 +151,11 @@ mod tests
             { Self{ blob: blob, hash: hash, attrs: attrs } }
     }
 
-    impl<'a> Data<'a> for MetaData
+    impl Data for MetaData
     {
         fn blob(&self) -> &[u8] { self.blob.as_ref() }
 
-        fn attributes(&'a self) -> Box< Iterator<Item = &'a Attribute> + 'a >
+        fn attributes<'a>(&'a self) -> Box< Iterator<Item = &'a Attribute> + 'a >
         {
             let result = self.attrs.iter().map( |meta| meta as &Attribute );
             Box::new(result)
