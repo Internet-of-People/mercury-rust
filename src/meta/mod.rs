@@ -69,14 +69,14 @@ pub fn iter_first_attrval_by_path<'a,'p>(
 
 
 #[cfg(test)]
-mod tests
+pub mod tests
 {
     use super::*;
     use common::Data;
 
 
-    #[derive(Debug, Serialize, Deserialize, PartialEq)]
-    enum MetaAttrVal
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+    pub enum MetaAttrVal
     {
         BOOL(bool),
         INT(i64),
@@ -113,8 +113,8 @@ mod tests
 
 
 
-    #[derive(Debug, Serialize, Deserialize, PartialEq)]
-    struct MetaAttr
+    #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+    pub struct MetaAttr
     {
         name:   String,
         value:  MetaAttrVal,
@@ -137,7 +137,7 @@ mod tests
 
 
     #[derive(Debug, Serialize, Deserialize)]
-    struct MetaData
+    pub struct MetaData
     {
         blob:   Vec<u8>,
         hash:   Vec<u8>,

@@ -15,6 +15,10 @@ pub struct FormatRegistry
 
 impl FormatRegistry
 {
+    pub fn new(formats: HashMap< FormatId, Box<FormatParser> >) -> Self
+        { Self{ formats: formats } }
+
+
     // TODO should we return error instead?
     fn resolve_format<'d>(&self, format_id: &'d str, data: &'d [u8])
         -> Result< Box<Data + 'd>, AddressResolutionError >

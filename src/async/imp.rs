@@ -12,7 +12,6 @@ use tokio_postgres;
 use async::*;
 use common::HashWebLink;
 use format::*;
-use meta::AttributeValue;
 
 
 
@@ -132,18 +131,21 @@ impl AddressResolver
 
         // Separate (possibly many) attribute references
         let attr_specs_str = &hashed_attr_specs_str[1..];
-        let attribute_specs: Vec<&str> = attr_specs_str[1..].split('&').collect();
+        let attribute_specs: Vec<&str> = attr_specs_str.split('&').collect();
         for attr_spec in attribute_specs
         {
             let formats_clone = self.format_registry.clone();
             let hashweb_clone = self.hashweb.clone();
             let attrspec_clone = attr_spec.to_owned();
+            // Perform resolution of next attribute apecifier
             blob_fut = Box::new( blob_fut.and_then( move |blob|
             {
+                // Parse blob and query attribute path as hashweblink
                 let hashlink_res = formats_clone.resolve_attr_link(&blob, &attrspec_clone);
                 match hashlink_res {
                     Err(e) => Box::new( future::err(e) ) as FutureBlob,
                     Ok(hashlink) => {
+                        // Resolve hashweblink as blob
                         let resolved_link_fut = hashweb_clone.resolve(&hashlink)
                             .map_err( |e| AddressResolutionError::HashSpaceError(e) );
                         Box::new(resolved_link_fut) as FutureBlob
@@ -396,5 +398,76 @@ mod tests
         let bytes_future = hashweb.resolve(&link);
         let bytes = reactor.run(bytes_future).unwrap();
         assert_eq!( bytes, content);
+    }
+
+
+    use meta::Attribute;
+    use meta::tests::{MetaData, MetaAttr, MetaAttrVal};
+
+    struct DummyFormatParser
+    {
+        link_attr: MetaAttr,
+    }
+
+    impl FormatParser for DummyFormatParser
+    {
+        fn parse<'b>(&self, blob: &'b [u8])
+            -> Result< Box<Data + 'b>, FormatParserError >
+        {
+            let mut attrs = Vec::new();
+            attrs.push( self.link_attr.clone() );
+            Ok( Box::new( MetaData::new( blob.to_owned(), "dummy_hash".as_bytes().to_owned(), attrs ) ) )
+        }
+    }
+
+    #[test]
+    fn test_blob_address_resolution()
+    {
+        let cache_store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
+        let modular_cache: ModularHashSpace<Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
+            Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
+            Box::new(cache_store),
+            Box::new( MultiBaseHashCoder::new(multibase::Base64) ) );
+        let mut cache_space = Box::new(modular_cache) as Box< HashSpace<Vec<u8>, String> >;
+
+        let mut reactor = reactor::Core::new()
+            .expect("Failed to initialize the reactor event loop");
+        let myblob = Vec::from("This is my custom binary data");
+        let myblob_hash_fut = cache_space.store( myblob.clone() );
+        let myblob_hash = reactor.run(myblob_hash_fut).unwrap();
+
+        let default_space = "mystore".to_owned();
+        let mut spacemap = HashMap::new();
+        spacemap.insert( default_space.clone(), cache_space );
+        let hashweb = HashWeb::new( spacemap, default_space.clone() );
+
+        // Test hashweb blob address resolution (without attributes), format:
+        // hashspaceId/hash
+        let hashlink_str = default_space.clone() + "/" + &myblob_hash;
+        let resolved_fut = hashweb.resolve_hashlink(&hashlink_str);
+        let resolved = reactor.run(resolved_fut).unwrap();
+        assert_eq!(resolved, myblob);
+
+        let link_attr = MetaAttr::new( "hashweblink", MetaAttrVal::LINK(
+            HashWebLink::new(&default_space, &myblob_hash) ) );
+        let mut attrs_vec = Vec::new();
+        attrs_vec.push( link_attr.clone() );
+        let container_attr = MetaAttr::new( "attributes", MetaAttrVal::OBJECT(attrs_vec) );
+
+        let myformat = "myformat".to_owned();
+        let myparser = DummyFormatParser{ link_attr: container_attr.clone() };
+        let mut formats = HashMap::new();
+        formats.insert( myformat.clone(), Box::new(myparser) as Box<FormatParser> );
+        let registry = FormatRegistry::new(formats);
+
+        // Test blob address resolution with link attributes, format:
+        // hashspaceId/hash#formatId@path/to/hashlink/attribute&formatId@path/to/another/attribute
+        let link_address = hashlink_str + "#" + &myformat + "@" +
+            container_attr.name() + "/" + link_attr.name();
+        let resolver = AddressResolver::new(registry, hashweb);
+        let resolved_fut = resolver.resolve_blob(&link_address);
+
+        let resolved = reactor.run(resolved_fut).unwrap();
+        assert_eq!(resolved, myblob);
     }
 }
