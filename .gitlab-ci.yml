@@ -12,6 +12,7 @@ image: "rust"
 # Check out: http://docs.gitlab.com/ce/ci/docker/using_docker_images.html#what-is-a-service
 services:
   - postgres:alpine
+  - jbenet/go-ipfs:latest
 #  - mysql:latest
 #  - redis:latest
 
