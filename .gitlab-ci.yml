@@ -39,7 +39,7 @@ test:cargo:
     # official way to provide password to psql: http://www.postgresql.org/docs/9.3/static/libpq-envars.html
     - export PGPASSWORD=$POSTGRES_PASSWORD
     - psql -h "postgres" -U "$POSTGRES_USER" -d "$POSTGRES_DB" -f "test/testdb.sql"
-    - time cargo test --verbose --jobs 1 --release # Don't paralize to make errors more readable
+    - RUST_BACKTRACE=1 time cargo test --verbose --jobs 1 --release # Don't parallelize to make errors more readable
   cache:
     paths:
       - target/
