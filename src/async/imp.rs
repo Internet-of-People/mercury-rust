@@ -5,6 +5,7 @@ use std::rc::Rc;
 use futures::prelude::*;
 use futures::future;
 use futures_state_stream::StateStream;
+use ipfs_api;
 use multibase;
 use tokio_core::reactor;
 use tokio_postgres;
@@ -30,7 +31,7 @@ impl<ObjectType: 'static> HashWeb<ObjectType>
 
 
     // Expected hashlink format: hashspaceId/hash
-    pub fn resolve_hashlink<'s,'h>(&'s self, hashlink_str: &'h str)
+    pub fn resolve_hashlink(&self, hashlink_str: &str)
         -> Box< Future<Item=ObjectType, Error=AddressResolutionError> >
     {
         // Ignore starting slash
@@ -71,7 +72,7 @@ where ObjectType: 'static
     }
 
 
-    fn resolve<'s,'l>(&'s self, link: &'l HashWebLink)
+    fn resolve(&self, link: &HashWebLink)
         -> Box< Future<Item = ObjectType, Error = HashSpaceError> >
     {
         let hashspace_res = self.hashspaces.get( link.hashspace() )
@@ -155,6 +156,52 @@ impl AddressResolver
             } ) );
         }
         blob_fut
+    }
+}
+
+
+
+pub struct Ipfs
+{
+    client: ipfs_api::IpfsClient,
+}
+
+impl Ipfs
+{
+    pub fn new(client: ipfs_api::IpfsClient) -> Self
+        { Self{ client: client} }
+}
+
+impl HashSpace<Vec<u8>, String> for Ipfs
+{
+    fn store(&mut self, object: Vec<u8>)
+        -> Box< Future<Item=String, Error=HashSpaceError> >
+    {
+        // TODO maybe we should also pin the object after adding
+        let data = ::std::io::Cursor::new(object);
+        let add_fut = self.client.add(data)
+            .map( |resp| resp.hash )
+            // TODO error should be mapped to something more descriptive than Other
+            .map_err( |e| HashSpaceError::Other( Box::new(e) ) );
+        Box::new(add_fut)
+    }
+
+    fn resolve(&self, hash: &String)
+        -> Box< Future<Item=Vec<u8>, Error=HashSpaceError> >
+    {
+        let cat_fut = self.client.cat(hash).concat2()
+            .map( |chunk| chunk.to_vec() )
+            // TODO error should be mapped to something more descriptive than Other
+            .map_err( |e| HashSpaceError::Other( Box::new(e) ) );
+        Box::new(cat_fut)
+    }
+
+    fn validate(&self, _object: &Vec<u8>, hash: &String)
+        -> Box< Future<Item=bool, Error=HashSpaceError> >
+    {
+        let val_fut = self.resolve(hash)
+            .map( |_bytes| true );
+        Box::new(val_fut)
     }
 }
 
@@ -312,7 +359,6 @@ mod tests
     #[test]
     fn test_postgres_storage()
     {
-        // TODO consider if these should also use assert!() calls instead of expect/unwrap
         let mut reactor = reactor::Core::new()
             .expect("Failed to initialize the reactor event loop");
 
@@ -370,7 +416,6 @@ mod tests
             Box::new(cache_store),
             Box::new( MultiBaseHashCoder::new(multibase::Base64) ) );
 
-        // TODO consider if these should also use assert!() calls instead of expect/unwrap
         let mut reactor = reactor::Core::new()
             .expect("Failed to initialize the reactor event loop");
 
@@ -398,6 +443,23 @@ mod tests
         let bytes_future = hashweb.resolve(&link);
         let bytes = reactor.run(bytes_future).unwrap();
         assert_eq!( bytes, content);
+    }
+
+    #[test]
+    fn test_ipfs_hashspace()
+    {
+        let mut reactor = reactor::Core::new()
+            .expect("Failed to initialize the reactor event loop");
+        let client = ipfs_api::IpfsClient::default( &reactor.handle() );
+        let mut ipfs = Ipfs::new(client);
+
+        let orig_data = b"Tear down the wall!".to_vec();
+        let hash_fut = ipfs.store( orig_data.clone() );
+        let hash = reactor.run(hash_fut).unwrap();
+println!("ipfs hash: {}", hash);
+        let resolve_fut = ipfs.resolve(&hash);
+        let resolved_data = reactor.run(resolve_fut).unwrap();
+        assert_eq!(orig_data, resolved_data);
     }
 
 

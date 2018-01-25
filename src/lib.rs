@@ -1,5 +1,6 @@
 extern crate futures;
 extern crate futures_state_stream;
+extern crate ipfs_api;
 extern crate multibase;
 extern crate multihash;
 extern crate serde;

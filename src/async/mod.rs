@@ -14,9 +14,9 @@ pub trait HashSpace<ObjectType, ReadableHashType>
 {
     fn store(&mut self, object: ObjectType)
         -> Box< Future<Item=ReadableHashType, Error=HashSpaceError> >;
-    fn resolve<'s,'h>(&'s self, hash: &'s ReadableHashType)
+    fn resolve(&self, hash: &ReadableHashType)
         -> Box< Future<Item=ObjectType, Error=HashSpaceError> >;
-    fn validate<'s,'o,'h>(&'s self, object: &'o ObjectType, hash: &'h ReadableHashType)
+    fn validate(&self, object: &ObjectType, hash: &ReadableHashType)
         -> Box< Future<Item=bool, Error=HashSpaceError> >;
 }
 
@@ -45,9 +45,9 @@ impl<SerializedType, BinaryHashType, ReadableHashType>
 ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
 {
     pub fn new( // serializer: Rc< Serializer<ObjectType, SerializedType> >,
-               hasher:     Rc< Hasher<SerializedType, BinaryHashType> >,
-               storage:    Box< KeyValueStore<BinaryHashType, SerializedType> >,
-               hash_coder:  Box< HashCoder<BinaryHashType, ReadableHashType> > ) -> Self
+                hasher:     Rc< Hasher<SerializedType, BinaryHashType> >,
+                storage:    Box< KeyValueStore<BinaryHashType, SerializedType> >,
+                hash_coder: Box< HashCoder<BinaryHashType, ReadableHashType> > ) -> Self
     {
         Self{ // serializer:   serializer,
               hasher:       hasher,
