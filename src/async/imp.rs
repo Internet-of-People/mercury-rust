@@ -450,8 +450,8 @@ mod tests
     {
         let mut reactor = reactor::Core::new()
             .expect("Failed to initialize the reactor event loop");
-        let client = ipfs_api::IpfsClient::default( &reactor.handle() );
-        //let client = ipfs_api::IpfsClient::new( &reactor.handle(), "localhost", 5001 ).unwrap();
+        // let client = ipfs_api::IpfsClient::default( &reactor.handle() );
+        let client = ipfs_api::IpfsClient::new( &reactor.handle(), "ipfs", 5001 ).unwrap();
         let mut ipfs = Ipfs::new(client);
 
         let orig_data = b"Tear down the wall!".to_vec();
