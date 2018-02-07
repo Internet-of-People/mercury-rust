@@ -17,13 +17,60 @@ use tokio_core::reactor;
 use tokio_postgres;
 
 use async::*;
-use common::HashWebLink;
 use format::*;
 
 
 
 const HashWebLink_HashSpaceId_Separator: &str = "/";
 const HashWebLink_Attribute_Separator:   &str = "#";
+
+
+
+pub type HashSpaceId = String;
+
+//pub trait HashLink
+//{
+//    fn hashspace(&self) -> &HashSpaceId;
+//    fn hash(&self)      -> &str;          // of linked data under specified hashspace
+//}
+
+
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct HashWebLink
+{
+    hashspace:  HashSpaceId,
+    hash:       String,
+}
+
+impl HashWebLink
+{
+    // TODO solve using &str instead of &String
+    pub fn new(hashspace: &HashSpaceId, hash: &str) -> Self
+    { Self{ hashspace: hashspace.to_owned(), hash: hash.to_owned() } }
+
+    pub fn hashspace(&self) -> &HashSpaceId { &self.hashspace }
+    pub fn hash(&self)      -> &str         {  self.hash.as_ref() }
+
+    pub fn parse(address_str: &str)
+                 -> Result<HashWebLink, HashSpaceError>
+    {
+        // Ignore starting slash
+        let address = if address_str.starts_with('/') { &address_str[1..] } else { address_str };
+
+        // Split hashspaceId and hash parts
+        let slash_pos = address.find('/')
+            .ok_or( HashSpaceError::LinkFormatError( address_str.to_owned() ) )?; //.unwrap_or( address.len() );
+        let (hashspace_id, slashed_hash) = address.split_at(slash_pos);
+        let hash = &slashed_hash[1..]; // Ignore starting slash
+
+        // Perform link resolution
+        let hashlink = HashWebLink::new( &hashspace_id.to_string(), hash );
+        Ok(hashlink)
+    }
+}
+
+
 
 pub struct HashWeb<ObjectType>
 {
@@ -55,60 +102,61 @@ impl<ObjectType: 'static> HashWeb<ObjectType>
 }
 
 
-impl<ObjectType>
-HashSpace<ObjectType, HashWebLink>
-for HashWeb<ObjectType>
-where ObjectType: 'static
-{
-    fn store(&mut self, object: ObjectType)
-         -> Box< Future<Item=HashWebLink, Error=HashSpaceError> >
-    {
-        let mut hashspace_res = self.hashspaces.get_mut(&self.default)
-            .ok_or( HashSpaceError::UnsupportedHashSpace( self.default.to_owned() ) );;
-        let hashspace = match hashspace_res {
-            Ok(ref mut space) => space,
-            Err(e) => return Box::new( future::err(e) ),
-        };
-        let default_hashspace_clone = self.default.clone();
-        let result = hashspace.store(object)
-            .map( move |hash| HashWebLink::new(&default_hashspace_clone, &hash) );
-        Box::new(result)
-    }
 
-
-    fn resolve(&self, link: &HashWebLink)
-        -> Box< Future<Item = ObjectType, Error = HashSpaceError> >
-    {
-        let hashspace_res = self.hashspaces.get( link.hashspace() )
-            .ok_or( HashSpaceError::UnsupportedHashSpace( link.hashspace().to_owned() ) );
-        let hashspace = match hashspace_res {
-            Ok(space) => space,
-            Err(e) => return Box::new( future::err(e) ),
-        };
-        let data = hashspace.resolve( &link.hash().to_owned() );
-        Box::new(data)
-    }
-
-
-    fn validate(&self, object: &ObjectType, link: &HashWebLink)
-        -> Box< Future<Item=bool, Error=HashSpaceError> >
-    {
-        let hashspace_res = self.hashspaces.get( link.hashspace() )
-            .ok_or( HashSpaceError::UnsupportedHashSpace( link.hashspace().to_owned() ) );
-        let hashspace = match hashspace_res {
-            Ok(ref space) => space,
-            Err(e) => return Box::new( future::err(e) ),
-        };
-        // TODO to_string() is unnecessary below, find out how to transform signatures so as it's not needed
-        let result = hashspace.validate( object, &link.hash().to_string() );
-        Box::new(result)
-    }
-}
-
-
-
-// TODO this implementation is very similar to HashSpace<ObjectType, HashWebLink>,
+// TODO this implementation is very similar to HashSpace<ObjectType, String>,
 //      most code should be shared between them if both are needed
+//impl<ObjectType>
+//HashSpace<ObjectType, HashWebLink>
+//for HashWeb<ObjectType>
+//where ObjectType: 'static
+//{
+//    fn store(&mut self, object: ObjectType)
+//         -> Box< Future<Item=HashWebLink, Error=HashSpaceError> >
+//    {
+//        let mut hashspace_res = self.hashspaces.get_mut(&self.default)
+//            .ok_or( HashSpaceError::UnsupportedHashSpace( self.default.to_owned() ) );;
+//        let hashspace = match hashspace_res {
+//            Ok(ref mut space) => space,
+//            Err(e) => return Box::new( future::err(e) ),
+//        };
+//        let default_hashspace_clone = self.default.clone();
+//        let result = hashspace.store(object)
+//            .map( move |hash| HashWebLink::new(&default_hashspace_clone, &hash) );
+//        Box::new(result)
+//    }
+//
+//
+//    fn resolve(&self, link: &HashWebLink)
+//        -> Box< Future<Item = ObjectType, Error = HashSpaceError> >
+//    {
+//        let hashspace_res = self.hashspaces.get( link.hashspace() )
+//            .ok_or( HashSpaceError::UnsupportedHashSpace( link.hashspace().to_owned() ) );
+//        let hashspace = match hashspace_res {
+//            Ok(space) => space,
+//            Err(e) => return Box::new( future::err(e) ),
+//        };
+//        let data = hashspace.resolve( &link.hash().to_owned() );
+//        Box::new(data)
+//    }
+//
+//
+//    fn validate(&self, object: &ObjectType, link: &HashWebLink)
+//        -> Box< Future<Item=bool, Error=HashSpaceError> >
+//    {
+//        let hashspace_res = self.hashspaces.get( link.hashspace() )
+//            .ok_or( HashSpaceError::UnsupportedHashSpace( link.hashspace().to_owned() ) );
+//        let hashspace = match hashspace_res {
+//            Ok(ref space) => space,
+//            Err(e) => return Box::new( future::err(e) ),
+//        };
+//        // TODO to_string() is unnecessary below, find out how to transform signatures so as it's not needed
+//        let result = hashspace.validate( object, &link.hash().to_string() );
+//        Box::new(result)
+//    }
+//}
+
+
+
 impl<ObjectType>
 HashSpace<ObjectType, String>
 for HashWeb<ObjectType>
@@ -129,6 +177,7 @@ for HashWeb<ObjectType>
         Box::new(result)
     }
 
+
     fn resolve(&self, hashlink_str: &String)
         -> Box< Future<Item = ObjectType, Error = HashSpaceError> >
     {
@@ -146,6 +195,7 @@ for HashWeb<ObjectType>
         let data = hashspace.resolve( &hashlink.hash().to_owned() );
         Box::new(data)
     }
+
 
     fn validate(&self, object: &ObjectType, hashlink_str: &String)
         -> Box< Future<Item=bool, Error=HashSpaceError> >
@@ -584,7 +634,7 @@ mod tests
 
         let content = b"There's over a dozen netrunners Netwatch Cops would love to brain burn and Rache Bartmoss is at least two of them".to_vec();
         let link_future = hashweb.store( content.clone() );
-        let link: String = reactor.run(link_future).unwrap();
+        let link = reactor.run(link_future).unwrap();
         //assert_eq!( *link.hashspace(), default_space );
         assert!( link.starts_with( (default_space + HashWebLink_HashSpaceId_Separator).as_str() ) );
 
@@ -656,7 +706,7 @@ mod tests
         assert_eq!(resolved, myblob);
 
         let link_attr = MetaAttr::new( "hashweblink", MetaAttrVal::LINK(
-            HashWebLink::new(&default_space, &myblob_hash) ) );
+            default_space.to_string() + HashWebLink_HashSpaceId_Separator + &myblob_hash) );
         let mut attrs_vec = Vec::new();
         attrs_vec.push( link_attr.clone() );
         let container_attr = MetaAttr::new( "attributes", MetaAttrVal::OBJECT(attrs_vec) );

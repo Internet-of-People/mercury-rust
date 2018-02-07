@@ -6,68 +6,6 @@ pub mod imp;
 
 
 
-pub type HashSpaceId = String;
-
-//#[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
-//pub enum HashSpaceId
-//{
-//    // TODO consider possible values
-//    Relative,
-//    Postgres,
-//    LevelDb,
-//    Magnet,
-//    Torrent,
-//    Ipfs,
-//    StoreJ,
-//    Git,
-//    Hydra,
-//}
-
-
-//pub trait HashLink
-//{
-//    fn hashspace(&self) -> &HashSpaceId;
-//    fn hash(&self)      -> &str;          // of linked data under specified hashspace
-//}
-
-
-
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
-pub struct HashWebLink
-{
-    hashspace:  HashSpaceId,
-    hash:       String,
-}
-
-impl HashWebLink
-{
-    // TODO solve using &str instead of &String
-    pub fn new(hashspace: &HashSpaceId, hash: &str) -> Self
-        { Self{ hashspace: hashspace.to_owned(), hash: hash.to_owned() } }
-
-    pub fn hashspace(&self) -> &HashSpaceId { &self.hashspace }
-    pub fn hash(&self)      -> &str         {  self.hash.as_ref() }
-
-    pub fn parse(address_str: &str)
-        -> Result<HashWebLink, HashSpaceError>
-    {
-        // Ignore starting slash
-        let address = if address_str.starts_with('/') { &address_str[1..] } else { address_str };
-
-        // Split hashspaceId and hash parts
-        let slash_pos = address.find('/')
-            .ok_or( HashSpaceError::LinkFormatError( address_str.to_owned() ) )?; //.unwrap_or( address.len() );
-        let (hashspace_id, slashed_hash) = address.split_at(slash_pos);
-        let hash = &slashed_hash[1..]; // Ignore starting slash
-
-        // Perform link resolution
-        let hashlink = HashWebLink::new( &hashspace_id.to_string(), hash );
-        Ok(hashlink)
-    }
-}
-
-
-
 pub trait Data
 {
     fn blob(&self) -> &[u8];

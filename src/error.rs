@@ -1,8 +1,6 @@
 use std::error::Error;
 use std::fmt;
 
-use common::HashSpaceId;
-
 
 
 #[derive(Debug)]
@@ -110,8 +108,8 @@ pub enum HashSpaceError {
     StorageError(StorageError),
     StringCoderError(StringCoderError),
     LinkFormatError(String),
-    UnknownHashSpace(HashSpaceId),
-    UnsupportedHashSpace(HashSpaceId),
+    UnknownHashSpace(String),
+    UnsupportedHashSpace(String),
     Other(Box<Error>),
 }
 

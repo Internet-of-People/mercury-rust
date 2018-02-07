@@ -1,7 +1,5 @@
 use std::time::SystemTime;
 
-use common::HashWebLink;
-
 
 
 pub trait Attribute
@@ -22,7 +20,7 @@ pub enum AttributeValue<'a>
     Location(GpsLocation),
     String(&'a str),
     Blob(&'a [u8]),
-    Link(&'a HashWebLink),
+    Link(&'a str),
     Array(Box< 'a + Iterator< Item = AttributeValue<'a> > >),
     Object(Box< 'a + Iterator<Item = &'a Attribute> >),
 }
@@ -84,7 +82,7 @@ pub mod tests
         TIMESTAMP(SystemTime),
         LOCATION(GpsLocation),
         STRING(String),
-        LINK(HashWebLink),
+        LINK(String),
         BLOB( Vec<u8> ),
         ARRAY( Vec<MetaAttrVal> ),
         OBJECT( Vec<MetaAttr> ),
@@ -171,7 +169,7 @@ pub mod tests
         let answer = 42;
         let pi = 3.14159265358979;
 
-        let linkhash = "Far far away in another storage network".to_owned();
+        let linkhash = "Far/far/away/in/another/storage/network".to_owned();
         let famous = vec!(
             MetaAttrVal::STRING( spoon.to_owned() ),
             MetaAttrVal::INT(answer),
@@ -185,7 +183,7 @@ pub mod tests
         let attrs = vec!(
             MetaAttr::new( "works", MetaAttrVal::BOOL(true) ),
             MetaAttr::new( "timestamp", MetaAttrVal::TIMESTAMP( SystemTime::now() ) ),
-            MetaAttr::new( "link", MetaAttrVal::LINK( HashWebLink::new( &"magnet".to_owned(), linkhash.as_str() ) ) ),
+            MetaAttr::new( "link", MetaAttrVal::LINK( "magnet/".to_owned() + linkhash.as_str() ) ),
             MetaAttr::new( "famous", MetaAttrVal::ARRAY(famous) ),
             MetaAttr::new( "color", MetaAttrVal::OBJECT(color) ),
         );

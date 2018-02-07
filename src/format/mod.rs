@@ -35,7 +35,7 @@ impl FormatRegistry
 
     // Expected attribute specifier format: formatId@path/to/hashlink/attribute
     pub fn resolve_attr_link<'a,'d>(&self, data: &'d Vec<u8>, attr_spec: &'a str)
-        -> Result<HashWebLink, AddressResolutionError>
+        -> Result<String, AddressResolutionError>
     {
         // Separate format and attribute path
         let format_sep_idx = attr_spec.find(Format_Separator).unwrap_or( attr_spec.len() );
@@ -51,7 +51,7 @@ impl FormatRegistry
             .ok_or( AddressResolutionError::AttributeNotFound( attr_path_str.to_owned() ) );
 
         match attr_res {
-            Ok( AttributeValue::Link(v) ) => Ok( v.clone() ),
+            Ok( AttributeValue::Link(v) ) => Ok( v.to_owned() ),
             Ok(_) => Err(AddressResolutionError::WrongAttributeType),
             Err(e) => Err(e),
         }
