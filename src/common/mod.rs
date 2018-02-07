@@ -47,6 +47,23 @@ impl HashWebLink
 
     pub fn hashspace(&self) -> &HashSpaceId { &self.hashspace }
     pub fn hash(&self)      -> &str         {  self.hash.as_ref() }
+
+    pub fn parse(address_str: &str)
+        -> Result<HashWebLink, HashSpaceError>
+    {
+        // Ignore starting slash
+        let address = if address_str.starts_with('/') { &address_str[1..] } else { address_str };
+
+        // Split hashspaceId and hash parts
+        let slash_pos = address.find('/')
+            .ok_or( HashSpaceError::LinkFormatError( address_str.to_owned() ) )?; //.unwrap_or( address.len() );
+        let (hashspace_id, slashed_hash) = address.split_at(slash_pos);
+        let hash = &slashed_hash[1..]; // Ignore starting slash
+
+        // Perform link resolution
+        let hashlink = HashWebLink::new( &hashspace_id.to_string(), hash );
+        Ok(hashlink)
+    }
 }
 
 

@@ -1,7 +1,13 @@
-use std::collections::HashMap;
+use std::collections::{HashMap}; //, HashSet};
 use std::hash::Hash;
+//use std::net::{SocketAddr, Ipv4Addr, SocketAddrV4, ToSocketAddrs};
 use std::rc::Rc;
+//use std::thread;
 
+//use bip_dht::{DhtBuilder, MainlineDht, Router};
+//use bip_dht::Handshaker;
+//use bip_magnet::Topic;
+//use bip_util::bt::{InfoHash, PeerId};
 use futures::prelude::*;
 use futures::future;
 use futures_state_stream::StateStream;
@@ -16,11 +22,15 @@ use format::*;
 
 
 
+const HashWebLink_HashSpaceId_Separator: &str = "/";
+const HashWebLink_Attribute_Separator:   &str = "#";
+
 pub struct HashWeb<ObjectType>
 {
     hashspaces: HashMap< HashSpaceId, Box< HashSpace<ObjectType, String> > >,
     default:    HashSpaceId,
 }
+
 
 
 impl<ObjectType: 'static> HashWeb<ObjectType>
@@ -29,25 +39,19 @@ impl<ObjectType: 'static> HashWeb<ObjectType>
                default: HashSpaceId) -> Self
         { HashWeb { hashspaces: hashspaces, default: default } }
 
-
-    // Expected hashlink format: hashspaceId/hash
-    pub fn resolve_hashlink(&self, hashlink_str: &str)
-        -> Box< Future<Item=ObjectType, Error=AddressResolutionError> >
-    {
-        // Ignore starting slash
-        let address = if hashlink_str.starts_with('/') { &hashlink_str[1..] } else { hashlink_str };
-
-        // Split hashspaceId and hash parts
-        let slash_pos = address.find('/').unwrap_or( address.len() );
-        let (hashspace_id, slashed_hash) = hashlink_str.split_at(slash_pos);
-        let hash = &slashed_hash[1..]; // Ignore starting slash
-
-        // Perform link resolution
-        let hashlink = HashWebLink::new( &hashspace_id.to_string(), hash );
-        let resolved_data_fut = self.resolve(&hashlink)
-            .map_err( |e| AddressResolutionError::HashSpaceError(e) );
-        Box::new(resolved_data_fut)
-    }
+//    // Expected hashlink format: hashspaceId/hash
+//    pub fn resolve_hashlink(&self, hashlink_str: &str)
+//        -> Box< Future<Item=ObjectType, Error=AddressResolutionError> >
+//    {
+//
+//        let hashlink = match HashWebLink::parse(hashlink_str) {
+//            Ok(link) => link,
+//            Err(e) => return Box::new( future::err(AddressResolutionError::HashSpaceError(e) ) ),
+//        };
+//        let resolved_data_fut = self.resolve(&hashlink)
+//            .map_err( |e| AddressResolutionError::HashSpaceError(e) );
+//        Box::new(resolved_data_fut)
+//    }
 }
 
 
@@ -103,6 +107,68 @@ where ObjectType: 'static
 
 
 
+// TODO this implementation is very similar to HashSpace<ObjectType, HashWebLink>,
+//      most code should be shared between them if both are needed
+impl<ObjectType>
+HashSpace<ObjectType, String>
+for HashWeb<ObjectType>
+    where ObjectType: 'static
+{
+    fn store(&mut self, object: ObjectType)
+        -> Box< Future<Item=String, Error=HashSpaceError> >
+    {
+        let mut hashspace_res = self.hashspaces.get_mut(&self.default)
+            .ok_or( HashSpaceError::UnsupportedHashSpace( self.default.to_owned() ) );;
+        let hashspace = match hashspace_res {
+            Ok(ref mut space) => space,
+            Err(e) => return Box::new( future::err(e) ),
+        };
+        let default_hashspace_clone = self.default.clone();
+        let result = hashspace.store(object)
+            .map( move |hash| default_hashspace_clone + HashWebLink_HashSpaceId_Separator + &hash);
+        Box::new(result)
+    }
+
+    fn resolve(&self, hashlink_str: &String)
+        -> Box< Future<Item = ObjectType, Error = HashSpaceError> >
+    {
+        let hashlink = match HashWebLink::parse(hashlink_str) {
+            Ok(link) => link,
+            Err(e) => return Box::new( future::err(e) ),
+        };
+
+        let hashspace_res = self.hashspaces.get( hashlink.hashspace() )
+            .ok_or( HashSpaceError::UnsupportedHashSpace( hashlink.hashspace().to_owned() ) );
+        let hashspace = match hashspace_res {
+            Ok(space) => space,
+            Err(e) => return Box::new( future::err(e) ),
+        };
+        let data = hashspace.resolve( &hashlink.hash().to_owned() );
+        Box::new(data)
+    }
+
+    fn validate(&self, object: &ObjectType, hashlink_str: &String)
+        -> Box< Future<Item=bool, Error=HashSpaceError> >
+    {
+        let hashlink = match HashWebLink::parse(hashlink_str) {
+            Ok(link) => link,
+            Err(e) => return Box::new( future::err(e) ),
+        };
+
+        let hashspace_res = self.hashspaces.get( hashlink.hashspace() )
+            .ok_or( HashSpaceError::UnsupportedHashSpace( hashlink.hashspace().to_owned() ) );
+        let hashspace = match hashspace_res {
+            Ok(ref space) => space,
+            Err(e) => return Box::new( future::err(e) ),
+        };
+        // TODO to_string() is unnecessary below, find out how to transform signatures so as it's not needed
+        let result = hashspace.validate( object, &hashlink.hash().to_string() );
+        Box::new(result)
+    }
+}
+
+
+
 pub struct AddressResolver
 {
     hashweb:            Rc< HashWeb< Vec<u8> > >,
@@ -124,11 +190,13 @@ impl AddressResolver
     pub fn resolve_blob<'s,'a>(&'s self, address: &'a str) -> FutureBlob
     {
         // Separate starting hashlink part from attributes
-        let attr_separ_idx = address.find('#').unwrap_or( address.len() );
+        let attr_separ_idx = address.find(HashWebLink_Attribute_Separator).unwrap_or( address.len() );
         let (hashlink_str, hashed_attr_specs_str) = address.split_at(attr_separ_idx);
 
         // Resolve hashlink into binary blob
-        let mut blob_fut: FutureBlob = Box::new( self.hashweb.resolve_hashlink(hashlink_str) );
+        let mut blob_fut: FutureBlob = Box::new(
+            self.hashweb.resolve( &hashlink_str.to_owned() )
+                .map_err( |e| AddressResolutionError::HashSpaceError(e) ) );
 
         // Separate (possibly many) attribute references
         let attr_specs_str = &hashed_attr_specs_str[1..];
@@ -147,7 +215,7 @@ impl AddressResolver
                     Err(e) => Box::new( future::err(e) ) as FutureBlob,
                     Ok(hashlink) => {
                         // Resolve hashweblink as blob
-                        let resolved_link_fut = hashweb_clone.resolve(&hashlink)
+                        let resolved_link_fut = hashweb_clone.resolve( &hashlink.to_owned() )
                             .map_err( |e| AddressResolutionError::HashSpaceError(e) );
                         Box::new(resolved_link_fut) as FutureBlob
                     }
@@ -204,6 +272,82 @@ impl HashSpace<Vec<u8>, String> for Ipfs
         Box::new(val_fut)
     }
 }
+
+
+
+//struct SimpleHandshaker
+//{
+//    filter: HashSet<SocketAddr>,
+//}
+//
+//impl Handshaker for SimpleHandshaker
+//{
+//    fn id(&self) -> PeerId { [0u8; 20].into() } // My unique peer id
+//    fn port(&self) -> u16 { 6889 }
+//
+//    // Initiates a handshake with other peer on the given socket address.
+//    fn connect(&mut self, _: Option<PeerId>, _: InfoHash, addr: SocketAddr)
+//    {
+//        if ! self.filter.contains(&addr)
+//        {
+//            self.filter.insert(addr);
+//            println!( "Received new peer {:?}, total unique peers {}", addr, self.filter.len() );
+//        }
+//    }
+//
+//    // TODO Type of stream used to receive connections from.
+//    type MetadataEnvelope = ();
+//
+//    // TODO Send the given Metadata back to the client.
+//    fn metadata(&mut self, _: Self::MetadataEnvelope) { () }
+//}
+//
+//pub struct MagnetDht
+//{
+//    dht: MainlineDht,
+//}
+//
+//impl MagnetDht
+//{
+//    fn new() -> Self
+//    {
+//        let handshaker = SimpleHandshaker{ filter: HashSet::new() };
+//        let dht = DhtBuilder::with_router(Router::uTorrent)
+//            .set_source_addr( SocketAddr::V4( SocketAddrV4::new( Ipv4Addr::new(0, 0, 0, 0), 6889 ) ) )
+//            .start_mainline(handshaker)
+//            .unwrap();
+//
+//        let events = dht.events();
+//        thread::spawn( move || {
+//            for event in events {
+//                println!("\nReceived Dht Event {:?}", event);
+//            }
+//        } );
+//        Self{ dht: dht }
+//    }
+//}
+//
+//impl HashSpace<Vec<u8>, String> for MagnetDht
+//{
+//    fn store(&mut self, object: Vec<u8>)
+//        -> Box< Future<Item=String, Error=HashSpaceError> >
+//    {
+//        unimplemented!(); // TODO should return a more reasonable error here
+//    }
+//
+//    fn resolve(&self, hash: &String)
+//        -> Box< Future<Item=Vec<u8>, Error=HashSpaceError> >
+//    {
+//        let infohash = Topic::parse(hash);
+//        self.dht.search( infohash.into(), false );
+//    }
+//
+//    fn validate(&self, object: &Vec<u8>, hash: &String)
+//        -> Box< Future<Item=bool, Error=HashSpaceError> >
+//    {
+//        unimplemented!(); // TODO should return a more reasonable error here
+//    }
+//}
 
 
 
@@ -309,7 +453,7 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
                         value
                     } )
                     .collect()
-                    // TODO reducing resulsts by concatenating provides bad results
+                    // TODO reducing results by concatenating provides bad results
                     //      if multiple rows are found in the result set
                     .map( |(vec,_state)| vec.concat() )
             )
@@ -328,6 +472,9 @@ mod tests
     use tokio_core::reactor;
 
     use common::imp::*;
+    use format::Format_Separator;
+    use meta::Attribute;
+    use meta::tests::{MetaData, MetaAttr, MetaAttrVal};
     use super::*;
 
 
@@ -437,8 +584,9 @@ mod tests
 
         let content = b"There's over a dozen netrunners Netwatch Cops would love to brain burn and Rache Bartmoss is at least two of them".to_vec();
         let link_future = hashweb.store( content.clone() );
-        let link = reactor.run(link_future).unwrap();
-        assert_eq!( *link.hashspace(), default_space );
+        let link: String = reactor.run(link_future).unwrap();
+        //assert_eq!( *link.hashspace(), default_space );
+        assert!( link.starts_with( (default_space + HashWebLink_HashSpaceId_Separator).as_str() ) );
 
         let bytes_future = hashweb.resolve(&link);
         let bytes = reactor.run(bytes_future).unwrap();
@@ -457,15 +605,11 @@ mod tests
         let orig_data = b"Tear down the wall!".to_vec();
         let hash_fut = ipfs.store( orig_data.clone() );
         let hash = reactor.run(hash_fut).unwrap();
-println!("ipfs hash: {}", hash);
         let resolve_fut = ipfs.resolve(&hash);
         let resolved_data = reactor.run(resolve_fut).unwrap();
         assert_eq!(orig_data, resolved_data);
     }
 
-
-    use meta::Attribute;
-    use meta::tests::{MetaData, MetaAttr, MetaAttrVal};
 
     struct DummyFormatParser
     {
@@ -506,8 +650,8 @@ println!("ipfs hash: {}", hash);
 
         // Test hashweb blob address resolution (without attributes), format:
         // hashspaceId/hash
-        let hashlink_str = default_space.clone() + "/" + &myblob_hash;
-        let resolved_fut = hashweb.resolve_hashlink(&hashlink_str);
+        let hashlink_str = default_space.clone() + HashWebLink_HashSpaceId_Separator + &myblob_hash;
+        let resolved_fut = hashweb.resolve(&hashlink_str);
         let resolved = reactor.run(resolved_fut).unwrap();
         assert_eq!(resolved, myblob);
 
@@ -525,8 +669,9 @@ println!("ipfs hash: {}", hash);
 
         // Test blob address resolution with link attributes, format:
         // hashspaceId/hash#formatId@path/to/hashlink/attribute&formatId@path/to/another/attribute
-        let link_address = hashlink_str + "#" + &myformat + "@" +
-            container_attr.name() + "/" + link_attr.name();
+        let link_address = hashlink_str + HashWebLink_Attribute_Separator + &myformat +
+            Format_Separator.to_string().as_str() +
+            container_attr.name() + HashWebLink_HashSpaceId_Separator + link_attr.name();
         let resolver = AddressResolver::new(registry, hashweb);
         let resolved_fut = resolver.resolve_blob(&link_address);
 

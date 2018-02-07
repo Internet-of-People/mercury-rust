@@ -109,6 +109,7 @@ pub enum HashSpaceError {
     HashError(HashError),
     StorageError(StorageError),
     StringCoderError(StringCoderError),
+    LinkFormatError(String),
     UnknownHashSpace(HashSpaceId),
     UnsupportedHashSpace(HashSpaceId),
     Other(Box<Error>),
@@ -127,8 +128,9 @@ impl Error for HashSpaceError {
             HashSpaceError::HashError(ref e)        => e.description(),
             HashSpaceError::StorageError(ref e)     => e.description(),
             HashSpaceError::StringCoderError(ref e) => e.description(),
-            HashSpaceError::UnknownHashSpace(ref _s) => "Unknown hashspace identifier: {:?}",
-            HashSpaceError::UnsupportedHashSpace(ref _s) => "Hashspace is not supporteD: {:?}",
+            HashSpaceError::LinkFormatError(ref _s)  => "Invalid link: {:?}", // TODO format!(, s),
+            HashSpaceError::UnknownHashSpace(ref _s) => "Unknown hashspace identifier: {:?}", // TODO format!(, s),
+            HashSpaceError::UnsupportedHashSpace(ref _s) => "Hashspace is not supporteD: {:?}", // TODO format!(, s),
             HashSpaceError::Other(ref e)            => e.description(),
         }
     }

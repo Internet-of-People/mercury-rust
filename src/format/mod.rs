@@ -5,6 +5,8 @@ use error::*;
 use meta::AttributeValue;
 
 
+pub const Format_Separator: char = '@';
+pub const Path_Separator:   char = '/';
 
 pub type FormatId = String;
 
@@ -36,10 +38,10 @@ impl FormatRegistry
         -> Result<HashWebLink, AddressResolutionError>
     {
         // Separate format and attribute path
-        let format_sep_idx = attr_spec.find('@').unwrap_or( attr_spec.len() );
+        let format_sep_idx = attr_spec.find(Format_Separator).unwrap_or( attr_spec.len() );
         let (format_id, prefixed_attr_path_str) = attr_spec.split_at(format_sep_idx);
         let attr_path_str = &prefixed_attr_path_str[1..];
-        let attr_path: Vec<&str> = attr_path_str.split('/').collect();
+        let attr_path: Vec<&str> = attr_path_str.split(Path_Separator).collect();
 
         // Parse blob to fetch attributes
         let parsed_data = self.resolve_format( format_id, data.as_slice() )?;

@@ -5,6 +5,10 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 license = "LGPL-3.0+"
 
 [dependencies]
+#bip_dht = { git = "https://github.com/GGist/bip-rs" }
+#bip_handshake = { git = "https://github.com/GGist/bip-rs" }
+#bip_magnet = { git = "https://github.com/GGist/bip-rs" }
+#bip_util = { git = "https://github.com/GGist/bip-rs" }
 futures = "0.1"
 futures-state-stream = "0.2"
 ipfs-api = "0.4.0-alpha"

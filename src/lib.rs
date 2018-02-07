@@ -1,3 +1,7 @@
+//extern crate bip_dht;
+//extern crate bip_handshake;
+//extern crate bip_magnet;
+//extern crate bip_util;
 extern crate futures;
 extern crate futures_state_stream;
 extern crate ipfs_api;
