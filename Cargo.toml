@@ -1,0 +1,9 @@
+[package]
+name = "mercury-client-sdk"
+version = "0.1.0"
+authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
+
+[dependencies]
+multiaddr = "*"
+futures = "0.1"
+tokio-core = "0.1"
