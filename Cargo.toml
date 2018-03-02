@@ -6,4 +6,7 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 [dependencies]
 multiaddr = "*"
 futures = "0.1"
+multihash = "*"
 tokio-core = "0.1"
+
+tokio-io = "*"
