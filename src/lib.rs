@@ -49,6 +49,7 @@ pub fn open(multiaddr: Multiaddr) ->
 type ProfileId = String;
 type ApplicationServiceId = String;
 
+#[derive(Debug, Clone)]
 pub struct Profile
 {
     id:         ProfileId,
@@ -80,6 +81,7 @@ impl Profile
 
 
 
+#[derive(Debug, Clone)]
 pub struct Contact
 {
     profile:    Profile,
@@ -88,14 +90,19 @@ pub struct Contact
 
 
 
-pub struct OwnedProfile
+#[derive(Debug, Clone)]
+pub struct OwnProfile
 {
     profile:    Profile,
 //    priv_key:   Vec<u8>???,
+//    services: Vec<ApplicationServiceId>, ??? should we have the services here ???
 }
 
-impl OwnedProfile
+impl OwnProfile
 {
+    pub fn new(profile: &Profile, /* TODO priv_key, services? */ ) -> Self
+        { Self{ profile: profile.clone() } }
+
     pub fn pair_with(&self, profile: &Profile) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
     {
@@ -122,31 +129,53 @@ impl OwnedProfile
 
 
 
-pub trait ProfileHost
+pub struct ProfileHost {} // TODO
+
+impl ProfileHost
 {
-    fn open(addr: &Multiaddr) ->
-        Box< Future<Item=Self, Error=ErrorToBeSpecified> >;
+    pub fn new(addr: &Multiaddr) ->
+        Box< Future<Item=Self, Error=ErrorToBeSpecified> >
+    {
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
+    }
 
-    fn register(&self, prof: &OwnedProfile) ->
-        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
+    pub fn register(&self, prof: &OwnProfile) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    {
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
+    }
 
-    fn remove(&self, prof: &OwnedProfile) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+    pub fn remove(&self, prof: &OwnProfile) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
+    }
 
-    fn find_profile(&self, /* TODO what filter criteria should we have here? */ ) ->
-        Box< Future<Item=Profile, Error=SearchProfileError> >;
+    pub fn find_profile(&self, /* TODO what filter criteria should we have here? */ ) ->
+        Box< Future<Item=Profile, Error=SearchProfileError> >
+    {
+        Box::new( future::err(SearchProfileError::TODO) )
+    }
 
-    fn find_addresses(&self, profile: &Profile) ->
-        Box< Future<Item=Vec<Multiaddr>, Error=ErrorToBeSpecified> >;
+    pub fn find_addresses(&self, profile: &Profile) ->
+        Box< Future<Item=Vec<Multiaddr>, Error=ErrorToBeSpecified> >
+    {
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
+    }
 
-    fn claim(&self, profile: &Profile, /* TODO what other params to prove ownership? */ ) ->
-        Box< Future<Item=OwnedProfile, Error=ErrorToBeSpecified> >;
+    // TODO is this really different from Home::new() where identity must be proven?
+    pub fn claim(&self, profile: &Profile, /* TODO what other params to prove ownership? */ ) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    {
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
+    }
 }
+
 
 
 pub trait Home
 {
-    fn open(addr: &Multiaddr, profiles: &[OwnedProfile], services: &[ApplicationServiceId]) ->
+    fn new(addr: &Multiaddr, profiles: &[OwnProfile], services: &[ApplicationServiceId]) ->
         Box< Future<Item=Self, Error=ErrorToBeSpecified> >;
 
     // TODO this should be appsrv-level but then raw TcpStream might not work
@@ -165,20 +194,52 @@ pub trait Home
 }
 
 
+
 #[cfg(test)]
 mod tests
 {
+    use super::*;
+    use multiaddr::ToMultiaddr;
+
+
+    struct TestSetup
+    {
+        reactor: reactor::Core,
+    }
+
+    impl TestSetup
+    {
+        fn new() -> Self
+        {
+            Self{ reactor: reactor::Core::new().unwrap() }
+        }
+    }
+
+
     #[test]
     fn test_connect_multiaddr()
     {
-        // TODO
+        let mut setup = TestSetup::new();
+        let addr = "/ip4/127.0.0.1/tcp/12345".to_multiaddr().unwrap();
+        let connect_fut = open(addr);
+        let result = setup.reactor.run(connect_fut);
+        // TODO assert!( result.TODO );
     }
+
 
     #[test]
     fn test_register_profile()
     {
-        // TODO
+        let mut setup = TestSetup::new();
+        let ownprof = OwnProfile::new( &Profile::new( &"OwnProfileId".to_string() ) );
+        let addr = "/ip4/127.0.0.1/tcp/23456".to_multiaddr().unwrap();
+        let register_fut = ProfileHost::new(&addr)
+            .and_then( move |host|
+                { host.register(&ownprof) } );
+        let result = setup.reactor.run(register_fut);
+        // TODO assert!( result.TODO );
     }
+
 
     #[test]
     fn test_claim_profile()
@@ -211,7 +272,13 @@ mod tests
     }
 
     #[test]
-    fn test_service_listen()
+    fn test_appservice_connect()
+    {
+        // TODO
+    }
+
+    #[test]
+    fn test_appservice_listen()
     {
         // TODO
     }
