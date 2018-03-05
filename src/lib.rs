@@ -4,6 +4,8 @@ extern crate multihash;
 extern crate tokio_core;
 extern crate tokio_io;
 
+use std::rc::Rc;
+
 use futures::{Future, Sink, Stream};
 use futures::future;
 use multiaddr::{Multiaddr};
@@ -28,15 +30,10 @@ pub enum SearchAddressError
     TODO // TODO
 }
 
-pub enum ConnectAddressError
-{
-    TODO // TODO
-}
-
-pub enum ConnectToContactError
+pub enum CallContactError
 {
     LookupFailed(SearchAddressError),
-    ConnectFailed(ConnectAddressError),
+    RingFailed(String), // TODO
     Other(Box<std::error::Error>),
 }
 
@@ -47,47 +44,51 @@ pub struct PublicKey(Vec<u8>);
 #[derive(Debug, Clone)]
 pub struct ProfileId(multihash::Hash);
 #[derive(Debug, Clone)]
-pub struct MetadataSchema(String);
+pub struct Signature(Vec<u8>);
 #[derive(Debug, Clone)]
 pub struct ApplicationId(String);
+#[derive(Debug, Clone)]
+pub struct AppMessageFrame(String);
 
 #[derive(Debug, Clone)]
 pub struct PairingCertificate
 {
     initiator_id:   ProfileId,
     acceptor_id:    ProfileId,
-    // TODO
-    // signatures: ???
+    initiator_sign: Signature,
+    acceptor_sign:  Signature,
+    // TODO is a nonce needed?
 }
 
 #[derive(Debug, Clone)]
 pub struct HomeInvitation
 {
-    // TODO ???
-    // voucher: code,
-    // signature: ???,
+    home_id: ProfileId,
+    voucher: String,
+    signature: Signature,
+    // TODO is a nonce needed?
 }
 
 
 
 #[derive(Debug, Clone)]
-pub struct PersonaSchema
+pub struct PersonaTrait
 {
     homes: Vec<ProfileId>,
 }
 
 
 #[derive(Debug, Clone)]
-pub struct HomeSchema
+pub struct HomeTrait
 {
-
     addrs: Vec<Multiaddr>,
 }
 
 
+
 // NOTE Given for each SUPPORTED app, not currently available (checked in) app, checkins are managed differently
 #[derive(Debug, Clone)]
-pub struct ApplicationSchema
+pub struct ApplicationTrait
 {
     id: ApplicationId,
     // TODO
@@ -103,11 +104,11 @@ pub struct Raw
 
 
 #[derive(Debug, Clone)]
-pub enum Metadata
+pub enum ProfileTrait
 {
-    Home(HomeSchema),
-    Persona(PersonaSchema),
-    Application(ApplicationSchema),
+    Home(HomeTrait),
+    Persona(PersonaTrait),
+    Application(ApplicationTrait),
     Raw(String),
 }
 
@@ -117,13 +118,13 @@ pub struct Profile
 {
     id:         ProfileId,
     pub_key:    PublicKey,
-    metadata:   Vec<Metadata>,
+    traits:     Vec<ProfileTrait>,
 }
 
 impl Profile
 {
-    pub fn new(id: &ProfileId, pub_key: &PublicKey, metadata: &[Metadata]) -> Self
-        { Self{ id: id.to_owned(), pub_key: pub_key.to_owned(), metadata: metadata.to_owned() } }
+    pub fn new(id: &ProfileId, pub_key: &PublicKey, traits: &[ProfileTrait]) -> Self
+        { Self{ id: id.to_owned(), pub_key: pub_key.to_owned(), traits: traits.to_owned() } }
 }
 
 
@@ -137,23 +138,23 @@ pub struct Contact
 
 impl Contact
 {
-    // TODO
-    // fn new(...) -> Self
+    fn new(profile: &Profile, proof: &PairingCertificate) -> Self
+        { Self { profile: profile.clone(), proof: proof.clone() } }
 }
 
 
 
 #[derive(Debug, Clone)]
-pub struct OwnProfile
+pub struct OwnProfileData
 {
     profile:    Profile,
 // TODO
 //    priv_metadata:   ???,
 }
 
-impl OwnProfile
+impl OwnProfileData
 {
-    pub fn new(profile: &Profile, /* TODO apps, priv_metadata? */ ) -> Self
+    pub fn new(profile: &Profile, /* TODO priv_metadata? */ ) -> Self
         { Self{ profile: profile.clone() } }
 }
 
@@ -166,15 +167,23 @@ pub struct SecretKey(Vec<u8>);
 pub trait Signer
 {
     fn pub_key(&self) -> &PublicKey;
-    fn sign(&self, data: Vec<u8>) -> Vec<u8>;
+    // TODO Vec<u8> will be ideally the multicodec output from Mudlee's repo
+    fn sign(&self, data: Vec<u8>) -> Signature;
 }
 
 
 
+pub struct OwnProfile
+{
+    profile: OwnProfileData,
+    signer:  Rc<Signer>,
+}
+
+
+
+
 // Potentially a whole network of nodes with internal routing and sharding
-// NOTE to construct an object of this type, a Signer instance will be needed
-//      to prove our identity during each method call
-pub trait ProfileStorage
+pub trait ProfileRepo
 {
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >;
@@ -182,7 +191,18 @@ pub trait ProfileStorage
     fn load(&self, id: ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
 
+    fn resolve(&self, url: &str) ->
+        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
+
     // TODO notifications on profile updates should be possible
+}
+
+
+
+pub trait HomeConnector
+{
+    fn connect(&self, home: &HomeTrait) -> Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
+    //fn resolve(&self, url: &str) -> Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
 }
 
 
@@ -204,19 +224,22 @@ pub struct Call
 
 
 // Interface to a single node
-// NOTE to construct an object of this type, a Signer instance will be needed
-//      to prove our identity during each method call
-pub trait ForeignHome : ProfileStorage
+pub trait Home: ProfileRepo
 {
     fn register(&self, prof: OwnProfile, invite: Option<HomeInvitation>) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
+
+    // TODO consider if we should notify an open session about an updated profile
+    fn update(&self, profile: OwnProfile) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
     // NOTE newhome is a profile that contains at least one HomeSchema different than this home
     fn unregister(&self, prof: OwnProfile, newhome: Option<Profile>) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
-    fn claim(&self, profile: Profile /* TODO what other params to prove for ownership? */ ) ->
+    fn claim(&self, profile: Profile, signer: Rc<Signer>) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
+
 
     // NOTE acceptor must have this server as its home
     fn pair_with(&self, initiator: &OwnProfile, acceptor: &Profile) ->
@@ -225,25 +248,15 @@ pub trait ForeignHome : ProfileStorage
     fn call(&self, initiator: &OwnProfile, acceptor: &Contact,
             app: ApplicationId, init_payload: &[u8]) ->
         Box< Future<Item=CallStream, Error=ErrorToBeSpecified> >;
+
+
+    fn login(&self, profile: &OwnProfile) ->
+        Box< Future<Item=Box<Session>, Error=ErrorToBeSpecified> >;
 }
 
 
 
-pub trait OwnHome
-{
-    fn login(&self, profile: &OwnProfile, signer: &Signer) ->
-        Box< Future<Item=Box<OwnSession>, Error=ErrorToBeSpecified> >;
-
-    // TODO consider if we should notify an open session about an updated profile
-    fn update(&self, profile: OwnProfile, signer: &Signer) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
-}
-
-
-
-// NOTE to construct an object of this type, a Signer instance will be needed
-//      to prove our identity during each method call
-pub trait OwnSession
+pub trait Session
 {
     // TODO add/remove app should be done in OwnProfile which should be delegated to Home?
     fn checkin_app(&self, app: &ApplicationId) ->
@@ -264,16 +277,80 @@ pub trait OwnSession
 
 
 
-// TODO this is not properly thought out yet
-//pub trait Client
-//{
-////    // NOTE loads up profile from ProfileStorage and connects appropriate ForeignHome for pairing
-////    fn pair_with(&self, initiator: &OwnProfile, acceptor: &Profile) ->
-////        Box< Future<Item=Contact, Error=ErrorToBeSpecified> >;
-//
-//    fn connect_to<A: 'static + AsyncRead + AsyncWrite>(&self, contact: &Contact, app: &ApplicationId) ->
-//        Box< Future<Item=A, Error=ConnectToContactError>>
-//    {
+pub trait Client
+{
+    fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >;    // TODO error type
+    fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >; // TODO error type
+
+    fn pair_with(&self, initiator: &OwnProfile, acceptor_profile_url: &str) ->
+        Box< Future<Item=Contact, Error=ErrorToBeSpecified> >;
+
+    fn call(&self, contact: &Contact, app: &ApplicationId) ->
+        Box< Future<Item=Call, Error=CallContactError> >;
+
+    fn login(&self, profile: &OwnProfile) -> Box< Future<Item=Box<Session>, Error=ErrorToBeSpecified> >;
+}
+
+
+
+pub struct ClientImp
+{
+    profile_repo:   Rc<ProfileRepo>,
+    home_connector: Rc<HomeConnector>,
+}
+
+
+impl ClientImp
+{
+
+}
+
+
+impl Client for ClientImp
+{
+    fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >
+    {
+        let (send, recv) = futures::sync::mpsc::channel(0);
+        Box::new(recv)
+    }
+
+
+    fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >
+    {
+        let (send, recv) = futures::sync::mpsc::channel(0);
+        Box::new(recv)
+    }
+
+
+    fn pair_with(&self, initiator: &OwnProfile, acceptor_profile_url: &str) ->
+        Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
+    {
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
+
+//        self.profile_repo.resolve(acceptor_profile_url)
+//            .and_then( |profile|
+//            {
+//                profile.traits.iter()
+//                    .flat_map( |_trait|
+//                        match _trait {
+//                            &ProfileTrait::Persona(persona) => persona.homes,
+//                            _ => Vec::new(),
+//                        } )
+//                    .collect()
+//            } )
+//            .and_then( |home_ids|
+//            {
+//                .map( |home_id| self.profile_repo.load(home_id) )
+//                self.home_connector.connect( homes[0] )
+//            } )
+    }
+
+
+    fn call(&self, contact: &Contact, app: &ApplicationId) ->
+        Box< Future<Item=Call, Error=CallContactError> >
+    {
+        Box::new( future::err(CallContactError::RingFailed("TODO".to_string())) )
+
 //        let result = contact.profile.find_addresses()
 //            .map_err( |e| ConnectToContactError::LookupFailed(e) )
 //            .and_then( |addrs|
@@ -285,26 +362,15 @@ pub trait OwnSession
 //                } );
 //
 //        Box::new(result)
-//    }
-//
-//    fn list( /* TODO what filter criteria should we have here? */ ) ->
-//        Box< Future<Item=Vec<Profile>, Error=SearchProfileError> >
-//    {
-//        // TODO explore ProfileHosts and query profiles on each of them
-//        Box::new( future::err(SearchProfileError::TODO) )
-//    }
-//
-//    // TODO should we use Stream<Multiaddr> here instead of Vec<>?
-//    fn find_addresses(&self) ->
-//        Box< Future<Item=Vec<Multiaddr>, Error=SearchAddressError> >
-//    {
-//        // TODO explore profile Home and query known addresses for profile
-//        Box::new( future::err(SearchAddressError::TODO) )
-//    }
-//
-//    fn call(profile: &ProfileId, app: &ApplicationId) -> TODO;
-//}
+    }
 
+
+    fn login(&self, profile: &OwnProfile) ->
+        Box< Future<Item=Box<Session>, Error=ErrorToBeSpecified> >
+    {
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
+    }
+}
 
 
 #[cfg(test)]
@@ -331,25 +397,25 @@ mod tests
     #[test]
     fn test_connect_multiaddr()
     {
-        let mut setup = TestSetup::new();
-        let addr = "/ip4/127.0.0.1/tcp/12345".to_multiaddr().unwrap();
-        let connect_fut = connect(addr);
-        let result = setup.reactor.run(connect_fut);
-        // TODO assert!( result.TODO );
+//        let mut setup = TestSetup::new();
+//        let addr = "/ip4/127.0.0.1/tcp/12345".to_multiaddr().unwrap();
+//        let connect_fut = connect(addr);
+//        let result = setup.reactor.run(connect_fut);
+//        // TODO assert!( result.TODO );
     }
 
 
     #[test]
     fn test_register_profile()
     {
-        let mut setup = TestSetup::new();
-        let ownprof = OwnProfile::new( &Profile::new( &"OwnProfileId".to_string() ) );
-        let addr = "/ip4/127.0.0.1/tcp/23456".to_multiaddr().unwrap();
-        let register_fut = ProfileIndex::new(&addr)
-            .and_then( move |host|
-                { host.register(&ownprof) } );
-        let result = setup.reactor.run(register_fut);
-        // TODO assert!( result.TODO );
+//        let mut setup = TestSetup::new();
+//        let ownprof = OwnProfile::new( &Profile::new( &"OwnProfileId".to_string() ) );
+//        let addr = "/ip4/127.0.0.1/tcp/23456".to_multiaddr().unwrap();
+//        let register_fut = ProfileIndex::new(&addr)
+//            .and_then( move |host|
+//                { host.register(&ownprof) } );
+//        let result = setup.reactor.run(register_fut);
+//        // TODO assert!( result.TODO );
     }
 
 
