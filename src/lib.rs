@@ -20,23 +20,6 @@ pub mod imp;
 // TODO
 pub enum ErrorToBeSpecified { TODO, }
 
-pub enum SearchProfileError
-{
-    TODO // TODO
-}
-
-pub enum SearchAddressError
-{
-    TODO // TODO
-}
-
-pub enum CallContactError
-{
-    LookupFailed(SearchAddressError),
-    RingFailed(String), // TODO
-    Other(Box<std::error::Error>),
-}
-
 
 
 #[derive(Debug, Clone)]
@@ -48,7 +31,7 @@ pub struct Signature(Vec<u8>);
 #[derive(Debug, Clone)]
 pub struct ApplicationId(String);
 #[derive(Debug, Clone)]
-pub struct AppMessageFrame(String);
+pub struct AppMessageFrame(Vec<u8>);
 
 #[derive(Debug, Clone)]
 pub struct PairingCertificate
@@ -75,6 +58,7 @@ pub struct HomeInvitation
 pub struct PersonaTrait
 {
     homes: Vec<ProfileId>,
+    // TODO and probably a lot more data
 }
 
 
@@ -82,6 +66,7 @@ pub struct PersonaTrait
 pub struct HomeTrait
 {
     addrs: Vec<Multiaddr>,
+    // TODO and probably a lot more data
 }
 
 
@@ -91,7 +76,7 @@ pub struct HomeTrait
 pub struct ApplicationTrait
 {
     id: ApplicationId,
-    // TODO
+    // TODO and probably a lot more data
 }
 
 
@@ -147,15 +132,14 @@ impl Contact
 #[derive(Debug, Clone)]
 pub struct OwnProfileData
 {
-    profile:    Profile,
-// TODO
-//    priv_metadata:   ???,
+    profile:        Profile,
+    private_data:   Vec<u8>, // TODO ???
 }
 
 impl OwnProfileData
 {
-    pub fn new(profile: &Profile, /* TODO priv_metadata? */ ) -> Self
-        { Self{ profile: profile.clone() } }
+    pub fn new(profile: &Profile, private_data: &[u8]) -> Self
+        { Self{ profile: profile.clone(), private_data: private_data.to_owned() } }
 }
 
 
@@ -167,7 +151,7 @@ pub struct SecretKey(Vec<u8>);
 pub trait Signer
 {
     fn pub_key(&self) -> &PublicKey;
-    // TODO Vec<u8> will be ideally the multicodec output from Mudlee's repo
+    // TODO the data Vec<u8> to be signed ideally will be the output from Mudlee's multicodec lib
     fn sign(&self, data: Vec<u8>) -> Signature;
 }
 
@@ -195,14 +179,6 @@ pub trait ProfileRepo
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
 
     // TODO notifications on profile updates should be possible
-}
-
-
-
-pub trait HomeConnector
-{
-    fn connect(&self, home: &HomeTrait) -> Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
-    //fn resolve(&self, url: &str) -> Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
 }
 
 
@@ -277,6 +253,14 @@ pub trait Session
 
 
 
+
+pub trait HomeConnector
+{
+    fn connect(&self, home: &HomeTrait) -> Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
+}
+
+
+
 pub trait Client
 {
     fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >;    // TODO error type
@@ -286,7 +270,7 @@ pub trait Client
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >;
 
     fn call(&self, contact: &Contact, app: &ApplicationId) ->
-        Box< Future<Item=Call, Error=CallContactError> >;
+        Box< Future<Item=Call, Error=ErrorToBeSpecified> >;
 
     fn login(&self, profile: &OwnProfile) -> Box< Future<Item=Box<Session>, Error=ErrorToBeSpecified> >;
 }
@@ -302,7 +286,7 @@ pub struct ClientImp
 
 impl ClientImp
 {
-
+    // TODO
 }
 
 
@@ -347,9 +331,9 @@ impl Client for ClientImp
 
 
     fn call(&self, contact: &Contact, app: &ApplicationId) ->
-        Box< Future<Item=Call, Error=CallContactError> >
+        Box< Future<Item=Call, Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(CallContactError::RingFailed("TODO".to_string())) )
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
 
 //        let result = contact.profile.find_addresses()
 //            .map_err( |e| ConnectToContactError::LookupFailed(e) )
@@ -397,10 +381,6 @@ mod tests
     #[test]
     fn test_connect_multiaddr()
     {
-//        let mut setup = TestSetup::new();
-//        let addr = "/ip4/127.0.0.1/tcp/12345".to_multiaddr().unwrap();
-//        let connect_fut = connect(addr);
-//        let result = setup.reactor.run(connect_fut);
 //        // TODO assert!( result.TODO );
     }
 
@@ -408,13 +388,6 @@ mod tests
     #[test]
     fn test_register_profile()
     {
-//        let mut setup = TestSetup::new();
-//        let ownprof = OwnProfile::new( &Profile::new( &"OwnProfileId".to_string() ) );
-//        let addr = "/ip4/127.0.0.1/tcp/23456".to_multiaddr().unwrap();
-//        let register_fut = ProfileIndex::new(&addr)
-//            .and_then( move |host|
-//                { host.register(&ownprof) } );
-//        let result = setup.reactor.run(register_fut);
 //        // TODO assert!( result.TODO );
     }
 
