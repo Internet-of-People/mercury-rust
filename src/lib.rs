@@ -83,7 +83,7 @@ pub struct ApplicationTrait
 #[derive(Debug, Clone)]
 pub struct Raw
 {
-    data: String,
+    data: Vec<u8>, // TODO or maybe multicodec output?
 }
 
 
@@ -133,7 +133,7 @@ impl Contact
 pub struct OwnProfileData
 {
     profile:        Profile,
-    private_data:   Vec<u8>, // TODO ???
+    private_data:   Vec<u8>, // TODO maybe multicodec output?
 }
 
 impl OwnProfileData
@@ -185,14 +185,14 @@ pub trait ProfileRepo
 
 pub struct CallStream
 {
-    stream: Box< Stream<Item=Vec<u8>, Error=ErrorToBeSpecified> >,
-    sink:   Box< Sink<SinkItem=Vec<u8>, SinkError=ErrorToBeSpecified> >,
+    stream: Box< Stream<Item=AppMessageFrame, Error=ErrorToBeSpecified> >,
+    sink:   Box< Sink<SinkItem=AppMessageFrame, SinkError=ErrorToBeSpecified> >,
 }
 
 pub struct Call
 {
     caller:         ProfileId,
-    init_payload:   Vec<u8>,
+    init_payload:   AppMessageFrame,
     // NOTE A missed call will contain Option::None
     stream:         Option<CallStream>,
 }
@@ -234,12 +234,12 @@ pub trait Home: ProfileRepo
 
 pub trait Session
 {
-    // TODO add/remove app should be done in OwnProfile which should be delegated to Home?
     fn checkin_app(&self, app: &ApplicationId) ->
         Box< Stream<Item=Call, Error=ErrorToBeSpecified> >;
 
     fn checkout_app(&self, app: &ApplicationId, calls: Stream<Item=Call, Error=ErrorToBeSpecified>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+
 
     fn banned_profiles(&self) ->
         Box< Future<Item=Vec<ProfileId>, Error=ErrorToBeSpecified> >;
@@ -272,7 +272,8 @@ pub trait Client
     fn call(&self, contact: &Contact, app: &ApplicationId) ->
         Box< Future<Item=Call, Error=ErrorToBeSpecified> >;
 
-    fn login(&self, profile: &OwnProfile) -> Box< Future<Item=Box<Session>, Error=ErrorToBeSpecified> >;
+    fn login(&self, profile: &OwnProfile) ->
+        Box< Future<Item=Box<Session>, Error=ErrorToBeSpecified> >;
 }
 
 
