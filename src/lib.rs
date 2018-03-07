@@ -172,9 +172,10 @@ pub trait ProfileRepo
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >;
 
-    fn load(&self, id: ProfileId) ->
+    fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
 
+    // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
     fn resolve(&self, url: &str) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
 
@@ -312,9 +313,11 @@ impl Client for ClientImp
     {
         Box::new( future::err(ErrorToBeSpecified::TODO) )
 
-//        self.profile_repo.resolve(acceptor_profile_url)
-//            .and_then( |profile|
+//        self.profile_repo
+//            .resolve(acceptor_profile_url)
+//            .map( |profile: Profile|
 //            {
+//                // Extract home ids from profile data
 //                profile.traits.iter()
 //                    .flat_map( |_trait|
 //                        match _trait {
@@ -323,10 +326,23 @@ impl Client for ClientImp
 //                        } )
 //                    .collect()
 //            } )
-//            .and_then( |home_ids|
+//            .and_then( |home_prof_ids: Vec<ProfileId>|
 //            {
-//                .map( |home_id| self.profile_repo.load(home_id) )
-//                self.home_connector.connect( homes[0] )
+//                home_prof_ids.iter()
+//                    .map( |home_prof_id|
+//                    {
+//                        // Load profiles from home ids
+//                        self.profile_repo.load(home_prof_id)
+//                            .and_then( |home_prof|
+//                            {
+//                                // TODO extract home trait from profile
+//                                self.home_connector.connect(home_prof)
+//                            } )
+//                    } )
+//            } )
+//            .and_then( |home_conn_futs|
+//            {
+//                let first_conn = future::select_ok( home_conn_futs.iter() );
 //            } )
     }
 
