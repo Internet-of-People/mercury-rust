@@ -184,10 +184,10 @@ pub trait ProfileRepo
 
 
 
-pub struct CallStream
+pub struct CallMessages
 {
-    stream: Box< Stream<Item=AppMessageFrame, Error=ErrorToBeSpecified> >,
-    sink:   Box< Sink<SinkItem=AppMessageFrame, SinkError=ErrorToBeSpecified> >,
+    incoming: Box< Stream<Item=AppMessageFrame, Error=ErrorToBeSpecified> >,
+    outgoing: Box< Sink<SinkItem=AppMessageFrame, SinkError=ErrorToBeSpecified> >,
 }
 
 pub struct Call
@@ -195,7 +195,7 @@ pub struct Call
     caller:         ProfileId,
     init_payload:   AppMessageFrame,
     // NOTE A missed call will contain Option::None
-    stream:         Option<CallStream>,
+    messages:       Option<CallMessages>,
 }
 
 
@@ -224,7 +224,7 @@ pub trait Home: ProfileRepo
 
     fn call(&self, initiator: &OwnProfile, acceptor: &Contact,
             app: ApplicationId, init_payload: &[u8]) ->
-        Box< Future<Item=CallStream, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
 
 
     fn login(&self, profile: &OwnProfile) ->
@@ -257,7 +257,8 @@ pub trait Session
 
 pub trait HomeConnector
 {
-    fn connect(&self, home: &HomeTrait) -> Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
+    // NOTE home_profile must have a HomeTrait with at least an address filled in
+    fn connect(&self, home_profile: &Profile) -> Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
 }
 
 
@@ -311,9 +312,10 @@ impl Client for ClientImp
     fn pair_with(&self, initiator: &OwnProfile, acceptor_profile_url: &str) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        let prof_repo_clone = self.profile_repo.clone();
+        let home_connector_clone = self.home_connector.clone();
 
-//        self.profile_repo
+//        let home_conn_fut = self.profile_repo
 //            .resolve(acceptor_profile_url)
 //            .map( |profile: Profile|
 //            {
@@ -321,29 +323,27 @@ impl Client for ClientImp
 //                profile.traits.iter()
 //                    .flat_map( |_trait|
 //                        match _trait {
-//                            &ProfileTrait::Persona(persona) => persona.homes,
+//                            &ProfileTrait::Persona(ref persona) => persona.homes.clone(),
 //                            _ => Vec::new(),
 //                        } )
 //                    .collect()
 //            } )
-//            .and_then( |home_prof_ids: Vec<ProfileId>|
+//            .map( |home_prof_ids: Vec<ProfileId>|
 //            {
+//                // Try resolving and connecting to each resolved homeId
 //                home_prof_ids.iter()
-//                    .map( |home_prof_id|
+//                    .map( move |home_prof_id|
 //                    {
 //                        // Load profiles from home ids
-//                        self.profile_repo.load(home_prof_id)
+//                        prof_repo_clone.load(home_prof_id)
 //                            .and_then( |home_prof|
-//                            {
-//                                // TODO extract home trait from profile
-//                                self.home_connector.connect(home_prof)
-//                            } )
+//                                home_connector_clone.connect(&home_prof) )
 //                    } )
 //            } )
 //            .and_then( |home_conn_futs|
-//            {
-//                let first_conn = future::select_ok( home_conn_futs.iter() );
-//            } )
+//                future::select_ok( home_conn_futs ) );
+
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 
 
