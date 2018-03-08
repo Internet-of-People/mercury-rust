@@ -22,18 +22,18 @@ pub enum ErrorToBeSpecified { TODO, }
 
 
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PublicKey(Vec<u8>);
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug, Copy)]
 pub struct ProfileId(multihash::Hash);
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Signature(Vec<u8>);
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ApplicationId(String);
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct AppMessageFrame(Vec<u8>);
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PairingCertificate
 {
     initiator_id:   ProfileId,
@@ -43,7 +43,7 @@ pub struct PairingCertificate
     // TODO is a nonce needed?
 }
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct HomeInvitation
 {
     home_id: ProfileId,
@@ -54,7 +54,7 @@ pub struct HomeInvitation
 
 
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PersonaFacet
 {
     homes: Vec<ProfileId>,
@@ -62,7 +62,7 @@ pub struct PersonaFacet
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct HomeFacet
 {
     addrs: Vec<Multiaddr>,
@@ -72,7 +72,7 @@ pub struct HomeFacet
 
 
 // NOTE Given for each SUPPORTED app, not currently available (checked in) app, checkins are managed differently
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ApplicationFacet
 {
     id: ApplicationId,
@@ -80,7 +80,7 @@ pub struct ApplicationFacet
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct RawFacet
 {
     data: Vec<u8>, // TODO or maybe multicodec output?
@@ -88,7 +88,7 @@ pub struct RawFacet
 
 
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ProfileFacet
 {
     Home(HomeFacet),
@@ -98,7 +98,7 @@ pub enum ProfileFacet
 }
 
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Profile
 {
     id:         ProfileId,
@@ -114,7 +114,7 @@ impl Profile
 
 
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Contact
 {
     profile:    Profile,
@@ -129,7 +129,7 @@ impl Contact
 
 
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct OwnProfileData
 {
     profile:        Profile,
@@ -144,7 +144,7 @@ impl OwnProfileData
 
 
 
-#[derive(Debug, Clone)]
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct SecretKey(Vec<u8>);
 
 // NOTE implemented containing a SecretKey or something similar internally
@@ -281,6 +281,7 @@ pub trait Client
 
 
 
+#[derive(Clone)]
 pub struct ClientImp
 {
     profile_repo:   Rc<ProfileRepo>,
@@ -298,6 +299,7 @@ impl Client for ClientImp
 {
     fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >
     {
+        // TODO
         let (send, recv) = futures::sync::mpsc::channel(0);
         Box::new(recv)
     }
@@ -305,6 +307,7 @@ impl Client for ClientImp
 
     fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >
     {
+        // TODO
         let (send, recv) = futures::sync::mpsc::channel(0);
         Box::new(recv)
     }
@@ -316,39 +319,41 @@ impl Client for ClientImp
         let prof_repo_clone = self.profile_repo.clone();
         let home_connector_clone = self.home_connector.clone();
 
-//        let home_conn_fut = self.profile_repo
-//            .resolve(acceptor_profile_url)
-//            .map( |profile: Profile|
-//            {
-//                // Extract home ids from profile data
-//                profile.facets.iter()
-//                    .flat_map( |facet|
-//                        match facet {
-//                            &ProfileFacet::Persona(ref persona) => persona.homes.clone(),
-//                            _ => Vec::new(),
-//                        } )
-//                    .collect()
-//            } )
-//            .map( |home_prof_ids: Vec<ProfileId>|
-//            {
-//                // Try resolving and connecting to each resolved homeId
-//                home_prof_ids.iter()
-//                    .map( |home_prof_id|
-//                    {
-//                        // Load profiles from home ids
-//                        let home_conn = prof_repo_clone.load(home_prof_id)
-//                            .and_then( move |home_prof|
-//                                // Connect to loaded homeprofile (Home of the user to pair with)
-//                                home_connector_clone.connect(&home_prof) );
-//                        Box::new(home_conn) as Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
-//                    } )
-//                    .collect()
-//            } )
-//            .and_then( |home_conn_futs: Vec<Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >>|
-//                // Pick first successful connection to a Home of the targeted profile
-//                future::select_ok( home_conn_futs ) );
+        let pair_fut = self.profile_repo
+            .resolve(acceptor_profile_url)
+            .and_then( |profile: Profile|
+            {
+                // Extract home ids from profile data
+                let profile_clone = profile.clone();
+                let home_conn_futs = profile.facets.iter()
+                    .flat_map( |facet|
+                    {
+                        match facet
+                        {
+                            &ProfileFacet::Persona(ref persona) => persona.homes.clone(),
+                            _ => Vec::new(),
+                        }
+                    } )
+                    .map( move |home_prof_id|
+                    {
+                        // Load profiles from home ids
+                        let home_connector_clone = home_connector_clone.clone();
+                        prof_repo_clone.load(&home_prof_id)
+                            .and_then( move |home_prof|
+                            {
+                                // Connect to loaded homeprofile (Home of the user to pair with)
+                                home_connector_clone.connect(&home_prof)
+                            } )
+                    } );
 
-        // TODO fix borrow checker above
+                future::select_ok( home_conn_futs )
+                    .and_then( move |(home, _pending_futs)|
+                    {
+                        home.pair_with(initiator, &profile_clone)
+                    } )
+            } );
+
+        //Box::new(pair_fut)
         Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 
