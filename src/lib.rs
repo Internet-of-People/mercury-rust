@@ -6,7 +6,7 @@ extern crate tokio_io;
 
 use std::rc::Rc;
 
-use futures::{Future, Sink, Stream};
+use futures::{Future, IntoFuture, Sink, Stream};
 use futures::future;
 use multiaddr::{Multiaddr};
 use tokio_core::reactor;
@@ -333,15 +333,19 @@ impl Client for ClientImp
 //            {
 //                // Try resolving and connecting to each resolved homeId
 //                home_prof_ids.iter()
-//                    .map( move |home_prof_id|
+//                    .map( |home_prof_id|
 //                    {
 //                        // Load profiles from home ids
-//                        prof_repo_clone.load(home_prof_id)
-//                            .and_then( |home_prof|
-//                                home_connector_clone.connect(&home_prof) )
+//                        let home_conn = prof_repo_clone.load(home_prof_id)
+//                            .and_then( move |home_prof|
+//                                // Connect to loaded homeprofile (Home of the user to pair with)
+//                                home_connector_clone.connect(&home_prof) );
+//                        Box::new(home_conn) as Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
 //                    } )
+//                    .collect()
 //            } )
-//            .and_then( |home_conn_futs|
+//            .and_then( |home_conn_futs: Vec<Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >>|
+//                // Pick first successful connection to a Home of the targeted profile
 //                future::select_ok( home_conn_futs ) );
 
         // TODO fix borrow checker above
