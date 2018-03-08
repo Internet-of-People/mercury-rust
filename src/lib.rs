@@ -269,7 +269,7 @@ pub trait Client
     fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >;    // TODO error type
     fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >; // TODO error type
 
-    fn pair_with(&self, initiator: &OwnProfile, acceptor_profile_url: &str) ->
+    fn pair_with(&self, initiator: OwnProfile, acceptor_profile_url: &str) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >;
 
     fn call(&self, contact: &Contact, app: &ApplicationId) ->
@@ -291,7 +291,43 @@ pub struct ClientImp
 
 impl ClientImp
 {
-    // TODO
+    fn pair_with(initiator: OwnProfile, acceptor_profile: Profile,
+                 profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>) ->
+        Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
+    {
+        // Extract home ids from profile data
+        let profile_clone = acceptor_profile.clone();
+        let home_conn_futs = acceptor_profile.facets.iter()
+            .flat_map( |facet|
+            {
+                match facet
+                {
+                    &ProfileFacet::Persona(ref persona) => persona.homes.clone(),
+                    _ => Vec::new(),
+                }
+            } )
+            .map( move |home_prof_id|
+            {
+                // Load profiles from home ids
+                let home_connector_clone = home_connector.clone();
+                profile_repo.load(&home_prof_id)
+                    .and_then( move |home_prof|
+                    {
+                        // Connect to loaded homeprofile (Home of the user to pair with)
+                        home_connector_clone.connect(&home_prof)
+                    } )
+            } );
+
+        // Pick first successful home connection
+        let contact_fut = future::select_ok( home_conn_futs )
+            // Pair with targeted profile on the successful home connection
+            .and_then( move |(home, _pending_futs)|
+            {
+                home.pair_with(&initiator, &profile_clone)
+            } );
+
+        Box::new(contact_fut)
+    }
 }
 
 
@@ -313,7 +349,7 @@ impl Client for ClientImp
     }
 
 
-    fn pair_with(&self, initiator: &OwnProfile, acceptor_profile_url: &str) ->
+    fn pair_with(&self, initiator: OwnProfile, acceptor_profile_url: &str) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
     {
         let prof_repo_clone = self.profile_repo.clone();
@@ -321,40 +357,12 @@ impl Client for ClientImp
 
         let pair_fut = self.profile_repo
             .resolve(acceptor_profile_url)
-            .and_then( |profile: Profile|
+            .and_then( move |profile|
             {
-                // Extract home ids from profile data
-                let profile_clone = profile.clone();
-                let home_conn_futs = profile.facets.iter()
-                    .flat_map( |facet|
-                    {
-                        match facet
-                        {
-                            &ProfileFacet::Persona(ref persona) => persona.homes.clone(),
-                            _ => Vec::new(),
-                        }
-                    } )
-                    .map( move |home_prof_id|
-                    {
-                        // Load profiles from home ids
-                        let home_connector_clone = home_connector_clone.clone();
-                        prof_repo_clone.load(&home_prof_id)
-                            .and_then( move |home_prof|
-                            {
-                                // Connect to loaded homeprofile (Home of the user to pair with)
-                                home_connector_clone.connect(&home_prof)
-                            } )
-                    } );
-
-                future::select_ok( home_conn_futs )
-                    .and_then( move |(home, _pending_futs)|
-                    {
-                        home.pair_with(initiator, &profile_clone)
-                    } )
+                ClientImp::pair_with(initiator, profile, prof_repo_clone, home_connector_clone)
             } );
 
-        //Box::new(pair_fut)
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new(pair_fut)
     }
 
 
