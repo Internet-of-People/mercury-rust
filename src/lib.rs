@@ -55,7 +55,7 @@ pub struct HomeInvitation
 
 
 #[derive(Debug, Clone)]
-pub struct PersonaTrait
+pub struct PersonaFacet
 {
     homes: Vec<ProfileId>,
     // TODO and probably a lot more data
@@ -63,7 +63,7 @@ pub struct PersonaTrait
 
 
 #[derive(Debug, Clone)]
-pub struct HomeTrait
+pub struct HomeFacet
 {
     addrs: Vec<Multiaddr>,
     // TODO and probably a lot more data
@@ -73,7 +73,7 @@ pub struct HomeTrait
 
 // NOTE Given for each SUPPORTED app, not currently available (checked in) app, checkins are managed differently
 #[derive(Debug, Clone)]
-pub struct ApplicationTrait
+pub struct ApplicationFacet
 {
     id: ApplicationId,
     // TODO and probably a lot more data
@@ -81,7 +81,7 @@ pub struct ApplicationTrait
 
 
 #[derive(Debug, Clone)]
-pub struct Raw
+pub struct RawFacet
 {
     data: Vec<u8>, // TODO or maybe multicodec output?
 }
@@ -89,11 +89,11 @@ pub struct Raw
 
 
 #[derive(Debug, Clone)]
-pub enum ProfileTrait
+pub enum ProfileFacet
 {
-    Home(HomeTrait),
-    Persona(PersonaTrait),
-    Application(ApplicationTrait),
+    Home(HomeFacet),
+    Persona(PersonaFacet),
+    Application(ApplicationFacet),
     Raw(String),
 }
 
@@ -103,13 +103,13 @@ pub struct Profile
 {
     id:         ProfileId,
     pub_key:    PublicKey,
-    traits:     Vec<ProfileTrait>,
+    facets:     Vec<ProfileFacet>,
 }
 
 impl Profile
 {
-    pub fn new(id: &ProfileId, pub_key: &PublicKey, traits: &[ProfileTrait]) -> Self
-        { Self{ id: id.to_owned(), pub_key: pub_key.to_owned(), traits: traits.to_owned() } }
+    pub fn new(id: &ProfileId, pub_key: &PublicKey, facets: &[ProfileFacet]) -> Self
+        { Self{ id: id.to_owned(), pub_key: pub_key.to_owned(), facets: facets.to_owned() } }
 }
 
 
@@ -257,8 +257,9 @@ pub trait Session
 
 pub trait HomeConnector
 {
-    // NOTE home_profile must have a HomeTrait with at least an address filled in
-    fn connect(&self, home_profile: &Profile) -> Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
+    // NOTE home_profile must have a HomeFacet with at least an address filled in
+    fn connect(&self, home_profile: &Profile) ->
+        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
 }
 
 
@@ -320,10 +321,10 @@ impl Client for ClientImp
 //            .map( |profile: Profile|
 //            {
 //                // Extract home ids from profile data
-//                profile.traits.iter()
-//                    .flat_map( |_trait|
-//                        match _trait {
-//                            &ProfileTrait::Persona(ref persona) => persona.homes.clone(),
+//                profile.facets.iter()
+//                    .flat_map( |facet|
+//                        match facet {
+//                            &ProfileFacet::Persona(ref persona) => persona.homes.clone(),
 //                            _ => Vec::new(),
 //                        } )
 //                    .collect()
@@ -343,6 +344,7 @@ impl Client for ClientImp
 //            .and_then( |home_conn_futs|
 //                future::select_ok( home_conn_futs ) );
 
+        // TODO fix borrow checker above
         Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 
@@ -396,58 +398,8 @@ mod tests
 
 
     #[test]
-    fn test_connect_multiaddr()
+    fn test_something()
     {
 //        // TODO assert!( result.TODO );
-    }
-
-
-    #[test]
-    fn test_register_profile()
-    {
-//        // TODO assert!( result.TODO );
-    }
-
-
-    #[test]
-    fn test_claim_profile()
-    {
-        // TODO
-    }
-
-    #[test]
-    fn test_pair_profiles()
-    {
-        // TODO
-    }
-
-    #[test]
-    fn test_lookup_profiles()
-    {
-        // TODO
-    }
-
-    #[test]
-    fn test_lookup_contacts()
-    {
-        // TODO
-    }
-
-    #[test]
-    fn test_connect_profile_service()
-    {
-        // TODO
-    }
-
-    #[test]
-    fn test_appservice_connect()
-    {
-        // TODO
-    }
-
-    #[test]
-    fn test_appservice_listen()
-    {
-        // TODO
     }
 }
