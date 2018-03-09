@@ -157,6 +157,7 @@ pub trait Signer
 
 
 
+#[derive(Clone)]
 pub struct OwnProfile
 {
     profile: OwnProfileData,
@@ -269,7 +270,7 @@ pub trait Client
     fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >;    // TODO error type
     fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >; // TODO error type
 
-    fn pair_with(&self, initiator: OwnProfile, acceptor_profile_url: &str) ->
+    fn pair_with(&self, initiator: &OwnProfile, acceptor_profile_url: &str) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >;
 
     fn call(&self, contact: &Contact, app: &ApplicationId) ->
@@ -291,13 +292,11 @@ pub struct ClientImp
 
 impl ClientImp
 {
-    fn pair_with(initiator: OwnProfile, acceptor_profile: Profile,
-                 profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>) ->
-        Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
+    fn connect_to_persona_home(persona_profile: &Profile, prof_repo: Rc<ProfileRepo>,
+                               connector: Rc<HomeConnector>) ->
+        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
     {
-        // Extract home ids from profile data
-        let profile_clone = acceptor_profile.clone();
-        let home_conn_futs = acceptor_profile.facets.iter()
+        let home_conn_futs = persona_profile.facets.iter()
             .flat_map( |facet|
             {
                 match facet
@@ -309,8 +308,8 @@ impl ClientImp
             .map( move |home_prof_id|
             {
                 // Load profiles from home ids
-                let home_connector_clone = home_connector.clone();
-                profile_repo.load(&home_prof_id)
+                let home_connector_clone = connector.clone();
+                prof_repo.load(&home_prof_id)
                     .and_then( move |home_prof|
                     {
                         // Connect to loaded homeprofile (Home of the user to pair with)
@@ -319,14 +318,9 @@ impl ClientImp
             } );
 
         // Pick first successful home connection
-        let contact_fut = future::select_ok( home_conn_futs )
-            // Pair with targeted profile on the successful home connection
-            .and_then( move |(home, _pending_futs)|
-            {
-                home.pair_with(&initiator, &profile_clone)
-            } );
-
-        Box::new(contact_fut)
+        let home_conn_fut = future::select_ok( home_conn_futs )
+            .map( |(home_conn, _pending_conn_futs)| home_conn );
+        Box::new(home_conn_fut)
     }
 }
 
@@ -349,17 +343,20 @@ impl Client for ClientImp
     }
 
 
-    fn pair_with(&self, initiator: OwnProfile, acceptor_profile_url: &str) ->
+    fn pair_with(&self, initiator: &OwnProfile, acceptor_profile_url: &str) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
     {
+        let initiator_clone = (*initiator).clone();
         let prof_repo_clone = self.profile_repo.clone();
         let home_connector_clone = self.home_connector.clone();
 
         let pair_fut = self.profile_repo
             .resolve(acceptor_profile_url)
-            .and_then( move |profile|
+            .and_then( |profile|
             {
-                ClientImp::pair_with(initiator, profile, prof_repo_clone, home_connector_clone)
+                ClientImp::connect_to_persona_home(&profile, prof_repo_clone, home_connector_clone)
+                    .and_then( move |home|
+                        home.pair_with(&initiator_clone, &profile) )
             } );
 
         Box::new(pair_fut)
