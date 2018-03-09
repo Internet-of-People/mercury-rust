@@ -220,15 +220,15 @@ pub trait Home: ProfileRepo
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_with(&self, initiator: &OwnProfile, acceptor: &Profile) ->
+    fn pair_with(&self, initiator: OwnProfile, acceptor: Profile) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >;
 
-    fn call(&self, initiator: &OwnProfile, acceptor: &Contact,
+    fn call(&self, caller: OwnProfile, callee: Contact,
             app: ApplicationId, init_payload: &[u8]) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
 
 
-    fn login(&self, profile: &OwnProfile) ->
+    fn login(&self, profile: OwnProfile) ->
         Box< Future<Item=Box<Session>, Error=ErrorToBeSpecified> >;
 }
 
@@ -270,14 +270,22 @@ pub trait Client
     fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >;    // TODO error type
     fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >; // TODO error type
 
-    fn pair_with(&self, initiator: &OwnProfile, acceptor_profile_url: &str) ->
+    // TODO is &self needed at all in these functions?
+    fn pair_with(&self, initiator: OwnProfile, acceptor_profile_url: &str) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >;
 
-    fn call(&self, contact: &Contact, app: &ApplicationId) ->
-        Box< Future<Item=Call, Error=ErrorToBeSpecified> >;
+    fn call(&self, caller: OwnProfile, callee: Contact,
+            app: ApplicationId, init_payload: Vec<u8>) ->
+        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
 
-    fn login(&self, profile: &OwnProfile) ->
+    fn login(&self, profile: OwnProfile) ->
         Box< Future<Item=Box<Session>, Error=ErrorToBeSpecified> >;
+
+    // TODO
+    // fn register()
+    // fn update()
+    // fn unregister()
+    // fn claim()
 }
 
 
@@ -343,10 +351,9 @@ impl Client for ClientImp
     }
 
 
-    fn pair_with(&self, initiator: &OwnProfile, acceptor_profile_url: &str) ->
+    fn pair_with(&self, initiator: OwnProfile, acceptor_profile_url: &str) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
     {
-        let initiator_clone = (*initiator).clone();
         let prof_repo_clone = self.profile_repo.clone();
         let home_connector_clone = self.home_connector.clone();
 
@@ -356,33 +363,29 @@ impl Client for ClientImp
             {
                 ClientImp::connect_to_persona_home(&profile, prof_repo_clone, home_connector_clone)
                     .and_then( move |home|
-                        home.pair_with(&initiator_clone, &profile) )
+                        home.pair_with(initiator, profile) )
             } );
 
         Box::new(pair_fut)
     }
 
 
-    fn call(&self, contact: &Contact, app: &ApplicationId) ->
-        Box< Future<Item=Call, Error=ErrorToBeSpecified> >
+    fn call(&self, caller: OwnProfile, callee: Contact,
+            app: ApplicationId, init_payload: Vec<u8>) ->
+        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        let prof_repo_clone = self.profile_repo.clone();
+        let home_connector_clone = self.home_connector.clone();
 
-//        let result = contact.profile.find_addresses()
-//            .map_err( |e| ConnectToContactError::LookupFailed(e) )
-//            .and_then( |addrs|
-//                {
-//                    for addr in addrs
-//                        {
-//                        }
-//                    future::err( ConnectToContactError::ConnectFailed(ConnectAddressError::TODO) )
-//                } );
-//
-//        Box::new(result)
+        let pair_fut = ClientImp::connect_to_persona_home(&callee.profile, prof_repo_clone, home_connector_clone)
+            .and_then( move |home|
+                home.call( caller, callee, app, init_payload.as_slice() ) ) ;
+
+        Box::new(pair_fut)
     }
 
 
-    fn login(&self, profile: &OwnProfile) ->
+    fn login(&self, profile: OwnProfile) ->
         Box< Future<Item=Box<Session>, Error=ErrorToBeSpecified> >
     {
         Box::new( future::err(ErrorToBeSpecified::TODO) )
