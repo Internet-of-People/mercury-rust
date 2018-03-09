@@ -229,18 +229,33 @@ pub trait Home: ProfileRepo
 
 
     fn login(&self, profile: OwnProfile) ->
-        Box< Future<Item=Box<Session>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
 }
 
 
 
-pub trait Session
+// TODO maybe use names like ProfileEvent and ProfileSession?
+pub enum HomeEvent
 {
+    // TODO what other events are needed?
+    PairingRequestReceived,
+    PairingSucceededResponse,
+    PairingRejectedResponse,
+// ProfileUpdated // from a different client instance/session
+}
+
+
+pub trait HomeSession
+{
+    fn events(&self) -> Rc< Stream<Item=HomeEvent, Error=ErrorToBeSpecified> >;
+
+    // TODO return not a Stream, but an AppSession struct containing a stream
     fn checkin_app(&self, app: &ApplicationId) ->
         Box< Stream<Item=Call, Error=ErrorToBeSpecified> >;
 
-    fn checkout_app(&self, app: &ApplicationId, calls: Stream<Item=Call, Error=ErrorToBeSpecified>) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+    // TODO this is probably not needed, we'll just drop the checkin_app result object instead
+//    fn checkout_app(&self, app: &ApplicationId, calls: Stream<Item=Call, Error=ErrorToBeSpecified>) ->
+//        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
 
     fn banned_profiles(&self) ->
@@ -279,13 +294,14 @@ pub trait Client
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
 
     fn login(&self, profile: OwnProfile) ->
-        Box< Future<Item=Box<Session>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
 
     // TODO
     // fn register()
     // fn update()
     // fn unregister()
     // fn claim()
+    // ...
 }
 
 
@@ -300,15 +316,16 @@ pub struct ClientImp
 
 impl ClientImp
 {
-    fn connect_to_persona_home(persona_profile: &Profile, prof_repo: Rc<ProfileRepo>,
+    fn connect_to_profile_home(profile: &Profile, prof_repo: Rc<ProfileRepo>,
                                connector: Rc<HomeConnector>) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
     {
-        let home_conn_futs = persona_profile.facets.iter()
+        let home_conn_futs = profile.facets.iter()
             .flat_map( |facet|
             {
                 match facet
                 {
+                    // TODO consider how to get homes/addresses for apps and smartfridges
                     &ProfileFacet::Persona(ref persona) => persona.homes.clone(),
                     _ => Vec::new(),
                 }
@@ -361,7 +378,7 @@ impl Client for ClientImp
             .resolve(acceptor_profile_url)
             .and_then( |profile|
             {
-                ClientImp::connect_to_persona_home(&profile, prof_repo_clone, home_connector_clone)
+                ClientImp::connect_to_profile_home(&profile, prof_repo_clone, home_connector_clone)
                     .and_then( move |home|
                         home.pair_with(initiator, profile) )
             } );
@@ -377,7 +394,7 @@ impl Client for ClientImp
         let prof_repo_clone = self.profile_repo.clone();
         let home_connector_clone = self.home_connector.clone();
 
-        let pair_fut = ClientImp::connect_to_persona_home(&callee.profile, prof_repo_clone, home_connector_clone)
+        let pair_fut = ClientImp::connect_to_profile_home(&callee.profile, prof_repo_clone, home_connector_clone)
             .and_then( move |home|
                 home.call( caller, callee, app, init_payload.as_slice() ) ) ;
 
@@ -386,7 +403,7 @@ impl Client for ClientImp
 
 
     fn login(&self, profile: OwnProfile) ->
-        Box< Future<Item=Box<Session>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
     {
         Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
