@@ -161,8 +161,8 @@ pub trait Signer
 #[derive(Clone)]
 pub struct OwnProfile
 {
-    profile_data:   OwnProfileData,
-    signer:         Rc<Signer>,
+    data:   OwnProfileData,
+    signer: Rc<Signer>,
 }
 
 
@@ -205,15 +205,15 @@ pub struct Call
 // Interface to a single node
 pub trait Home: ProfileRepo
 {
-    fn register(&self, prof: OwnProfile, invite: Option<HomeInvitation>) ->
+    fn register(&self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
     // TODO consider if we should notify an open session about an updated profile
-    fn update(&self, profile: OwnProfile) ->
+    fn update(&self, own_prof: OwnProfile) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
     // NOTE newhome is a profile that contains at least one HomeSchema different than this home
-    fn unregister(&self, prof: OwnProfile, newhome: Option<Profile>) ->
+    fn unregister(&self, own_prof: OwnProfile, newhome: Option<Profile>) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
     fn claim(&self, profile: Profile, signer: Rc<Signer>) ->
@@ -229,7 +229,7 @@ pub trait Home: ProfileRepo
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
 
 
-    fn login(&self, profile: OwnProfile) ->
+    fn login(&self, own_prof: OwnProfile) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
 }
 
@@ -285,7 +285,16 @@ pub trait Client
     fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >;    // TODO error type
     fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >; // TODO error type
 
-    // TODO is &self needed at all in these functions?
+
+    fn register(&self, own_prof: OwnProfile, home: ProfileId, invite: Option<HomeInvitation>) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
+
+    // TODO
+    // fn update()
+    // fn unregister()
+    // fn claim()
+
+
     fn pair_with(&self, initiator: OwnProfile, acceptor_profile_url: &str) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >;
 
@@ -293,15 +302,10 @@ pub trait Client
             app: ApplicationId, init_payload: Vec<u8>) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
 
-    fn login(&self, profile: OwnProfile) ->
+    fn login(&self, own_prof: OwnProfile) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
 
-    // TODO
-    // fn register()
-    // fn update()
-    // fn unregister()
-    // fn claim()
-    // ...
+    // TODO what else is needed here?
 }
 
 
@@ -376,6 +380,20 @@ impl Client for ClientImp
     }
 
 
+    fn register(&self, own_prof: OwnProfile, home_id: ProfileId,
+                invite: Option<HomeInvitation>) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    {
+        let home_connector_clone = self.home_connector.clone();
+        let reg_fut = self.profile_repo.load(&home_id)
+            .and_then( move |home_profile|
+                home_connector_clone.connect(&home_profile) )
+            .and_then( move |home|
+                home.register(own_prof, invite) );
+        Box::new(reg_fut)
+    }
+
+
     fn pair_with(&self, initiator: OwnProfile, acceptor_profile_url: &str) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
     {
@@ -409,7 +427,7 @@ impl Client for ClientImp
     fn login(&self, own_prof: OwnProfile) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        let pair_fut = self.home_of(&own_prof.profile_data.profile)
+        let pair_fut = self.home_of(&own_prof.data.profile)
             .and_then( move |home|
                 home.login(own_prof) ) ;
 
