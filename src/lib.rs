@@ -292,6 +292,7 @@ pub trait Client
     fn update(&self, home: ProfileId, own_prof: OwnProfile) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
+    // TODO should newhome be Option<ProfileId> instead?
     // NOTE newhome is a profile that contains at least one HomeSchema different than this home
     fn unregister(&self, home: ProfileId, own_prof: OwnProfile, newhome: Option<Profile>) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
