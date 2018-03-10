@@ -33,6 +33,7 @@ pub struct ApplicationId(String);
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct AppMessageFrame(Vec<u8>);
 
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PairingCertificate
 {
@@ -42,6 +43,7 @@ pub struct PairingCertificate
     acceptor_sign:  Signature,
     // TODO is a nonce needed?
 }
+
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct HomeInvitation
@@ -68,7 +70,6 @@ pub struct HomeFacet
     addrs: Vec<Multiaddr>,
     // TODO and probably a lot more data
 }
-
 
 
 // NOTE Given for each SUPPORTED app, not currently available (checked in) app, checkins are managed differently
@@ -103,7 +104,7 @@ pub struct Profile
 {
     id:         ProfileId,
     pub_key:    PublicKey,
-    facets:     Vec<ProfileFacet>,
+    facets:     Vec<ProfileFacet>, // TODO consider using dictionary instead of vector
 }
 
 impl Profile
@@ -160,8 +161,8 @@ pub trait Signer
 #[derive(Clone)]
 pub struct OwnProfile
 {
-    profile: OwnProfileData,
-    signer:  Rc<Signer>,
+    profile_data:   OwnProfileData,
+    signer:         Rc<Signer>,
 }
 
 
@@ -238,9 +239,8 @@ pub trait Home: ProfileRepo
 pub enum HomeEvent
 {
     // TODO what other events are needed?
-    PairingRequestReceived,
-    PairingSucceededResponse,
-    PairingRejectedResponse,
+    PairingRequest,
+    PairingResponse,
 // ProfileUpdated // from a different client instance/session
 }
 
@@ -316,8 +316,16 @@ pub struct ClientImp
 
 impl ClientImp
 {
-    fn connect_to_profile_home(profile: &Profile, prof_repo: Rc<ProfileRepo>,
-                               connector: Rc<HomeConnector>) ->
+    fn home_of(&self, profile: &Profile) ->
+        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
+    {
+        let profile_repo_clone = self.profile_repo.clone();
+        let home_connector_clone = self.home_connector.clone();
+        ClientImp::home_of2(profile, profile_repo_clone, home_connector_clone)
+    }
+
+
+    fn home_of2(profile: &Profile, prof_repo: Rc<ProfileRepo>, connector: Rc<HomeConnector>) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
     {
         let home_conn_futs = profile.facets.iter()
@@ -371,14 +379,14 @@ impl Client for ClientImp
     fn pair_with(&self, initiator: OwnProfile, acceptor_profile_url: &str) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
     {
-        let prof_repo_clone = self.profile_repo.clone();
+        let profile_repo_clone = self.profile_repo.clone();
         let home_connector_clone = self.home_connector.clone();
 
         let pair_fut = self.profile_repo
             .resolve(acceptor_profile_url)
             .and_then( |profile|
             {
-                ClientImp::connect_to_profile_home(&profile, prof_repo_clone, home_connector_clone)
+                ClientImp::home_of2(&profile, profile_repo_clone, home_connector_clone)
                     .and_then( move |home|
                         home.pair_with(initiator, profile) )
             } );
@@ -391,23 +399,24 @@ impl Client for ClientImp
             app: ApplicationId, init_payload: Vec<u8>) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
-        let prof_repo_clone = self.profile_repo.clone();
-        let home_connector_clone = self.home_connector.clone();
-
-        let pair_fut = ClientImp::connect_to_profile_home(&callee.profile, prof_repo_clone, home_connector_clone)
+        let pair_fut = self.home_of(&callee.profile)
             .and_then( move |home|
                 home.call( caller, callee, app, init_payload.as_slice() ) ) ;
-
         Box::new(pair_fut)
     }
 
 
-    fn login(&self, profile: OwnProfile) ->
+    fn login(&self, own_prof: OwnProfile) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        let pair_fut = self.home_of(&own_prof.profile_data.profile)
+            .and_then( move |home|
+                home.login(own_prof) ) ;
+
+        Box::new(pair_fut)
     }
 }
+
 
 
 #[cfg(test)]
