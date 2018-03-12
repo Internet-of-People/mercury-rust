@@ -1,0 +1,13 @@
+[package]
+name = "mercury-sdk"
+version = "0.1.0"
+authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
+
+[dependencies]
+mercury-common = { path="../common", version="0.1" }
+multiaddr = "*"
+futures = "0.1"
+multihash = "*"
+tokio-core = "0.1"
+
+tokio-io = "*"
