@@ -22,8 +22,8 @@ pub enum ErrorToBeSpecified { TODO, }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PublicKey(Vec<u8>);
-#[derive(PartialEq, Eq, Clone, Debug, Copy)]
-pub struct ProfileId(multihash::Hash);
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct ProfileId(Vec<u8>); // NOTE multihash::Multihash::encode() output
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Signature(Vec<u8>);
 #[derive(PartialEq, Eq, Clone, Debug)]

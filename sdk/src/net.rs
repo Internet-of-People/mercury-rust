@@ -94,7 +94,7 @@ impl HomeConnector for SimpleTcpHomeConnector
             .map(  move |addr| SimpleTcpHomeConnector::connect(&addr, &handle_clone) );
 
         let tcp_home = future::select_ok(tcp_conns)
-            // TODO remove unwrap() when tcp_home(() signature is fixed
+            // TODO remove unwrap() when tcp_home() signature is fixed
             .map( |(tcp, _pending_futs)| tcp_home(tcp).unwrap() );
         Box::new(tcp_home)
     }
