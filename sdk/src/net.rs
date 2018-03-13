@@ -10,7 +10,7 @@ use super::*;
 
 
 
-// TODO this should return simply Box<Home> but then it's a lot of boilerplate to compile until implemented
+// TODO this should return simply Rc<Home> but then it's a lot of boilerplate to compile until implemented
 pub fn tcp_home(tcp_stream: TcpStream) -> Option<Rc<Home>>
 {
     // TODO wrap a Tcp stream into a Home implementation, hopefully using generated Capnproto code

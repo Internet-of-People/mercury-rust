@@ -1,3 +1,4 @@
+extern crate capnp;
 extern crate futures;
 extern crate multiaddr;
 extern crate multihash;
@@ -13,6 +14,11 @@ use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 use tokio_io::{AsyncRead, AsyncWrite};
 
+
+
+pub mod mercury_capnp {
+    include!( concat!( env!("OUT_DIR"), "/protocol/mercury_capnp.rs" ) );
+}
 
 
 // TODO
@@ -131,14 +137,14 @@ impl Contact
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct OwnProfileData
 {
-    pub profile:        Profile,
-    pub private_data:   Vec<u8>, // TODO maybe multicodec output?
+    pub profile:    Profile,
+    pub priv_data:  Vec<u8>, // TODO maybe multicodec output?
 }
 
 impl OwnProfileData
 {
     pub fn new(profile: &Profile, private_data: &[u8]) -> Self
-        { Self{ profile: profile.clone(), private_data: private_data.to_owned() } }
+        { Self{ profile: profile.clone(), priv_data: private_data.to_owned() } }
 }
 
 
