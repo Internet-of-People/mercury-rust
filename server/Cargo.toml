@@ -1,0 +1,15 @@
+[package]
+name = "server"
+version = "0.1.0"
+authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
+
+[dependencies]
+capnp = "0.8"
+capnp-rpc = "0.8"
+futures = "0.1"
+mercury-common = { path="../common" }
+multiaddr = "*"
+multihash = "*"
+tokio-core = "0.1"
+
+tokio-io = "*"
