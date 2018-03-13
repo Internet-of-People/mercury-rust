@@ -247,8 +247,24 @@ mod tests
 
 
     #[test]
-    fn test_something()
+    fn temporary_test_capnproto()
     {
+        use std::net::SocketAddr;
+        use std::net::ToSocketAddrs;
+        use super::net::*;
+
+        let mut setup = TestSetup::new();
+        let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
+        let test_fut = TcpStream::connect( &addr, &setup.reactor.handle() )
+            .map_err( |_e| ErrorToBeSpecified::TODO )
+            .and_then( |tcp_stream|
+            {
+                let home = HomeClientCapnProto::new(tcp_stream);
+                home.load( &ProfileId( "testing".as_bytes().to_owned() ) )
+            } );
+
+        let profile = setup.reactor.run(test_fut);
+        println!("Response: {:?}", profile);
 //        // TODO assert!( result.TODO );
     }
 }

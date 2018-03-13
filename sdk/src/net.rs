@@ -25,12 +25,16 @@ impl HomeClientCapnProto
         tcp_stream.set_nodelay(true).unwrap();
         let (reader, writer) = tcp_stream.split();
 
+        // TODO maybe we should set up only single party capnp first
         let rpc_network = Box::new( capnp_rpc::twoparty::VatNetwork::new( reader, writer,
             capnp_rpc::rpc_twoparty_capnp::Side::Client, Default::default() ) );
         let mut rpc_system = capnp_rpc::RpcSystem::new(rpc_network, None);
 
+        // TODO which side to use here?
+//        let home: mercury_capnp::home::Client<> =
+//            rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
         let home: mercury_capnp::home::Client<> =
-            rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
+            rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Client);
 
         Self{ rpc_system: rpc_system, home: home }
     }

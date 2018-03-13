@@ -30,9 +30,21 @@ impl mercury_capnp::home::Server for HomeImpl
              mut results: mercury_capnp::home::PingResults,)
         -> Promise<(), ::capnp::Error>
     {
-        println!("ping called");
+        let res = params.get()
+            .and_then( |params| params.get_txt() )
+            .and_then( |txt|
+            {
+                println!("ping called with '{}', sending pong", txt);
+                Ok(())
+            } );
+
         results.get().set_result(&"wooooorks");
-        Promise::ok(())
+
+        match res {
+            Ok(_) => Promise::ok(()),
+            Err(e) => Promise::err(e),
+        }
+
     }
 }
 
@@ -48,13 +60,14 @@ fn main()
     let socket = TcpListener::bind(&addr, &handle).expect("Failed to bind socket");
 
     let home_impl = HomeImpl::new();
-
-    let publisher = mercury_capnp::home::ToClient::new(home_impl)
+    let home = mercury_capnp::home::ToClient::new(home_impl)
         .from_server::<::capnp_rpc::Server>();
 
+    println!("Waiting for clients");
     let handle1 = handle.clone();
     let done = socket.incoming().for_each(move |(socket, _addr)|
     {
+        println!("Accepted client connection, serving requests");
         try!(socket.set_nodelay(true));
         let (reader, writer) = socket.split();
         let handle = handle1.clone();
@@ -62,12 +75,11 @@ fn main()
         let network = capnp_rpc::twoparty::VatNetwork::new( reader, writer,
             capnp_rpc::rpc_twoparty_capnp::Side::Server, Default::default() );
 
-        let rpc_system = capnp_rpc::RpcSystem::new( Box::new(network), Some(publisher.clone().client) );
+        let rpc_system = capnp_rpc::RpcSystem::new( Box::new(network), Some(home.clone().client) );
 
         handle.spawn(rpc_system.map_err(|_| ()));
         Ok(())
     } );
-    //.map_err(|e| e.into());
 
     core.run(done).unwrap();
 }
