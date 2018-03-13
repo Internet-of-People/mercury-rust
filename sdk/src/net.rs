@@ -1,5 +1,6 @@
 use std::net::{SocketAddr};
 
+use mercury_common::mercury_capnp;
 use futures::{Future};
 use futures::future;
 use multiaddr::{Multiaddr, Protocol};
@@ -10,11 +11,133 @@ use super::*;
 
 
 
-// TODO this should return simply Rc<Home> but then it's a lot of boilerplate to compile until implemented
-pub fn tcp_home(tcp_stream: TcpStream) -> Option<Rc<Home>>
+pub struct HomeClientCapnProto
 {
-    // TODO wrap a Tcp stream into a Home implementation, hopefully using generated Capnproto code
-    None
+    rpc_system: capnp_rpc::RpcSystem<capnp_rpc::rpc_twoparty_capnp::Side>,
+    home:       mercury_capnp::home::Client<>,
+}
+
+
+impl HomeClientCapnProto
+{
+    pub fn new(tcp_stream: TcpStream) -> Self
+    {
+        tcp_stream.set_nodelay(true).unwrap();
+        let (reader, writer) = tcp_stream.split();
+
+        let rpc_network = Box::new( capnp_rpc::twoparty::VatNetwork::new( reader, writer,
+            capnp_rpc::rpc_twoparty_capnp::Side::Client, Default::default() ) );
+        let mut rpc_system = capnp_rpc::RpcSystem::new(rpc_network, None);
+
+        let home: mercury_capnp::home::Client<> =
+            rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
+
+        Self{ rpc_system: rpc_system, home: home }
+    }
+}
+
+
+impl ProfileRepo for HomeClientCapnProto
+{
+    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
+    Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >
+    {
+        let (send, recv) = futures::sync::mpsc::channel(0);
+        Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
+    }
+
+    fn load(&self, id: &ProfileId) ->
+    Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
+    {
+        let mut request = self.home.ping_request();
+        request.get().set_txt(&"gooood mooorrrning"); // TODO
+
+        let resp_fut = request.send().promise
+            .and_then( |resp|
+            {
+                resp.get()
+                    .and_then( |res| res.get_result() )
+                    .map( |pong|
+                        Profile::new( &ProfileId( pong.as_bytes().to_owned() ),
+                                      &PublicKey( Vec::new() ), &Vec::new() )
+                    )
+            } )
+            .map_err( |_e| ErrorToBeSpecified::TODO );
+        Box::new(resp_fut)
+    }
+
+    // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
+    fn resolve(&self, url: &str) ->
+    Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
+    {
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+    }
+}
+
+
+impl Home for HomeClientCapnProto
+{
+    fn register(&self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    {
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+    }
+
+    // TODO consider if we should notify an open session about an updated profile
+    fn update(&self, own_prof: OwnProfile) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    {
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+    }
+
+    // NOTE newhome is a profile that contains at least one HomeFacet different than this home
+    fn unregister(&self, own_prof: OwnProfile, newhome: Option<Profile>) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    {
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+    }
+
+    fn claim(&self, profile: Profile, signer: Rc<Signer>) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    {
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+    }
+
+
+    // NOTE acceptor must have this server as its home
+    fn pair_with(&self, initiator: OwnProfile, acceptor: Profile) ->
+        Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
+    {
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+    }
+
+    fn call(&self, caller: OwnProfile, callee: Contact,
+            app: ApplicationId, init_payload: &[u8]) ->
+        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
+    {
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+    }
+
+
+    fn login(&self, own_prof: OwnProfile) ->
+        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
+    {
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+
+//        let mut request = self.home.login_request();
+//        request.get().set_name(&"jooozsi"); // TODO
+//
+//        let resp_fut = request.send().promise
+//            .map_err( |_e| ErrorToBeSpecified::TODO );
+//        Box::new(resp_fut)
+    }
+}
+
+
+// TODO this should return simply Rc<Home> but then it's a lot of boilerplate to compile until implemented
+pub fn tcp_home(tcp_stream: TcpStream) -> Rc<Home>
+{
+    Rc::new( HomeClientCapnProto::new(tcp_stream) )
 }
 
 
@@ -94,8 +217,7 @@ impl HomeConnector for SimpleTcpHomeConnector
             .map(  move |addr| SimpleTcpHomeConnector::connect(&addr, &handle_clone) );
 
         let tcp_home = future::select_ok(tcp_conns)
-            // TODO remove unwrap() when tcp_home() signature is fixed
-            .map( |(tcp, _pending_futs)| tcp_home(tcp).unwrap() );
+            .map( |(tcp, _pending_futs)| tcp_home(tcp) );
         Box::new(tcp_home)
     }
 }

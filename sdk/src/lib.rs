@@ -1,3 +1,5 @@
+extern crate capnp;
+extern crate capnp_rpc;
 extern crate futures;
 extern crate mercury_common;
 extern crate multiaddr;

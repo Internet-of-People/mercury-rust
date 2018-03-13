@@ -27,15 +27,15 @@ pub enum ErrorToBeSpecified { TODO, }
 
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct PublicKey(Vec<u8>);
+pub struct PublicKey(pub Vec<u8>);
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct ProfileId(Vec<u8>); // NOTE multihash::Multihash::encode() output
+pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Signature(Vec<u8>);
+pub struct Signature(pub Vec<u8>);
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct ApplicationId(String);
+pub struct ApplicationId(pub String);
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct AppMessageFrame(Vec<u8>);
+pub struct AppMessageFrame(pub Vec<u8>);
 
 
 #[derive(PartialEq, Eq, Clone, Debug)]
