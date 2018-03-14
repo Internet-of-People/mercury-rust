@@ -15,6 +15,15 @@ use tokio_core::net::TcpListener;
 use tokio_io::AsyncRead;
 
 
+trait PromiseUtil<T,E>
+{
+    fn result(result: Result<T,E>) -> Promise<T,E> where T: 'static, E: 'static
+        { Promise::from_future( futures::future::result(result) ) }
+}
+
+impl<T,E> PromiseUtil<T,E> for Promise<T,E> {}
+
+
 
 struct HomeImpl {}
 
@@ -25,27 +34,38 @@ impl HomeImpl
 
 impl mercury_capnp::home::Server for HomeImpl
 {
-    fn ping(&mut self,
-             params: mercury_capnp::home::PingParams,
-             mut results: mercury_capnp::home::PingResults,)
+    fn login(&mut self,
+             params: mercury_capnp::home::LoginParams,
+             mut results: mercury_capnp::home::LoginResults,)
         -> Promise<(), ::capnp::Error>
     {
         let res = params.get()
-            .and_then( |params| params.get_txt() )
-            .and_then( |txt|
+            .and_then( |params| params.get_name() )
+            .and_then( |name|
             {
-                println!("ping called with '{}', sending pong", txt);
+                println!("ping called with '{}', sending pong", name);
                 Ok(())
             } );
 
-        results.get().set_result(&"wooooorks");
-
-        match res {
-            Ok(_) => Promise::ok(()),
-            Err(e) => Promise::err(e),
-        }
-
+        let session = mercury_capnp::session::ToClient::new( SessionImpl::new() )
+            .from_server::<::capnp_rpc::Server>();
+        results.get().set_result(session);
+        Promise::result(res)
     }
+}
+
+
+
+pub struct SessionImpl {}
+
+impl SessionImpl
+{
+    pub fn new() -> Self { Self{} }
+}
+
+impl mercury_capnp::session::Server for SessionImpl
+{
+
 }
 
 

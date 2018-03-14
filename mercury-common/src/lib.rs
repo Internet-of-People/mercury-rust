@@ -263,14 +263,15 @@ pub trait HomeSession
 //        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
 
-    fn banned_profiles(&self) ->
-        Box< Future<Item=Vec<ProfileId>, Error=ErrorToBeSpecified> >;
-
-    fn ban(&self, profile: &ProfileId) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
-
-    fn unban(&self, profile: &ProfileId) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+// TODO ban features are delayed to a later milestone
+//    fn banned_profiles(&self) ->
+//        Box< Future<Item=Vec<ProfileId>, Error=ErrorToBeSpecified> >;
+//
+//    fn ban(&self, profile: &ProfileId) ->
+//        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+//
+//    fn unban(&self, profile: &ProfileId) ->
+//        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 }
 
 

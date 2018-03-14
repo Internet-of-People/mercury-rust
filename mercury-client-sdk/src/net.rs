@@ -31,7 +31,7 @@ impl HomeClientCapnProto
             capnp_rpc::rpc_twoparty_capnp::Side::Client, Default::default() ) );
         let mut rpc_system = capnp_rpc::RpcSystem::new(rpc_network, None);
 
-        let home: mercury_capnp::home::Client<> =
+        let home: mercury_capnp::home::Client =
             rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
 
         handle.spawn( rpc_system.map_err( |e| println!("Capnp RPC failed: {}", e) ) );
@@ -53,28 +53,7 @@ impl ProfileRepo for HomeClientCapnProto
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
-        println!("load() called");
-        let mut request = self.home.ping_request();
-        request.get().set_txt(&"gooood mooorrrning"); // TODO
-        println!("request created");
-
-        let resp_fut = request.send().promise
-            .and_then( |resp|
-            {
-                println!("load() message sent");
-                resp.get()
-                    .and_then( |res| res.get_result() )
-                    .map( |pong|
-                        Profile::new( &ProfileId( pong.as_bytes().to_owned() ),
-                                      &PublicKey( Vec::new() ), &Vec::new() )
-                    )
-            } )
-            .map_err( |e| { println!("load() failed {}", e); ErrorToBeSpecified::TODO } );;
-
-//        let res = self.rpc_system.join(resp_fut)
-//            .map(|join_res| join_res.1)
-//            .map_err( |e| { println!("load() failed {}", e); ErrorToBeSpecified::TODO } );
-        Box::new(resp_fut)
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
 
     // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
@@ -133,16 +112,56 @@ impl Home for HomeClientCapnProto
     fn login(&self, own_prof: OwnProfile) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        println!("load() called");
+        let mut request = self.home.login_request();
+        request.get().set_name(&"beeeela"); // TODO
+        println!("request created");
 
-//        let mut request = self.home.login_request();
-//        request.get().set_name(&"jooozsi"); // TODO
-//
-//        let resp_fut = request.send().promise
-//            .map_err( |_e| ErrorToBeSpecified::TODO );
-//        Box::new(resp_fut)
+        let resp_fut = request.send().promise
+            .and_then( |resp|
+            {
+                println!("load() message sent");
+                resp.get()
+                    .and_then( |res| res.get_result() )
+                    .map( |session_client| Box::new( HomeSessionClientCapnProto::new(session_client) ) )
+                    .map( |session| session as Box<HomeSession>)
+            } )
+            .map_err( |e| { println!("load() failed {}", e); ErrorToBeSpecified::TODO } );;
+
+        Box::new(resp_fut)
     }
 }
+
+
+
+pub struct HomeSessionClientCapnProto
+{
+    session: mercury_capnp::session::Client<>,
+}
+
+impl HomeSessionClientCapnProto
+{
+    pub fn new(session: mercury_capnp::session::Client) -> Self
+        { Self{ session: session } }
+}
+
+impl HomeSession for HomeSessionClientCapnProto
+{
+    fn events(&self) -> Rc< Stream<Item=HomeEvent, Error=ErrorToBeSpecified> >
+    {
+        let (send, recv) = futures::sync::mpsc::channel(0);
+        Rc::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
+    }
+
+    // TODO return not a Stream, but an AppSession struct containing a stream
+    fn checkin_app(&self, app: &ApplicationId) ->
+        Box< Stream<Item=Call, Error=ErrorToBeSpecified> >
+    {
+        let (send, recv) = futures::sync::mpsc::channel(0);
+        Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
+    }
+}
+
 
 
 // TODO this should return simply Rc<Home> but then it's a lot of boilerplate to compile until implemented

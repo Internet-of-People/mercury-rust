@@ -261,7 +261,7 @@ mod tests
             .and_then( move |tcp_stream|
             {
                 let home = HomeClientCapnProto::new(tcp_stream, handle);
-                home.load( &ProfileId( "testing".as_bytes().to_owned() ) )
+                home.login(&"testing")
             } );
 
         let profile = setup.reactor.run(test_fut);
