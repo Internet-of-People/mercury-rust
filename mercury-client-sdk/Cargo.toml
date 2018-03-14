@@ -7,7 +7,7 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 capnp = "0.8"
 capnp-rpc = "0.8"
 futures = "0.1"
-mercury-common = { path="../common" }
+mercury-common = { path="../mercury-common" }
 multiaddr = "*"
 multihash = "*"
 tokio-core = "0.1"
