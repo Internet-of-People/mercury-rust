@@ -4,3 +4,7 @@ members = [
     "mercury-client-sdk",
     "mercury-profile-server",
 ]
+
+[patch.crates-io]
+# We use the AddrComponent part, which is not in "0.2", the current latest release.
+"multiaddr" = { git = "https://github.com/multiformats/rust-multiaddr" }
