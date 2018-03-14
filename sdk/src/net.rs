@@ -13,15 +13,16 @@ use super::*;
 
 pub struct HomeClientCapnProto
 {
-    rpc_system: capnp_rpc::RpcSystem<capnp_rpc::rpc_twoparty_capnp::Side>,
+    // rpc_system: capnp_rpc::RpcSystem<capnp_rpc::rpc_twoparty_capnp::Side>,
     home:       mercury_capnp::home::Client<>,
 }
 
 
 impl HomeClientCapnProto
 {
-    pub fn new(tcp_stream: TcpStream) -> Self
+    pub fn new(tcp_stream: TcpStream, handle: reactor::Handle) -> Self
     {
+        println!("Initializing Cap'n'Proto");
         tcp_stream.set_nodelay(true).unwrap();
         let (reader, writer) = tcp_stream.split();
 
@@ -30,13 +31,12 @@ impl HomeClientCapnProto
             capnp_rpc::rpc_twoparty_capnp::Side::Client, Default::default() ) );
         let mut rpc_system = capnp_rpc::RpcSystem::new(rpc_network, None);
 
-        // TODO which side to use here?
-//        let home: mercury_capnp::home::Client<> =
-//            rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
         let home: mercury_capnp::home::Client<> =
-            rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Client);
+            rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
 
-        Self{ rpc_system: rpc_system, home: home }
+        handle.spawn( rpc_system.map_err( |e| println!("Capnp RPC failed: {}", e) ) );
+
+        Self{ home: home } // , rpc_system: rpc_system
     }
 }
 
@@ -44,21 +44,24 @@ impl HomeClientCapnProto
 impl ProfileRepo for HomeClientCapnProto
 {
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-    Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >
+        Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >
     {
         let (send, recv) = futures::sync::mpsc::channel(0);
         Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
 
     fn load(&self, id: &ProfileId) ->
-    Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
+        println!("load() called");
         let mut request = self.home.ping_request();
         request.get().set_txt(&"gooood mooorrrning"); // TODO
+        println!("request created");
 
         let resp_fut = request.send().promise
             .and_then( |resp|
             {
+                println!("load() message sent");
                 resp.get()
                     .and_then( |res| res.get_result() )
                     .map( |pong|
@@ -66,13 +69,17 @@ impl ProfileRepo for HomeClientCapnProto
                                       &PublicKey( Vec::new() ), &Vec::new() )
                     )
             } )
-            .map_err( |_e| ErrorToBeSpecified::TODO );
+            .map_err( |e| { println!("load() failed {}", e); ErrorToBeSpecified::TODO } );;
+
+//        let res = self.rpc_system.join(resp_fut)
+//            .map(|join_res| join_res.1)
+//            .map_err( |e| { println!("load() failed {}", e); ErrorToBeSpecified::TODO } );
         Box::new(resp_fut)
     }
 
     // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
     fn resolve(&self, url: &str) ->
-    Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
@@ -139,9 +146,9 @@ impl Home for HomeClientCapnProto
 
 
 // TODO this should return simply Rc<Home> but then it's a lot of boilerplate to compile until implemented
-pub fn tcp_home(tcp_stream: TcpStream) -> Rc<Home>
+pub fn tcp_home(tcp_stream: TcpStream, handle: reactor::Handle) -> Rc<Home>
 {
-    Rc::new( HomeClientCapnProto::new(tcp_stream) )
+    Rc::new( HomeClientCapnProto::new(tcp_stream, handle) )
 }
 
 
@@ -220,8 +227,9 @@ impl HomeConnector for SimpleTcpHomeConnector
             )
             .map(  move |addr| SimpleTcpHomeConnector::connect(&addr, &handle_clone) );
 
+        let handle_clone = self.handle.clone();
         let tcp_home = future::select_ok(tcp_conns)
-            .map( |(tcp, _pending_futs)| tcp_home(tcp) );
+            .map( move |(tcp, _pending_futs)| tcp_home(tcp, handle_clone) );
         Box::new(tcp_home)
     }
 }
