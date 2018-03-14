@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "mercury-common",
+    "mercury-client-sdk",
+    "mercury-profile-server",
+]
