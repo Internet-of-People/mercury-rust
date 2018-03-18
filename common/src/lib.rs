@@ -37,6 +37,34 @@ pub struct ApplicationId(String);
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct AppMessageFrame(Vec<u8>);
 
+//deusz-app...
+impl PublicKey{
+    pub fn new( key : &str)->Self{
+        PublicKey(key.as_bytes().to_owned())
+    }
+    pub fn new_from_vec( key : Vec<u8>)->Self{
+        PublicKey(key)
+    }
+}
+
+impl ProfileId{
+    pub fn new( id : &str)->Self{
+        ProfileId(id.as_bytes().to_owned())
+    }
+    pub fn new_from_vec( id : Vec<u8>)->Self{
+        ProfileId(id)
+    }
+}
+
+impl Signature{
+    pub fn new( sign : &str)->Self{
+        Signature(sign.as_bytes().to_owned())
+    }
+    pub fn new_from_vec( sign : Vec<u8>)->Self{
+        Signature(sign)
+    }
+}
+//...end
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PairingCertificate
@@ -91,7 +119,27 @@ pub struct RawFacet
     pub data: Vec<u8>, // TODO or maybe multicodec output?
 }
 
+//deusz-app...
+impl PersonaFacet{
+    pub fn new( profids : &[ProfileId])->Self{
+        let mut homesvec = vec![];
+        for prof in profids{
+             homesvec.push(prof.to_owned());
+        }
+        PersonaFacet{homes : homesvec }
+    }
+}
 
+impl HomeFacet{
+    pub fn new(homeadds : &[Multiaddr])->Self{
+        let mut addrvec = vec![];
+        for addr in homeadds{
+            addrvec.push(addr.to_owned());
+        }
+        HomeFacet{ addrs : addrvec }
+    }
+}
+//...end
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ProfileFacet
@@ -169,8 +217,16 @@ pub struct OwnProfile
     pub signer: Rc<Signer>,
 }
 
-
-
+//deusz-app...
+// impl OwnProfile{
+//     pub fn new<S : Signer>( data : OwnProfileData, sign : S )->Self{
+//         OwnProfile{
+//             data:   data,
+//             signer: Rc::new(sign),
+//         }
+//     }
+// }
+//...end   ----- cancelled because lifetimes
 
 // Potentially a whole network of nodes with internal routing and sharding
 pub trait ProfileRepo
