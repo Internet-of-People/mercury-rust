@@ -19,7 +19,8 @@ struct OwnProfileData
 
 interface Home
 {
-    login @0 (profile : OwnProfileData) -> (result : Session);
+    login @0 (name : Text) -> (result : Session);
+#     login @0 (profile : OwnProfileData) -> (result : Session);
 }
 
 
@@ -31,6 +32,6 @@ interface Home
 
 interface Session
 {
-    echo @0 (ping : Text) -> (result : Text);
+    ping @0 (txt : Text) -> (result : Text);
 #    checkin_app @0 (app: Text) -> (result : Client);
 }

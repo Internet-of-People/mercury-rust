@@ -1,3 +1,5 @@
+extern crate capnp;
+extern crate capnp_rpc;
 extern crate futures;
 extern crate mercury_common;
 extern crate multiaddr;
@@ -245,8 +247,25 @@ mod tests
 
 
     #[test]
-    fn test_something()
+    fn temporary_test_capnproto()
     {
+        use std::net::SocketAddr;
+        use std::net::ToSocketAddrs;
+        use super::net::*;
+
+        let mut setup = TestSetup::new();
+        let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
+        let handle = setup.reactor.handle();
+        let test_fut = TcpStream::connect( &addr, &setup.reactor.handle() )
+            .map_err( |_e| ErrorToBeSpecified::TODO )
+            .and_then( move |tcp_stream|
+            {
+                let home = HomeClientCapnProto::new(tcp_stream, handle);
+                home.login(&"testing")
+            } );
+
+        let profile = setup.reactor.run(test_fut);
+        println!("Response: {:?}", profile);
 //        // TODO assert!( result.TODO );
     }
 }

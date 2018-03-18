@@ -1,3 +1,4 @@
+#![allow(unused)]
 extern crate capnp;
 extern crate futures;
 extern crate multiaddr;
@@ -5,11 +6,12 @@ extern crate multihash;
 extern crate tokio_core;
 extern crate tokio_io;
 
+use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 use std::rc::Rc;
 
 use futures::{Future, IntoFuture, Sink, Stream};
 use futures::future;
-use multiaddr::{Multiaddr};
+use multiaddr::{Multiaddr, AddrComponent};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -22,20 +24,21 @@ pub mod mercury_capnp {
 
 
 // TODO
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ErrorToBeSpecified { TODO, }
 
 
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct PublicKey(Vec<u8>);
+pub struct PublicKey(pub Vec<u8>);
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct ProfileId(Vec<u8>); // NOTE multihash::Multihash::encode() output
+pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Signature(Vec<u8>);
+pub struct Signature(pub Vec<u8>);
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct ApplicationId(String);
+pub struct ApplicationId(pub String);
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct AppMessageFrame(Vec<u8>);
+pub struct AppMessageFrame(pub Vec<u8>);
 
 //deusz-app...
 impl PublicKey{
@@ -318,17 +321,41 @@ pub trait HomeSession
 //        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
 
-    fn banned_profiles(&self) ->
-        Box< Future<Item=Vec<ProfileId>, Error=ErrorToBeSpecified> >;
-
-    fn ban(&self, profile: &ProfileId) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
-
-    fn unban(&self, profile: &ProfileId) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+// TODO ban features are delayed to a later milestone
+//    fn banned_profiles(&self) ->
+//        Box< Future<Item=Vec<ProfileId>, Error=ErrorToBeSpecified> >;
+//
+//    fn ban(&self, profile: &ProfileId) ->
+//        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+//
+//    fn unban(&self, profile: &ProfileId) ->
+//        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 }
 
+/// Convert a TCP/IP multiaddr to a SocketAddr. For multiaddr instances that are not TCP or IP, error is returned.
+pub fn multiaddr_to_socketaddr(multiaddr: Multiaddr) -> Result<SocketAddr, ErrorToBeSpecified> {
 
+    let mut components = multiaddr.iter();
+    let mut ip_address;
+
+    match components.next() {
+        Some(AddrComponent::IP4(address)) => {ip_address = IpAddr::from(address);},
+        Some(AddrComponent::IP6(address)) => {ip_address = IpAddr::from(address);},
+        _ => {
+            return Err(ErrorToBeSpecified::TODO);
+        }
+    };
+
+    let mut ip_port;
+    match components.next() {
+        Some(AddrComponent::TCP(port)) => ip_port = port,
+        _ => {
+            return Err(ErrorToBeSpecified::TODO);
+        }
+    }
+
+    Ok(SocketAddr::new(ip_address, ip_port))
+}
 
 #[cfg(test)]
 mod tests
@@ -350,6 +377,13 @@ mod tests
         }
     }
 
+    #[test]
+    fn test_multiaddr_conversion()
+    {
+        let multiaddr = "/ip4/127.0.0.1/tcp/22".parse::<Multiaddr>().unwrap();
+        let socketaddr = multiaddr_to_socketaddr(multiaddr).unwrap();
+        assert_eq!(socketaddr, SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 22));
+    }
 
     #[test]
     fn test_something()
