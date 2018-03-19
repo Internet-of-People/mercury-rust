@@ -220,16 +220,13 @@ pub struct OwnProfile
     pub signer: Rc<Signer>,
 }
 
-//deusz-app...
-// impl OwnProfile{
-//     pub fn new<S : Signer>( data : OwnProfileData, sign : S )->Self{
-//         OwnProfile{
-//             data:   data,
-//             signer: Rc::new(sign),
-//         }
-//     }
-// }
-//...end   ----- cancelled because lifetimes
+ impl OwnProfile
+{
+     pub fn new(data: OwnProfileData, signer: Rc<Signer>) -> Self
+        { OwnProfile{ data: data, signer: signer } }
+ }
+
+
 
 // Potentially a whole network of nodes with internal routing and sharding
 pub trait ProfileRepo
@@ -315,6 +312,10 @@ pub trait HomeSession
     // TODO return not a Stream, but an AppSession struct containing a stream
     fn checkin_app(&self, app: &ApplicationId) ->
         Box< Stream<Item=Call, Error=ErrorToBeSpecified> >;
+
+    // TODO remove this after testing
+    fn ping(&self, txt: &str) ->
+        Box< Future<Item=String, Error=ErrorToBeSpecified> >;
 
     // TODO this is probably not needed, we'll just drop the checkin_app result object instead
 //    fn checkout_app(&self, app: &ApplicationId, calls: Stream<Item=Call, Error=ErrorToBeSpecified>) ->

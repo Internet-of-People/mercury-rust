@@ -43,29 +43,41 @@ impl mercury_capnp::home::Server for HomeImpl
             .and_then( |params| params.get_name() )
             .and_then( |name|
             {
-                println!("ping called with '{}', sending pong", name);
-                Ok(())
+                println!("login called with '{}', sending session", name);
+                let session = mercury_capnp::home_session::ToClient::new( HomeSessionImpl::new() )
+                    .from_server::<::capnp_rpc::Server>();
+                results.get().set_session(session);
+                Ok( () )
             } );
-
-        let session = mercury_capnp::session::ToClient::new( SessionImpl::new() )
-            .from_server::<::capnp_rpc::Server>();
-        results.get().set_result(session);
         Promise::result(res)
     }
 }
 
 
 
-pub struct SessionImpl {}
+pub struct HomeSessionImpl {}
 
-impl SessionImpl
+impl HomeSessionImpl
 {
     pub fn new() -> Self { Self{} }
 }
 
-impl mercury_capnp::session::Server for SessionImpl
+impl mercury_capnp::home_session::Server for HomeSessionImpl
 {
-
+    fn ping(&mut self, params: mercury_capnp::home_session::PingParams<>,
+            mut results: mercury_capnp::home_session::PingResults<>) ->
+        Promise<(), ::capnp::Error>
+    {
+        let res = params.get()
+            .and_then( |params| params.get_txt() )
+            .and_then( |ping|
+            {
+                println!("ping called with '{}', sending pong", ping);
+                results.get().set_pong(ping);
+                Ok( () )
+            } );
+        Promise::result(res)
+    }
 }
 
 

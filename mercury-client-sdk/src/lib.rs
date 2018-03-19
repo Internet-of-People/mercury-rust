@@ -246,6 +246,17 @@ mod tests
     }
 
 
+    struct DummySigner
+    {
+        pub_key: PublicKey
+    }
+
+    impl Signer for DummySigner
+    {
+        fn pub_key(&self) -> &PublicKey { &self.pub_key }
+        fn sign(&self, data: Vec<u8>) -> Signature { Signature( Vec::new() ) }
+    }
+
     #[test]
     fn temporary_test_capnproto()
     {
@@ -261,11 +272,21 @@ mod tests
             .and_then( move |tcp_stream|
             {
                 let home = HomeClientCapnProto::new(tcp_stream, handle);
-                home.login(&"testing")
-            } );
 
-        let profile = setup.reactor.run(test_fut);
-        println!("Response: {:?}", profile);
+                let profile = Profile::new(
+                    &ProfileId( "joooozsi".as_bytes().to_owned() ),
+                    &PublicKey( "joooozsi".as_bytes().to_owned() ),
+                    &[] );
+                let signer = Rc::new( DummySigner{ pub_key: PublicKey(Vec::new()) } );
+                let own_profile = OwnProfile::new(
+                    OwnProfileData::new( &profile, &[] ),
+                    signer);
+                home.login(own_profile)
+            } )
+            .and_then( |session| session.ping("hahoooo") );
+
+        let pong = setup.reactor.run(test_fut);
+        println!("Response: {:?}", pong);
 //        // TODO assert!( result.TODO );
     }
 }

@@ -112,21 +112,21 @@ impl Home for HomeClientCapnProto
     fn login(&self, own_prof: OwnProfile) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        println!("load() called");
+        println!("login() called");
         let mut request = self.home.login_request();
         request.get().set_name(&"beeeela"); // TODO
-        println!("request created");
+        println!("login request created");
 
         let resp_fut = request.send().promise
             .and_then( |resp|
             {
-                println!("load() message sent");
+                println!("login() message sent");
                 resp.get()
-                    .and_then( |res| res.get_result() )
+                    .and_then( |res| res.get_session() )
                     .map( |session_client| Box::new( HomeSessionClientCapnProto::new(session_client) ) )
                     .map( |session| session as Box<HomeSession>)
             } )
-            .map_err( |e| { println!("load() failed {}", e); ErrorToBeSpecified::TODO } );;
+            .map_err( |e| { println!("login() failed {}", e); ErrorToBeSpecified::TODO } );;
 
         Box::new(resp_fut)
     }
@@ -136,12 +136,12 @@ impl Home for HomeClientCapnProto
 
 pub struct HomeSessionClientCapnProto
 {
-    session: mercury_capnp::session::Client<>,
+    session: mercury_capnp::home_session::Client<>,
 }
 
 impl HomeSessionClientCapnProto
 {
-    pub fn new(session: mercury_capnp::session::Client) -> Self
+    pub fn new(session: mercury_capnp::home_session::Client) -> Self
         { Self{ session: session } }
 }
 
@@ -159,6 +159,27 @@ impl HomeSession for HomeSessionClientCapnProto
     {
         let (send, recv) = futures::sync::mpsc::channel(0);
         Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
+    }
+
+    fn ping(&self, txt: &str) ->
+        Box< Future<Item=String, Error=ErrorToBeSpecified> >
+    {
+        println!("checkin() called");
+        let mut request = self.session.ping_request();
+        request.get().set_txt(txt);
+        println!("checkin request created");
+
+        let resp_fut = request.send().promise
+            .and_then( |resp|
+                {
+                    println!("checkin() message sent");
+                    resp.get()
+                        .and_then( |res|
+                            res.get_pong().map( |s| s.to_owned() ) )
+                } )
+            .map_err( |e| { println!("checkin() failed {}", e); ErrorToBeSpecified::TODO } );
+
+        Box::new(resp_fut)
     }
 }
 
@@ -217,15 +238,22 @@ pub struct SimpleTcpHomeConnector
 
 impl SimpleTcpHomeConnector
 {
-    pub fn connect(addr: &Multiaddr, handle: &reactor::Handle) ->
+    pub fn new(handle: reactor::Handle) -> Self
+        { Self{ handle: handle} }
+
+    pub fn connect_addr(addr: &Multiaddr, handle: &reactor::Handle) ->
         Box< Future<Item=TcpStream, Error=ErrorToBeSpecified> >
     {
-        if ! addr.protocol().contains(&Protocol::TCP)
-            { return Box::new( future::err(ErrorToBeSpecified::TODO) ); }
+        // TODO handle other multiaddresses, not only TCP
+        let tcp_addr = match multiaddr_to_socketaddr(addr)
+        {
+            Ok(res) => res,
+            Err(_) => return Box::new( future::err(ErrorToBeSpecified::TODO) )
+        };
 
-        // TODO how to extract TCPv4/v6 address???
-        return Box::new( future::err(ErrorToBeSpecified::TODO) );
-//        TcpStream::connect(tcp_addr, &handle)
+        let tcp_str = TcpStream::connect(&tcp_addr, handle)
+            .map_err( |_| ErrorToBeSpecified::TODO );
+        Box::new(tcp_str)
     }
 
 }
@@ -244,7 +272,7 @@ impl HomeConnector for SimpleTcpHomeConnector
                     _ => Vec::new()
                 }
             )
-            .map(  move |addr| SimpleTcpHomeConnector::connect(&addr, &handle_clone) );
+            .map(  move |addr| SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone) );
 
         let handle_clone = self.handle.clone();
         let tcp_home = future::select_ok(tcp_conns)
