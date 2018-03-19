@@ -333,29 +333,27 @@ pub trait HomeSession
 }
 
 /// Convert a TCP/IP multiaddr to a SocketAddr. For multiaddr instances that are not TCP or IP, error is returned.
-pub fn multiaddr_to_socketaddr(multiaddr: Multiaddr) -> Result<SocketAddr, ErrorToBeSpecified> {
-
+pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Result<SocketAddr, ErrorToBeSpecified>
+{
     let mut components = multiaddr.iter();
-    let mut ip_address;
 
-    match components.next() {
-        Some(AddrComponent::IP4(address)) => {ip_address = IpAddr::from(address);},
-        Some(AddrComponent::IP6(address)) => {ip_address = IpAddr::from(address);},
-        _ => {
-            return Err(ErrorToBeSpecified::TODO);
-        }
+    let mut ip_address = match components.next()
+    {
+        Some( AddrComponent::IP4(address) ) => IpAddr::from(address),
+        Some( AddrComponent::IP6(address) ) => IpAddr::from(address),
+        _ => return Err(ErrorToBeSpecified::TODO),
     };
 
-    let mut ip_port;
-    match components.next() {
-        Some(AddrComponent::TCP(port)) => ip_port = port,
-        _ => {
-            return Err(ErrorToBeSpecified::TODO);
-        }
-    }
+    let mut ip_port = match components.next()
+    {
+        Some( AddrComponent::TCP(port) ) => port,
+        _ => return Err(ErrorToBeSpecified::TODO),
+    };
 
-    Ok(SocketAddr::new(ip_address, ip_port))
+    Ok( SocketAddr::new(ip_address, ip_port) )
 }
+
+
 
 #[cfg(test)]
 mod tests
@@ -381,8 +379,12 @@ mod tests
     fn test_multiaddr_conversion()
     {
         let multiaddr = "/ip4/127.0.0.1/tcp/22".parse::<Multiaddr>().unwrap();
-        let socketaddr = multiaddr_to_socketaddr(multiaddr).unwrap();
+        let socketaddr = multiaddr_to_socketaddr(&multiaddr).unwrap();
         assert_eq!(socketaddr, SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 22));
+
+        let multiaddr = "/ip4/127.0.0.1/udp/22".parse::<Multiaddr>().unwrap();
+        let socketaddr = multiaddr_to_socketaddr(&multiaddr);
+        assert_eq!(socketaddr, Result::Err(ErrorToBeSpecified::TODO));
     }
 
     #[test]
