@@ -265,6 +265,16 @@ mod tests
         use super::net::*;
 
         let mut setup = TestSetup::new();
+
+        let profile = Profile::new(
+            &ProfileId( "joooozsi".as_bytes().to_owned() ),
+            &PublicKey( "publickey".as_bytes().to_owned() ),
+            &[] );
+        let signer = Rc::new( DummySigner{ pub_key: PublicKey(Vec::new()) } );
+        let own_profile = OwnProfile::new(
+            OwnProfileData::new( &profile, &[] ),
+            signer);
+
         let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
         let handle = setup.reactor.handle();
         let test_fut = TcpStream::connect( &addr, &setup.reactor.handle() )
@@ -272,15 +282,6 @@ mod tests
             .and_then( move |tcp_stream|
             {
                 let home = HomeClientCapnProto::new(tcp_stream, handle);
-
-                let profile = Profile::new(
-                    &ProfileId( "joooozsi".as_bytes().to_owned() ),
-                    &PublicKey( "joooozsi".as_bytes().to_owned() ),
-                    &[] );
-                let signer = Rc::new( DummySigner{ pub_key: PublicKey(Vec::new()) } );
-                let own_profile = OwnProfile::new(
-                    OwnProfileData::new( &profile, &[] ),
-                    signer);
                 home.login(own_profile)
             } )
             .and_then( |session| session.ping("hahoooo") );

@@ -220,11 +220,11 @@ pub struct OwnProfile
     pub signer: Rc<Signer>,
 }
 
- impl OwnProfile
+impl OwnProfile
 {
-     pub fn new(data: OwnProfileData, signer: Rc<Signer>) -> Self
+    pub fn new(data: OwnProfileData, signer: Rc<Signer>) -> Self
         { OwnProfile{ data: data, signer: signer } }
- }
+}
 
 
 
@@ -276,7 +276,8 @@ pub trait Home: ProfileRepo
     fn unregister(&self, own_prof: OwnProfile, newhome: Option<Profile>) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
-    //office-talk: maybe change to profile: ProfileId so you don't have to download the public data, or you already have the id stored 
+    // TODO consider changing argument to profile: ProfileId so you don't have to
+    //      download the public data, or you already have the id stored
     fn claim(&self, profile: Profile, signer: Rc<Signer>) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
