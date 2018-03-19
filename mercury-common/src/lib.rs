@@ -276,6 +276,7 @@ pub trait Home: ProfileRepo
     fn unregister(&self, own_prof: OwnProfile, newhome: Option<Profile>) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
+    //office-talk: maybe change to profile: ProfileId so you don't have to download the public data, or you already have the id stored 
     fn claim(&self, profile: Profile, signer: Rc<Signer>) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
