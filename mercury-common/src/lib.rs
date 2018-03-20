@@ -206,6 +206,7 @@ pub struct SecretKey(Vec<u8>);
 // NOTE implemented containing a SecretKey or something similar internally
 pub trait Signer
 {
+    fn prof_id(&self) -> &ProfileId;
     fn pub_key(&self) -> &PublicKey;
     // TODO the data Vec<u8> to be signed ideally will be the output from Mudlee's multicodec lib
     fn sign(&self, data: Vec<u8>) -> Signature;
@@ -297,8 +298,7 @@ pub trait Home: ProfileRepo
 
 
 
-// TODO maybe use names like ProfileEvent and ProfileSession?
-pub enum HomeEvent
+pub enum ProfileEvent
 {
     // TODO what other events are needed?
     PairingRequest,
@@ -307,9 +307,10 @@ pub enum HomeEvent
 }
 
 
+// TODO can the server keep the same funcs with Stream args (while it uses Sink)?
 pub trait HomeSession
 {
-    fn events(&self) -> Rc< Stream<Item=HomeEvent, Error=ErrorToBeSpecified> >;
+    fn events(&self) -> Rc< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >;
 
     // TODO return not a Stream, but an AppSession struct containing a stream
     fn checkin_app(&self, app: &ApplicationId) ->
@@ -335,19 +336,21 @@ pub trait HomeSession
 //        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 }
 
+
+
 /// Convert a TCP/IP multiaddr to a SocketAddr. For multiaddr instances that are not TCP or IP, error is returned.
 pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Result<SocketAddr, ErrorToBeSpecified>
 {
     let mut components = multiaddr.iter();
 
-    let mut ip_address = match components.next()
+    let ip_address = match components.next()
     {
         Some( AddrComponent::IP4(address) ) => IpAddr::from(address),
         Some( AddrComponent::IP6(address) ) => IpAddr::from(address),
         _ => return Err(ErrorToBeSpecified::TODO),
     };
 
-    let mut ip_port = match components.next()
+    let ip_port = match components.next()
     {
         Some( AddrComponent::TCP(port) ) => port,
         _ => return Err(ErrorToBeSpecified::TODO),

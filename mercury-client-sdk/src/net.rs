@@ -147,7 +147,7 @@ impl HomeSessionClientCapnProto
 
 impl HomeSession for HomeSessionClientCapnProto
 {
-    fn events(&self) -> Rc< Stream<Item=HomeEvent, Error=ErrorToBeSpecified> >
+    fn events(&self) -> Rc< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >
     {
         let (send, recv) = futures::sync::mpsc::channel(0);
         Rc::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )

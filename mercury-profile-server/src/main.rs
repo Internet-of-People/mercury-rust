@@ -32,6 +32,8 @@ impl HomeImpl
     pub fn new() -> Self { Self{} }
 }
 
+impl mercury_capnp::profile_repo::Server for HomeImpl {}
+
 impl mercury_capnp::home::Server for HomeImpl
 {
     fn login(&mut self,

@@ -248,11 +248,13 @@ mod tests
 
     struct DummySigner
     {
-        pub_key: PublicKey
+        prof_id: ProfileId,
+        pub_key: PublicKey,
     }
 
     impl Signer for DummySigner
     {
+        fn prof_id(&self) -> &ProfileId { &self.prof_id }
         fn pub_key(&self) -> &PublicKey { &self.pub_key }
         fn sign(&self, data: Vec<u8>) -> Signature { Signature( Vec::new() ) }
     }
@@ -266,11 +268,10 @@ mod tests
 
         let mut setup = TestSetup::new();
 
-        let profile = Profile::new(
-            &ProfileId( "joooozsi".as_bytes().to_owned() ),
-            &PublicKey( "publickey".as_bytes().to_owned() ),
-            &[] );
-        let signer = Rc::new( DummySigner{ pub_key: PublicKey(Vec::new()) } );
+        let prof_id = &ProfileId( "joooozsi".as_bytes().to_owned() );
+        let profile = Profile::new( prof_id,
+            &PublicKey( "publickey".as_bytes().to_owned() ), &[] );
+        let signer = Rc::new( DummySigner{ prof_id: prof_id.clone(), pub_key: PublicKey(Vec::new()) } );
         let own_profile = OwnProfile::new(
             OwnProfileData::new( &profile, &[] ),
             signer);
