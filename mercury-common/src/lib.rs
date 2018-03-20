@@ -343,7 +343,7 @@ pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Result<SocketAddr, Erro
 {
     let mut components = multiaddr.iter();
 
-    let ip_address = match components.next()
+    let mut ip_address = match components.next()
     {
         Some( AddrComponent::IP4(address) ) => IpAddr::from(address),
         Some( AddrComponent::IP6(address) ) => IpAddr::from(address),
@@ -353,6 +353,7 @@ pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Result<SocketAddr, Erro
     let ip_port = match components.next()
     {
         Some( AddrComponent::TCP(port) ) => port,
+        Some( AddrComponent::UDP(port) ) => port,
         _ => return Err(ErrorToBeSpecified::TODO),
     };
 
