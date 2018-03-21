@@ -9,12 +9,9 @@ extern crate tokio_io;
 
 use std::rc::Rc;
 
-use futures::{Future, IntoFuture, Sink, Stream};
+use futures::{Future, Stream}; // IntoFuture, Sink
 use futures::future;
-use multiaddr::{Multiaddr};
-use tokio_core::reactor;
-use tokio_core::net::TcpStream;
-use tokio_io::{AsyncRead, AsyncWrite};
+//use tokio_io::{AsyncRead, AsyncWrite};
 
 use mercury_common::*;
 
@@ -25,7 +22,7 @@ pub mod net;
 pub trait HomeConnector
 {
     // NOTE home_profile must have a HomeFacet with at least an address filled in
-    fn connect(&self, home_profile: &Profile) ->
+    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
 }
 
@@ -34,36 +31,41 @@ pub trait HomeConnector
 pub trait Client
 {
 // TODO consider if using streams here is a good idea considering implementation complexity
-//    fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >;    // TODO error type
+//    fn relations(&self) -> Box< Stream<Item=Contact, Error=()> >;    // TODO error type
 //    fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >; // TODO error type
 
-    fn contacts(&self) -> Box< Future<Item=Vec<Contact>, Error=ErrorToBeSpecified> >;
-    fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >;
+    fn profiles(&self) ->
+        Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >;
+    fn relations(&self, profile: &ProfileId) ->
+        Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >;
 
 
-    fn register(&self, home: ProfileId, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
-
-//    fn update(&self, home: ProfileId, own_prof: OwnProfile) ->
-//        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
-//
-//    // NOTE newhome is a profile that contains at least one HomeSchema different than this home
-//    fn unregister(&self, home: ProfileId, own_prof: OwnProfile, newhome: Option<Profile>) ->
-//        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
-
+    // TODO do we really want only profileId of homes here would a Profile also comfortable?
     fn claim(&self, home: ProfileId, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
+    fn register(&self, home: ProfileId, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
+        Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
 
-    fn pair_with(&self, initiator: Profile, acceptor_profile_url: &str) ->
-        Box< Future<Item=Contact, Error=ErrorToBeSpecified> >;
+    fn update(&self, home: ProfileId, own_prof: &OwnProfile) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    fn call(&self, caller: Profile, callee: Contact,
-            app: ApplicationId, init_payload: Vec<u8>) ->
-        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
+    // NOTE newhome is a profile that contains at least one HomeSchema different than this home
+    fn unregister(&self, home: ProfileId, own_prof: ProfileId, newhome: Option<Profile>) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    fn login(&self, own_prof: Profile) ->
+    fn login(&self) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
+
+
+    fn pair_request(&self, relation_type: &str, with_profile_url: &str) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+
+    fn pair_response(&self, rel: Relation) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+
+    fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame) ->
+        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
 
     // TODO what else is needed here?
 }
@@ -73,6 +75,7 @@ pub trait Client
 #[derive(Clone)]
 pub struct ClientImp
 {
+    signer:         Rc<Signer>,
     profile_repo:   Rc<ProfileRepo>,
     home_connector: Rc<HomeConnector>,
 }
@@ -84,9 +87,10 @@ impl ClientImp
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
     {
         let home_connector_clone = self.home_connector.clone();
+        let signer_clone = self.signer.clone();
         let home_conn_fut = self.profile_repo.load(home_profile_id)
             .and_then( move |home_profile|
-                home_connector_clone.connect(&home_profile) );
+                home_connector_clone.connect(&home_profile, signer_clone) );
         Box::new(home_conn_fut)
     }
 
@@ -96,11 +100,13 @@ impl ClientImp
     {
         let profile_repo_clone = self.profile_repo.clone();
         let home_connector_clone = self.home_connector.clone();
-        ClientImp::any_home_of2(profile, profile_repo_clone, home_connector_clone)
+        let signer_clone = self.signer.clone();
+        ClientImp::any_home_of2(profile, profile_repo_clone, home_connector_clone, signer_clone)
     }
 
 
-    fn any_home_of2(profile: &Profile, prof_repo: Rc<ProfileRepo>, connector: Rc<HomeConnector>) ->
+    fn any_home_of2(profile: &Profile, prof_repo: Rc<ProfileRepo>,
+                    connector: Rc<HomeConnector>, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
     {
         let home_conn_futs = profile.facets.iter()
@@ -113,16 +119,10 @@ impl ClientImp
                     _ => Vec::new(),
                 }
             } )
-            .map( move |home_prof_id|
+            .map( move |home_relation|
             {
                 // Load profiles from home ids
-                let home_connector_clone = connector.clone();
-                prof_repo.load(&home_prof_id)
-                    .and_then( move |home_prof|
-                    {
-                        // Connect to loaded homeprofile (Home of the user to pair with)
-                        home_connector_clone.connect(&home_prof)
-                    } )
+                connector.connect(&home_relation.profile, signer)
             } );
 
         // Pick first successful home connection
@@ -130,12 +130,22 @@ impl ClientImp
             .map( |(home_conn, _pending_conn_futs)| home_conn );
         Box::new(home_conn_fut)
     }
+
+
+    fn new_half_proof(relation_type: &str, with_prof: &ProfileId, signer: Rc<Signer>) ->
+        RelationHalfProof
+    {
+        // TODO implement binary serialization for signing
+        RelationHalfProof{ relation_type: relation_type.to_owned(),
+            my_id: signer.prof_id().to_owned(), peer_id: with_prof.to_owned(),
+            my_sign: signer.sign( "TODO implement halfproof serialization".as_bytes().to_owned() ) }
+    }
 }
 
 
 impl Client for ClientImp
 {
-//    fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >
+//    fn relations(&self) -> Box< Stream<Item=Contact, Error=()> >
 //    {
 //        // TODO
 //        let (send, recv) = futures::sync::mpsc::channel(0);
@@ -151,41 +161,17 @@ impl Client for ClientImp
 //    }
 
 
-    fn contacts(&self) -> Box< Future<Item=Vec<Contact>, Error=ErrorToBeSpecified> >
-    {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
-    }
-
     fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
 
-
-    fn register(&self, home_id: ProfileId, own_prof: OwnProfile,
-                invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    fn relations(&self, profile: &ProfileId) ->
+        Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >
     {
-        let reg_fut = self.connect_home(&home_id)
-            .and_then( move |home| home.register(own_prof, invite) );
-        Box::new(reg_fut)
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
 
-//    fn update(&self, home_id: ProfileId, own_prof: OwnProfile) ->
-//        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
-//    {
-//        let upd_fut = self.connect_home(&home_id)
-//            .and_then( move |home| home.update(own_prof) );
-//        Box::new(upd_fut)
-//    }
-//
-//    fn unregister(&self, home_id: ProfileId, own_prof: OwnProfile, newhome: Option<Profile>) ->
-//        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
-//    {
-//        let unreg_fut = self.connect_home(&home_id)
-//            .and_then( move |home| home.unregister(own_prof, newhome) );
-//        Box::new(unreg_fut)
-//    }
 
     fn claim(&self, home_id: ProfileId, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
@@ -195,46 +181,89 @@ impl Client for ClientImp
         Box::new(claim_fut)
     }
 
+    fn register(&self, home_id: ProfileId, own_prof: OwnProfile,
+                invite: Option<HomeInvitation>) ->
+        Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
+    {
+        let reg_fut = self.connect_home(&home_id)
+            .map_err( |e| (own_prof, e) )
+            .and_then( move |home| home.register(own_prof, invite) );
+        Box::new(reg_fut)
+    }
 
-    fn pair_with(&self, initiator: Profile, acceptor_profile_url: &str) ->
-        Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
+    fn update(&self, home_id: ProfileId, own_prof: &OwnProfile) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        let own_profile_clone = own_prof.clone();
+        let own_profile_id_clone = own_prof.profile.id.clone();
+        let upd_fut = self.connect_home(&home_id)
+            .and_then( move |home| home.login(own_profile_id_clone) )
+            .and_then( move |session| session.update(&own_profile_clone) );
+        Box::new(upd_fut)
+    }
+
+    fn unregister(&self, home_id: ProfileId, own_prof: ProfileId, newhome_id: Option<Profile>) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        let unreg_fut = self.connect_home(&home_id)
+            .and_then( move |home| home.login(own_prof) )
+            .and_then( move |session| session.unregister(newhome_id) );
+        Box::new(unreg_fut)
+    }
+
+    // TODO this should try connecting to ALL of our homes
+    fn login(&self) ->
+        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
+    {
+        let profile_repo_clone = self.profile_repo.clone();
+        let home_conn_clone = self.home_connector.clone();
+        let signer_clone = self.signer.clone();
+        let prof_id = self.signer.prof_id().clone();
+        let log_fut = self.profile_repo.load( &self.signer.prof_id() )
+            .and_then( move |profile| ClientImp::any_home_of2(
+                &profile, profile_repo_clone, home_conn_clone, signer_clone) )
+            .and_then( move |home| home.login(prof_id) ) ;
+
+        Box::new(log_fut)
+    }
+
+
+    fn pair_request(&self, relation_type: &str, with_profile_url: &str) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let profile_repo_clone = self.profile_repo.clone();
         let home_connector_clone = self.home_connector.clone();
+        let signer_clone = self.signer.clone();
 
         let pair_fut = self.profile_repo
-            .resolve(acceptor_profile_url)
-            .and_then( |profile|
+            .resolve(with_profile_url)
+            .and_then( move |profile|
             {
-                ClientImp::any_home_of2(&profile, profile_repo_clone, home_connector_clone)
-                    .and_then( move |home|
-                        home.pair_with(initiator, profile) )
+                let half_proof = ClientImp::new_half_proof( relation_type, &profile.id, signer_clone.clone() );
+                ClientImp::any_home_of2(&profile, profile_repo_clone, home_connector_clone, signer_clone)
+                    .and_then( move |home| home.pair_request(half_proof) )
             } );
 
         Box::new(pair_fut)
     }
 
 
-    fn call(&self, caller: Profile, callee: Contact,
-            app: ApplicationId, init_payload: Vec<u8>) ->
-        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
+    fn pair_response(&self, rel: Relation) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        let pair_fut = self.any_home_of(&callee.profile)
-            .and_then( move |home|
-                home.call( caller, callee, app, init_payload.as_slice() ) ) ;
+        let pair_fut = self.any_home_of(&rel.profile)
+            .and_then( |home| home.pair_response(rel) );
         Box::new(pair_fut)
     }
 
 
-    // TODO this should try connecting to ALL of our homes
-    fn login(&self, own_prof: Profile) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
+    fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame) ->
+        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
-        let pair_fut = self.any_home_of(&own_prof)
+        let call_fut = self.any_home_of(&rel.profile)
             .and_then( move |home|
-                home.login(own_prof) ) ;
-
-        Box::new(pair_fut)
+                home.call( rel, app, init_payload.as_slice() ) ) ;
+        Box::new(call_fut)
     }
 }
 

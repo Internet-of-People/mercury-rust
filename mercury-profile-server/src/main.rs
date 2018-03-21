@@ -7,8 +7,6 @@ extern crate multihash;
 extern crate tokio_core;
 extern crate tokio_io;
 
-use std::rc::Rc;
-
 use capnp::capability::Promise;
 use futures::{Future, Stream};
 use tokio_core::reactor;
@@ -16,7 +14,6 @@ use tokio_core::net::TcpListener;
 use tokio_io::AsyncRead;
 
 use mercury_common::*;
-//use mercury_common::mercury_capnp;
 
 
 
