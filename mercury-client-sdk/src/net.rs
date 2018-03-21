@@ -5,6 +5,7 @@ use futures::future;
 use multiaddr::{Multiaddr, AddrComponent};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
+use tokio_io::AsyncRead;
 
 use mercury_common::mercury_capnp;
 
@@ -87,7 +88,7 @@ impl Home for HomeClientCapnProto
     fn register(&self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        Box::new( futures::future::err( (own_prof,ErrorToBeSpecified::TODO) ) )
     }
 
 
@@ -205,9 +206,9 @@ impl HomeSession for HomeSessionClientCapnProto
 
 
 
-pub fn tcp_home(tcp_stream: TcpStream, handle: reactor::Handle) -> Rc<Home>
+pub fn tcp_home(tcp_stream: TcpStream, context: Box<HomeContext>, handle: reactor::Handle) -> Rc<Home>
 {
-    Rc::new( HomeClientCapnProto::new(tcp_stream, handle) )
+    Rc::new( HomeClientCapnProto::new(tcp_stream, context, handle) )
 }
 
 
@@ -302,27 +303,28 @@ impl SimpleTcpHomeConnector
 }
 
 
-impl HomeConnector for SimpleTcpHomeConnector
-{
-    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
-    {
-        let handle_clone = self.handle.clone();
-        let tcp_conns = home_profile.facets.iter()
-            .flat_map( |facet|
-                match facet {
-                    &ProfileFacet::Home(ref home) => home.addrs.clone(),
-                    _ => Vec::new()
-                }
-            )
-            .map(  move |addr| SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone) );
-
-        let handle_clone = self.handle.clone();
-        let tcp_home = future::select_ok(tcp_conns)
-            .map( move |(tcp, _pending_futs)| tcp_home(tcp, handle_clone) );
-        Box::new(tcp_home)
-    }
-}
+// TODO uncomment and implement
+//impl HomeConnector for SimpleTcpHomeConnector
+//{
+//    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
+//        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
+//    {
+//        let handle_clone = self.handle.clone();
+//        let tcp_conns = home_profile.facets.iter()
+//            .flat_map( |facet|
+//                match facet {
+//                    &ProfileFacet::Home(ref home) => home.addrs.clone(),
+//                    _ => Vec::new()
+//                }
+//            )
+//            .map(  move |addr| SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone) );
+//
+//        let handle_clone = self.handle.clone();
+//        let tcp_home = future::select_ok(tcp_conns)
+//            .map( move |(tcp, _pending_futs)| tcp_home(tcp, handle_clone) );
+//        Box::new(tcp_home)
+//    }
+//}
 
 
 

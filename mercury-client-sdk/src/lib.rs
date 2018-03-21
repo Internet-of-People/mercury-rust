@@ -11,7 +11,6 @@ use std::rc::Rc;
 
 use futures::{Future, Stream}; // IntoFuture, Sink
 use futures::future;
-//use tokio_io::{AsyncRead, AsyncWrite};
 
 use mercury_common::*;
 
@@ -122,7 +121,7 @@ impl ClientImp
             .map( move |home_relation|
             {
                 // Load profiles from home ids
-                connector.connect(&home_relation.profile, signer)
+                connector.connect( &home_relation.profile, signer.clone() )
             } );
 
         // Pick first successful home connection
@@ -185,8 +184,9 @@ impl Client for ClientImp
                 invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
+        let own_prof_clone = own_prof.clone();
         let reg_fut = self.connect_home(&home_id)
-            .map_err( |e| (own_prof, e) )
+            .map_err( move |e| (own_prof_clone, e) )
             .and_then( move |home| home.register(own_prof, invite) );
         Box::new(reg_fut)
     }
@@ -234,12 +234,13 @@ impl Client for ClientImp
         let profile_repo_clone = self.profile_repo.clone();
         let home_connector_clone = self.home_connector.clone();
         let signer_clone = self.signer.clone();
+        let rel_type_clone = relation_type.to_owned();
 
         let pair_fut = self.profile_repo
             .resolve(with_profile_url)
             .and_then( move |profile|
             {
-                let half_proof = ClientImp::new_half_proof( relation_type, &profile.id, signer_clone.clone() );
+                let half_proof = ClientImp::new_half_proof( rel_type_clone.as_str(), &profile.id, signer_clone.clone() );
                 ClientImp::any_home_of2(&profile, profile_repo_clone, home_connector_clone, signer_clone)
                     .and_then( move |home| home.pair_request(half_proof) )
             } );
@@ -262,7 +263,7 @@ impl Client for ClientImp
     {
         let call_fut = self.any_home_of(&rel.profile)
             .and_then( move |home|
-                home.call( rel, app, init_payload.as_slice() ) ) ;
+                home.call(rel, app, init_payload) ) ;
         Box::new(call_fut)
     }
 }
