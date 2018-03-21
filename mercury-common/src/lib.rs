@@ -6,12 +6,12 @@ extern crate multihash;
 extern crate tokio_core;
 extern crate tokio_io;
 
-use std::net::{SocketAddr, IpAddr, Ipv4Addr};
+use std::collections::hash_map::HashMap;
 use std::rc::Rc;
 
 use futures::{Future, IntoFuture, Sink, Stream};
 use futures::future;
-use multiaddr::{Multiaddr, AddrComponent};
+use multiaddr::Multiaddr;
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -31,61 +31,27 @@ pub enum ErrorToBeSpecified { TODO, }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PublicKey(pub Vec<u8>);
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Signature(pub Vec<u8>);
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ApplicationId(pub String);
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct AppMessageFrame(pub Vec<u8>);
 
-//deusz-app...
-impl PublicKey{
-    pub fn new( key : &str)->Self{
-        PublicKey(key.as_bytes().to_owned())
-    }
-    pub fn new_from_vec( key : Vec<u8>)->Self{
-        PublicKey(key)
-    }
-}
-
-impl ProfileId{
-    pub fn new( id : &str)->Self{
-        ProfileId(id.as_bytes().to_owned())
-    }
-    pub fn new_from_vec( id : Vec<u8>)->Self{
-        ProfileId(id)
-    }
-}
-
-impl Signature{
-    pub fn new( sign : &str)->Self{
-        Signature(sign.as_bytes().to_owned())
-    }
-    pub fn new_from_vec( sign : Vec<u8>)->Self{
-        Signature(sign)
-    }
-}
-//...end
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct PairingCertificate
-{
-    pub initiator_id:   ProfileId,
-    pub acceptor_id:    ProfileId,
-    pub initiator_sign: Signature,
-    pub acceptor_sign:  Signature,
-    // TODO is a nonce needed?
-}
 
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct HomeInvitation
 {
-    pub home_id: ProfileId,
-    pub voucher: String,
-    pub signature: Signature,
+    pub home_id:    ProfileId,
+    pub voucher:    String,
+    pub signature:  Signature,
     // TODO is a nonce needed?
 }
 
@@ -94,8 +60,10 @@ pub struct HomeInvitation
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PersonaFacet
 {
-    pub homes: Vec<ProfileId>,
+    pub homes:      Vec<Relation>, // NOTE with proof relation_type "home"
+    pub pub_data:   Vec<u8>,
     // TODO and probably a lot more data
+    // pub app_data:   HashMap<ApplicationId, Vec<u8>>,
 }
 
 
@@ -122,27 +90,6 @@ pub struct RawFacet
     pub data: Vec<u8>, // TODO or maybe multicodec output?
 }
 
-//deusz-app...
-impl PersonaFacet{
-    pub fn new( profids : &[ProfileId])->Self{
-        let mut homesvec = vec![];
-        for prof in profids{
-             homesvec.push(prof.to_owned());
-        }
-        PersonaFacet{homes : homesvec }
-    }
-}
-
-impl HomeFacet{
-    pub fn new(homeadds : &[Multiaddr])->Self{
-        let mut addrvec = vec![];
-        for addr in homeadds{
-            addrvec.push(addr.to_owned());
-        }
-        HomeFacet{ addrs : addrvec }
-    }
-}
-//...end
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ProfileFacet
@@ -150,7 +97,7 @@ pub enum ProfileFacet
     Home(HomeFacet),
     Persona(PersonaFacet),
     Application(ApplicationFacet),
-    Raw(String),
+    Unknown(Vec<u8>),
 }
 
 
@@ -169,30 +116,51 @@ impl Profile
 }
 
 
-
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Contact
+pub struct RelationHalfProof
 {
-    pub profile:    Profile,
-    pub proof:      PairingCertificate,
+    pub relation_type:  String,
+    pub my_id:          ProfileId,
+    pub my_sign:        Signature,
+    pub peer_id:        ProfileId,
+    // TODO is a nonce needed?
 }
 
-impl Contact
+
+// TODO maybe halfproof should be inlined (with macro?)
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct RelationProof
 {
-    fn new(profile: &Profile, proof: &PairingCertificate) -> Self
+    pub half_proof: RelationHalfProof,
+    pub peer_sign:  Signature,
+    // TODO is a nonce needed?
+}
+
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct Relation
+{
+    pub profile:    Profile,
+    pub proof:      RelationProof,
+}
+
+impl Relation
+{
+    fn new(profile: &Profile, proof: &RelationProof) -> Self
         { Self { profile: profile.clone(), proof: proof.clone() } }
 }
 
 
 
+// TODO how to access signer for a person
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct OwnProfileData
+pub struct OwnProfile
 {
     pub profile:    Profile,
     pub priv_data:  Vec<u8>, // TODO maybe multicodec output?
 }
 
-impl OwnProfileData
+impl OwnProfile
 {
     pub fn new(profile: &Profile, private_data: &[u8]) -> Self
         { Self{ profile: profile.clone(), priv_data: private_data.to_owned() } }
@@ -206,25 +174,10 @@ pub struct SecretKey(Vec<u8>);
 // NOTE implemented containing a SecretKey or something similar internally
 pub trait Signer
 {
-    fn prof_id(&self) -> &ProfileId;
+    fn prof_id(&self) -> &ProfileId; // TODO consider moving id to HomeContext instead
     fn pub_key(&self) -> &PublicKey;
-    // TODO the data Vec<u8> to be signed ideally will be the output from Mudlee's multicodec lib
+    // NOTE the data Vec<u8> to be signed ideally will be the output from Mudlee's multicodec lib
     fn sign(&self, data: Vec<u8>) -> Signature;
-}
-
-
-
-#[derive(Clone)]
-pub struct OwnProfile
-{
-    pub data:   OwnProfileData,
-    pub signer: Rc<Signer>,
-}
-
-impl OwnProfile
-{
-    pub fn new(data: OwnProfileData, signer: Rc<Signer>) -> Self
-        { OwnProfile{ data: data, signer: signer } }
 }
 
 
@@ -263,66 +216,82 @@ pub struct Call
 
 
 
-// Interface to a single node
-pub trait Home: ProfileRepo
+pub trait HomeContext
 {
+    fn signer(&self) -> &Signer;
+    fn peer(&self) -> Option<Profile>;
+    fn peer_pubkey(&self) -> Option<PublicKey>;
+}
+
+
+// Interface to a single home server.
+// NOTE authentication is already done when the connection is built,
+//      authenticated profile info is available from the connection context
+pub trait Home: HomeContext + ProfileRepo
+{
+    // NOTE profile id needed because of supporting multihash, the id cannot be guessed otherwise
+    fn claim(&self, profile: ProfileId) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
+
+    // TODO consider how to enforce overwriting the original ownprofile with the modified one
+    //      with the pairing proof, especially the error case
     fn register(&self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
 
-    // TODO consider if we should notify an open session about an updated profile
-    fn update(&self, own_prof: OwnProfile) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
-
-    // NOTE newhome is a profile that contains at least one HomeFacet different than this home
-    fn unregister(&self, own_prof: OwnProfile, newhome: Option<Profile>) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
-
-    // TODO consider changing argument to profile: ProfileId so you don't have to
-    //      download the public data, or you already have the id stored
-    fn claim(&self, profile: Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
+    // NOTE this closes all previous sessions of the same profile
+    fn login(&self, profile: ProfileId) ->
+        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_with(&self, initiator: OwnProfile, acceptor: Profile) ->
-        Box< Future<Item=Contact, Error=ErrorToBeSpecified> >;
+    // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
+    fn pair_request(&self, half_proof: RelationHalfProof) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    fn call(&self, caller: OwnProfile, callee: Contact,
-            app: ApplicationId, init_payload: &[u8]) ->
+    fn pair_response(&self, rel: Relation) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+
+    fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
 
-
-    fn login(&self, own_prof: OwnProfile) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
+// TODO consider how to do this in a later milestone
+//    fn presence(&self, rel: Relation, app: ApplicationId) ->
+//        Box< Future<Item=Option<AppMessageFrame>, Error=ErrorToBeSpecified> >;
 }
 
 
 
 pub enum ProfileEvent
 {
-    // TODO what other events are needed?
+    Unknown(Vec<u8>), // forward compatibility for protocol extension
     PairingRequest,
     PairingResponse,
-// ProfileUpdated // from a different client instance/session
+// TODO are these events needed? What others?
+    HomeBroadcast,
+    HomeHostingExpiry,
+    ProfileUpdated, // from a different client instance/session
 }
 
 
-// TODO can the server keep the same funcs with Stream args (while it uses Sink)?
 pub trait HomeSession
 {
+    fn update(&self, own_prof: &OwnProfile) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+
+    // NOTE newhome is a profile that contains at least one HomeFacet different than this home
+    fn unregister(&self, newhome: Option<Profile>) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+
+
     fn events(&self) -> Rc< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >;
 
-    // TODO return not a Stream, but an AppSession struct containing a stream
+    // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) ->
         Box< Stream<Item=Call, Error=ErrorToBeSpecified> >;
 
     // TODO remove this after testing
     fn ping(&self, txt: &str) ->
         Box< Future<Item=String, Error=ErrorToBeSpecified> >;
-
-    // TODO this is probably not needed, we'll just drop the checkin_app result object instead
-//    fn checkout_app(&self, app: &ApplicationId, calls: Stream<Item=Call, Error=ErrorToBeSpecified>) ->
-//        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
 
 // TODO ban features are delayed to a later milestone
@@ -338,35 +307,10 @@ pub trait HomeSession
 
 
 
-/// Convert a TCP/IP multiaddr to a SocketAddr. For multiaddr instances that are not TCP or IP, error is returned.
-pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Result<SocketAddr, ErrorToBeSpecified>
-{
-    let mut components = multiaddr.iter();
-
-    let mut ip_address = match components.next()
-    {
-        Some( AddrComponent::IP4(address) ) => IpAddr::from(address),
-        Some( AddrComponent::IP6(address) ) => IpAddr::from(address),
-        _ => return Err(ErrorToBeSpecified::TODO),
-    };
-
-    let ip_port = match components.next()
-    {
-        Some( AddrComponent::TCP(port) ) => port,
-        Some( AddrComponent::UDP(port) ) => port,
-        _ => return Err(ErrorToBeSpecified::TODO),
-    };
-
-    Ok( SocketAddr::new(ip_address, ip_port) )
-}
-
-
-
 #[cfg(test)]
 mod tests
 {
     use super::*;
-    use multiaddr::ToMultiaddr;
 
 
     struct TestSetup
@@ -380,18 +324,6 @@ mod tests
         {
             Self{ reactor: reactor::Core::new().unwrap() }
         }
-    }
-
-    #[test]
-    fn test_multiaddr_conversion()
-    {
-        let multiaddr = "/ip4/127.0.0.1/tcp/22".parse::<Multiaddr>().unwrap();
-        let socketaddr = multiaddr_to_socketaddr(&multiaddr).unwrap();
-        assert_eq!(socketaddr, SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 22));
-
-        let multiaddr = "/ip4/127.0.0.1/udp/22".parse::<Multiaddr>().unwrap();
-        let socketaddr = multiaddr_to_socketaddr(&multiaddr);
-        assert_eq!(socketaddr, Result::Err(ErrorToBeSpecified::TODO));
     }
 
     #[test]

@@ -33,33 +33,36 @@ pub trait HomeConnector
 
 pub trait Client
 {
-    fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >;    // TODO error type
-    fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >; // TODO error type
+// TODO consider if using streams here is a good idea considering implementation complexity
+//    fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >;    // TODO error type
+//    fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >; // TODO error type
+
+    fn contacts(&self) -> Box< Future<Item=Vec<Contact>, Error=ErrorToBeSpecified> >;
+    fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >;
 
 
     fn register(&self, home: ProfileId, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
-    fn update(&self, home: ProfileId, own_prof: OwnProfile) ->
+//    fn update(&self, home: ProfileId, own_prof: OwnProfile) ->
+//        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
+//
+//    // NOTE newhome is a profile that contains at least one HomeSchema different than this home
+//    fn unregister(&self, home: ProfileId, own_prof: OwnProfile, newhome: Option<Profile>) ->
+//        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
+
+    fn claim(&self, home: ProfileId, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
-    // TODO should newhome be Option<ProfileId> instead?
-    // NOTE newhome is a profile that contains at least one HomeSchema different than this home
-    fn unregister(&self, home: ProfileId, own_prof: OwnProfile, newhome: Option<Profile>) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
-    fn claim(&self, home: ProfileId, profile: Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
-
-
-    fn pair_with(&self, initiator: OwnProfile, acceptor_profile_url: &str) ->
+    fn pair_with(&self, initiator: Profile, acceptor_profile_url: &str) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >;
 
-    fn call(&self, caller: OwnProfile, callee: Contact,
+    fn call(&self, caller: Profile, callee: Contact,
             app: ApplicationId, init_payload: Vec<u8>) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
 
-    fn login(&self, own_prof: OwnProfile) ->
+    fn login(&self, own_prof: Profile) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
 
     // TODO what else is needed here?
@@ -132,19 +135,30 @@ impl ClientImp
 
 impl Client for ClientImp
 {
-    fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >
+//    fn contacts(&self) -> Box< Stream<Item=Contact, Error=()> >
+//    {
+//        // TODO
+//        let (send, recv) = futures::sync::mpsc::channel(0);
+//        Box::new(recv)
+//    }
+//
+//
+//    fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >
+//    {
+//        // TODO
+//        let (send, recv) = futures::sync::mpsc::channel(0);
+//        Box::new(recv)
+//    }
+
+
+    fn contacts(&self) -> Box< Future<Item=Vec<Contact>, Error=ErrorToBeSpecified> >
     {
-        // TODO
-        let (send, recv) = futures::sync::mpsc::channel(0);
-        Box::new(recv)
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
 
-
-    fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >
+    fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >
     {
-        // TODO
-        let (send, recv) = futures::sync::mpsc::channel(0);
-        Box::new(recv)
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
 
 
@@ -157,32 +171,32 @@ impl Client for ClientImp
         Box::new(reg_fut)
     }
 
-    fn update(&self, home_id: ProfileId, own_prof: OwnProfile) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
-    {
-        let upd_fut = self.connect_home(&home_id)
-            .and_then( move |home| home.update(own_prof) );
-        Box::new(upd_fut)
-    }
+//    fn update(&self, home_id: ProfileId, own_prof: OwnProfile) ->
+//        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+//    {
+//        let upd_fut = self.connect_home(&home_id)
+//            .and_then( move |home| home.update(own_prof) );
+//        Box::new(upd_fut)
+//    }
+//
+//    fn unregister(&self, home_id: ProfileId, own_prof: OwnProfile, newhome: Option<Profile>) ->
+//        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+//    {
+//        let unreg_fut = self.connect_home(&home_id)
+//            .and_then( move |home| home.unregister(own_prof, newhome) );
+//        Box::new(unreg_fut)
+//    }
 
-    fn unregister(&self, home_id: ProfileId, own_prof: OwnProfile, newhome: Option<Profile>) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
-    {
-        let unreg_fut = self.connect_home(&home_id)
-            .and_then( move |home| home.unregister(own_prof, newhome) );
-        Box::new(unreg_fut)
-    }
-
-    fn claim(&self, home_id: ProfileId, profile: Profile, signer: Rc<Signer>) ->
+    fn claim(&self, home_id: ProfileId, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
     {
         let claim_fut = self.connect_home(&home_id)
-            .and_then( move |home| home.claim(profile, signer) );
+            .and_then( move |home| home.claim(profile) );
         Box::new(claim_fut)
     }
 
 
-    fn pair_with(&self, initiator: OwnProfile, acceptor_profile_url: &str) ->
+    fn pair_with(&self, initiator: Profile, acceptor_profile_url: &str) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
     {
         let profile_repo_clone = self.profile_repo.clone();
@@ -201,7 +215,7 @@ impl Client for ClientImp
     }
 
 
-    fn call(&self, caller: OwnProfile, callee: Contact,
+    fn call(&self, caller: Profile, callee: Contact,
             app: ApplicationId, init_payload: Vec<u8>) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
@@ -212,10 +226,11 @@ impl Client for ClientImp
     }
 
 
-    fn login(&self, own_prof: OwnProfile) ->
+    // TODO this should try connecting to ALL of our homes
+    fn login(&self, own_prof: Profile) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        let pair_fut = self.any_home_of(&own_prof.data.profile)
+        let pair_fut = self.any_home_of(&own_prof)
             .and_then( move |home|
                 home.login(own_prof) ) ;
 

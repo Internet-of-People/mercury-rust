@@ -1,11 +1,12 @@
-use std::net::{SocketAddr};
+use std::net::{SocketAddr, IpAddr, Ipv4Addr};
 
-use mercury_common::mercury_capnp;
 use futures::{Future};
 use futures::future;
-use multiaddr::{Multiaddr, Protocol};
+use multiaddr::{Multiaddr, AddrComponent};
 use tokio_core::reactor;
 use tokio_core::net::{TcpStream, TcpStreamNew};
+
+use mercury_common::mercury_capnp;
 
 use super::*;
 
@@ -13,8 +14,7 @@ use super::*;
 
 pub struct HomeClientCapnProto
 {
-    // rpc_system: capnp_rpc::RpcSystem<capnp_rpc::rpc_twoparty_capnp::Side>,
-    home:       mercury_capnp::home::Client<>,
+    home: mercury_capnp::home::Client<>,
 }
 
 
@@ -67,68 +67,56 @@ impl ProfileRepo for HomeClientCapnProto
 
 impl Home for HomeClientCapnProto
 {
+    fn claim(&self, profile: ProfileId) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    {
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+    }
+
     fn register(&self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
 
-    // TODO consider if we should notify an open session about an updated profile
-    fn update(&self, own_prof: OwnProfile) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
-    {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
-    }
 
-    // NOTE newhome is a profile that contains at least one HomeFacet different than this home
-    fn unregister(&self, own_prof: OwnProfile, newhome: Option<Profile>) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    fn login(&self, own_prof: Profile) ->
+        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
-    }
 
-    fn claim(&self, profile: Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
-    {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+//        println!("login() called");
+//        let mut request = self.home.login_request();
+//        request.get().set_name(&"beeeela"); // TODO
+//        println!("login request created");
+//
+//        let resp_fut = request.send().promise
+//            .and_then( |resp|
+//            {
+//                println!("login() message sent");
+//                resp.get()
+//                    .and_then( |res| res.get_session() )
+//                    .map( |session_client| Box::new( HomeSessionClientCapnProto::new(session_client) ) )
+//                    .map( |session| session as Box<HomeSession>)
+//            } )
+//            .map_err( |e| { println!("login() failed {}", e); ErrorToBeSpecified::TODO } );;
+//
+//        Box::new(resp_fut)
     }
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_with(&self, initiator: OwnProfile, acceptor: Profile) ->
+    fn pair_with(&self, initiator: Profile, acceptor: Profile) ->
         Box< Future<Item=Contact, Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
 
-    fn call(&self, caller: OwnProfile, callee: Contact,
+    fn call(&self, caller: Profile, callee: Contact,
             app: ApplicationId, init_payload: &[u8]) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
-    }
-
-
-    fn login(&self, own_prof: OwnProfile) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
-    {
-        println!("login() called");
-        let mut request = self.home.login_request();
-        request.get().set_name(&"beeeela"); // TODO
-        println!("login request created");
-
-        let resp_fut = request.send().promise
-            .and_then( |resp|
-            {
-                println!("login() message sent");
-                resp.get()
-                    .and_then( |res| res.get_session() )
-                    .map( |session_client| Box::new( HomeSessionClientCapnProto::new(session_client) ) )
-                    .map( |session| session as Box<HomeSession>)
-            } )
-            .map_err( |e| { println!("login() failed {}", e); ErrorToBeSpecified::TODO } );;
-
-        Box::new(resp_fut)
     }
 }
 
@@ -147,6 +135,20 @@ impl HomeSessionClientCapnProto
 
 impl HomeSession for HomeSessionClientCapnProto
 {
+    // TODO consider if we should notify an open session about an updated profile
+    fn update(&self, own_prof: OwnProfile) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    {
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+    }
+
+    // NOTE newhome is a profile that contains at least one HomeFacet different than this home
+    fn unregister(&self, own_prof: ProfileId, newhome: Option<Profile>) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    {
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+    }
+
     fn events(&self) -> Rc< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >
     {
         let (send, recv) = futures::sync::mpsc::channel(0);
@@ -161,31 +163,30 @@ impl HomeSession for HomeSessionClientCapnProto
         Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
 
-    fn ping(&self, txt: &str) ->
-        Box< Future<Item=String, Error=ErrorToBeSpecified> >
-    {
-        println!("checkin() called");
-        let mut request = self.session.ping_request();
-        request.get().set_txt(txt);
-        println!("checkin request created");
-
-        let resp_fut = request.send().promise
-            .and_then( |resp|
-                {
-                    println!("checkin() message sent");
-                    resp.get()
-                        .and_then( |res|
-                            res.get_pong().map( |s| s.to_owned() ) )
-                } )
-            .map_err( |e| { println!("checkin() failed {}", e); ErrorToBeSpecified::TODO } );
-
-        Box::new(resp_fut)
-    }
+//    fn ping(&self, txt: &str) ->
+//        Box< Future<Item=String, Error=ErrorToBeSpecified> >
+//    {
+//        println!("checkin() called");
+//        let mut request = self.session.ping_request();
+//        request.get().set_txt(txt);
+//        println!("checkin request created");
+//
+//        let resp_fut = request.send().promise
+//            .and_then( |resp|
+//                {
+//                    println!("checkin() message sent");
+//                    resp.get()
+//                        .and_then( |res|
+//                            res.get_pong().map( |s| s.to_owned() ) )
+//                } )
+//            .map_err( |e| { println!("checkin() failed {}", e); ErrorToBeSpecified::TODO } );
+//
+//        Box::new(resp_fut)
+//    }
 }
 
 
 
-// TODO this should return simply Rc<Home> but then it's a lot of boilerplate to compile until implemented
 pub fn tcp_home(tcp_stream: TcpStream, handle: reactor::Handle) -> Rc<Home>
 {
     Rc::new( HomeClientCapnProto::new(tcp_stream, handle) )
@@ -226,6 +227,30 @@ impl HomeConnector for TcpHomeConnector
         //      to it and build a Home proxy on top of it
         Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
+}
+
+
+
+/// Convert a TCP/IP multiaddr to a SocketAddr. For multiaddr instances that are not TCP or IP, error is returned.
+pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Result<SocketAddr, ErrorToBeSpecified>
+{
+    let mut components = multiaddr.iter();
+
+    let mut ip_address = match components.next()
+        {
+            Some( AddrComponent::IP4(address) ) => IpAddr::from(address),
+            Some( AddrComponent::IP6(address) ) => IpAddr::from(address),
+            _ => return Err(ErrorToBeSpecified::TODO),
+        };
+
+    let ip_port = match components.next()
+        {
+            Some( AddrComponent::TCP(port) ) => port,
+            Some( AddrComponent::UDP(port) ) => port,
+            _ => return Err(ErrorToBeSpecified::TODO),
+        };
+
+    Ok( SocketAddr::new(ip_address, ip_port) )
 }
 
 
@@ -278,5 +303,27 @@ impl HomeConnector for SimpleTcpHomeConnector
         let tcp_home = future::select_ok(tcp_conns)
             .map( move |(tcp, _pending_futs)| tcp_home(tcp, handle_clone) );
         Box::new(tcp_home)
+    }
+}
+
+
+
+#[cfg(test)]
+mod tests
+{
+    use super::*;
+    use multiaddr::ToMultiaddr;
+
+
+    #[test]
+    fn test_multiaddr_conversion()
+    {
+        let multiaddr = "/ip4/127.0.0.1/tcp/22".parse::<Multiaddr>().unwrap();
+        let socketaddr = multiaddr_to_socketaddr(&multiaddr).unwrap();
+        assert_eq!(socketaddr, SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 22));
+
+        let multiaddr = "/ip4/127.0.0.1/udp/22".parse::<Multiaddr>().unwrap();
+        let socketaddr = multiaddr_to_socketaddr(&multiaddr);
+        assert_eq!(socketaddr, Result::Err(ErrorToBeSpecified::TODO));
     }
 }
