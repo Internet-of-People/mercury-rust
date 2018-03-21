@@ -152,7 +152,6 @@ impl Relation
 
 
 
-// TODO how to access signer for a person
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct OwnProfile
 {
