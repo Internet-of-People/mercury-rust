@@ -27,6 +27,14 @@ pub trait HomeConnector
 
 
 
+pub trait ProfileConnector
+{
+    fn next() -> Bip32Path;
+    fn connect(bip32_path: &Bip32Path) -> Rc<ProfileGateway>;
+}
+
+
+
 pub struct ClientHomeContext
 {
     signer:         Rc<Signer>,
