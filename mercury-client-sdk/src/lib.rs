@@ -27,6 +27,27 @@ pub trait HomeConnector
 
 
 
+pub struct ClientHomeContext
+{
+    signer:         Rc<Signer>,
+    home_profile:   Profile,
+}
+
+impl ClientHomeContext
+{
+    pub fn new(signer: Rc<Signer>, home_profile: &Profile) -> Self
+        { Self{ signer: signer, home_profile: home_profile.clone() } }
+}
+
+impl HomeContext for ClientHomeContext
+{
+    fn signer(&self) -> &Signer { &*self.signer }
+    fn peer(&self) -> Option<Profile> { Some( self.home_profile.clone() ) }
+    fn peer_pubkey(&self) -> Option<PublicKey> { Some( self.home_profile.pub_key.clone() ) }
+}
+
+
+
 pub trait Client
 {
 // TODO consider if using streams here is a good idea considering implementation complexity
@@ -274,7 +295,8 @@ impl Client for ClientImp
 mod tests
 {
     use super::*;
-    use multiaddr::ToMultiaddr;
+    use tokio_core::net::TcpStream;
+    use tokio_core::reactor;
 
 
     struct TestSetup
@@ -304,6 +326,8 @@ mod tests
         fn sign(&self, data: Vec<u8>) -> Signature { Signature( Vec::new() ) }
     }
 
+
+
     #[test]
     fn temporary_test_capnproto()
     {
@@ -313,13 +337,18 @@ mod tests
 
         let mut setup = TestSetup::new();
 
-        let prof_id = &ProfileId( "joooozsi".as_bytes().to_owned() );
-        let profile = Profile::new( prof_id,
-            &PublicKey( "publickey".as_bytes().to_owned() ), &[] );
+        let prof_id = ProfileId( "joooozsi".as_bytes().to_owned() );
+        let home_id = ProfileId( "HomeSweetHome".as_bytes().to_owned() );
         let signer = Rc::new( DummySigner{ prof_id: prof_id.clone(), pub_key: PublicKey(Vec::new()) } );
-        let own_profile = OwnProfile::new(
-            OwnProfileData::new( &profile, &[] ),
-            signer);
+        let home_facet = HomeFacet{ addrs: Vec::new() };
+        let home_prof = Profile::new( &home_id,
+            &PublicKey( "HomePubKey".as_bytes().to_owned() ),
+            &[ ProfileFacet::Home(home_facet) ] );
+        let home_ctx = Box::new( ClientHomeContext::new(signer, &home_prof) );
+
+//        let profile = Profile::new( prof_id,
+//            &PublicKey( "publickey".as_bytes().to_owned() ), &[] );
+//        let own_profile = OwnProfile::new( &profile, &[] );
 
         let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
         let handle = setup.reactor.handle();
@@ -327,8 +356,8 @@ mod tests
             .map_err( |_e| ErrorToBeSpecified::TODO )
             .and_then( move |tcp_stream|
             {
-                let home = HomeClientCapnProto::new(tcp_stream, handle);
-                home.login(own_profile)
+                let home = HomeClientCapnProto::new(tcp_stream, home_ctx, handle);
+                home.login(prof_id)
             } )
             .and_then( |session| session.ping("hahoooo") );
 

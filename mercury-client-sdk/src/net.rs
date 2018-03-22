@@ -50,7 +50,7 @@ impl ProfileRepo for HomeClientCapnProto
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >
     {
-        let (send, recv) = futures::sync::mpsc::channel(0);
+        let (_send, recv) = futures::sync::mpsc::channel(0);
         Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
 
@@ -170,7 +170,7 @@ impl HomeSession for HomeSessionClientCapnProto
 
     fn events(&self) -> Rc< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >
     {
-        let (send, recv) = futures::sync::mpsc::channel(0);
+        let (_send, recv) = futures::sync::mpsc::channel(0);
         Rc::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
 
@@ -178,7 +178,7 @@ impl HomeSession for HomeSessionClientCapnProto
     fn checkin_app(&self, app: &ApplicationId) ->
         Box< Stream<Item=Call, Error=ErrorToBeSpecified> >
     {
-        let (send, recv) = futures::sync::mpsc::channel(0);
+        let (_send, recv) = futures::sync::mpsc::channel(0);
         Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
 
@@ -255,7 +255,7 @@ pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Result<SocketAddr, Erro
 {
     let mut components = multiaddr.iter();
 
-    let mut ip_address = match components.next()
+    let ip_address = match components.next()
         {
             Some( AddrComponent::IP4(address) ) => IpAddr::from(address),
             Some( AddrComponent::IP6(address) ) => IpAddr::from(address),
@@ -299,32 +299,35 @@ impl SimpleTcpHomeConnector
             .map_err( |_| ErrorToBeSpecified::TODO );
         Box::new(tcp_str)
     }
-
 }
 
 
-// TODO uncomment and implement
-//impl HomeConnector for SimpleTcpHomeConnector
-//{
-//    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-//        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
-//    {
-//        let handle_clone = self.handle.clone();
-//        let tcp_conns = home_profile.facets.iter()
-//            .flat_map( |facet|
-//                match facet {
-//                    &ProfileFacet::Home(ref home) => home.addrs.clone(),
-//                    _ => Vec::new()
-//                }
-//            )
-//            .map(  move |addr| SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone) );
-//
-//        let handle_clone = self.handle.clone();
-//        let tcp_home = future::select_ok(tcp_conns)
-//            .map( move |(tcp, _pending_futs)| tcp_home(tcp, handle_clone) );
-//        Box::new(tcp_home)
-//    }
-//}
+impl HomeConnector for SimpleTcpHomeConnector
+{
+    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
+        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
+    {
+        let handle_clone = self.handle.clone();
+        let tcp_conns = home_profile.facets.iter()
+            .flat_map( |facet|
+                match facet {
+                    &ProfileFacet::Home(ref home) => home.addrs.clone(),
+                    _ => Vec::new()
+                }
+            )
+            .map(  move |addr| SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone) );
+
+        let home_profile_clone = home_profile.clone();
+        let handle_clone = self.handle.clone();
+        let tcp_home = future::select_ok(tcp_conns)
+            .map( move |(tcp, _pending_futs)|
+            {
+                let home_ctx = Box::new( ClientHomeContext::new(signer, &home_profile_clone) );
+                tcp_home(tcp, home_ctx, handle_clone)
+            } );
+        Box::new(tcp_home)
+    }
+}
 
 
 
@@ -332,7 +335,7 @@ impl SimpleTcpHomeConnector
 mod tests
 {
     use super::*;
-    use multiaddr::ToMultiaddr;
+    use std::net::{IpAddr, Ipv4Addr};
 
 
     #[test]
@@ -342,7 +345,7 @@ mod tests
         let socketaddr = multiaddr_to_socketaddr(&multiaddr).unwrap();
         assert_eq!(socketaddr, SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 22));
 
-        let multiaddr = "/ip4/127.0.0.1/udp/22".parse::<Multiaddr>().unwrap();
+        let multiaddr = "/ip4/127.0.0.1/utp".parse::<Multiaddr>().unwrap();
         let socketaddr = multiaddr_to_socketaddr(&multiaddr);
         assert_eq!(socketaddr, Result::Err(ErrorToBeSpecified::TODO));
     }
