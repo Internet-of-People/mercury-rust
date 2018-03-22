@@ -48,14 +48,15 @@ impl HomeContext for ClientHomeContext
 
 
 
-pub trait Client
+pub trait ProfileGateway
 {
 // TODO consider if using streams here is a good idea considering implementation complexity
-//    fn relations(&self) -> Box< Stream<Item=Contact, Error=()> >;    // TODO error type
+//    fn relations(&self) -> Box< Stream<Item=Contact, Error=()> >;   // TODO error type
 //    fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >; // TODO error type
 
-    fn profiles(&self) ->
-        Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >;
+// NOTE this interface currently works with a single Profile, so this is not here
+//    fn profiles(&self) ->
+//        Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >;
     fn relations(&self, profile: &ProfileId) ->
         Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >;
 
@@ -93,7 +94,7 @@ pub trait Client
 
 
 #[derive(Clone)]
-pub struct ClientImp
+pub struct ProfileGatewayImpl
 {
     signer:         Rc<Signer>,
     profile_repo:   Rc<ProfileRepo>,
@@ -101,7 +102,7 @@ pub struct ClientImp
 }
 
 
-impl ClientImp
+impl ProfileGatewayImpl
 {
     fn connect_home(&self, home_profile_id: &ProfileId) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
@@ -121,7 +122,7 @@ impl ClientImp
         let profile_repo_clone = self.profile_repo.clone();
         let home_connector_clone = self.home_connector.clone();
         let signer_clone = self.signer.clone();
-        ClientImp::any_home_of2(profile, profile_repo_clone, home_connector_clone, signer_clone)
+        ProfileGatewayImpl::any_home_of2(profile, profile_repo_clone, home_connector_clone, signer_clone)
     }
 
 
@@ -163,7 +164,7 @@ impl ClientImp
 }
 
 
-impl Client for ClientImp
+impl ProfileGateway for ProfileGatewayImpl
 {
 //    fn relations(&self) -> Box< Stream<Item=Contact, Error=()> >
 //    {
@@ -181,10 +182,10 @@ impl Client for ClientImp
 //    }
 
 
-    fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >
-    {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
-    }
+//    fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >
+//    {
+//        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+//    }
 
     fn relations(&self, profile: &ProfileId) ->
         Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >
@@ -241,7 +242,7 @@ impl Client for ClientImp
         let signer_clone = self.signer.clone();
         let prof_id = self.signer.prof_id().clone();
         let log_fut = self.profile_repo.load( &self.signer.prof_id() )
-            .and_then( move |profile| ClientImp::any_home_of2(
+            .and_then( move |profile| ProfileGatewayImpl::any_home_of2(
                 &profile, profile_repo_clone, home_conn_clone, signer_clone) )
             .and_then( move |home| home.login(prof_id) ) ;
 
@@ -261,8 +262,8 @@ impl Client for ClientImp
             .resolve(with_profile_url)
             .and_then( move |profile|
             {
-                let half_proof = ClientImp::new_half_proof( rel_type_clone.as_str(), &profile.id, signer_clone.clone() );
-                ClientImp::any_home_of2(&profile, profile_repo_clone, home_connector_clone, signer_clone)
+                let half_proof = ProfileGatewayImpl::new_half_proof(rel_type_clone.as_str(), &profile.id, signer_clone.clone() );
+                ProfileGatewayImpl::any_home_of2(&profile, profile_repo_clone, home_connector_clone, signer_clone)
                     .and_then( move |home| home.pair_request(half_proof) )
             } );
 

@@ -168,7 +168,14 @@ impl OwnProfile
 
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct SecretKey(Vec<u8>);
+pub struct Bip32Path(String);
+
+pub trait Seed
+{
+    // TODO do we need a password to unlock the private key?
+    fn generate(bip32_path: &Bip32Path) -> Rc<Signer>;
+}
+
 
 // NOTE implemented containing a SecretKey or something similar internally
 pub trait Signer
