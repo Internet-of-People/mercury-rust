@@ -234,7 +234,7 @@ pub struct Call
 //      authenticated profile info is available from the connection context
 pub trait Home: PeerContext + ProfileRepo
 {
-    // NOTE profile id needed because of supporting multihash, the id cannot be guessed otherwise
+    // NOTE because we support multihash, the id cannot be guessed from the public key
     fn claim(&self, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 

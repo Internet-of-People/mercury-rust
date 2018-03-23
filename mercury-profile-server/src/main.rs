@@ -44,10 +44,10 @@ impl mercury_capnp::home::Server for HomeImpl
         -> Promise<(), ::capnp::Error>
     {
         let res = params.get()
-            .and_then( |params| params.get_name() )
-            .and_then( |name|
+            .and_then( |params| params.get_profile_id() )
+            .and_then( |profile_id|
             {
-                println!("login called with '{}', sending session", name);
+                println!("login called with '{:?}', sending session", profile_id);
                 let session = mercury_capnp::home_session::ToClient::new( HomeSessionImpl::new() )
                     .from_server::<::capnp_rpc::Server>();
                 results.get().set_session(session);

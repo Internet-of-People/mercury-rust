@@ -99,7 +99,7 @@ impl Home for HomeClientCapnProto
 
         println!("login() called");
         let mut request = self.home.login_request();
-        request.get().set_name(&"beeeela"); // TODO
+        request.get().set_profile_id( "beeeela".as_bytes() ); // TODO
         println!("login request created");
 
         let resp_fut = request.send().promise
