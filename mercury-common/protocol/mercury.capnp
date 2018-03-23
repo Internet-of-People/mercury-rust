@@ -1,72 +1,80 @@
 @0xbf11c96f54b8924d;
 
 
+
 using PublicKey = Data;
 using ProfileId = Data;
 using Signature = Data;
 using ApplicationId = Text;
-#using AppMessageFrame = Data;
+using AppMessageFrame = Data;
+
 
 
 struct Profile
 {
-    id        @0 : ProfileId;
-    publicKey @1 : PublicKey;
-# TODO pub facets:     Vec<ProfileFacet>;
+    data      @0 : Data; # output of multicodec encode()
+
+    # NOTE these are mandatory in the API, but will be serialized into the data instead
+    # id        @1 : ProfileId;
+    # publicKey @2 : PublicKey;
 }
 
 
-struct Contact
+interface ProfileRepo
 {
-    # TODO
+    # TODO what filter criteria should we have in list()?
+    list @0 () -> (profiles: List(Profile));
+    load @1 (profileId: ProfileId) -> (profile: Profile);
+    resolve @2 (profileUrl: Text) -> (profile: Profile);
+}
+
+
+
+struct RelationHalfProof
+{
+    data            @0 : Data;
+    # relationType    @0 : Text,
+    # myId            @1 : ProfileId,
+    # mySign          @2 : Signature,
+    # peerId          @3 : ProfileId,
+}
+
+
+struct RelationProof
+{
+    data        @0 : Data;
+    # halfProof   @0 : RelationHalfProof,
+    # peerSign    @1 : Signature,
+}
+
+
+struct Relation
+{
+    data    @0 : Data;
+    # profile @0 : Profile,
+    # proof   @1 : RelationProof,
 }
 
 
 struct HomeInvitation
 {
-    # TODO
+    data @0 : Data;
 }
 
 
-struct OwnProfileData
+struct OwnProfile
 {
     profile     @0 : Profile;
     privateData @1 : Data; # TODO maybe multicodec output?
 }
 
 
-interface Signer
+
+interface AppMessageListener
 {
-    # TODO
+    onMessageSent @0 (message: AppMessageFrame);
 }
 
-
-struct OwnProfile
-{
-    data   @0 : OwnProfileData;
-    signer @1 : Signer;
-}
-
-
-
-interface ProfileRepo
-{
-    # TODO what filter criteria should we have here?
-#    list @0 () -> (profiles: List(Profile));
-#    load @1 (profileId: ProfileId) -> (profile: Profile);
-#    resolve @2 (profileUrl: Text) -> (profile: Profile);
-}
-
-
-# struct Call {}
-# interface ClientNotificator {
-#     incoming_call @0 (call: Call);
-# }
-
-struct CallMessages
-{
-    # TODO
-}
 
 
 interface Home extends (ProfileRepo)
@@ -91,15 +99,26 @@ interface Home extends (ProfileRepo)
 }
 
 
+
+struct Call
+{
+    callerId    @0 : ProfileId;
+    initPayload @1 : AppMessageFrame;
+    toCaller    @2 : AppMessageListener;
+}
+
+interface CallListener
+{
+    onCall @0 (call: Call) -> (toCallee: AppMessageListener);
+}
+
+
+
 interface HomeEventNotifier
 {
     # TODO
 }
 
-interface Calls
-{
-    # TODO
-}
 
 interface HomeSession
 {

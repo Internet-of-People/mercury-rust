@@ -49,9 +49,9 @@ impl ClientHomeContext
 
 impl HomeContext for ClientHomeContext
 {
-    fn signer(&self) -> &Signer { &*self.signer }
-    fn peer(&self) -> Option<Profile> { Some( self.home_profile.clone() ) }
+    fn my_signer(&self) -> &Signer { &*self.signer }
     fn peer_pubkey(&self) -> Option<PublicKey> { Some( self.home_profile.pub_key.clone() ) }
+    fn peer(&self) -> Option<Profile> { Some( self.home_profile.clone() ) }
 }
 
 
@@ -349,7 +349,7 @@ mod tests
         let prof_id = ProfileId( "joooozsi".as_bytes().to_owned() );
         let home_id = ProfileId( "HomeSweetHome".as_bytes().to_owned() );
         let signer = Rc::new( DummySigner{ prof_id: prof_id.clone(), pub_key: PublicKey(Vec::new()) } );
-        let home_facet = HomeFacet{ addrs: Vec::new() };
+        let home_facet = HomeFacet{ addrs: Vec::new(), data: Vec::new() };
         let home_prof = Profile::new( &home_id,
             &PublicKey( "HomePubKey".as_bytes().to_owned() ),
             &[ ProfileFacet::Home(home_facet) ] );

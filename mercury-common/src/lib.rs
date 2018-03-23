@@ -30,29 +30,33 @@ pub enum ErrorToBeSpecified { TODO, }
 
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct PublicKey(pub Vec<u8>);
+pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
+pub struct PublicKey(pub Vec<u8>);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Signature(pub Vec<u8>);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct ApplicationId(pub String);
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct AppMessageFrame(pub Vec<u8>);
+pub struct Bip32Path(String);
 
 
 
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct HomeInvitation
+pub trait Seed
 {
-    pub home_id:    ProfileId,
-    pub voucher:    String,
-    pub signature:  Signature,
-    // TODO is a nonce needed?
+    // TODO do we need a password to unlock the private key?
+    fn unlock(bip32_path: &Bip32Path) -> Rc<Signer>;
+}
+
+
+// NOTE implemented containing a SecretKey or something similar internally
+pub trait Signer
+{
+    fn prof_id(&self) -> &ProfileId; // TODO is this really needed here?
+    fn pub_key(&self) -> &PublicKey;
+    // NOTE the data Vec<u8> to be signed ideally will be the output from Mudlee's multicodec lib
+    fn sign(&self, data: Vec<u8>) -> Signature;
 }
 
 
@@ -60,29 +64,24 @@ pub struct HomeInvitation
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PersonaFacet
 {
-    pub homes:      Vec<Relation>, // NOTE with proof relation_type "home"
-    pub pub_data:   Vec<u8>,
-    // TODO and probably a lot more data
-    // pub app_data:   HashMap<ApplicationId, Vec<u8>>,
+    pub homes:  Vec<Relation>, // NOTE with proof relation_type "home"
+    pub data:   Vec<u8>,
 }
-
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct HomeFacet
 {
-    pub addrs: Vec<Multiaddr>,
-    // TODO and probably a lot more data
+    pub addrs:  Vec<Multiaddr>,
+    pub data:   Vec<u8>,
 }
-
 
 // NOTE Given for each SUPPORTED app, not currently available (checked in) app, checkins are managed differently
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ApplicationFacet
 {
-    pub id: ApplicationId,
-    // TODO and probably a lot more data
+    pub id:     ApplicationId,
+    pub data:   Vec<u8>,
 }
-
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct RawFacet
@@ -90,14 +89,13 @@ pub struct RawFacet
     pub data: Vec<u8>, // TODO or maybe multicodec output?
 }
 
-
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ProfileFacet
 {
     Home(HomeFacet),
     Persona(PersonaFacet),
     Application(ApplicationFacet),
-    Unknown(Vec<u8>),
+    Unknown(RawFacet),
 }
 
 
@@ -106,14 +104,59 @@ pub struct Profile
 {
     pub id:         ProfileId,
     pub pub_key:    PublicKey,
-    pub facets:     Vec<ProfileFacet>, // TODO consider using dictionary instead of vector
+    pub facets:     Vec<ProfileFacet>, // TODO consider redesigning facet Rust types/storage
+    // TODO consider having a signature of the profile data here
 }
+
 
 impl Profile
 {
     pub fn new(id: &ProfileId, pub_key: &PublicKey, facets: &[ProfileFacet]) -> Self
         { Self{ id: id.to_owned(), pub_key: pub_key.to_owned(), facets: facets.to_owned() } }
 }
+
+
+
+pub trait HomeContext
+{
+    fn my_signer(&self) -> &Signer;
+    fn peer_pubkey(&self) -> Option<PublicKey>;
+    fn peer(&self) -> Option<Profile>;
+}
+
+
+
+// Potentially a whole network of nodes with internal routing and sharding
+pub trait ProfileRepo
+{
+    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
+        Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >;
+
+    fn load(&self, id: &ProfileId) ->
+        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
+
+    // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
+    fn resolve(&self, url: &str) ->
+        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
+
+    // TODO notifications on profile updates should be possible
+}
+
+
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct OwnProfile
+{
+    pub profile:    Profile,
+    pub priv_data:  Vec<u8>, // TODO maybe multicodec output?
+}
+
+impl OwnProfile
+{
+    pub fn new(profile: &Profile, private_data: &[u8]) -> Self
+    { Self{ profile: profile.clone(), priv_data: private_data.to_owned() } }
+}
+
 
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -147,63 +190,27 @@ pub struct Relation
 impl Relation
 {
     fn new(profile: &Profile, proof: &RelationProof) -> Self
-        { Self { profile: profile.clone(), proof: proof.clone() } }
+    { Self { profile: profile.clone(), proof: proof.clone() } }
 }
 
 
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct OwnProfile
+pub struct HomeInvitation
 {
-    pub profile:    Profile,
-    pub priv_data:  Vec<u8>, // TODO maybe multicodec output?
-}
-
-impl OwnProfile
-{
-    pub fn new(profile: &Profile, private_data: &[u8]) -> Self
-        { Self{ profile: profile.clone(), priv_data: private_data.to_owned() } }
+    pub home_id:    ProfileId,
+    pub voucher:    String,
+    pub signature:  Signature,
+    // TODO is a nonce needed?
 }
 
 
 
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Bip32Path(String);
+pub struct ApplicationId(pub String);
 
-pub trait Seed
-{
-    // TODO do we need a password to unlock the private key?
-    fn generate(bip32_path: &Bip32Path) -> Rc<Signer>;
-}
-
-
-// NOTE implemented containing a SecretKey or something similar internally
-pub trait Signer
-{
-    fn prof_id(&self) -> &ProfileId; // TODO consider moving id to HomeContext instead
-    fn pub_key(&self) -> &PublicKey;
-    // NOTE the data Vec<u8> to be signed ideally will be the output from Mudlee's multicodec lib
-    fn sign(&self, data: Vec<u8>) -> Signature;
-}
-
-
-
-// Potentially a whole network of nodes with internal routing and sharding
-pub trait ProfileRepo
-{
-    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-        Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >;
-
-    fn load(&self, id: &ProfileId) ->
-        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
-
-    // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
-    fn resolve(&self, url: &str) ->
-        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
-
-    // TODO notifications on profile updates should be possible
-}
-
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct AppMessageFrame(pub Vec<u8>);
 
 
 pub struct CallMessages
@@ -220,14 +227,6 @@ pub struct Call
     pub messages:       Option<CallMessages>,
 }
 
-
-
-pub trait HomeContext
-{
-    fn signer(&self) -> &Signer;
-    fn peer(&self) -> Option<Profile>;
-    fn peer_pubkey(&self) -> Option<PublicKey>;
-}
 
 
 // Interface to a single home server.

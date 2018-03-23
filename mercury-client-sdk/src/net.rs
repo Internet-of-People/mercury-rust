@@ -71,9 +71,9 @@ impl ProfileRepo for HomeClientCapnProto
 
 impl HomeContext for HomeClientCapnProto
 {
-    fn signer(&self)        -> &Signer          { self.context.signer() }
-    fn peer(&self)          -> Option<Profile>  { self.context.peer() }
+    fn my_signer(&self)     -> &Signer          { self.context.my_signer() }
     fn peer_pubkey(&self)   -> Option<PublicKey>{ self.context.peer_pubkey() }
+    fn peer(&self)          -> Option<Profile>  { self.context.peer() }
 }
 
 
