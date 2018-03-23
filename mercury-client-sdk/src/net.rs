@@ -15,14 +15,14 @@ use super::*;
 
 pub struct HomeClientCapnProto
 {
-    context:Box<HomeContext>,
+    context:Box<PeerContext>,
     home:   mercury_capnp::home::Client<>,
 }
 
 
 impl HomeClientCapnProto
 {
-    pub fn new(tcp_stream: TcpStream, context: Box<HomeContext>,
+    pub fn new(tcp_stream: TcpStream, context: Box<PeerContext>,
                handle: reactor::Handle) -> Self
     {
         println!("Initializing Cap'n'Proto");
@@ -69,7 +69,7 @@ impl ProfileRepo for HomeClientCapnProto
 }
 
 
-impl HomeContext for HomeClientCapnProto
+impl PeerContext for HomeClientCapnProto
 {
     fn my_signer(&self)     -> &Signer          { self.context.my_signer() }
     fn peer_pubkey(&self)   -> Option<PublicKey>{ self.context.peer_pubkey() }
@@ -206,7 +206,7 @@ impl HomeSession for HomeSessionClientCapnProto
 
 
 
-pub fn tcp_home(tcp_stream: TcpStream, context: Box<HomeContext>, handle: reactor::Handle) -> Rc<Home>
+pub fn tcp_home(tcp_stream: TcpStream, context: Box<PeerContext>, handle: reactor::Handle) -> Rc<Home>
 {
     Rc::new( HomeClientCapnProto::new(tcp_stream, context, handle) )
 }
@@ -322,7 +322,7 @@ impl HomeConnector for SimpleTcpHomeConnector
         let tcp_home = future::select_ok(tcp_conns)
             .map( move |(tcp, _pending_futs)|
             {
-                let home_ctx = Box::new( ClientHomeContext::new(signer, &home_profile_clone) );
+                let home_ctx = Box::new( HomeContext::new(signer, &home_profile_clone) );
                 tcp_home(tcp, home_ctx, handle_clone)
             } );
         Box::new(tcp_home)

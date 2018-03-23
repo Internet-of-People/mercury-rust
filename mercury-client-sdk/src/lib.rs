@@ -35,19 +35,19 @@ pub trait ProfileConnector
 
 
 
-pub struct ClientHomeContext
+pub struct HomeContext
 {
     signer:         Rc<Signer>,
     home_profile:   Profile,
 }
 
-impl ClientHomeContext
+impl HomeContext
 {
     pub fn new(signer: Rc<Signer>, home_profile: &Profile) -> Self
         { Self{ signer: signer, home_profile: home_profile.clone() } }
 }
 
-impl HomeContext for ClientHomeContext
+impl PeerContext for HomeContext
 {
     fn my_signer(&self) -> &Signer { &*self.signer }
     fn peer_pubkey(&self) -> Option<PublicKey> { Some( self.home_profile.pub_key.clone() ) }
@@ -353,7 +353,7 @@ mod tests
         let home_prof = Profile::new( &home_id,
             &PublicKey( "HomePubKey".as_bytes().to_owned() ),
             &[ ProfileFacet::Home(home_facet) ] );
-        let home_ctx = Box::new( ClientHomeContext::new(signer, &home_prof) );
+        let home_ctx = Box::new( HomeContext::new(signer, &home_prof) );
 
 //        let profile = Profile::new( prof_id,
 //            &PublicKey( "publickey".as_bytes().to_owned() ), &[] );

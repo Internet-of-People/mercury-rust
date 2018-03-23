@@ -117,7 +117,7 @@ impl Profile
 
 
 
-pub trait HomeContext
+pub trait PeerContext
 {
     fn my_signer(&self) -> &Signer;
     fn peer_pubkey(&self) -> Option<PublicKey>;
@@ -232,7 +232,7 @@ pub struct Call
 // Interface to a single home server.
 // NOTE authentication is already done when the connection is built,
 //      authenticated profile info is available from the connection context
-pub trait Home: HomeContext + ProfileRepo
+pub trait Home: PeerContext + ProfileRepo
 {
     // NOTE profile id needed because of supporting multihash, the id cannot be guessed otherwise
     fn claim(&self, profile: ProfileId) ->
