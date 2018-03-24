@@ -16,7 +16,7 @@ use mercury_common::*;
 
 pub mod net;
 
-
+pub mod mock;
 
 pub trait HomeConnector
 {
