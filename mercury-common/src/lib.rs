@@ -54,8 +54,8 @@ pub trait Signer
 {
     fn prof_id(&self) -> &ProfileId; // TODO is this really needed here?
     fn pub_key(&self) -> &PublicKey;
-    // NOTE the data Vec<u8> to be signed ideally will be the output from Mudlee's multicodec lib
-    fn sign(&self, data: Vec<u8>) -> Signature;
+    // NOTE the data to be signed ideally will be the output from Mudlee's multicodec lib
+    fn sign(&self, data: &[u8]) -> Signature;
 }
 
 

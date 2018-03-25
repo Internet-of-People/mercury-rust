@@ -169,7 +169,7 @@ impl ProfileGatewayImpl
         // TODO implement binary serialization for signing
         RelationHalfProof{ relation_type: relation_type.to_owned(),
             my_id: signer.prof_id().to_owned(), peer_id: with_prof.to_owned(),
-            my_sign: signer.sign( "TODO implement halfproof serialization".as_bytes().to_owned() ) }
+            my_sign: signer.sign( "TODO implement halfproof serialization".as_bytes() ) }
     }
 }
 
