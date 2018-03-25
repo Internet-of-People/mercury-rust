@@ -178,12 +178,14 @@ impl RelationHalfProof
 }
 
 
-// TODO maybe halfproof should be inlined (with macro?)
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct RelationProof
 {
-    pub half_proof: RelationHalfProof,
-    pub peer_sign:  Signature,
+    pub relation_type:  String,        // TODO inline halfproof fields with macro, if possible at all
+    pub my_id:          ProfileId,
+    pub my_sign:        Signature,
+    pub peer_id:        ProfileId,
+    pub peer_sign:      Signature,
     // TODO is a nonce needed?
 }
 
@@ -191,7 +193,28 @@ impl RelationProof
 {
     // TODO add params and properly initialize
     pub fn new() -> Self
-        { Self{ half_proof: RelationHalfProof::new(), peer_sign: Signature(Vec::new()) } }
+    {
+        Self
+        {
+            relation_type: String::new(),
+            my_id: ProfileId(Vec::new()),
+            my_sign: Signature(Vec::new()),
+            peer_id: ProfileId(Vec::new()),
+            peer_sign: Signature(Vec::new()),
+        }
+    }
+
+    pub fn from_halfproof(half_proof: RelationHalfProof, peer_sign: Signature) -> Self
+    {
+        Self
+        {
+            relation_type: half_proof.relation_type.clone(),
+            my_id: half_proof.my_id.clone(),
+            my_sign: half_proof.my_sign.clone(),
+            peer_id: half_proof.peer_id.clone(),
+            peer_sign: peer_sign.clone(),
+        }
+    }
 }
 
 
