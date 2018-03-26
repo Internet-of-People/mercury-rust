@@ -1,4 +1,5 @@
 extern crate capnp;
+#[macro_use]
 extern crate capnp_rpc;
 extern crate futures;
 extern crate mercury_common;

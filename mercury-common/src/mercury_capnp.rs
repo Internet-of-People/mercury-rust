@@ -11,7 +11,17 @@ pub trait TryFrom<T> : Sized {
     fn try_from(value: T) -> Result<Self, Self::Error>;
 }
 
+pub trait FillFrom<T>
+{
+    fn fill_from(&mut self, source: &T);
+}
 
+
+impl<'a> From<&'a [u8]> for ::ProfileId
+{
+    fn from(src: &'a [u8]) -> Self
+        { ::ProfileId( src.to_owned() ) }
+}
 
 impl<'a> TryFrom<profile::Reader<'a>> for ::Profile
 {
@@ -24,6 +34,16 @@ impl<'a> TryFrom<profile::Reader<'a>> for ::Profile
         let public_key = ::PublicKey( src.get_public_key()?.to_owned() );
         let facets = &[]; // TODO
         Ok( ::Profile::new(&profile_id, &public_key, facets) )
+    }
+}
+
+impl<'a> FillFrom<::Profile> for profile::Builder<'a>
+{
+    fn fill_from(&mut self, src: &::Profile)
+    {
+        self.set_id(&src.id.0);
+        self.set_public_key(&src.pub_key.0);
+        // TODO set facets
     }
 }
 

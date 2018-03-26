@@ -1,5 +1,6 @@
 use std::rc::Rc;
 
+use mercury_common::mercury_capnp::FillFrom;
 use super::*;
 
 
@@ -27,7 +28,38 @@ impl HomeDispatcher
 
 impl mercury_capnp::profile_repo::Server for HomeDispatcher
 {
+    fn list(&mut self,
+            params: mercury_capnp::profile_repo::ListParams,
+            mut results: mercury_capnp::profile_repo::ListResults,)
+        -> Promise<(), ::capnp::Error>
+    {
+        // TODO
+        Promise::result( Ok( () ) )
+    }
 
+    fn load(&mut self,
+            params: mercury_capnp::profile_repo::LoadParams,
+            mut results: mercury_capnp::profile_repo::LoadResults,)
+        -> Promise<(), ::capnp::Error>
+    {
+        //let builder : ::capnp::message::Builder<::capnp::message::HeapAllocator>;
+        //let builder : mercury_capnp::profile::Builder::new_default();
+
+        let profile_id_capnp = pry!( pry!( params.get() ).get_profile_id() );
+        let load_fut = self.home.load( &profile_id_capnp.into() )
+            .map( move |profile| results.get().init_profile().fill_from(&profile) )
+            .map_err( |e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+
+        Promise::from_future(load_fut)
+    }
+
+    fn resolve(&mut self,
+               params: mercury_capnp::profile_repo::ResolveParams,
+               mut results: mercury_capnp::profile_repo::ResolveResults,)
+        -> Promise<(), ::capnp::Error>
+    {
+        Promise::result( Ok( () ) )
+    }
 }
 
 impl mercury_capnp::home::Server for HomeDispatcher
