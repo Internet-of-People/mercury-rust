@@ -7,11 +7,11 @@ use multiaddr::{Multiaddr, ToMultiaddr};
 
 use futures::{Async, Future, IntoFuture, Sink, Stream};
 
-fn generate_hash( base : &str) -> Vec<u8> {
+pub fn generate_hash( base : &str) -> Vec<u8> {
     encode(Hash::SHA2256, base.as_bytes()).unwrap()
 }
 
-fn generate_hash_from_vec( base : Vec<u8>) -> Vec<u8> {
+pub fn generate_hash_from_vec( base : Vec<u8>) -> Vec<u8> {
     encode(Hash::SHA2256, &base).unwrap()
 }
 
@@ -24,6 +24,29 @@ pub fn create_ownprofile(name : &str)->OwnProfile{
     OwnProfile::new(&p, &[])
 }
 
+pub fn make_own_persona_profile(name : &str, pubkey : &PublicKey)->Profile{
+    let id = generate_hash(name);
+    let empty = vec![];
+    let homes = vec![];
+    Profile::new(
+        &ProfileId(id), 
+        &pubkey,
+        &[ProfileFacet::Persona( PersonaFacet{ homes : homes , data : empty } )] 
+    )
+}
+
+pub fn make_home_profile(addr : &str, name : &str, pubkey : &str)->Profile{
+    let homeaddr = addr.to_multiaddr().unwrap();
+    let home_hash = mock::generate_hash(name);
+    let empty = vec![];
+    let homevec = vec![homeaddr];
+    Profile::new(
+        &ProfileId(home_hash), 
+        &PublicKey(pubkey.as_bytes().to_owned()),
+        &[ProfileFacet::Home( HomeFacet{ addrs : homevec , data : empty } ) ] 
+    )
+}
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Signo{
     prof_id : ProfileId,
     pubkey : PublicKey,
@@ -54,7 +77,7 @@ impl Signer for Signo{
         Signature( sig.into_bytes() )
     }
 }
-
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct DummyHomeConnector{
     pub home : DummyHome,
 }
@@ -71,7 +94,7 @@ impl HomeConnector for DummyHomeConnector{
             //Box::new(futures::future::ok(Rc::new(&self.home)))
         }
 }
-
+#[derive(PartialEq, Eq, Clone, Debug)]
 pub struct DummyHome {
     pub signer : Signo,
     pub ping_reply: String,
@@ -152,7 +175,7 @@ impl Home for DummyHome{
     // NOTE this closes all previous sessions of the same profile
     fn login(&self, profile: ProfileId) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >{
-            println!("login");
+            println!("login: {:?}", profile);
             unimplemented!()
         }
 
@@ -181,6 +204,32 @@ impl Home for DummyHome{
 //    fn presence(&self, rel: Relation, app: ApplicationId) ->
 //        Box< Future<Item=Option<AppMessageFrame>, Error=ErrorToBeSpecified> >;
 }
+
+pub fn dummy_half_proof(rtype: &str)->RelationHalfProof{
+    RelationHalfProof{
+        relation_type:  String::from(rtype),
+        my_id:          ProfileId("my_id".as_bytes().to_owned()),
+        my_sign:        Signature("my_sign".as_bytes().to_owned()),
+        peer_id:        ProfileId("peer_id".as_bytes().to_owned()),
+    }
+}
+pub fn dummy_proof(rtype: &str)->RelationProof{
+    RelationProof{
+        half_proof: dummy_half_proof(rtype),
+        peer_sign:  Signature("peer_sign".as_bytes().to_owned()),
+    }
+
+}
+pub fn dummy_relation(rtype: &str)->Relation{
+    Relation::new(
+        &make_own_persona_profile(
+            "relation_profile",
+            &PublicKey("dummy_relation_profile_id".as_bytes().to_owned()) 
+        ),
+        &dummy_proof(rtype)
+    )
+}
+
 #[cfg(test)]
 mod test {
     use super::*;
