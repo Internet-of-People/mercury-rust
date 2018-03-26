@@ -76,9 +76,13 @@ impl AppContext{
 
 fn main(){
     //print!("{}[2J", 27 as char);
+    let mut reactor = reactor::Core::new().unwrap();
+    let reactorhandle = reactor.handle();
     let homeaddr = "/ip4/127.0.0.1/udp/9876";
     let homemultiaddr = homeaddr.to_multiaddr().unwrap();
+    
     let homeprof = mock::make_home_profile(&homeaddr,"home","");
+    
     let signo = Rc::new(mock::Signo::new("Daswitch"));
     let homesigno = Rc::new(mock::Signo::new("makusguba"));
     let prof_rep = mock::DummyHome::new("pong");
@@ -94,8 +98,12 @@ fn main(){
         profilegateway : Box::new(
             ProfileGatewayImpl{
                 signer:         signo,
-                profile_repo:   Rc::new(prof_rep),
-                home_connector: Rc::new(DummyHomeConnector{home: home_rep}),
+                profile_repo:   Rc::new(HomeClientCapnProto::new(
+                    TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap() , &reactor.handle() ),
+                    Box::new(HomeContext::new(signo, &homeprof)),
+                    reactor.handle()
+                )),
+                home_connector: Rc::new(SimpleTcpHomeConnector::new(reactorhandle)),
     })};
     loop{
         let mut buffer = String::new();
@@ -113,14 +121,17 @@ fn main(){
                 appcontext.profilegateway.login();
             }
             "call\n" =>{
-                dummyhome.call(mock::dummy_relation("work"), ApplicationId( String::from("SampleApp") ), AppMessageFrame("whatever".as_bytes().to_owned() ) );
-                unimplemented!();
+                appcontext.profilegateway.call(
+                    mock::dummy_relation("work"), 
+                    ApplicationId( String::from("SampleApp") ), 
+                    AppMessageFrame("whatever".as_bytes().to_owned() ) 
+                );
             }
             "register\n" =>{
-                dummyhome.register(mock::create_ownprofile("Deusz"),None);
+                appcontext.profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None);
             }
             "pair\n" =>{
-                
+                appcontext.profilegateway.pair_request("relation_dummy_type", "url");
             }
             _ =>{println!("nope");},
         }

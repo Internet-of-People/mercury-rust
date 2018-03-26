@@ -142,7 +142,7 @@ impl ProfileRepo for DummyHome{
 
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
-            println!("load");
+            println!("load: {:?}" , id );
             unimplemented!()
         }
 
