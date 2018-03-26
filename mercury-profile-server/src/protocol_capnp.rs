@@ -1,6 +1,6 @@
+use std::rc::Rc;
+
 use super::*;
-//use capnp::capability::Promise;
-//use futures::Future;
 
 
 
@@ -14,16 +14,23 @@ impl<T,E> PromiseUtil<T,E> for Promise<T,E> {}
 
 
 
-pub struct HomeImpl {}
-
-impl HomeImpl
+pub struct HomeDispatcher
 {
-    pub fn new() -> Self { Self{} }
+    home: Rc<Home>,
 }
 
-impl mercury_capnp::profile_repo::Server for HomeImpl {}
+impl HomeDispatcher
+{
+    pub fn new(home: Rc<Home>) -> Self
+        { Self{ home: home } }
+}
 
-impl mercury_capnp::home::Server for HomeImpl
+impl mercury_capnp::profile_repo::Server for HomeDispatcher
+{
+
+}
+
+impl mercury_capnp::home::Server for HomeDispatcher
 {
     fn login(&mut self,
              params: mercury_capnp::home::LoginParams,
@@ -35,7 +42,7 @@ impl mercury_capnp::home::Server for HomeImpl
             .and_then( |profile_id|
             {
                 println!("login called with '{:?}', sending session", profile_id);
-                let session = mercury_capnp::home_session::ToClient::new( HomeSessionImpl::new() )
+                let session = mercury_capnp::home_session::ToClient::new( HomeSessionDispatcher::new() )
                     .from_server::<::capnp_rpc::Server>();
                 results.get().set_session(session);
                 Ok( () )
@@ -46,14 +53,14 @@ impl mercury_capnp::home::Server for HomeImpl
 
 
 
-pub struct HomeSessionImpl {}
+pub struct HomeSessionDispatcher {}
 
-impl HomeSessionImpl
+impl HomeSessionDispatcher
 {
     pub fn new() -> Self { Self{} }
 }
 
-impl mercury_capnp::home_session::Server for HomeSessionImpl
+impl mercury_capnp::home_session::Server for HomeSessionDispatcher
 {
     fn ping(&mut self, params: mercury_capnp::home_session::PingParams<>,
             mut results: mercury_capnp::home_session::PingResults<>) ->

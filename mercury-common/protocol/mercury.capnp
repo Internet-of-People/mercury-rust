@@ -12,11 +12,11 @@ using AppMessageFrame = Data;
 
 struct Profile
 {
-    data      @0 : Data; # output of multicodec encode()
+    # data      @0 : Data; # output of multicodec encode()
 
     # NOTE these are mandatory in the API, but will be serialized into the data instead
-    # id        @1 : ProfileId;
-    # publicKey @2 : PublicKey;
+    id        @0 : ProfileId;
+    publicKey @1 : PublicKey;
 }
 
 

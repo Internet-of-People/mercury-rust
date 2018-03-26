@@ -7,6 +7,8 @@ extern crate multihash;
 extern crate tokio_core;
 extern crate tokio_io;
 
+use std::rc::Rc;
+
 use capnp::capability::Promise;
 use futures::{Future, Stream};
 use tokio_core::reactor;
@@ -17,7 +19,8 @@ use mercury_common::*;
 
 
 
-mod protocol_capnp;
+pub mod protocol_capnp;
+pub mod server;
 
 
 
@@ -30,7 +33,8 @@ fn main()
     let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
     let socket = TcpListener::bind(&addr, &handle).expect("Failed to bind socket");
 
-    let home_impl = protocol_capnp::HomeImpl::new();
+    let home = Rc::new( server::HomeServer::new() );
+    let home_impl = protocol_capnp::HomeDispatcher::new(home);
     let home = mercury_capnp::home::ToClient::new(home_impl)
         .from_server::<::capnp_rpc::Server>();
 
