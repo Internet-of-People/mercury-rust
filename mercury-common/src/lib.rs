@@ -18,9 +18,8 @@ use tokio_io::{AsyncRead, AsyncWrite};
 
 
 
-pub mod mercury_capnp {
-    include!( concat!( env!("OUT_DIR"), "/protocol/mercury_capnp.rs" ) );
-}
+pub mod mercury_capnp;
+
 
 
 // TODO

@@ -340,7 +340,6 @@ mod tests
     #[test]
     fn temporary_test_capnproto()
     {
-        use std::net::SocketAddr;
         use std::net::ToSocketAddrs;
         use super::net::*;
 
