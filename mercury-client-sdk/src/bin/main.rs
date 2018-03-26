@@ -1,3 +1,4 @@
+#![allow(unused)]
 extern crate mercury_sdk;
 extern crate mercury_common;
 
@@ -8,11 +9,13 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate futures;
 
+
 use std::rc::Rc;
 
 use mercury_common::*;
 use mercury_sdk::*;
-use mercury_sdk::net::*;
+use ::net::*;
+use ::mock::*;
 
 use multihash::{encode, Hash};
 use multiaddr::{Multiaddr, ToMultiaddr};
@@ -21,4 +24,38 @@ use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 use tokio_io::{AsyncRead, AsyncWrite};
 
-fn main(){}
+struct ConnectApp{
+    home    : DummyHome,
+}
+
+impl ConnectApp{
+    
+}
+
+struct AppContext{
+    profilegateway : Box<ProfileGateway>,
+}
+
+impl AppContext{
+    
+}
+
+fn main(){
+    //print!("{}[2J", 27 as char);
+    let signo = mock::Signo::new("Daswitch");
+    let prof_rep = mock::DummyHome::new("pong");
+    let home_rep = mock::DummyHome::new("home");
+    let connect = ConnectApp{ home : mock::DummyHome::new("apples") };
+    let appcontext = AppContext{
+        profilegateway : Box::new(
+            ProfileGatewayImpl{
+                signer:         Rc::new(signo),
+                profile_repo:   Rc::new(prof_rep),
+                home_connector: Rc::new(DummyHomeConnector{home: home_rep}),
+    })};
+    loop{
+        
+    
+        
+    }
+}

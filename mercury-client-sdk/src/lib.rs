@@ -1,3 +1,4 @@
+#![allow(unused)]
 extern crate capnp;
 extern crate capnp_rpc;
 extern crate futures;
@@ -104,9 +105,10 @@ pub trait ProfileGateway
 #[derive(Clone)]
 pub struct ProfileGatewayImpl
 {
-    signer:         Rc<Signer>,
-    profile_repo:   Rc<ProfileRepo>,
-    home_connector: Rc<HomeConnector>,
+    pub signer:         Rc<Signer>,
+    //local profile repository?
+    pub profile_repo:   Rc<ProfileRepo>,
+    pub home_connector: Rc<HomeConnector>,
 }
 
 
