@@ -33,7 +33,12 @@ impl ProfileRepo for HomeServer
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        // Box::new( future::err(ErrorToBeSpecified::TODO) )
+        let profile = Profile::new(
+            &ProfileId( "Dummy ProfileId for testing load()".as_bytes().to_owned() ),
+            &PublicKey( "Dummy PublicKey for testing load()".as_bytes().to_owned() ),
+            &[] );
+        Box::new( future::ok(profile) )
     }
 
     // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution

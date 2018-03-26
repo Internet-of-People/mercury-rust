@@ -1,4 +1,5 @@
 extern crate capnp;
+#[macro_use]
 extern crate capnp_rpc;
 extern crate futures;
 extern crate mercury_common;
@@ -365,9 +366,10 @@ mod tests
             .and_then( move |tcp_stream|
             {
                 let home = HomeClientCapnProto::new(tcp_stream, home_ctx, handle);
-                home.login(prof_id)
-            } )
-            .and_then( |session| session.ping("hahoooo") );
+                home.load(&prof_id)
+                //home.login(prof_id)
+            } );
+            //.and_then( |session| session.ping("hahoooo") );
 
         let pong = setup.reactor.run(test_fut);
         println!("Response: {:?}", pong);

@@ -1,6 +1,18 @@
 use capnp;
+use capnp::capability::Promise;
+use futures;
 
 include!( concat!( env!("OUT_DIR"), "/protocol/mercury_capnp.rs" ) );
+
+
+
+pub trait PromiseUtil<T,E>
+{
+    fn result(result: Result<T,E>) -> Promise<T,E> where T: 'static, E: 'static
+        { Promise::from_future( futures::future::result(result) ) }
+}
+
+impl<T,E> PromiseUtil<T,E> for Promise<T,E> {}
 
 
 

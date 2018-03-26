@@ -1,5 +1,6 @@
 use std::net::{SocketAddr, IpAddr};
 
+use capnp::capability::Promise;
 use futures::{Future};
 use futures::future;
 use multiaddr::{Multiaddr, AddrComponent};
@@ -8,6 +9,7 @@ use tokio_core::net::TcpStream;
 use tokio_io::AsyncRead;
 
 use mercury_common::mercury_capnp;
+use mercury_common::mercury_capnp::*;
 
 use super::*;
 
@@ -16,6 +18,7 @@ use super::*;
 pub struct HomeClientCapnProto
 {
     context:Box<PeerContext>,
+    repo:   mercury_capnp::profile_repo::Client<>,
     home:   mercury_capnp::home::Client<>,
 }
 
@@ -36,10 +39,12 @@ impl HomeClientCapnProto
 
         let home: mercury_capnp::home::Client =
             rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
+        let repo: mercury_capnp::profile_repo::Client =
+            rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
 
         handle.spawn( rpc_system.map_err( |e| println!("Capnp RPC failed: {}", e) ) );
 
-        Self{ context: context, home: home } // , rpc_system: rpc_system
+        Self{ context: context, home: home, repo: repo } // , rpc_system: rpc_system
     }
 }
 
@@ -57,7 +62,19 @@ impl ProfileRepo for HomeClientCapnProto
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        let mut request = self.repo.load_request();
+        request.get().set_profile_id( id.0.as_slice() );
+
+        let resp_fut = request.send().promise
+            .and_then( |resp|
+            {
+                let profile_capnp = pry!( pry!( resp.get() ).get_profile() );
+                let profile = Profile::try_from(profile_capnp);
+                Promise::result(profile)
+            } )
+            .map_err( |e| { println!("checkin() failed {}", e); ErrorToBeSpecified::TODO } );
+
+        Box::new(resp_fut)
     }
 
     // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution

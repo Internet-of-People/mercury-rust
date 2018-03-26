@@ -1,17 +1,8 @@
 use std::rc::Rc;
 
-use mercury_common::mercury_capnp::FillFrom;
+use mercury_common::mercury_capnp::*;
+
 use super::*;
-
-
-
-trait PromiseUtil<T,E>
-{
-    fn result(result: Result<T,E>) -> Promise<T,E> where T: 'static, E: 'static
-        { Promise::from_future( futures::future::result(result) ) }
-}
-
-impl<T,E> PromiseUtil<T,E> for Promise<T,E> {}
 
 
 
