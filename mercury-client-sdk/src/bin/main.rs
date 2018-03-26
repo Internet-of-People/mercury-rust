@@ -11,6 +11,7 @@ extern crate futures;
 
 
 use std::rc::Rc;
+use std::io::{BufRead, Read, Write, stdin};
 
 use mercury_common::*;
 use mercury_sdk::*;
@@ -33,7 +34,7 @@ impl ConnectApp{
 }
 
 struct AppContext{
-    profilegateway : Box<ProfileGateway>,
+    profilegateway : Box<ProfileGatewayImpl>,
 }
 
 impl AppContext{
@@ -45,6 +46,7 @@ fn main(){
     let signo = mock::Signo::new("Daswitch");
     let prof_rep = mock::DummyHome::new("pong");
     let home_rep = mock::DummyHome::new("home");
+    let home = mock::DummyHome::new("home");
     let connect = ConnectApp{ home : mock::DummyHome::new("apples") };
     let appcontext = AppContext{
         profilegateway : Box::new(
@@ -54,8 +56,26 @@ fn main(){
                 home_connector: Rc::new(DummyHomeConnector{home: home_rep}),
     })};
     loop{
-        
-    
-        
+        let mut buffer = String::new();
+        //let mut buffer = vec!();
+        let stdin = stdin();
+        let mut handle = stdin.lock();
+        handle.read_line(&mut buffer);
+        match buffer.as_ref(){
+            "connect\n" =>{
+                //appcontext.profilegateway.home_connector.dconnect();
+                println!("connect" );
+            },
+            "login\n" =>{
+                appcontext.profilegateway.login();
+            }
+            "call\n" =>{
+                home.call();
+            }
+            "register\n" =>{
+                home.register(mock::create_ownprofile("Deusz"),None);
+            }
+            _ =>{println!("nope");},
+        };
     }
 }

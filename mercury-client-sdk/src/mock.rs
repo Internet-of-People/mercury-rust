@@ -15,6 +15,15 @@ fn generate_hash_from_vec( base : Vec<u8>) -> Vec<u8> {
     encode(Hash::SHA2256, &base).unwrap()
 }
 
+pub fn create_ownprofile(name : &str)->OwnProfile{
+    let p = Profile{
+        id:         ProfileId(name.as_bytes().to_owned()),
+        pub_key:    PublicKey("publickey".as_bytes().to_owned()),
+        facets:     vec!(),
+    };
+    OwnProfile::new(&p, &[])
+}
+
 pub struct Signo{
     prof_id : ProfileId,
     pubkey : PublicKey,
@@ -49,9 +58,15 @@ impl Signer for Signo{
 pub struct DummyHomeConnector{
     pub home : DummyHome,
 }
+impl DummyHomeConnector{
+    fn dconnect(&self){
+        unimplemented!();
+    }
+}
 impl HomeConnector for DummyHomeConnector{
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >{
+            println!("connect");
             unimplemented!();
             //Box::new(futures::future::ok(Rc::new(&self.home)))
         }
@@ -77,6 +92,7 @@ impl Future for DummyHome{
     fn poll(
         &mut self
     ) -> Result<Async<Self::Item>, Self::Error>{
+        println!("poll");
         unimplemented!();
     }
 }
@@ -85,9 +101,11 @@ impl PeerContext for DummyHome {
         &self.signer
     }
     fn peer(&self) -> Option<Profile>{
+        println!("peer");
         None
     }
     fn peer_pubkey(&self) -> Option<PublicKey>{
+        println!("peer_pubkey");
         None
     }
 }
@@ -95,17 +113,20 @@ impl PeerContext for DummyHome {
 impl ProfileRepo for DummyHome{
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >{
+            println!("list");
             unimplemented!()
         }
 
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
+            println!("load");
             unimplemented!()
         }
 
     // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
     fn resolve(&self, url: &str) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
+            println!("resolve");
             unimplemented!()
         }
 
@@ -116,6 +137,7 @@ impl Home for DummyHome{
     // NOTE because we support multihash, the id cannot be guessed from the public key
     fn claim(&self, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >{
+            println!("claim");
             unimplemented!()
         }
 
@@ -123,12 +145,14 @@ impl Home for DummyHome{
     //      with the pairing proof, especially the error case
     fn register(&self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >{
+            println!("register: {:?}", own_prof.profile.id);
             unimplemented!()
         }
 
     // NOTE this closes all previous sessions of the same profile
     fn login(&self, profile: ProfileId) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >{
+            println!("login");
             unimplemented!()
         }
 
@@ -137,16 +161,19 @@ impl Home for DummyHome{
     // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
     fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >{
+            println!("pair_request");
             unimplemented!()
         }
 
     fn pair_response(&self, rel: Relation) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >{
+            println!("pair_response");
             unimplemented!()
         }
 
     fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >{
+            println!("call");
             unimplemented!()
         }
 
