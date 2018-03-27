@@ -77,7 +77,7 @@ impl AppContext{
 fn main(){
     //print!("{}[2J", 27 as char);
     let mut reactor = reactor::Core::new().unwrap();
-    let reactorhandle = reactor.handle();
+    let mut reactorhandle = reactor.handle();
     let homeaddr = "/ip4/127.0.0.1/udp/9876";
     let homemultiaddr = homeaddr.to_multiaddr().unwrap();
     
@@ -93,18 +93,24 @@ fn main(){
     let connect = ConnectApp{ home : mock::DummyHome::new("apples") };
     
     let profile = make_own_persona_profile("Deusz", signo.pub_key());
-    
-    let appcontext = AppContext{
-        profilegateway : Box::new(
-            ProfileGatewayImpl{
-                signer:         signo,
-                profile_repo:   Rc::new(HomeClientCapnProto::new(
-                    TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap() , &reactor.handle() ),
-                    Box::new(HomeContext::new(signo, &homeprof)),
-                    reactor.handle()
-                )),
-                home_connector: Rc::new(SimpleTcpHomeConnector::new(reactorhandle)),
-    })};
+    let capclient = TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap() , &reactorhandle.clone() )
+    .map(|stream|{
+        let cap = Rc::new(HomeClientCapnProto::new(
+            stream,
+            Box::new(HomeContext::new(signo.clone(), &homeprof)),
+            reactor.handle()
+        ));
+        AppContext{
+            profilegateway : Box::new(
+                ProfileGatewayImpl{
+                    signer:         signo,
+                    profile_repo:   cap,
+                    home_connector: Rc::new(SimpleTcpHomeConnector::new(reactorhandle)),
+        })}
+    });
+    let mut reactor2 = reactor::Core::new().unwrap();
+    let appcontext = reactor2.run(capclient).unwrap();
+    //let appcontext = ;
     loop{
         let mut buffer = String::new();
         //let mut buffer = vec!();
@@ -120,6 +126,7 @@ fn main(){
             "login\n" =>{
                 appcontext.profilegateway.login();
             }
+            //call dies miserably 
             "call\n" =>{
                 appcontext.profilegateway.call(
                     mock::dummy_relation("work"), 
