@@ -86,3 +86,44 @@ impl<'a> FillFrom<::OwnProfile> for own_profile::Builder<'a>
         self.init_profile().fill_from(&src.profile);
     }
 }
+
+
+impl<'a> TryFrom<home_invitation::Reader<'a>> for ::HomeInvitation
+{
+    type Error = capnp::Error;
+
+    fn try_from(src: home_invitation::Reader) -> Result<Self, Self::Error>
+    {
+        // TODO
+        Ok( ::HomeInvitation::new( &::ProfileId("TODO".as_bytes().to_owned()),
+                                   &"TODO", &::Signature("TODO".as_bytes().to_owned() ) ) )
+    }
+}
+
+impl<'a> FillFrom<::HomeInvitation> for home_invitation::Builder<'a>
+{
+    fn fill_from(mut self, src: &::HomeInvitation)
+    {
+        // TODO
+    }
+}
+
+
+impl<'a> TryFrom<relation_half_proof::Reader<'a>> for ::RelationHalfProof
+{
+    type Error = capnp::Error;
+
+    fn try_from(src: relation_half_proof::Reader) -> Result<Self, Self::Error>
+    {
+        // TODO
+        Ok( ::RelationHalfProof::new() )
+    }
+}
+
+impl<'a> FillFrom<::RelationHalfProof> for relation_half_proof::Builder<'a>
+{
+    fn fill_from(mut self, src: &::RelationHalfProof)
+    {
+        // TODO
+    }
+}

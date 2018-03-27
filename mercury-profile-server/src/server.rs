@@ -81,13 +81,13 @@ impl Home for HomeServer
     }
 
     // NOTE acceptor must have this server as its home
-    fn pair_response(&self, rel: Relation) ->
+    fn pair_response(&self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
 
-    fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame) ->
+    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )

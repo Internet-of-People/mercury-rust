@@ -284,7 +284,7 @@ impl ProfileGateway for ProfileGatewayImpl
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let pair_fut = self.any_home_of(&rel.profile)
-            .and_then( |home| home.pair_response(rel) );
+            .and_then( |home| home.pair_response(rel.proof) );
         Box::new(pair_fut)
     }
 
@@ -294,7 +294,7 @@ impl ProfileGateway for ProfileGatewayImpl
     {
         let call_fut = self.any_home_of(&rel.profile)
             .and_then( move |home|
-                home.call(rel, app, init_payload) ) ;
+                home.call(rel.proof, app, init_payload) ) ;
         Box::new(call_fut)
     }
 }

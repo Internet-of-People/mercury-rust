@@ -12,11 +12,13 @@ pub struct HomeDispatcherCapnProto
     home: Rc<Home>,
 }
 
+
 impl HomeDispatcherCapnProto
 {
     pub fn new(home: Rc<Home>) -> Self
         { Self{ home: home } }
 }
+
 
 impl mercury_capnp::profile_repo::Server for HomeDispatcherCapnProto
 {
@@ -55,6 +57,8 @@ impl mercury_capnp::profile_repo::Server for HomeDispatcherCapnProto
     }
 }
 
+
+
 impl mercury_capnp::home::Server for HomeDispatcherCapnProto
 {
     fn claim(&mut self, params: mercury_capnp::home::ClaimParams,
@@ -70,19 +74,25 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
         Promise::from_future(claim_fut)
     }
 
+
     fn register(&mut self, params: mercury_capnp::home::RegisterParams,
                 mut results: mercury_capnp::home::RegisterResults,)
         -> Promise<(), ::capnp::Error>
     {
         let own_prof_capnp = pry!( pry!( params.get() ).get_own_profile() );
         let own_prof = pry!( OwnProfile::try_from(own_prof_capnp) );
-        // TODO properly pass Option<invitation> instead of None
-        let reg_fut = self.home.register(own_prof, None)
+        let inv_capnp_res = pry!( params.get() ).get_invite();
+        let invite = match inv_capnp_res {
+            Ok(inv) => HomeInvitation::try_from(inv).ok(),
+            Err(_e) => None,
+        };
+        let reg_fut = self.home.register(own_prof, invite)
             .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling
             .map( move |own_profile|
                 results.get().init_own_profile().fill_from(&own_profile) );
         Promise::from_future(reg_fut)
     }
+
 
     fn login(&mut self, params: mercury_capnp::home::LoginParams,
              mut results: mercury_capnp::home::LoginResults,)
@@ -93,6 +103,24 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
         let session = mercury_capnp::home_session::ToClient::new( HomeSessionDispatcher::new() )
             .from_server::<::capnp_rpc::Server>();
         results.get().set_session(session);
+        Promise::ok( () )
+    }
+
+
+    fn pair_request(&mut self, params: mercury_capnp::home::PairRequestParams,
+                    mut results: mercury_capnp::home::PairRequestResults,)
+        -> Promise<(), ::capnp::Error>
+    {
+        // TODO
+        Promise::ok( () )
+    }
+
+
+    fn pair_response(&mut self, params: mercury_capnp::home::PairResponseParams,
+                     mut results: mercury_capnp::home::PairResponseResults,)
+        -> Promise<(), ::capnp::Error>
+    {
+        // TODO
         Promise::ok( () )
     }
 }

@@ -133,8 +133,9 @@ impl Home for HomeClientCapnProto
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         let mut request = self.home.register_request();
-        // TODO properly pass home invitation if present
         request.get().init_own_profile().fill_from(&own_profile);
+        if let Some(inv) = invite
+            { request.get().init_invite().fill_from(&inv); }
 
         let resp_fut = request.send().promise
             .and_then( |resp|
@@ -174,13 +175,13 @@ impl Home for HomeClientCapnProto
     }
 
     // NOTE acceptor must have this server as its home
-    fn pair_response(&self, rel: Relation) ->
+    fn pair_response(&self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
 
-    fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame) ->
+    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )

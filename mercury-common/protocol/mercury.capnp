@@ -48,14 +48,6 @@ struct RelationProof
 }
 
 
-struct Relation
-{
-    data    @0 : Data;
-    # profile @0 : Profile,
-    # proof   @1 : RelationProof,
-}
-
-
 struct HomeInvitation
 {
     data @0 : Data;
@@ -83,10 +75,10 @@ interface Home extends (ProfileRepo)
     register @1 (ownProfile: OwnProfile, invite: HomeInvitation) -> (ownProfile: OwnProfile);
     login @2 (profileId : ProfileId) -> (session : HomeSession);
 
-    #pairRequest @3 (halfProof: RelationHalfProof);  # NOTE called on acceptor's home
-    #pairResponse @4 (relation: Relation);           # NOTE called on requestor's home
+    pairRequest @3 (halfProof: RelationHalfProof);  # NOTE called on acceptor's home
+    pairResponse @4 (relation: RelationProof);      # NOTE called on requestor's home
 
-    #call @5 (relation: Relation, app: ApplicationId, initPayload: AppMessageFrame,
+    #call @5 (relation: RelationProof, app: ApplicationId, initPayload: AppMessageFrame,
     #     toCaller: AppMessageListener) -> (toCallee: CallMessages);
 }
 

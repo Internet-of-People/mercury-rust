@@ -63,6 +63,7 @@ pub trait Signer
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PersonaFacet
 {
+    // TODO should we use only a RelationProof here instead of full Relation info?
     pub homes:  Vec<Relation>, // NOTE with proof relation_type "home"
     pub data:   Vec<u8>,
 }
@@ -168,6 +169,14 @@ pub struct RelationHalfProof
     // TODO is a nonce needed?
 }
 
+impl RelationHalfProof
+{
+    // TODO add params and properly initialize
+    pub fn new() -> Self
+        { Self{ relation_type: String::new(), my_id: ProfileId(Vec::new()),
+                my_sign: Signature(Vec::new()), peer_id: ProfileId(Vec::new()) } }
+}
+
 
 // TODO maybe halfproof should be inlined (with macro?)
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -178,7 +187,15 @@ pub struct RelationProof
     // TODO is a nonce needed?
 }
 
+impl RelationProof
+{
+    // TODO add params and properly initialize
+    pub fn new() -> Self
+        { Self{ half_proof: RelationHalfProof::new(), peer_sign: Signature(Vec::new()) } }
+}
 
+
+// TODO consider moving this to the client API, might be not needed here at all
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Relation
 {
@@ -203,6 +220,11 @@ pub struct HomeInvitation
     // TODO is a nonce needed?
 }
 
+impl HomeInvitation
+{
+    pub fn new(home_id: &ProfileId, voucher: &str, signature: &Signature) -> Self
+        { Self{ home_id: home_id.to_owned(), voucher: voucher.to_owned(), signature: signature.to_owned() } }
+}
 
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -252,10 +274,10 @@ pub trait Home: ProfileRepo
     fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    fn pair_response(&self, rel: Relation) ->
+    fn pair_response(&self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame) ->
+    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
 
 // TODO consider how to do this in a later milestone
