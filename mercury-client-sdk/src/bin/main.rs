@@ -5,6 +5,7 @@ extern crate mercury_common;
 extern crate multihash;
 extern crate multiaddr;
 
+extern crate tokio_stdin_stdout;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate futures;
@@ -23,7 +24,7 @@ use multiaddr::{Multiaddr, ToMultiaddr};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 use tokio_io::{AsyncRead, AsyncWrite};
-use futures::Future;
+use futures::{Future,Stream};
 
 struct ConnectApp{
     home    : DummyHome,
@@ -58,70 +59,75 @@ fn main(){
     let mut profile = make_own_persona_profile("Deusz", signo.pub_key());
     
     println!("Setting up connection");
-    let capclient = TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap() , &reactorhandle.clone() )
+
+    let bizbasz = TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap() , &reactorhandle.clone() )
     .map(|stream|{
         let cap = Rc::new(HomeClientCapnProto::new(
             stream,
             Box::new(HomeContext::new(signo.clone(), &homeprof)),
-            reactor.handle()
+            reactorhandle.clone()
         ));
         AppContext{
             profilegateway : Box::new(
                 ProfileGatewayImpl{
                     signer:         signo,
                     profile_repo:   cap,
-                    home_connector: Rc::new(SimpleTcpHomeConnector::new(reactorhandle)),
+                    home_connector: Rc::new(SimpleTcpHomeConnector::new(reactorhandle.clone())),
         })}
     });
-    let mut reactor2 = reactor::Core::new().unwrap();
-    let appcontext = reactor2.run(capclient).unwrap();
+    let appcontext = reactor.run(bizbasz).unwrap();
     
     println!("Please register then log in");
     println!("Registering");
-    let ownprofile = reactor2.run(appcontext.profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None)).unwrap();
+    let ownprofile = reactor.run(appcontext.profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None)).unwrap();
+    println!("{:?}",ownprofile );
+    
     println!("Logging in");
-    let login = appcontext.profilegateway.login();
     println!("Getting session");
-    let session = reactor2.run(login).unwrap();
+    let session = reactor.run(appcontext.profilegateway.login()).unwrap();
+    
     println!("All set up");
-
+    
     println!("Menu\n1. Connect\n2. Call(crashes)\n3. Pair\n4. Ping\n5. Show profile\n0. Exit");
     let mut buffer = String::new();
-    let stdin = stdin();
-
-    
-    loop{
-        let mut handle = stdin.lock();
-        handle.read_line(&mut buffer);        
-        match buffer.as_ref(){
-            "1\n" =>{
+    let stdin = tokio_stdin_stdout::stdin(1);
+    let bufreader = std::io::BufReader::new(stdin);
+    let instream = tokio_io::io::lines(bufreader);
+    let stdin_closed = instream.for_each(|line|{     
+        match line.as_ref(){
+            "1" =>{
                 let signer = appcontext.profilegateway.signer.to_owned();
                 appcontext.profilegateway.home_connector.connect(&homeprof, signer);
                 println!("connect");
+    
             },
             //call dies miserably 
-            "2\n" =>{
+            "2" =>{
                 appcontext.profilegateway.call(
                     mock::dummy_relation("work"), 
                     ApplicationId( String::from("SampleApp") ), 
                     AppMessageFrame("whatever".as_bytes().to_owned() ) 
                 );
+    
             }
-            "3\n" =>{
+            "3" =>{
                 appcontext.profilegateway.pair_request("relation_dummy_type", "url");
+    
             }
-            "4\n" =>{
+            "4" =>{
                 session.ping("dummy_ping");
+    
             }
-            "5\n" =>{
+            "5" =>{
                 println!("{:?}", ownprofile);
-            }
-            "0\n" =>{
-                break;
+    
             }
             _ =>{
                 println!("nope");
+    
             },
         };
-    }
+        futures::future::ok::<(),std::io::Error>(())
+    });
+    reactor.run(stdin_closed);
 }
