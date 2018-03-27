@@ -50,14 +50,26 @@ impl HomeClientCapnProto
 
 
 
+// TODO is this needed here or elsewhere?
+//impl PeerContext for HomeClientCapnProto
+//{
+//    fn my_signer(&self)     -> &Signer          { self.context.my_signer() }
+//    fn peer_pubkey(&self)   -> Option<PublicKey>{ self.context.peer_pubkey() }
+//    fn peer(&self)          -> Option<Profile>  { self.context.peer() }
+//}
+
+
+
 impl ProfileRepo for HomeClientCapnProto
 {
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >
     {
+        // TODO properly implement this
         let (_send, recv) = futures::sync::mpsc::channel(0);
         Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
+
 
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
@@ -81,52 +93,72 @@ impl ProfileRepo for HomeClientCapnProto
     fn resolve(&self, url: &str) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
-    }
-}
-
-
-impl PeerContext for HomeClientCapnProto
-{
-    fn my_signer(&self)     -> &Signer          { self.context.my_signer() }
-    fn peer_pubkey(&self)   -> Option<PublicKey>{ self.context.peer_pubkey() }
-    fn peer(&self)          -> Option<Profile>  { self.context.peer() }
-}
-
-
-impl Home for HomeClientCapnProto
-{
-    fn claim(&self, profile: ProfileId) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
-    {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
-    }
-
-    fn register(&self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
-    {
-        Box::new( futures::future::err( (own_prof,ErrorToBeSpecified::TODO) ) )
-    }
-
-
-    fn login(&self, profile: ProfileId) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
-    {
-//        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
-
-        println!("login() called");
-        let mut request = self.home.login_request();
-        request.get().set_profile_id( "beeeela".as_bytes() ); // TODO
-        println!("login request created");
+        let mut request = self.repo.resolve_request();
+        request.get().set_profile_url(url);
 
         let resp_fut = request.send().promise
             .and_then( |resp|
             {
-                println!("login() message sent");
+                let profile_capnp = pry!( pry!( resp.get() ).get_profile() );
+                let profile = Profile::try_from(profile_capnp);
+                Promise::result(profile)
+            } )
+            .map_err( |e| { println!("checkin() failed {}", e); ErrorToBeSpecified::TODO } );
+
+        Box::new(resp_fut)
+    }
+}
+
+
+
+impl Home for HomeClientCapnProto
+{
+    fn claim(&self, profile_id: ProfileId) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+    {
+        let mut request = self.home.claim_request();
+        request.get().set_profile_id( (&profile_id).into() );
+
+        let resp_fut = request.send().promise
+            .and_then( |resp|
+                resp.get()
+                    .and_then( |res| res.get_own_profile() )
+                    .and_then( |own_prof_capnp| OwnProfile::try_from(own_prof_capnp) ) )
+            .map_err( |e| { println!("login() failed {}", e); ErrorToBeSpecified::TODO } );;
+
+        Box::new(resp_fut)
+    }
+
+    fn register(&self, own_profile: OwnProfile, invite: Option<HomeInvitation>) ->
+        Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
+    {
+        let mut request = self.home.register_request();
+        // TODO properly pass home invitation if present
+        request.get().init_own_profile().fill_from(&own_profile);
+
+        let resp_fut = request.send().promise
+            .and_then( |resp|
+                resp.get()
+                    .and_then( |res| res.get_own_profile() )
+                    .and_then( |own_prof_capnp| OwnProfile::try_from(own_prof_capnp) ) )
+            .map_err( move |e| (own_profile, ErrorToBeSpecified::TODO) );;
+
+        Box::new(resp_fut)
+    }
+
+
+    fn login(&self, profile_id: ProfileId) ->
+        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
+    {
+        let mut request = self.home.login_request();
+        request.get().set_profile_id( (&profile_id).into() );
+
+        let resp_fut = request.send().promise
+            .and_then( |resp|
+            {
                 resp.get()
                     .and_then( |res| res.get_session() )
-                    .map( |session_client| Box::new( HomeSessionClientCapnProto::new(session_client) ) )
-                    .map( |session| session as Box<HomeSession>)
+                    .map( |session_client| Box::new( HomeSessionClientCapnProto::new(session_client) ) as Box<HomeSession> )
             } )
             .map_err( |e| { println!("login() failed {}", e); ErrorToBeSpecified::TODO } );;
 

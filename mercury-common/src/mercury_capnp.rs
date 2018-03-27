@@ -25,7 +25,7 @@ pub trait TryFrom<T> : Sized {
 
 pub trait FillFrom<T>
 {
-    fn fill_from(&mut self, source: &T);
+    fn fill_from(self, source: &T);
 }
 
 
@@ -35,13 +35,19 @@ impl<'a> From<&'a [u8]> for ::ProfileId
         { ::ProfileId( src.to_owned() ) }
 }
 
+impl<'a> From<&'a ::ProfileId> for &'a [u8]
+{
+    fn from(src: &'a ::ProfileId) -> Self
+        { &src.0 }
+}
+
+
 impl<'a> TryFrom<profile::Reader<'a>> for ::Profile
 {
     type Error = capnp::Error;
 
     fn try_from(src: profile::Reader) -> Result<Self, Self::Error>
     {
-        // TODO properly implement this
         let profile_id = ::ProfileId( src.get_id()?.to_owned() );
         let public_key = ::PublicKey( src.get_public_key()?.to_owned() );
         let facets = &[]; // TODO
@@ -51,7 +57,7 @@ impl<'a> TryFrom<profile::Reader<'a>> for ::Profile
 
 impl<'a> FillFrom<::Profile> for profile::Builder<'a>
 {
-    fn fill_from(&mut self, src: &::Profile)
+    fn fill_from(mut self, src: &::Profile)
     {
         self.set_id(&src.id.0);
         self.set_public_key(&src.pub_key.0);
@@ -60,10 +66,23 @@ impl<'a> FillFrom<::Profile> for profile::Builder<'a>
 }
 
 
-//impl<'a> From<::Profile> for profile::Builder<'a>
-//{
-//    fn from(src: ::Profile) -> Self
-//    {
-//
-//    }
-//}
+impl<'a> TryFrom<own_profile::Reader<'a>> for ::OwnProfile
+{
+    type Error = capnp::Error;
+
+    fn try_from(src: own_profile::Reader) -> Result<Self, Self::Error>
+    {
+        let profile = ::Profile::try_from( src.get_profile()? )?;
+        let private_data = src.get_private_data()?;
+        Ok( ::OwnProfile::new(&profile, &private_data) )
+    }
+}
+
+impl<'a> FillFrom<::OwnProfile> for own_profile::Builder<'a>
+{
+    fn fill_from(mut self, src: &::OwnProfile)
+    {
+        self.set_private_data(&src.priv_data);
+        self.init_profile().fill_from(&src.profile);
+    }
+}
