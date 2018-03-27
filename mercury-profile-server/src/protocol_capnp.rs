@@ -86,10 +86,12 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
             Ok(inv) => HomeInvitation::try_from(inv).ok(),
             Err(_e) => None,
         };
+
         let reg_fut = self.home.register(own_prof, invite)
             .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling
             .map( move |own_profile|
                 results.get().init_own_profile().fill_from(&own_profile) );
+
         Promise::from_future(reg_fut)
     }
 
@@ -111,8 +113,13 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
                     mut results: mercury_capnp::home::PairRequestResults,)
         -> Promise<(), ::capnp::Error>
     {
-        // TODO
-        Promise::ok( () )
+        let half_proof_capnp = pry!( pry!( params.get() ).get_half_proof() );
+        let half_proof = pry!( RelationHalfProof::try_from(half_proof_capnp) );
+
+        let pair_req_fut = self.home.pair_request(half_proof)
+            .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+
+        Promise::from_future(pair_req_fut)
     }
 
 
@@ -120,9 +127,22 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
                      mut results: mercury_capnp::home::PairResponseResults,)
         -> Promise<(), ::capnp::Error>
     {
-        // TODO
-        Promise::ok( () )
+        let proof_capnp = pry!( pry!( params.get() ).get_relation_proof() );
+        let proof = pry!( RelationProof::try_from(proof_capnp) );
+
+        let pair_resp_fut = self.home.pair_response(proof)
+            .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+
+        Promise::from_future(pair_resp_fut)
     }
+
+
+//    fn call(&mut self, params: mercury_capnp::home::CallParams,
+//            mut results: mercury_capnp::home::CallResults,)
+//            -> Promise<(), ::capnp::Error>
+//    {
+//        Promise::ok( () )
+//    }
 }
 
 

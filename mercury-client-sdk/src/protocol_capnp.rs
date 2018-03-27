@@ -1,7 +1,5 @@
 use capnp::capability::Promise;
-use futures::{Future};
-use futures::future;
-use multiaddr::{Multiaddr, AddrComponent};
+use futures::Future;
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 use tokio_io::AsyncRead;
@@ -68,7 +66,7 @@ impl HomeClientCapnProto
 impl ProfileRepo for HomeClientCapnProto
 {
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-    Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >
+        Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >
     {
         // TODO properly implement this
         let (_send, recv) = futures::sync::mpsc::channel(0);
@@ -77,38 +75,38 @@ impl ProfileRepo for HomeClientCapnProto
 
 
     fn load(&self, id: &ProfileId) ->
-    Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
         let mut request = self.repo.load_request();
         request.get().set_profile_id( id.0.as_slice() );
 
         let resp_fut = request.send().promise
             .and_then( |resp|
-                {
-                    let profile_capnp = pry!( pry!( resp.get() ).get_profile() );
-                    let profile = Profile::try_from(profile_capnp);
-                    Promise::result(profile)
-                } )
-            .map_err( |e| { println!("checkin() failed {}", e); ErrorToBeSpecified::TODO } );
+            {
+                let profile_capnp = pry!( pry!( resp.get() ).get_profile() );
+                let profile = Profile::try_from(profile_capnp);
+                Promise::result(profile)
+            } )
+            .map_err( |_e| ErrorToBeSpecified::TODO );
 
         Box::new(resp_fut)
     }
 
     // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
     fn resolve(&self, url: &str) ->
-    Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
         let mut request = self.repo.resolve_request();
         request.get().set_profile_url(url);
 
         let resp_fut = request.send().promise
             .and_then( |resp|
-                {
-                    let profile_capnp = pry!( pry!( resp.get() ).get_profile() );
-                    let profile = Profile::try_from(profile_capnp);
-                    Promise::result(profile)
-                } )
-            .map_err( |e| { println!("checkin() failed {}", e); ErrorToBeSpecified::TODO } );
+            {
+                let profile_capnp = pry!( pry!( resp.get() ).get_profile() );
+                let profile = Profile::try_from(profile_capnp);
+                Promise::result(profile)
+            } )
+            .map_err( |_e| ErrorToBeSpecified::TODO );
 
         Box::new(resp_fut)
     }
@@ -119,7 +117,7 @@ impl ProfileRepo for HomeClientCapnProto
 impl Home for HomeClientCapnProto
 {
     fn claim(&self, profile_id: ProfileId) ->
-    Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.claim_request();
         request.get().set_profile_id( (&profile_id).into() );
@@ -129,13 +127,13 @@ impl Home for HomeClientCapnProto
                 resp.get()
                     .and_then( |res| res.get_own_profile() )
                     .and_then( |own_prof_capnp| OwnProfile::try_from(own_prof_capnp) ) )
-            .map_err( |e| { println!("login() failed {}", e); ErrorToBeSpecified::TODO } );;
+            .map_err( |_e| ErrorToBeSpecified::TODO );;
 
         Box::new(resp_fut)
     }
 
     fn register(&self, own_profile: OwnProfile, invite: Option<HomeInvitation>) ->
-    Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
+        Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         let mut request = self.home.register_request();
         request.get().init_own_profile().fill_from(&own_profile);
@@ -147,26 +145,26 @@ impl Home for HomeClientCapnProto
                 resp.get()
                     .and_then( |res| res.get_own_profile() )
                     .and_then( |own_prof_capnp| OwnProfile::try_from(own_prof_capnp) ) )
-            .map_err( move |e| (own_profile, ErrorToBeSpecified::TODO) );;
+            .map_err( move |_e| (own_profile, ErrorToBeSpecified::TODO) );;
 
         Box::new(resp_fut)
     }
 
 
     fn login(&self, profile_id: ProfileId) ->
-    Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.login_request();
         request.get().set_profile_id( (&profile_id).into() );
 
         let resp_fut = request.send().promise
             .and_then( |resp|
-                {
-                    resp.get()
-                        .and_then( |res| res.get_session() )
-                        .map( |session_client| Box::new( HomeSessionClientCapnProto::new(session_client) ) as Box<HomeSession> )
-                } )
-            .map_err( |e| { println!("login() failed {}", e); ErrorToBeSpecified::TODO } );;
+            {
+                resp.get()
+                    .and_then( |res| res.get_session() )
+                    .map( |session_client| Box::new( HomeSessionClientCapnProto::new(session_client) ) as Box<HomeSession> )
+            } )
+            .map_err( |_e| ErrorToBeSpecified::TODO );;
 
         Box::new(resp_fut)
     }
@@ -174,20 +172,34 @@ impl Home for HomeClientCapnProto
 
     // NOTE acceptor must have this server as its home
     fn pair_request(&self, half_proof: RelationHalfProof) ->
-    Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        let mut request = self.home.pair_request_request();
+        request.get().init_half_proof().fill_from(&half_proof);
+
+        let resp_fut = request.send().promise
+            .map( |resp| () )
+            .map_err( |_e| ErrorToBeSpecified::TODO );;
+
+        Box::new(resp_fut)
     }
 
     // NOTE acceptor must have this server as its home
-    fn pair_response(&self, rel: RelationProof) ->
-    Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    fn pair_response(&self, relation_proof: RelationProof) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        let mut request = self.home.pair_response_request();
+        request.get().init_relation_proof().fill_from(&relation_proof);
+
+        let resp_fut = request.send().promise
+            .map( |resp| () )
+            .map_err( |_e| ErrorToBeSpecified::TODO );;
+
+        Box::new(resp_fut)
     }
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame) ->
-    Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
+        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
@@ -203,21 +215,21 @@ pub struct HomeSessionClientCapnProto
 impl HomeSessionClientCapnProto
 {
     pub fn new(session: mercury_capnp::home_session::Client) -> Self
-    { Self{ session: session } }
+        { Self{ session: session } }
 }
 
 impl HomeSession for HomeSessionClientCapnProto
 {
     // TODO consider if we should notify an open session about an updated profile
     fn update(&self, own_prof: &OwnProfile) ->
-    Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home
     fn unregister(&self, newhome: Option<Profile>) ->
-    Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
@@ -231,29 +243,26 @@ impl HomeSession for HomeSessionClientCapnProto
 
     // TODO return not a Stream, but an AppSession struct containing a stream
     fn checkin_app(&self, app: &ApplicationId) ->
-    Box< Stream<Item=Call, Error=ErrorToBeSpecified> >
+        Box< Stream<Item=Call, Error=ErrorToBeSpecified> >
     {
         let (_send, recv) = futures::sync::mpsc::channel(0);
         Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
 
     fn ping(&self, txt: &str) ->
-    Box< Future<Item=String, Error=ErrorToBeSpecified> >
+        Box< Future<Item=String, Error=ErrorToBeSpecified> >
     {
-        println!("checkin() called");
         let mut request = self.session.ping_request();
         request.get().set_txt(txt);
-        println!("checkin request created");
 
         let resp_fut = request.send().promise
             .and_then( |resp|
-                {
-                    println!("checkin() message sent");
-                    resp.get()
-                        .and_then( |res|
-                            res.get_pong().map( |s| s.to_owned() ) )
-                } )
-            .map_err( |e| { println!("checkin() failed {}", e); ErrorToBeSpecified::TODO } );
+            {
+                resp.get()
+                    .and_then( |res| res.get_pong() )
+                    .map( |pong| pong.to_owned() )
+            } )
+            .map_err( |_e| ErrorToBeSpecified::TODO );
 
         Box::new(resp_fut)
     }

@@ -343,7 +343,6 @@ mod tests
     fn temporary_test_capnproto()
     {
         use std::net::ToSocketAddrs;
-        use super::net::*;
         use super::protocol_capnp::*;
 
         let mut setup = TestSetup::new();

@@ -76,10 +76,10 @@ interface Home extends (ProfileRepo)
     login @2 (profileId : ProfileId) -> (session : HomeSession);
 
     pairRequest @3 (halfProof: RelationHalfProof);  # NOTE called on acceptor's home
-    pairResponse @4 (relation: RelationProof);      # NOTE called on requestor's home
+    pairResponse @4 (relationProof: RelationProof);      # NOTE called on requestor's home
 
     #call @5 (relation: RelationProof, app: ApplicationId, initPayload: AppMessageFrame,
-    #     toCaller: AppMessageListener) -> (toCallee: CallMessages);
+    #         toCaller: AppMessageListener) -> (toCallee: CallMessages);
 }
 
 

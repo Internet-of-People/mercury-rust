@@ -5,7 +5,6 @@ use futures::future;
 use multiaddr::{Multiaddr, AddrComponent};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
-use tokio_io::AsyncRead;
 
 use super::*;
 

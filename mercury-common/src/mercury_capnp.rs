@@ -127,3 +127,23 @@ impl<'a> FillFrom<::RelationHalfProof> for relation_half_proof::Builder<'a>
         // TODO
     }
 }
+
+
+impl<'a> TryFrom<relation_proof::Reader<'a>> for ::RelationProof
+{
+    type Error = capnp::Error;
+
+    fn try_from(src: relation_proof::Reader) -> Result<Self, Self::Error>
+    {
+        // TODO
+        Ok( ::RelationProof::new() )
+    }
+}
+
+impl<'a> FillFrom<::RelationProof> for relation_proof::Builder<'a>
+{
+    fn fill_from(mut self, src: &::RelationProof)
+    {
+        // TODO
+    }
+}
