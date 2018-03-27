@@ -77,8 +77,8 @@ fn main(){
     let appcontext = reactor2.run(capclient).unwrap();
     
     println!("Please register then log in");
-    // println!("Registering");
-    // let ownprofile = reactor2.run(appcontext.profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None)).unwrap();
+    println!("Registering");
+    let ownprofile = reactor2.run(appcontext.profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None)).unwrap();
     println!("Logging in");
     let login = appcontext.profilegateway.login();
     println!("Getting session");
@@ -113,9 +113,9 @@ fn main(){
             "4\n" =>{
                 session.ping("dummy_ping");
             }
-            // "5\n" =>{
-            //     println!("{:?}", ownprofile);
-            // }
+            "5\n" =>{
+                println!("{:?}", ownprofile);
+            }
             "0\n" =>{
                 break;
             }
