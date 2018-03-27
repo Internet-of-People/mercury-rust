@@ -16,6 +16,7 @@ use futures::future;
 use mercury_common::*;
 
 pub mod net;
+pub mod protocol_capnp;
 
 
 
@@ -343,6 +344,7 @@ mod tests
     {
         use std::net::ToSocketAddrs;
         use super::net::*;
+        use super::protocol_capnp::*;
 
         let mut setup = TestSetup::new();
 
