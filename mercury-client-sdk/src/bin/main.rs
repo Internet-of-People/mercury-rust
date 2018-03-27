@@ -55,7 +55,7 @@ fn main(){
     
     println!("Setting up profiles");
     let homeprof = mock::make_home_profile(&homeaddr,"home","szeretem a kakaot");
-    let profile = make_own_persona_profile("Deusz", signo.pub_key());
+    let mut profile = make_own_persona_profile("Deusz", signo.pub_key());
     
     println!("Setting up connection");
     let capclient = TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap() , &reactorhandle.clone() )
@@ -76,39 +76,52 @@ fn main(){
     let mut reactor2 = reactor::Core::new().unwrap();
     let appcontext = reactor2.run(capclient).unwrap();
     
-    println!("Menu\n1. Connect\n2. Login\n3. Call(crashes)\n4. Register\n5. Pair\n0. Exit");
+    println!("Please register then log in");
+    // println!("Registering");
+    // let ownprofile = reactor2.run(appcontext.profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None)).unwrap();
+    println!("Logging in");
+    let login = appcontext.profilegateway.login();
+    println!("Getting session");
+    let session = reactor2.run(login).unwrap();
+    println!("All set up");
+
+    println!("Menu\n1. Connect\n2. Call(crashes)\n3. Pair\n4. Ping\n5. Show profile\n0. Exit");
+    let mut buffer = String::new();
+    let stdin = stdin();
+
+    
     loop{
-        let mut buffer = String::new();
-        let stdin = stdin();
         let mut handle = stdin.lock();
-        handle.read_line(&mut buffer);
+        handle.read_line(&mut buffer);        
         match buffer.as_ref(){
             "1\n" =>{
                 let signer = appcontext.profilegateway.signer.to_owned();
                 appcontext.profilegateway.home_connector.connect(&homeprof, signer);
                 println!("connect");
             },
-            "2\n" =>{
-                appcontext.profilegateway.login();
-            }
             //call dies miserably 
-            "3\n" =>{
+            "2\n" =>{
                 appcontext.profilegateway.call(
                     mock::dummy_relation("work"), 
                     ApplicationId( String::from("SampleApp") ), 
                     AppMessageFrame("whatever".as_bytes().to_owned() ) 
                 );
             }
-            "4\n" =>{
-                appcontext.profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None);
-            }
-            "5\n" =>{
+            "3\n" =>{
                 appcontext.profilegateway.pair_request("relation_dummy_type", "url");
             }
+            "4\n" =>{
+                session.ping("dummy_ping");
+            }
+            // "5\n" =>{
+            //     println!("{:?}", ownprofile);
+            // }
             "0\n" =>{
                 break;
             }
-            _ =>{println!("nope");},
-        }
+            _ =>{
+                println!("nope");
+            },
+        };
     }
 }
