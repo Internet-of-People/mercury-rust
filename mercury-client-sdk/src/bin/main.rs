@@ -88,7 +88,7 @@ fn main(){
     
     println!("All set up");
     
-    println!("Menu\n1. Connect\n2. Call(crashes)\n3. Pair\n4. Ping\n5. Show profile\n0. Exit");
+    println!("Menu\n1. Connect\n2. Call(crashes)\n3. Pair\n4. Ping\n5. Show profile\nExit with ctrl+d");
     let mut buffer = String::new();
     let stdin = tokio_stdin_stdout::stdin(1);
     let bufreader = std::io::BufReader::new(stdin);
