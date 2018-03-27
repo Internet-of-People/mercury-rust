@@ -12,11 +12,11 @@ using AppMessageFrame = Data;
 
 struct Profile
 {
-    data      @0 : Data; # output of multicodec encode()
+    # data      @0 : Data; # output of multicodec encode()
 
     # NOTE these are mandatory in the API, but will be serialized into the data instead
-    # id        @1 : ProfileId;
-    # publicKey @2 : PublicKey;
+    id        @0 : ProfileId;
+    publicKey @1 : PublicKey;
 }
 
 
@@ -79,11 +79,9 @@ interface AppMessageListener
 
 interface Home extends (ProfileRepo)
 {
-    # TODO consider changing argument to profile: ProfileId so you don't have to
-    #      download the public data, or you already have the id stored
-    #claim @0 (profile: ProfileId) -> (ownProfile: OwnProfile);
-    #register @1 (ownProfile: OwnProfile, invite: HomeInvitation) -> (ownProfile: OwnProfile);
-    login @0 (profileId : ProfileId) -> (session : HomeSession);
+    claim @0 (profileId: ProfileId) -> (ownProfile: OwnProfile);
+    register @1 (ownProfile: OwnProfile, invite: HomeInvitation) -> (ownProfile: OwnProfile);
+    login @2 (profileId : ProfileId) -> (session : HomeSession);
 
     #pairRequest @3 (halfProof: RelationHalfProof);  # NOTE called on acceptor's home
     #pairResponse @4 (relation: Relation);           # NOTE called on requestor's home

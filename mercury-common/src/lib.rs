@@ -18,9 +18,8 @@ use tokio_io::{AsyncRead, AsyncWrite};
 
 
 
-pub mod mercury_capnp {
-    include!( concat!( env!("OUT_DIR"), "/protocol/mercury_capnp.rs" ) );
-}
+pub mod mercury_capnp;
+
 
 
 // TODO
@@ -154,7 +153,7 @@ pub struct OwnProfile
 impl OwnProfile
 {
     pub fn new(profile: &Profile, private_data: &[u8]) -> Self
-    { Self{ profile: profile.clone(), priv_data: private_data.to_owned() } }
+        { Self{ profile: profile.clone(), priv_data: private_data.to_owned() } }
 }
 
 
@@ -190,7 +189,7 @@ pub struct Relation
 impl Relation
 {
     pub fn new(profile: &Profile, proof: &RelationProof) -> Self
-    { Self { profile: profile.clone(), proof: proof.clone() } }
+        { Self { profile: profile.clone(), proof: proof.clone() } }
 }
 
 
@@ -232,7 +231,7 @@ pub struct Call
 // Interface to a single home server.
 // NOTE authentication is already done when the connection is built,
 //      authenticated profile info is available from the connection context
-pub trait Home: PeerContext + ProfileRepo
+pub trait Home: ProfileRepo
 {
     // NOTE because we support multihash, the id cannot be guessed from the public key
     fn claim(&self, profile: ProfileId) ->
