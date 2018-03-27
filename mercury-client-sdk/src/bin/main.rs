@@ -9,7 +9,6 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate futures;
 
-
 use std::rc::Rc;
 use std::io::{BufRead, Read, Write, stdin};
 
@@ -42,57 +41,23 @@ impl AppContext{
     
 }
 
-
-
-// fn re(){
-//     let mut reactor = reactor::Core::new().unwrap();
-//     let reactorhandle = reactor.handle();
-//     let pk = &profile.signer.pub_key().0;
-//     let test_fut = TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap(), &reactorhandle )
-//         .map_err( |_e| ErrorToBeSpecified::TODO )
-//         .and_then( move |tcp_stream|
-//         {
-//             let home = HomeClientCapnProto::new(tcp_stream, reactorhandle);
-//             home.login(profile.to_owned())
-//         } )
-//         .and_then( |session| session.ping( "std::str::from_utf8(&pk).unwrap()" ) );
-// 
-//     let pong = reactor.run(test_fut);
-//     println!("Response: {:?}", pong);
-// 
-// }
-// let mut reactor = reactor::Core::new().unwrap();
-// let reactorhandle = reactor.handle();
-// let test_fut = TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap(), &reactorhandle )
-//     .map_err( |_e| ErrorToBeSpecified::TODO )
-//     .and_then( move |tcp_stream|{
-//         let home = HomeClientCapnProto::new( tcp_stream, dummyhome, reactorhandle );
-//         home.login(ProfileId("Deusz".as_bytes().to_owned()))
-//     } )
-//     .and_then( |session| session.ping( "std::str::from_utf8(&pk).unwrap()" ) );
-// 
-// let pong = reactor.run(test_fut);
-// println!("Response: {:?}", pong);
-
 fn main(){
     //print!("{}[2J", 27 as char);
+    println!("Setting up config");
     let mut reactor = reactor::Core::new().unwrap();
     let mut reactorhandle = reactor.handle();
     let homeaddr = "/ip4/127.0.0.1/udp/9876";
     let homemultiaddr = homeaddr.to_multiaddr().unwrap();
     
-    let homeprof = mock::make_home_profile(&homeaddr,"home","");
-    
-    let signo = Rc::new(mock::Signo::new("Daswitch"));
+    println!("Setting up signers");
+    let signo = Rc::new(mock::Signo::new("Deuszkulcs"));
     let homesigno = Rc::new(mock::Signo::new("makusguba"));
-    let prof_rep = mock::DummyHome::new("pong");
-    let home_rep = mock::DummyHome::new("home");
-    let dummyhome = Box::new(mock::DummyHome::new("homedummy"));
-    let dummyhome2 = mock::DummyHome::new("homedummy2");
-    let homecontext = HomeContext::new(homesigno, &homeprof);
-    let connect = ConnectApp{ home : mock::DummyHome::new("apples") };
     
+    println!("Setting up profiles");
+    let homeprof = mock::make_home_profile(&homeaddr,"home","szeretem a kakaot");
     let profile = make_own_persona_profile("Deusz", signo.pub_key());
+    
+    println!("Setting up connection");
     let capclient = TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap() , &reactorhandle.clone() )
     .map(|stream|{
         let cap = Rc::new(HomeClientCapnProto::new(
@@ -110,35 +75,38 @@ fn main(){
     });
     let mut reactor2 = reactor::Core::new().unwrap();
     let appcontext = reactor2.run(capclient).unwrap();
-    //let appcontext = ;
+    
+    println!("Menu\n1. Connect\n2. Login\n3. Call(crashes)\n4. Register\n5. Pair\n0. Exit");
     loop{
         let mut buffer = String::new();
-        //let mut buffer = vec!();
         let stdin = stdin();
         let mut handle = stdin.lock();
         handle.read_line(&mut buffer);
         match buffer.as_ref(){
-            "connect\n" =>{
+            "1\n" =>{
                 let signer = appcontext.profilegateway.signer.to_owned();
                 appcontext.profilegateway.home_connector.connect(&homeprof, signer);
                 println!("connect");
             },
-            "login\n" =>{
+            "2\n" =>{
                 appcontext.profilegateway.login();
             }
             //call dies miserably 
-            "call\n" =>{
+            "3\n" =>{
                 appcontext.profilegateway.call(
                     mock::dummy_relation("work"), 
                     ApplicationId( String::from("SampleApp") ), 
                     AppMessageFrame("whatever".as_bytes().to_owned() ) 
                 );
             }
-            "register\n" =>{
+            "4\n" =>{
                 appcontext.profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None);
             }
-            "pair\n" =>{
+            "5\n" =>{
                 appcontext.profilegateway.pair_request("relation_dummy_type", "url");
+            }
+            "0\n" =>{
+                break;
             }
             _ =>{println!("nope");},
         }
