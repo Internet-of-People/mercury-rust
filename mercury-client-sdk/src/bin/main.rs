@@ -44,31 +44,50 @@ fn main(){
     let other_homeprof = mock::make_home_profile( &homeaddr,"otherhome","konyhalevel100" );
     let mut profile = make_own_persona_profile( "Deusz", signo.pub_key() );
     let mut other_profile = make_own_persona_profile( "Othereusz", signo.pub_key() );
-    
-    let bizbasz = TcpStream::connect( 
-        &multiaddr_to_socketaddr( &homemultiaddr ).unwrap(),
-        &reactorhandle.clone() 
-    ).map(|stream|{
-        println!( "Setting up connection" );
-        println!( "Own Proto: TcpStream, HomeContext, ReactorHandle" );
-        let cap = Rc::new(HomeClientCapnProto::new(
-            stream,
-            Box::new(HomeContext::new(signo.clone(), &homeprof)),
-            reactorhandle.clone()
-        ));
+
+    // let cap = Rc::new(HomeClientCapnProto::new(
+    //     TcpStream::connect( 
+    //         &multiaddr_to_socketaddr( &homemultiaddr ).unwrap(),
+    //         &reactorhandle.clone() 
+    //     ),
+    //     Box::new(HomeContext::new(signo.clone(), &homeprof)),
+    //     reactorhandle.clone()
+    // ));
+    println!( "Own Gateway: ProfileSigner, DummyHome(as profile repo), HomeConnector" );
+    let own_gateway = ProfileGatewayImpl::new(
+        signo,
+        Rc::new(mock::DummyHome::new("eins")),
+        Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
+    );
+
+
+    println!( "any_home_of(profile) -> Home" );
+    let bizbasz = own_gateway.any_home_of(&profile)
+
+    // let bizbasz = TcpStream::connect( 
+    //     &multiaddr_to_socketaddr( &homemultiaddr ).unwrap(),
+    //     &reactorhandle.clone() 
+    // ).map(|stream|{
+    //     println!( "Setting up connection" );
+    //     println!( "Own Proto: TcpStream, HomeContext, ReactorHandle" );
+    //     let cap = Rc::new(HomeClientCapnProto::new(
+    //         stream,
+    //         Box::new(HomeContext::new(signo.clone(), &homeprof)),
+    //         reactorhandle.clone()
+    //     ));
         // println!( "Other Proto: TcpStream, HomeContext, ReactorHandle" );
         // let other_cap = Rc::new(HomeClientCapnProto::new(
         //     stream,
         //     Box::new(HomeContext::new(signo.clone(), &homeprof)),
         //     reactorhandle.clone()
         // ));
-        println!( "Own Gateway: ProfileSigner, CapnprotoClientSide(as profile repo), HomeConnector" );
+        // println!( "Own Gateway: ProfileSigner, CapnprotoClientSide(as profile repo), HomeConnector" );
         // let own_gateway = 
-        ProfileGatewayImpl{
-            signer:         signo,
-            profile_repo:   cap,
-            home_connector: Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ),
-        }
+        // ProfileGatewayImpl{
+        //     signer:         signo,
+        //     profile_repo:   cap,
+        //     home_connector: Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ),
+        // }
         // println!( "Other Gateway: ProfileSigner, CapnprotoClientSide(as profile repo), HomeConnector" );
         // let other_gateway = ProfileGatewayImpl{
         //     signer:         other_signo,
@@ -76,39 +95,31 @@ fn main(){
         //     home_connector: Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ),
         // };
         
-    }).and_then(|own_gateway|{
+    .and_then(|home|{
         println!( "register(HomeProfile_Id_WhereWeRegister, OwnProfile) -> OwnProfile_ExtendedWithNewHome" );
         
-        let ownprofile = own_gateway.register(ProfileId( Vec::from("Home") ),mock::create_ownprofile( "Deusz" ),None);
-        
-    }).and_then(|( own_gateway, ownprofile )|{
+        Ok(own_gateway.register(
+            ProfileId( Vec::from("Home") ),
+            mock::create_ownprofile( "Deusz" ),
+            None
+        ))
+    })
+    .and_then(|ownprofile|{
         println!( "login() -> HomeSession" );
-        let session = own_gateway.login();
+        own_gateway.login()
         
-    }).and_then(|( own_gateway, session )|{
+    }).and_then(| session |{
         println!( "ping(str) -> String" );
         
         session.ping( "dummy_ping" )
+    }).and_then(|response|{
+        println!( "request pair() -> (gives back nothing or error){:?}", response );
         
-    }).and_then(|own_gateway|{
-        println!( "request pair() -> (gives back nothing or error)" );
+        own_gateway.pair_request( "relation_dummy_type", "url" )
         
-        let req = own_gateway.pair_request( "relation_dummy_type", "url" );
-        
-    }).and_then(|own_gateway|{
-        println!( "connect_home(HomeId) -> Rc<Home>" );
-        
-        let home = own_gateway.connect_home( "Home" );
-
-    })/*.and_then(|own_gateway|{
-        println!( "HomeConnector.connect(HomesProfile, OwnSigner) -> Home" );
-        
-        let home = own_gateway.home_connector.connect( &homeprof, mock::Signo::new( "Deuszkulcs" ) );
-
-    })*/.and_then(|own_gateway|{
+    }).and_then(|()|{
         println!( "call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
-        
-        //let CallMessages = 
+
         own_gateway.call(
             mock::dummy_relation( "work" ), 
             ApplicationId( String::from( "SampleApp" ) ), 
