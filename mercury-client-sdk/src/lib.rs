@@ -338,7 +338,7 @@ mod tests
     {
         fn prof_id(&self) -> &ProfileId { &self.prof_id }
         fn pub_key(&self) -> &PublicKey { &self.pub_key }
-        fn sign(&self, data: Vec<u8>) -> Signature { Signature( Vec::new() ) }
+        fn sign(&self, data: &[u8]) -> Signature { Signature( Vec::new() ) }
     }
 
 
