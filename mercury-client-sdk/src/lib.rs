@@ -22,7 +22,10 @@ pub mod protocol_capnp;
 
 pub trait HomeConnector
 {
-    // NOTE home_profile must have a HomeFacet with at least an address filled in
+    /// Initiate a permanent connection to the home server defined by `home_profile`, or return an
+    /// existing, live `Home` immediately.
+    /// `home_profile` must have a HomeFacet with at least an address filled in.
+    /// `signer` belongs to me.
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
 }
@@ -75,6 +78,7 @@ pub trait ProfileGateway
     fn claim(&self, home: ProfileId, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
+    /// `invite` is needed only if the home has a restrictive registration policy.
     fn register(&self, home: ProfileId, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
 
@@ -169,7 +173,7 @@ impl ProfileGatewayImpl
         // TODO implement binary serialization for signing
         RelationHalfProof{ relation_type: relation_type.to_owned(),
             my_id: signer.prof_id().to_owned(), peer_id: with_prof.to_owned(),
-            my_sign: signer.sign( "TODO implement halfproof serialization".as_bytes().to_owned() ) }
+            my_sign: signer.sign( "TODO implement halfproof serialization".as_bytes() ) }
     }
 }
 

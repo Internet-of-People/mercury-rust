@@ -49,13 +49,14 @@ pub trait Seed
 }
 
 
-// NOTE implemented containing a SecretKey or something similar internally
+/// Something that can sign data, but cannot give out the private key.
+/// Usually implemented using a private key internally.
 pub trait Signer
 {
     fn prof_id(&self) -> &ProfileId; // TODO is this really needed here?
     fn pub_key(&self) -> &PublicKey;
-    // NOTE the data Vec<u8> to be signed ideally will be the output from Mudlee's multicodec lib
-    fn sign(&self, data: Vec<u8>) -> Signature;
+    // NOTE the data to be signed ideally will be the output from Mudlee's multicodec lib
+    fn sign(&self, data: &[u8]) -> Signature;
 }
 
 
@@ -64,13 +65,18 @@ pub trait Signer
 pub struct PersonaFacet
 {
     // TODO should we use only a RelationProof here instead of full Relation info?
-    pub homes:  Vec<Relation>, // NOTE with proof relation_type "home"
+    /// `homes` contain items with `relation_type` "home", with proofs included.
+    /// Current implementation supports only a single home stored in `homes[0]`,
+    /// Support for multiple homes will be implemented in a future release.
+    pub homes:  Vec<Relation>,
     pub data:   Vec<u8>,
 }
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct HomeFacet
 {
+    /// Addresses of the same home server. A typical scenario of multiple addresses is when there is
+    /// one IPv4 address/port, one onion address/port and some IPv6 address/port pairs.
     pub addrs:  Vec<Multiaddr>,
     pub data:   Vec<u8>,
 }
@@ -79,6 +85,7 @@ pub struct HomeFacet
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct ApplicationFacet
 {
+    /// unique id of the application - like 'iop-chat'
     pub id:     ApplicationId,
     pub data:   Vec<u8>,
 }
@@ -116,7 +123,7 @@ impl Profile
 }
 
 
-
+/// Represents a connection to another Profile (Home <-> Persona), (Persona <-> Persona)
 pub trait PeerContext
 {
     fn my_signer(&self) -> &Signer;
@@ -126,16 +133,25 @@ pub trait PeerContext
 
 
 
-// Potentially a whole network of nodes with internal routing and sharding
+/// Potentially a whole network of nodes with internal routing and sharding
 pub trait ProfileRepo
 {
+    /// List all profiles that can be load()'ed or resolve()'d.
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >;
 
+    /// Look for specified `id` and return. This might involve searching for the latest version
+    /// of the profile in the dht, but if it's the profile's home server, could come from memory, too.
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
 
-    // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
+    /// Same as load(), but also contains hints for resolution, therefore it's more efficient than load(id)
+    /// 
+    /// The `url` may contain
+    /// * ProfileID (mandatory)
+    /// * some profile metadata (for user experience enhancement) (big fat warning should be thrown if it does not match the latest info)
+    /// * ProfileID of its home server
+    /// * last known multiaddress(es) of its home server
     fn resolve(&self, url: &str) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
 
@@ -178,12 +194,14 @@ impl RelationHalfProof
 }
 
 
-// TODO maybe halfproof should be inlined (with macro?)
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct RelationProof
 {
-    pub half_proof: RelationHalfProof,
-    pub peer_sign:  Signature,
+    pub relation_type:  String,        // TODO inline halfproof fields with macro, if possible at all
+    pub my_id:          ProfileId,
+    pub my_sign:        Signature,
+    pub peer_id:        ProfileId,
+    pub peer_sign:      Signature,
     // TODO is a nonce needed?
 }
 
@@ -191,7 +209,28 @@ impl RelationProof
 {
     // TODO add params and properly initialize
     pub fn new() -> Self
-        { Self{ half_proof: RelationHalfProof::new(), peer_sign: Signature(Vec::new()) } }
+    {
+        Self
+        {
+            relation_type: String::new(),
+            my_id: ProfileId(Vec::new()),
+            my_sign: Signature(Vec::new()),
+            peer_id: ProfileId(Vec::new()),
+            peer_sign: Signature(Vec::new()),
+        }
+    }
+
+    pub fn from_halfproof(half_proof: RelationHalfProof, peer_sign: Signature) -> Self
+    {
+        Self
+        {
+            relation_type: half_proof.relation_type.clone(),
+            my_id: half_proof.my_id.clone(),
+            my_sign: half_proof.my_sign.clone(),
+            peer_id: half_proof.peer_id.clone(),
+            peer_sign: peer_sign.clone(),
+        }
+    }
 }
 
 
@@ -210,7 +249,7 @@ impl Relation
 }
 
 
-
+/// This invitation allows a persona to register on the specified home.
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct HomeInvitation
 {
