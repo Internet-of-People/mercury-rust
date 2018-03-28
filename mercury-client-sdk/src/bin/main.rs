@@ -53,48 +53,21 @@ fn main(){
     //     Box::new(HomeContext::new(signo.clone(), &homeprof)),
     //     reactorhandle.clone()
     // ));
-    println!( "Own Gateway: ProfileSigner, DummyHome(as profile repo), HomeConnector" );
+    println!( "ProfileGateway: ProfileSigner, DummyHome(as profile repo), HomeConnector" );
     let own_gateway = ProfileGatewayImpl::new(
         signo,
-        Rc::new(mock::DummyHome::new("eins")),
+        Rc::new(mock::DummyHome::new("ein")),
         Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
     );
 
+    let other_gateway = ProfileGatewayImpl::new(
+        other_signo,
+        Rc::new(mock::DummyHome::new("zwei")),
+        Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
+    );
 
     println!( "any_home_of(profile) -> Home" );
-    let bizbasz = own_gateway.any_home_of(&profile)
-
-    // let bizbasz = TcpStream::connect( 
-    //     &multiaddr_to_socketaddr( &homemultiaddr ).unwrap(),
-    //     &reactorhandle.clone() 
-    // ).map(|stream|{
-    //     println!( "Setting up connection" );
-    //     println!( "Own Proto: TcpStream, HomeContext, ReactorHandle" );
-    //     let cap = Rc::new(HomeClientCapnProto::new(
-    //         stream,
-    //         Box::new(HomeContext::new(signo.clone(), &homeprof)),
-    //         reactorhandle.clone()
-    //     ));
-        // println!( "Other Proto: TcpStream, HomeContext, ReactorHandle" );
-        // let other_cap = Rc::new(HomeClientCapnProto::new(
-        //     stream,
-        //     Box::new(HomeContext::new(signo.clone(), &homeprof)),
-        //     reactorhandle.clone()
-        // ));
-        // println!( "Own Gateway: ProfileSigner, CapnprotoClientSide(as profile repo), HomeConnector" );
-        // let own_gateway = 
-        // ProfileGatewayImpl{
-        //     signer:         signo,
-        //     profile_repo:   cap,
-        //     home_connector: Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ),
-        // }
-        // println!( "Other Gateway: ProfileSigner, CapnprotoClientSide(as profile repo), HomeConnector" );
-        // let other_gateway = ProfileGatewayImpl{
-        //     signer:         other_signo,
-        //     profile_repo:   cap,
-        //     home_connector: Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ),
-        // };
-        
+    let ownapp = own_gateway.any_home_of(&profile)
     .and_then(|home|{
         println!( "register(HomeProfile_Id_WhereWeRegister, OwnProfile) -> OwnProfile_ExtendedWithNewHome" );
         
@@ -113,7 +86,8 @@ fn main(){
         
         session.ping( "dummy_ping" )
     }).and_then(|response|{
-        println!( "request pair() -> (gives back nothing or error){:?}", response );
+        println!( "{:?}" , response );
+        println!( "request pair() -> (gives back nothing or error)" );
         
         own_gateway.pair_request( "relation_dummy_type", "url" )
         
@@ -128,8 +102,44 @@ fn main(){
     
     });
     
+    println!( "any_home_of(otherprofile) -> Home" );
+    let otherapp = other_gateway.any_home_of(&profile)
+    .and_then(|home|{
+        println!( "register(HomeProfile_Id_WhereWeRegister, OtherProfile) -> OtherProfile_ExtendedWithNewHome" );
+        
+        Ok(other_gateway.register(
+            ProfileId( Vec::from("OtherHome") ),
+            mock::create_ownprofile( "Othereusz" ),
+            None
+        ))
+    })
+    .and_then(|otherprofile|{
+        println!( "login() -> HomeSession" );
+        other_gateway.login()
+        
+    }).and_then(| session |{
+        println!( "ping(str) -> String" );
+        
+        session.ping( "dummy_pong" )
+    }).and_then(|response|{
+        println!( "{:?}" , response );
+        println!( "request pair() -> (gives back nothing or error)" );
+        
+        other_gateway.pair_response( dummy_relation( "relation_dummy_type" ) )
+        
+    }).and_then(|()|{
+        println!( "call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
+
+        other_gateway.call(
+            mock::dummy_relation( "work" ), 
+            ApplicationId( String::from( "SampleApp" ) ), 
+            AppMessageFrame( Vec::from( "whetavar" ) ) 
+        )
+    
+    });
     println!( "All set up" );
-    reactor.run( bizbasz );
+    reactor.run( otherapp );
+    reactor.run( ownapp );
     
     println!( "We're done here, let's go packing" );
 }
