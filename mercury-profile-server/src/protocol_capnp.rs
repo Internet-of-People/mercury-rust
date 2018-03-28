@@ -83,13 +83,13 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
     {
         let own_prof_capnp = pry!( pry!( params.get() ).get_own_profile() );
         let own_prof = pry!( OwnProfile::try_from(own_prof_capnp) );
-        let inv_capnp_res = pry!( params.get() ).get_invite();
-        let invite = match inv_capnp_res {
-            Ok(inv) => HomeInvitation::try_from(inv).ok(),
-            Err(_e) => None,
-        };
 
-        let reg_fut = self.home.register(own_prof, invite)
+        let inv_capnp_res = pry!( params.get() ).get_invite();
+        let invite_opt = inv_capnp_res
+            .and_then( |inv_capnp| HomeInvitation::try_from(inv_capnp) )
+            .ok();
+
+        let reg_fut = self.home.register(own_prof, invite_opt)
             .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling
             .map( move |own_profile|
                 results.get().init_own_profile().fill_from(&own_profile) );
@@ -174,6 +174,22 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
         let own_profile = pry!( OwnProfile::try_from(own_profile_capnp) );
 
         let upd_fut = self.session.update(&own_profile)
+            .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+
+        Promise::from_future(upd_fut)
+    }
+
+
+    fn unregister(&mut self, params: mercury_capnp::home_session::UnregisterParams,
+                   mut results: mercury_capnp::home_session::UnregisterResults,)
+        -> Promise<(), ::capnp::Error>
+    {
+        let new_home_res_capnp = pry!( params.get() ).get_new_home();
+        let new_home_opt = new_home_res_capnp
+            .and_then( |new_home_capnp| Profile::try_from(new_home_capnp) )
+            .ok();
+
+        let upd_fut = self.session.unregister(new_home_opt)
             .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
 
         Promise::from_future(upd_fut)

@@ -119,6 +119,7 @@ impl HomeSession for HomeSessionServer
     }
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home
+    // TODO is the ID of the new home enough here or do we need the whole profile?
     fn unregister(&self, newhome: Option<Profile>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
