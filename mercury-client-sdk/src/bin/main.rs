@@ -53,17 +53,89 @@ mod tests
     }
 
     #[test]
+    fn test_unregister(){
+        let mut reactor = reactor::Core::new().unwrap();
+        let mut reactorhandle = reactor.handle();
+        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
+        let profile_gateway = ProfileGatewayImpl::new(
+            signo,
+            Rc::new(mock::DummyHome::new("test_unregister")),
+            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
+        );
+
+        // let home_prof = mock::make_home_profile( 
+        //     "/ip4/127.0.0.1/udp/9876", 
+        //     "Insomnia", 
+        //     "FinalFantasyXV" 
+        // );
+
+        let registered = profile_gateway.register(
+                ProfileId( Vec::from( "Insomnia" ) ),
+                mock::create_ownprofile( "Noctis" ),
+                None
+        );
+        let res = reactor.run(registered); 
+        //assert
+
+        let unregistered = profile_gateway.unregister(
+                ProfileId( Vec::from( "Insomnia" ) ),
+                ProfileId( Vec::from( "Noctis" ) ),
+                None
+        );
+
+        let res = reactor.run(unregistered);      
+    }
+
+    #[test]
     fn test_login(){
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new(mock::DummyHome::new("test_login")),
+            Rc::new( mock::DummyHome::new("test_login") ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
         let home_session = profile_gateway.login();
+
+        let res = reactor.run(home_session);      
+    }
+
+    #[test]
+    fn test_claim(){
+        let mut reactor = reactor::Core::new().unwrap();
+        let mut reactorhandle = reactor.handle();
+        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
+        let profile_gateway = ProfileGatewayImpl::new(
+            signo,
+            Rc::new( mock::DummyHome::new("test_claim") ),
+            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
+        );
+
+        let home_session = profile_gateway.claim(
+            ProfileId( Vec::from( "Insomnia" ) ),
+            ProfileId( Vec::from( "Noctis" ) ),
+        );
+
+        let res = reactor.run(home_session);      
+    }
+    
+    #[test]
+    fn test_update(){
+        let mut reactor = reactor::Core::new().unwrap();
+        let mut reactorhandle = reactor.handle();
+        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
+        let profile_gateway = ProfileGatewayImpl::new(
+            signo,
+            Rc::new( mock::DummyHome::new("test_update") ),
+            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
+        );
+
+        let home_session = profile_gateway.update(
+            ProfileId( Vec::from( "Tenebrae" ) ),
+            &mock::create_ownprofile( "Noctis" ),
+        );
 
         let res = reactor.run(home_session);      
     }
@@ -78,7 +150,7 @@ mod tests
 
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new(mock::DummyHome::new("test_any_home_of")),
+            Rc::new( mock::DummyHome::new("test_any_home_of") ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -92,7 +164,7 @@ mod tests
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-        let profile_repo = Rc::new(mock::DummyHome::new("test_any_home_of"));
+        let profile_repo = Rc::new( mock::DummyHome::new("test_any_home_of") );
         let home_connector = Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) );
 
         let mut profile = make_own_persona_profile( "Chara", signo.pub_key() );
@@ -114,7 +186,7 @@ mod tests
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new(mock::DummyHome::new("test_call")),
+            Rc::new( mock::DummyHome::new("test_call") ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -134,7 +206,7 @@ mod tests
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new(mock::DummyHome::new("test_ping")),
+            Rc::new( mock::DummyHome::new("test_ping") ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -146,6 +218,22 @@ mod tests
         let res = reactor.run(response);      
     }
 
+    //based on private method
+    //  #[test]
+    // fn test_new_half_proof(){
+    //     let mut reactor = reactor::Core::new().unwrap();
+    //     let mut reactorhandle = reactor.handle();
+    //     let signo = Rc::new( mock::Signo::new( "TestKey" ) );
+
+    //     let half_proof = ProfileGatewayImpl::new_half_proof( 
+    //         "test",
+    //         ProfileId( Vec::from("Chara") ),
+    //         signo
+    //     );
+
+    //     let res = reactor.run(half_proof);      
+    // }
+
     #[test]
     fn test_pair_req(){
         let mut reactor = reactor::Core::new().unwrap();
@@ -153,7 +241,7 @@ mod tests
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new(mock::DummyHome::new("test_pair_req")),
+            Rc::new( mock::DummyHome::new("test_pair_req") ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -169,11 +257,27 @@ mod tests
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new(mock::DummyHome::new("test_pair_res")),
+            Rc::new( mock::DummyHome::new("test_pair_res") ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
         let zero = profile_gateway.pair_response( dummy_relation( "test_relation" ) );
+
+        let res = reactor.run(zero);      
+    }
+
+    #[test]
+    fn test_relations(){
+        let mut reactor = reactor::Core::new().unwrap();
+        let mut reactorhandle = reactor.handle();
+        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
+        let profile_gateway = ProfileGatewayImpl::new(
+            signo,
+            Rc::new( mock::DummyHome::new("test_relations") ),
+            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
+        );
+
+        let zero = profile_gateway.relations( &ProfileId( Vec::from( "Noctis" ) ) );
 
         let res = reactor.run(zero);      
     }
@@ -202,13 +306,13 @@ mod tests
         println!( "ProfileGateway: ProfileSigner, DummyHome(as profile repo), HomeConnector" );
         let own_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new(mock::DummyHome::new("ein")),
+            Rc::new( mock::DummyHome::new("ein") ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
         let other_gateway = ProfileGatewayImpl::new(
             other_signo,
-            Rc::new(mock::DummyHome::new("zwei")),
+            Rc::new( mock::DummyHome::new("zwei") ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
