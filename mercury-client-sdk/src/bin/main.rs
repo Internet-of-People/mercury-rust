@@ -34,13 +34,7 @@ impl ConnectApp{
     
 }
 
-struct AppContext{
-    profilegateway : Box<ProfileGatewayImpl>,
-}
 
-impl AppContext{
-    
-}
 
 fn main(){
     //print!("{}[2J", 27 as char);
@@ -52,82 +46,66 @@ fn main(){
     
     println!("Setting up signers");
     let signo = Rc::new(mock::Signo::new("Deuszkulcs"));
+    let othersigno = Rc::new(mock::Signo::new("Othereusz"));
     let homesigno = Rc::new(mock::Signo::new("makusguba"));
     
     println!("Setting up profiles");
     let homeprof = mock::make_home_profile(&homeaddr,"home","szeretem a kakaot");
     let mut profile = make_own_persona_profile("Deusz", signo.pub_key());
     
-    println!("Setting up connection");
-
-    let bizbasz = TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap() , &reactorhandle.clone() )
-    .map(|stream|{
+    let bizbasz = TcpStream::connect( 
+        &multiaddr_to_socketaddr(&homemultiaddr).unwrap(),
+        &reactorhandle.clone() 
+     ).and_then(|stream|{
+        println!("Setting up connection");
         let cap = Rc::new(HomeClientCapnProto::new(
             stream,
             Box::new(HomeContext::new(signo.clone(), &homeprof)),
             reactorhandle.clone()
         ));
-        AppContext{
-            profilegateway : Box::new(
-                ProfileGatewayImpl{
-                    signer:         signo,
-                    profile_repo:   cap,
-                    home_connector: Rc::new(SimpleTcpHomeConnector::new(reactorhandle.clone())),
-        })}
+        let profilegateway = ProfileGatewayImpl{
+            signer:         signo,
+            profile_repo:   cap,
+            home_connector: Rc::new(SimpleTcpHomeConnector::new(reactorhandle.clone())),
+        };
+    }).and_then(|profilegateway|{
+        println!("register(HomeProfile_Id_WhereWeRegister, OwnProfile) -> OwnProfile_ExtendedWithNewHome");
+        let ownprofile = profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None);
+    }).and_then(|(profilegateway, ownprofile)|{
+        println!("login() -> HomeSession");
+        let session = profilegateway.login();
+    }).and_then(|(profilegateway, session)|{
+        println!("ping(str) -> String");
+        
+        session.ping("dummy_ping")
+    }).and_then(|profilegateway|{
+        println!("request pair() -> (gives back nothing or error)");
+        
+        let req = profilegateway.pair_request("relation_dummy_type", "url");
+    }).and_then(|profilegateway|{
+        println!("HomeConnector.connect(HomesProfile, OwnSigner) -> Home");
+        
+        let home = profilegateway.home_connector.connect(&homeprof, mock::Signo::new("Deuszkulcs"));
+    }).and_then(|profilegateway|{
+        println!("call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages");
+        
+        //let CallMessages = 
+        profilegateway.call(
+            mock::dummy_relation("work"), 
+            ApplicationId( String::from("SampleApp") ), 
+            AppMessageFrame(Vec::from("whatever")) 
+        )        
     });
-    let appcontext = reactor.run(bizbasz).unwrap();
-    
-    println!("Please register then log in");
-    println!("Registering");
-    let ownprofile = reactor.run(appcontext.profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None)).unwrap();
-    println!("{:?}",ownprofile );
-    
-    println!("Logging in");
-    println!("Getting session");
-    let session = reactor.run(appcontext.profilegateway.login()).unwrap();
-    
     println!("All set up");
     
-    println!("Menu\n1. Connect\n2. Call(crashes)\n3. Pair\n4. Ping\n5. Show profile\nExit with ctrl+d");
-    let mut buffer = String::new();
-    let stdin = tokio_stdin_stdout::stdin(1);
-    let bufreader = std::io::BufReader::new(stdin);
-    let instream = tokio_io::io::lines(bufreader);
-    let stdin_closed = instream.for_each(|line|{     
-        match line.as_ref(){
-            "1" =>{
-                let signer = appcontext.profilegateway.signer.to_owned();
-                appcontext.profilegateway.home_connector.connect(&homeprof, signer);
-                println!("connect");
-    
-            },
-            //call dies miserably 
-            "2" =>{
-                appcontext.profilegateway.call(
-                    mock::dummy_relation("work"), 
-                    ApplicationId( String::from("SampleApp") ), 
-                    AppMessageFrame("whatever".as_bytes().to_owned() ) 
-                );
-    
-            }
-            "3" =>{
-                appcontext.profilegateway.pair_request("relation_dummy_type", "url");
-    
-            }
-            "4" =>{
-                session.ping("dummy_ping");
-    
-            }
-            "5" =>{
-                println!("{:?}", ownprofile);
-    
-            }
-            _ =>{
-                println!("nope");
-    
-            },
-        };
-        futures::future::ok::<(),std::io::Error>(())
-    });
-    reactor.run(stdin_closed);
+    // println!("Menu\n1. Connect\n2. Call(crashes)\n3. Pair\n4. Ping\n5. Show profile\nExit with ctrl+d");
+    //         "2" =>{
+;
+    // 
+    //         }
+    //         "3" =>{
+    //             profilegateway.pair_request("relation_dummy_type", "url");
+
+
+    reactor.run(bizbasz);
 }
