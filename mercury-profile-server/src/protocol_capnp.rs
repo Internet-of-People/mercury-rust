@@ -10,6 +10,8 @@ use super::*;
 pub struct HomeDispatcherCapnProto
 {
     home: Rc<Home>,
+    // TODO probably we should have a SessionFactory here
+    //      instead of instantiating sessions "manually"
 }
 
 
@@ -100,9 +102,12 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
              mut results: mercury_capnp::home::LoginResults,)
         -> Promise<(), ::capnp::Error>
     {
+        use server::HomeSessionServer;
         let profile_id = pry!( pry!( params.get() ).get_profile_id() );
         // TODO profile_id must be used to build session
-        let session = mercury_capnp::home_session::ToClient::new( HomeSessionDispatcher::new() )
+        let session_impl = Rc::new( HomeSessionServer::new() );
+        let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl);
+        let session = mercury_capnp::home_session::ToClient::new(session_dispatcher)
             .from_server::<::capnp_rpc::Server>();
         results.get().set_session(session);
         Promise::ok( () )
@@ -137,6 +142,7 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
     }
 
 
+// TODO
 //    fn call(&mut self, params: mercury_capnp::home::CallParams,
 //            mut results: mercury_capnp::home::CallResults,)
 //            -> Promise<(), ::capnp::Error>
@@ -147,15 +153,33 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
 
 
 
-pub struct HomeSessionDispatcher {}
-
-impl HomeSessionDispatcher
+pub struct HomeSessionDispatcherCapnProto
 {
-    pub fn new() -> Self { Self{} }
+    session: Rc<HomeSession>
 }
 
-impl mercury_capnp::home_session::Server for HomeSessionDispatcher
+impl HomeSessionDispatcherCapnProto
 {
+    pub fn new(session: Rc<HomeSession>) -> Self
+        { Self{ session: session } }
+}
+
+impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
+{
+    fn update(&mut self, params: mercury_capnp::home_session::UpdateParams,
+              mut results: mercury_capnp::home_session::UpdateResults,)
+        -> Promise<(), ::capnp::Error>
+    {
+        let own_profile_capnp = pry!( pry!( params.get() ).get_own_profile() );
+        let own_profile = pry!( OwnProfile::try_from(own_profile_capnp) );
+
+        let upd_fut = self.session.update(&own_profile)
+            .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+
+        Promise::from_future(upd_fut)
+    }
+
+
     fn ping(&mut self, params: mercury_capnp::home_session::PingParams<>,
             mut results: mercury_capnp::home_session::PingResults<>)
         -> Promise<(), ::capnp::Error>

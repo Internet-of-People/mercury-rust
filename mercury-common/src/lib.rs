@@ -348,7 +348,7 @@ pub trait HomeSession
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
 
-    fn events(&self) -> Rc< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >;
+    fn events(&self) -> Box< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >;
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) ->

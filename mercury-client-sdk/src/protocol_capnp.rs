@@ -221,6 +221,8 @@ impl HomeSessionClientCapnProto
 impl HomeSession for HomeSessionClientCapnProto
 {
     // TODO consider if we should notify an open session about an updated profile
+    // TODO consider if an OwnProfile return value is needed or how to force updating
+    //      the currently active profile in all PeerContext/Session/etc instances
     fn update(&self, own_prof: &OwnProfile) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
@@ -235,10 +237,10 @@ impl HomeSession for HomeSessionClientCapnProto
     }
 
 
-    fn events(&self) -> Rc< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >
+    fn events(&self) -> Box< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >
     {
         let (_send, recv) = futures::sync::mpsc::channel(0);
-        Rc::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
+        Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
 
     // TODO return not a Stream, but an AppSession struct containing a stream

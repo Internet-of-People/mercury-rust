@@ -106,12 +106,12 @@ interface HomeEventNotifier
 
 interface HomeSession
 {
-    # update @0 (ownProfile: OwnProfile);
-    # unregister @1 (newHome: Profile); # NOTE closes session after successful call
+    update @0 (ownProfile: OwnProfile);
+    unregister @1 (newHome: ProfileId); # NOTE closes session after successful call
 
     # events @2 () -> (events: HomeEventNotifier);
     # checkinApp @3 (app: ApplicationId) -> (calls: Calls);
 
     # TODO remove after testing
-    ping @0 (txt : Text) -> (pong : Text);
+    ping @2 (txt : Text) -> (pong : Text);
 }

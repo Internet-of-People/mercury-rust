@@ -93,3 +93,57 @@ impl Home for HomeServer
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
 }
+
+
+
+pub struct HomeSessionServer
+{
+    // TODO
+    // how to access context to get client profileId?
+}
+
+
+impl HomeSessionServer
+{
+    pub fn new() -> Self
+        { Self{} }
+}
+
+
+impl HomeSession for HomeSessionServer
+{
+    fn update(&self, own_prof: &OwnProfile) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
+    }
+
+    // NOTE newhome is a profile that contains at least one HomeFacet different than this home
+    fn unregister(&self, newhome: Option<Profile>) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
+    }
+
+
+    fn events(&self) -> Box< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >
+    {
+        let (sender, receiver) = futures::sync::mpsc::channel(0);
+        Box::new( receiver.map_err( |_| ErrorToBeSpecified::TODO ) )
+    }
+
+    // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
+    fn checkin_app(&self, app: &ApplicationId) ->
+        Box< Stream<Item=Call, Error=ErrorToBeSpecified> >
+    {
+        let (sender, receiver) = futures::sync::mpsc::channel(0);
+        Box::new( receiver.map_err( |_| ErrorToBeSpecified::TODO ) )
+    }
+
+    // TODO remove this after testing
+    fn ping(&self, txt: &str) ->
+        Box< Future<Item=String, Error=ErrorToBeSpecified> >
+    {
+        Box::new( future::ok( txt.to_owned() ) )
+    }
+}
