@@ -70,7 +70,7 @@ impl Signer for Signo{
     fn pub_key(&self) -> &PublicKey{
         &self.pubkey
     }
-    fn sign(&self, data: Vec<u8>) -> Signature{
+    fn sign(&self, data: &[u8]) -> Signature{
         let mut sig = String::new();
         sig.push_str( std::str::from_utf8(&data).unwrap() );
         sig.push_str( std::str::from_utf8(&self.privkey).unwrap() );
@@ -188,13 +188,13 @@ impl Home for DummyHome{
             unimplemented!()
         }
 
-    fn pair_response(&self, rel: Relation) ->
+    fn pair_response(&self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >{
             println!("pair_response");
             unimplemented!()
         }
 
-    fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame) ->
+    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >{
             println!("call");
             unimplemented!()
@@ -213,20 +213,14 @@ pub fn dummy_half_proof(rtype: &str)->RelationHalfProof{
         peer_id:        ProfileId("peer_id".as_bytes().to_owned()),
     }
 }
-pub fn dummy_proof(rtype: &str)->RelationProof{
-    RelationProof{
-        half_proof: dummy_half_proof(rtype),
-        peer_sign:  Signature("peer_sign".as_bytes().to_owned()),
-    }
 
-}
 pub fn dummy_relation(rtype: &str)->Relation{
     Relation::new(
         &make_own_persona_profile(
             "relation_profile",
             &PublicKey("dummy_relation_profile_id".as_bytes().to_owned()) 
         ),
-        &dummy_proof(rtype)
+        &RelationProof::new()
     )
 }
 
@@ -236,7 +230,7 @@ mod test {
 
     #[test]
     fn instantiate_signo(){
-        let _signo = Signo();
+        let _signo = Signo("Trololo");
         assert_eq!(3, 4);
     }
 }

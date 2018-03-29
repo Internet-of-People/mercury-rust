@@ -18,7 +18,7 @@ use mercury_common::*;
 
 pub mod net;
 pub mod protocol_capnp;
-
+pub mod test;
 pub mod mock;
 
 pub trait HomeConnector
@@ -306,7 +306,7 @@ impl ProfileGateway for ProfileGatewayImpl
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let pair_fut = self.any_home_of(&rel.profile)
-            .and_then( |home| home.pair_response(rel.proof) );
+            .and_then( move |home| home.pair_response(rel.proof) );
         Box::new(pair_fut)
     }
 
