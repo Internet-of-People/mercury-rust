@@ -48,14 +48,6 @@ struct RelationProof
 }
 
 
-struct Relation
-{
-    data    @0 : Data;
-    # profile @0 : Profile,
-    # proof   @1 : RelationProof,
-}
-
-
 struct HomeInvitation
 {
     data @0 : Data;
@@ -72,7 +64,7 @@ struct OwnProfile
 
 interface AppMessageListener
 {
-    onMessageSent @0 (message: AppMessageFrame);
+    receive @0 (message: AppMessageFrame);
 }
 
 
@@ -83,11 +75,11 @@ interface Home extends (ProfileRepo)
     register @1 (ownProfile: OwnProfile, invite: HomeInvitation) -> (ownProfile: OwnProfile);
     login @2 (profileId : ProfileId) -> (session : HomeSession);
 
-    #pairRequest @3 (halfProof: RelationHalfProof);  # NOTE called on acceptor's home
-    #pairResponse @4 (relation: Relation);           # NOTE called on requestor's home
+    pairRequest @3 (halfProof: RelationHalfProof);  # NOTE called on acceptor's home
+    pairResponse @4 (relationProof: RelationProof);      # NOTE called on requestor's home
 
-    #call @5 (relation: Relation, app: ApplicationId, initPayload: AppMessageFrame,
-    #     toCaller: AppMessageListener) -> (toCallee: CallMessages);
+    call @5 (relation: RelationProof, app: ApplicationId, initPayload: AppMessageFrame,
+             toCaller: AppMessageListener) -> (toCallee: AppMessageListener);
 }
 
 
@@ -101,25 +93,26 @@ struct Call
 
 interface CallListener
 {
-    onCall @0 (call: Call) -> (toCallee: AppMessageListener);
+    receive @0 (call: Call) -> (toCallee: AppMessageListener);
 }
 
 
 
-interface HomeEventNotifier
+# TODO consider making this generic and merging it with AppMessageListener and maybe CallListener
+interface HomeEventListener
 {
-    # TODO
+    receive @0 (event: Data); # TODO event probably should be typed
 }
 
 
 interface HomeSession
 {
-    # update @0 (ownProfile: OwnProfile);
-    # unregister @1 (newHome: Profile); # NOTE closes session after successful call
+    update @0 (ownProfile: OwnProfile);
+    unregister @1 (newHome: Profile); # NOTE closes session after successful call
 
-    # events @2 () -> (events: HomeEventNotifier);
-    # checkinApp @3 (app: ApplicationId) -> (calls: Calls);
+    events @2 (eventListener: HomeEventListener);
+    checkinApp @3 (app: ApplicationId, callListener: CallListener);
 
     # TODO remove after testing
-    ping @0 (txt : Text) -> (pong : Text);
+    ping @4 (txt : Text) -> (pong : Text);
 }

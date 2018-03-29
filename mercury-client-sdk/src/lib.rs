@@ -1,5 +1,6 @@
 #![allow(unused)]
 extern crate capnp;
+#[macro_use]
 extern crate capnp_rpc;
 extern crate futures;
 extern crate mercury_common;
@@ -16,12 +17,16 @@ use futures::future;
 use mercury_common::*;
 
 pub mod net;
+pub mod protocol_capnp;
 
 pub mod mock;
 
 pub trait HomeConnector
 {
-    // NOTE home_profile must have a HomeFacet with at least an address filled in
+    /// Initiate a permanent connection to the home server defined by `home_profile`, or return an
+    /// existing, live `Home` immediately.
+    /// `home_profile` must have a HomeFacet with at least an address filled in.
+    /// `signer` belongs to me.
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
 }
@@ -74,6 +79,7 @@ pub trait ProfileGateway
     fn claim(&self, home: ProfileId, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
+    /// `invite` is needed only if the home has a restrictive registration policy.
     fn register(&self, home: ProfileId, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
 
@@ -183,7 +189,7 @@ impl ProfileGatewayImpl
         // TODO implement binary serialization for signing
         RelationHalfProof{ relation_type: relation_type.to_owned(),
             my_id: signer.prof_id().to_owned(), peer_id: with_prof.to_owned(),
-            my_sign: signer.sign( "TODO implement halfproof serialization".as_bytes().to_owned() ) }
+            my_sign: signer.sign( "TODO implement halfproof serialization".as_bytes() ) }
     }
 
 }
@@ -300,7 +306,7 @@ impl ProfileGateway for ProfileGatewayImpl
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let pair_fut = self.any_home_of(&rel.profile)
-            .and_then( |home| home.pair_response(rel) );
+            .and_then( |home| home.pair_response(rel.proof) );
         Box::new(pair_fut)
     }
 
@@ -310,7 +316,7 @@ impl ProfileGateway for ProfileGatewayImpl
     {
         let call_fut = self.any_home_of(&rel.profile)
             .and_then( move |home|
-                home.call(rel, app, init_payload) ) ;
+                home.call(rel.proof, app, init_payload) ) ;
         Box::new(call_fut)
     }
 }
@@ -349,7 +355,7 @@ mod tests
     {
         fn prof_id(&self) -> &ProfileId { &self.prof_id }
         fn pub_key(&self) -> &PublicKey { &self.pub_key }
-        fn sign(&self, data: Vec<u8>) -> Signature { Signature( Vec::new() ) }
+        fn sign(&self, data: &[u8]) -> Signature { Signature( Vec::new() ) }
     }
 
 
@@ -357,9 +363,8 @@ mod tests
     #[test]
     fn temporary_test_capnproto()
     {
-        use std::net::SocketAddr;
         use std::net::ToSocketAddrs;
-        use super::net::*;
+        use super::protocol_capnp::*;
 
         let mut setup = TestSetup::new();
 
@@ -383,9 +388,10 @@ mod tests
             .and_then( move |tcp_stream|
             {
                 let home = HomeClientCapnProto::new(tcp_stream, home_ctx, handle);
-                home.login(prof_id)
-            } )
-            .and_then( |session| session.ping("hahoooo") );
+                home.load(&prof_id)
+                //home.login(prof_id)
+            } );
+            //.and_then( |session| session.ping("hahoooo") );
 
         let pong = setup.reactor.run(test_fut);
         println!("Response: {:?}", pong);
