@@ -1,5 +1,7 @@
+#![allow(unused)]
 use std::net::{SocketAddr, IpAddr};
 
+use capnp::capability::Promise;
 use futures::{Future};
 use futures::future;
 use multiaddr::{Multiaddr, AddrComponent};

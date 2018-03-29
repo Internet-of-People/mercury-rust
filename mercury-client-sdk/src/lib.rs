@@ -1,3 +1,4 @@
+#![allow(unused)]
 extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
@@ -18,7 +19,7 @@ use mercury_common::*;
 pub mod net;
 pub mod protocol_capnp;
 
-
+pub mod mock;
 
 pub trait HomeConnector
 {
@@ -110,15 +111,30 @@ pub trait ProfileGateway
 #[derive(Clone)]
 pub struct ProfileGatewayImpl
 {
-    signer:         Rc<Signer>,
-    profile_repo:   Rc<ProfileRepo>,
-    home_connector: Rc<HomeConnector>,
+    pub signer:         Rc<Signer>,
+    //local profile repository?
+    pub profile_repo:   Rc<ProfileRepo>,
+    pub home_connector: Rc<HomeConnector>,
 }
 
 
 impl ProfileGatewayImpl
 {
-    fn connect_home(&self, home_profile_id: &ProfileId) ->
+    pub fn new(    
+        signer:         Rc<Signer>,
+        profile_repo:   Rc<ProfileRepo>,
+        home_connector: Rc<HomeConnector>,
+    ) -> Self
+    {
+        ProfileGatewayImpl{
+            signer:         signer,
+            profile_repo:   profile_repo,
+            home_connector: home_connector,
+        }
+
+    }
+
+    pub fn connect_home(&self, home_profile_id: &ProfileId) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
     {
         let home_connector_clone = self.home_connector.clone();
@@ -130,7 +146,7 @@ impl ProfileGatewayImpl
     }
 
 
-    fn any_home_of(&self, profile: &Profile) ->
+    pub fn any_home_of(&self, profile: &Profile) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
     {
         let profile_repo_clone = self.profile_repo.clone();
@@ -140,7 +156,7 @@ impl ProfileGatewayImpl
     }
 
 
-    fn any_home_of2(profile: &Profile, prof_repo: Rc<ProfileRepo>,
+    pub fn any_home_of2(profile: &Profile, prof_repo: Rc<ProfileRepo>,
                     connector: Rc<HomeConnector>, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
     {
@@ -175,6 +191,7 @@ impl ProfileGatewayImpl
             my_id: signer.prof_id().to_owned(), peer_id: with_prof.to_owned(),
             my_sign: signer.sign( "TODO implement halfproof serialization".as_bytes() ) }
     }
+
 }
 
 

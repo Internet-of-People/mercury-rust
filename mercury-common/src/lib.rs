@@ -244,7 +244,7 @@ pub struct Relation
 
 impl Relation
 {
-    fn new(profile: &Profile, proof: &RelationProof) -> Self
+    pub fn new(profile: &Profile, proof: &RelationProof) -> Self
         { Self { profile: profile.clone(), proof: proof.clone() } }
 }
 
