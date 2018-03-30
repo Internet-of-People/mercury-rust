@@ -166,7 +166,7 @@ impl Home for DummyHome{
 
     // TODO consider how to enforce overwriting the original ownprofile with the modified one
     //      with the pairing proof, especially the error case
-    fn register(&self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
+    fn register(&mut self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >{
             println!("register: {:?}", own_prof.profile.id);
             unimplemented!()
@@ -230,7 +230,7 @@ mod test {
 
     #[test]
     fn instantiate_signo(){
-        let _signo = Signo("Trololo");
+        let _signo = Signo::new("Trololo");
         assert_eq!(3, 4);
     }
 }

@@ -10,6 +10,8 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate futures;
 
+mod dummy;
+
 use std::rc::Rc;
 use std::io::{BufRead, Read, Write, stdin};
 
@@ -44,72 +46,69 @@ fn main(){
     
     println!("Setting up connection");
 
+    let profilegateway = ProfileGatewayImpl{
+        signer:         signo,
+        profile_repo:   Rc::new( dummy::Dummy::new() ),
+        home_connector: Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ),
+    };
+
     // let bizbasz = TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap() , &reactorhandle.clone() )
     // .map(|stream|{
-    //     let cap = Rc::new(HomeClientCapnProto::new(
-    //         stream,
-    //         Box::new(HomeContext::new(signo.clone(), &homeprof)),
-    //         reactorhandle.clone()
-    //     ));
-    //     ProfileGatewayImpl{
-    //             signer:         signo,
-    //             profile_repo:   cap,
-    //             home_connector: Rc::new(SimpleTcpHomeConnector::new(reactorhandle.clone())),
-    //     }
+
     // });
     // let appcontext = reactor.run(bizbasz).unwrap();
     
-    // println!("Please register then log in");
-    // println!("Registering");
-    // let ownprofile = reactor.run(profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None)).unwrap();
-    // println!("{:?}",ownprofile );
+    println!("Please register then log in");
+    println!("Registering");
+    let ownprofile = reactor.run(profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None)).unwrap();
+    println!("{:?}",ownprofile );
     
-    // println!("Logging in");
-    // println!("Getting session");
-    // let session = reactor.run(profilegateway.login()).unwrap();
+    println!("Logging in");
+    println!("Getting session");
+    let session = reactor.run(profilegateway.login()).unwrap();
     
-    // println!("All set up");
+    println!("All set up");
     
-    // println!("Menu\n1. Connect\n2. Call(crashes)\n3. Pair\n4. Ping\n5. Show profile\nExit with ctrl+d");
-    // let mut buffer = String::new();
-    // let stdin = tokio_stdin_stdout::stdin(1);
-    // let bufreader = std::io::BufReader::new(stdin);
-    // let instream = tokio_io::io::lines(bufreader);
-    // let stdin_closed = instream.for_each(|line|{     
-    //     match line.as_ref(){
-    //         "1" =>{
-    //             let signer = profilegateway.signer.to_owned();
-    //             profilegateway.home_connector.connect(&homeprof, signer);
-    //             println!("connect");
+    println!("Menu\n1. Connect\n2. Call(crashes)\n3. Pair\n4. Ping\n5. Show profile\nExit with ctrl+d");
+    let mut buffer = String::new();
+    let stdin = tokio_stdin_stdout::stdin(1);
+    let bufreader = std::io::BufReader::new(stdin);
+    let instream = tokio_io::io::lines(bufreader);
+    let stdin_closed = instream.for_each(|line|{     
+        match line.as_ref(){
+            "1" =>{
+                let signer = profilegateway.signer.to_owned();
+                profilegateway.home_connector.connect(&homeprof, signer);
+                println!("connect");
     
-    //         },
-    //         //call dies miserably 
-    //         "2" =>{
-    //             profilegateway.call(
-    //                 mock::dummy_relation("work"), 
-    //                 ApplicationId( String::from("SampleApp") ), 
-    //                 AppMessageFrame("whatever".as_bytes().to_owned() ) 
-    //             );
+            },
+            //call dies miserably 
+            "2" =>{
+                profilegateway.call(
+                    mock::dummy_relation("work"), 
+                    ApplicationId( String::from("SampleApp") ), 
+                    AppMessageFrame("whatever".as_bytes().to_owned() ) 
+                );
     
-    //         }
-    //         "3" =>{
-    //             profilegateway.pair_request("relation_dummy_type", "url");
+            }
+            "3" =>{
+                profilegateway.pair_request("relation_dummy_type", "url");
     
-    //         }
-    //         "4" =>{
-    //             session.ping("dummy_ping");
+            }
+            "4" =>{
+                session.ping("dummy_ping");
     
-    //         }
-    //         "5" =>{
-    //             println!("{:?}", ownprofile);
+            }
+            "5" =>{
+                println!("{:?}", ownprofile);
     
-    //         }
-    //         _ =>{
-    //             println!("nope");
+            }
+            _ =>{
+                println!("nope");
     
-    //         },
-    //     };
-    //     futures::future::ok::<(),std::io::Error>(())
-    // });
-    // reactor.run(stdin_closed);
+            },
+        };
+        futures::future::ok::<(),std::io::Error>(())
+    });
+    reactor.run(stdin_closed);
 }

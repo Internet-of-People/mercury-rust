@@ -28,13 +28,15 @@ use tokio_io::{AsyncRead, AsyncWrite};
 use futures::{future, Future,Stream};
 
 
-struct Dummy{
+pub struct Dummy{
+    home_id   : ProfileId, 
     prof_repo : HashMap<Vec<u8>, Profile>,
 }
 
 impl Dummy{
     pub fn new() -> Self {
         Self{
+            home_id   : ProfileId( Vec::from( "DummyHome" ) ),
             prof_repo : HashMap::new()
         }
     }
@@ -73,9 +75,26 @@ impl Home for Dummy
 
     // TODO consider how to enforce overwriting the original ownprofile with the modified one
     //      with the pairing proof, especially the error case
-    fn register(&self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
+    fn register(&mut self, mut own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
     Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >{
-        Box::new( future::err( (own_prof, ErrorToBeSpecified::TODO) ) )
+        //make some relation magic
+        //match own_prof.profile.facets[0].homes.append(dummy_relation(self.home_id));
+        let mut ret : Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
+        match own_prof.profile.facets[0] {
+            ProfileFacet::Persona(ref mut persona) => {
+                persona.homes.append( &mut vec!(dummy_relation("dummy_home") ) );
+            },
+            _ => {
+                /*Box::new( future::err( (own_prof, ErrorToBeSpecified::TODO) ) )*/
+                //ret = Box::new(future::ok(own_prof));
+            },
+        };
+        match self.prof_repo.insert(own_prof.profile.id.0.clone(), own_prof.profile.clone()){
+            Some(updated)=> Box::new( future::err( (own_prof, ErrorToBeSpecified::TODO) ) ) ,
+            None => Box::new(future::ok(own_prof)),
+        }
+        //own_prof.priv_data = Vec::from("potato");
+        
     }
 
     // NOTE this closes all previous sessions of the same profile
