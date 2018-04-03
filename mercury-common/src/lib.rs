@@ -300,7 +300,7 @@ pub trait Home: ProfileRepo
 
     // TODO consider how to enforce overwriting the original ownprofile with the modified one
     //      with the pairing proof, especially the error case
-    fn register(&self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
+    fn register(&mut self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
 
     // NOTE this closes all previous sessions of the same profile

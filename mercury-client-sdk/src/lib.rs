@@ -10,6 +10,7 @@ extern crate tokio_core;
 extern crate tokio_io;
 
 use std::rc::Rc;
+use std::borrow::BorrowMut;
 
 use futures::{Future, Stream}; // IntoFuture, Sink
 use futures::future;
@@ -240,7 +241,7 @@ impl ProfileGateway for ProfileGatewayImpl
         let own_prof_clone = own_prof.clone();
         let reg_fut = self.connect_home(&home_id)
             .map_err( move |e| (own_prof_clone, e) )
-            .and_then( move |home| home.register(own_prof, invite) );
+            .and_then( move |mut home : Rc<Home>| Rc::get_mut(&mut home).unwrap().register(own_prof, invite) );
         Box::new(reg_fut)
     }
 

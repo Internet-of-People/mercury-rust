@@ -132,7 +132,7 @@ impl Home for HomeClientCapnProto
         Box::new(resp_fut)
     }
 
-    fn register(&self, own_profile: OwnProfile, invite: Option<HomeInvitation>) ->
+    fn register(&mut self, own_profile: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         let mut request = self.home.register_request();
