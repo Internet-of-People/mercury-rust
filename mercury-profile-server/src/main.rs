@@ -34,7 +34,7 @@ fn main()
     let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
     let socket = TcpListener::bind(&addr, &handle).expect("Failed to bind socket");
 
-    let home = Rc::new( server::HomeServer::new() );
+    let home = Box::new( server::HomeServer::new() );
     let dispatcher = protocol_capnp::HomeDispatcherCapnProto::new(home);
     let home_capnp = mercury_capnp::home::ToClient::new(dispatcher)
         .from_server::<::capnp_rpc::Server>();

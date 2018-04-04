@@ -9,7 +9,7 @@ use super::*;
 
 pub struct HomeDispatcherCapnProto
 {
-    home: Rc<Home>,
+    home: Box<Home>,
     // TODO probably we should have a SessionFactory here
     //      instead of instantiating sessions "manually"
 }
@@ -17,7 +17,7 @@ pub struct HomeDispatcherCapnProto
 
 impl HomeDispatcherCapnProto
 {
-    pub fn new(home: Rc<Home>) -> Self
+    pub fn new(home: Box<Home>) -> Self
         { Self{ home: home } }
 }
 

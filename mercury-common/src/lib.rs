@@ -4,7 +4,6 @@ extern crate futures;
 extern crate multiaddr;
 extern crate multihash;
 extern crate tokio_core;
-extern crate tokio_io;
 
 use std::collections::hash_map::HashMap;
 use std::rc::Rc;
@@ -14,7 +13,6 @@ use futures::future;
 use multiaddr::Multiaddr;
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
-use tokio_io::{AsyncRead, AsyncWrite};
 
 
 

@@ -59,7 +59,7 @@ impl Home for HomeServer
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
     }
 
-    fn register(&self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
+    fn register(&mut self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         Box::new( futures::future::err( (own_prof,ErrorToBeSpecified::TODO) ) )
