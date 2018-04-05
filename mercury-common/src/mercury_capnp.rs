@@ -42,6 +42,19 @@ impl<'a> From<&'a ::ProfileId> for &'a [u8]
 }
 
 
+impl<'a> From<&'a str> for ::ApplicationId
+{
+    fn from(src: &'a str) -> Self
+        { ::ApplicationId( src.to_owned() ) }
+}
+
+impl<'a> From<&'a ::ApplicationId> for &'a str
+{
+    fn from(src: &'a ::ApplicationId) -> Self
+        { &src.0 }
+}
+
+
 impl<'a> TryFrom<profile::Reader<'a>> for ::Profile
 {
     type Error = capnp::Error;

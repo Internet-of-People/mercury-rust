@@ -219,9 +219,33 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
             {
                 let request = callback.receive_request();
                 // TODO event serialization
-                // event_req.get().set_event(event);
+                // request.get().set_event(event);
                 request.send().promise
-                    .map( |resp| () )
+                    .map( |_resp| () )
+                    // TODO .map_err() what to do here in case of an error?
+            } );
+        Promise::from_future(events_fut)
+    }
+
+
+    fn checkin_app(&mut self, params: mercury_capnp::home_session::CheckinAppParams<>,
+                   mut results: mercury_capnp::home_session::CheckinAppResults<>)
+        -> Promise<(), ::capnp::Error>
+    {
+        let params = pry!( params.get() );
+        let app_id = pry!( params.get_app() );
+        let callback = pry!( params.get_call_listener() );
+
+        let events_fut = self.session.checkin_app( &app_id.into() )
+            .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling;
+            .for_each( move |event|
+            {
+                let request = callback.receive_request();
+                // TODO call serialization
+                // request.get().set_call(call);
+                request.send().promise
+                    .map( |_resp| () )
+                    // TODO .map_err() what to do here in case of an error?
             } );
         Promise::from_future(events_fut)
     }
