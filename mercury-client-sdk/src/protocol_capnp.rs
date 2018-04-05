@@ -193,7 +193,7 @@ impl Home for HomeClientCapnProto
 
         let resp_fut = request.send().promise
             .map( |resp| () )
-            .map_err( |_e| ErrorToBeSpecified::TODO );;
+            .map_err( |_e| ErrorToBeSpecified::TODO );
 
         Box::new(resp_fut)
     }

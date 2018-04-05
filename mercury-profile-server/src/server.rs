@@ -123,6 +123,7 @@ impl HomeSession for HomeSessionServer
     fn unregister(&self, newhome: Option<Profile>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
+        // TODO close/drop session connection after successful unregister()
         Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 

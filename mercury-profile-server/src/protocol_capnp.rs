@@ -200,8 +200,29 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
             mut results: mercury_capnp::home_session::PingResults<>)
         -> Promise<(), ::capnp::Error>
     {
-        let ping = pry!( pry!( params.get() ).get_txt() );
-        results.get().set_pong(ping);
-        Promise::ok( () )
+        let txt = pry!( pry!( params.get() ).get_txt() );
+        let ping_fut = self.session.ping(txt)
+            .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling
+            .map( move |pong| results.get().set_pong(&pong) );
+        Promise::from_future(ping_fut)
+    }
+
+
+    fn events(&mut self, params: mercury_capnp::home_session::EventsParams<>,
+              mut results: mercury_capnp::home_session::EventsResults<>)
+        -> Promise<(), ::capnp::Error>
+    {
+        let callback = pry!( pry!( params.get() ).get_event_listener() );
+        let events_fut = self.session.events()
+            .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling;
+            .for_each( move |event|
+            {
+                let request = callback.receive_request();
+                // TODO event serialization
+                // event_req.get().set_event(event);
+                request.send().promise
+                    .map( |resp| () )
+            } );
+        Promise::from_future(events_fut)
     }
 }
