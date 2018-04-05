@@ -1,5 +1,6 @@
 use capnp::capability::Promise;
-use futures::Future;
+use futures::{Future, Sink};
+use futures::sync::mpsc::Sender;
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 use tokio_io::AsyncRead;
@@ -21,8 +22,9 @@ pub fn capnp_home(tcp_stream: TcpStream, context: Box<PeerContext>, handle: reac
 pub struct HomeClientCapnProto
 {
     context:Box<PeerContext>,
-    repo:   mercury_capnp::profile_repo::Client<>,
-    home:   mercury_capnp::home::Client<>,
+    repo:   mercury_capnp::profile_repo::Client,
+    home:   mercury_capnp::home::Client,
+    handle: reactor::Handle,
 }
 
 
@@ -47,7 +49,7 @@ impl HomeClientCapnProto
 
         handle.spawn( rpc_system.map_err( |e| println!("Capnp RPC failed: {}", e) ) );
 
-        Self{ context: context, home: home, repo: repo } // , rpc_system: rpc_system
+        Self{ context: context, home: home, repo: repo, handle: handle }
     }
 }
 
@@ -157,12 +159,14 @@ impl Home for HomeClientCapnProto
         let mut request = self.home.login_request();
         request.get().set_profile_id( (&profile_id).into() );
 
+        let handle_clone = self.handle.clone();
         let resp_fut = request.send().promise
             .and_then( |resp|
             {
                 resp.get()
                     .and_then( |res| res.get_session() )
-                    .map( |session_client| Box::new( HomeSessionClientCapnProto::new(session_client) ) as Box<HomeSession> )
+                    .map( |session_client| Box::new(
+                        HomeSessionClientCapnProto::new(session_client, handle_clone) ) as Box<HomeSession> )
             } )
             .map_err( |_e| ErrorToBeSpecified::TODO );;
 
@@ -207,15 +211,39 @@ impl Home for HomeClientCapnProto
 
 
 
+struct ProfileEventListener
+{
+    sender: Sender<ProfileEvent>,
+}
+
+
+impl mercury_capnp::profile_event_listener::Server for ProfileEventListener
+{
+    fn receive(&mut self, params: mercury_capnp::profile_event_listener::ReceiveParams,
+                mut results: mercury_capnp::profile_event_listener::ReceiveResults,)
+        -> Promise<(), ::capnp::Error>
+    {
+        let event_capnp = pry!( pry!( params.get() ).get_event() );
+        let event = pry!( ProfileEvent::try_from(event_capnp) );
+        let recv_fut = self.sender.clone().send(event)
+            .map( |_sink| () )
+            .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}",e ) ) );
+        Promise::from_future(recv_fut)
+    }
+}
+
+
+
 pub struct HomeSessionClientCapnProto
 {
-    session: mercury_capnp::home_session::Client<>,
+    session: mercury_capnp::home_session::Client,
+    handle:  reactor::Handle,
 }
 
 impl HomeSessionClientCapnProto
 {
-    pub fn new(session: mercury_capnp::home_session::Client) -> Self
-        { Self{ session: session } }
+    pub fn new(session: mercury_capnp::home_session::Client, handle: reactor::Handle) -> Self
+        { Self{ session: session, handle: handle } }
 }
 
 impl HomeSession for HomeSessionClientCapnProto
@@ -226,22 +254,54 @@ impl HomeSession for HomeSessionClientCapnProto
     fn update(&self, own_prof: &OwnProfile) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        let mut request = self.session.update_request();
+        request.get().init_own_profile().fill_from(&own_prof);
+
+        let resp_fut = request.send().promise
+            .map( |resp| () )
+            .map_err( |_e| ErrorToBeSpecified::TODO );
+
+        Box::new(resp_fut)
     }
+
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home
     fn unregister(&self, newhome: Option<Profile>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        let mut request = self.session.unregister_request();
+        if let Some(new_home_profile) = newhome
+            { request.get().init_new_home().fill_from(&new_home_profile); }
+
+        let resp_fut = request.send().promise
+            .map( |resp| () )
+            .map_err( |_e| ErrorToBeSpecified::TODO );
+
+        Box::new(resp_fut)
     }
 
 
     fn events(&self) -> Box< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >
     {
-        let (_send, recv) = futures::sync::mpsc::channel(0);
+        let (send, recv) = futures::sync::mpsc::channel(0);
+        let listener = ProfileEventListener{ sender: send };
+        let listener_capnp = mercury_capnp::profile_event_listener::ToClient::new(listener)
+            .from_server::<::capnp_rpc::Server>();
+
+        let mut request = self.session.events_request();
+        request.get().set_event_listener(listener_capnp);
+
+        // TODO can we avoid handle.spawn() here?
+        self.handle.spawn(
+            // TODO if not, how to delegate errors to close the stream?
+            request.send().promise
+                .map( move |_resp| () )
+                .map_err( |_e| () )
+        );
+
         Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
+
 
     // TODO return not a Stream, but an AppSession struct containing a stream
     fn checkin_app(&self, app: &ApplicationId) ->
@@ -250,6 +310,7 @@ impl HomeSession for HomeSessionClientCapnProto
         let (_send, recv) = futures::sync::mpsc::channel(0);
         Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
+
 
     fn ping(&self, txt: &str) ->
         Box< Future<Item=String, Error=ErrorToBeSpecified> >

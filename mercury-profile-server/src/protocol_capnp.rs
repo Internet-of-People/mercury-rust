@@ -217,9 +217,8 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
             .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling;
             .for_each( move |event|
             {
-                let request = callback.receive_request();
-                // TODO event serialization
-                // request.get().set_event(event);
+                let mut request = callback.receive_request();
+                request.get().init_event().fill_from(&event);
                 request.send().promise
                     .map( |_resp| () )
                     // TODO .map_err() what to do here in case of an error?
@@ -241,7 +240,6 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
             .for_each( move |call|
             {
                 let request = callback.receive_request();
-                // TODO call serialization
                 // request.get().set_call(call);
                 request.send().promise
                     .map( |_resp| () )
