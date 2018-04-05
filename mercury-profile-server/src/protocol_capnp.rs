@@ -238,7 +238,7 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
 
         let events_fut = self.session.checkin_app( &app_id.into() )
             .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling;
-            .for_each( move |event|
+            .for_each( move |call|
             {
                 let request = callback.receive_request();
                 // TODO call serialization

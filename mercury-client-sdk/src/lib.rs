@@ -42,6 +42,21 @@ pub trait ProfileConnector
 
 
 
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct Relation
+{
+    pub profile:    Profile,
+    pub proof:      RelationProof,
+}
+
+impl Relation
+{
+    pub fn new(profile: &Profile, proof: &RelationProof) -> Self
+        { Self { profile: profile.clone(), proof: proof.clone() } }
+}
+
+
+
 pub struct HomeContext
 {
     signer:         Rc<Signer>,
@@ -157,7 +172,7 @@ impl ProfileGatewayImpl
     }
 
 
-    pub fn any_home_of2(profile: &Profile, prof_repo: Rc<ProfileRepo>,
+    fn any_home_of2(profile: &Profile, prof_repo: Rc<ProfileRepo>,
                     connector: Rc<HomeConnector>, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
     {
@@ -171,10 +186,16 @@ impl ProfileGatewayImpl
                     _ => Vec::new(),
                 }
             } )
-            .map( move |home_relation|
+            .map( move |home_relation_proof|
             {
-                // Load profiles from home ids
-                connector.connect( &home_relation.profile, signer.clone() )
+                let connector_clone = connector.clone();
+                let signer_clone = signer.clone();
+                prof_repo.load(&home_relation_proof.peer_id)
+                    .and_then( move |home_profile|
+                    {
+                        // Load profiles from home ids
+                        connector_clone.connect(&home_profile, signer_clone)
+                    } )
             } );
 
         // Pick first successful home connection

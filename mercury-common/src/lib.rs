@@ -66,7 +66,7 @@ pub struct PersonaFacet
     /// `homes` contain items with `relation_type` "home", with proofs included.
     /// Current implementation supports only a single home stored in `homes[0]`,
     /// Support for multiple homes will be implemented in a future release.
-    pub homes:  Vec<Relation>,
+    pub homes:  Vec<RelationProof>,
     pub data:   Vec<u8>,
 }
 
@@ -232,20 +232,6 @@ impl RelationProof
 }
 
 
-// TODO consider moving this to the client API, might be not needed here at all
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Relation
-{
-    pub profile:    Profile,
-    pub proof:      RelationProof,
-}
-
-impl Relation
-{
-    pub fn new(profile: &Profile, proof: &RelationProof) -> Self
-        { Self { profile: profile.clone(), proof: proof.clone() } }
-}
-
 
 /// This invitation allows a persona to register on the specified home.
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -326,13 +312,13 @@ pub trait Home: ProfileRepo
 
 pub enum ProfileEvent
 {
-    Unknown(Vec<u8>), // forward compatibility for protocol extension
-    PairingRequest,
-    PairingResponse,
+    PairingRequest(RelationHalfProof),
+    PairingResponse(RelationProof),
 // TODO are these events needed? What others?
-    HomeBroadcast,
-    HomeHostingExpiry,
-    ProfileUpdated, // from a different client instance/session
+//    Unknown(Vec<u8>), // forward compatibility for protocol extension
+//    HomeBroadcast,
+//    HomeHostingExpiry,
+//    ProfileUpdated, // from a different client instance/session
 }
 
 

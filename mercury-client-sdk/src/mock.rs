@@ -214,13 +214,17 @@ pub fn dummy_half_proof(rtype: &str)->RelationHalfProof{
     }
 }
 
+pub fn dummy_relation_proof()->RelationProof {
+    RelationProof::new()
+}
+
 pub fn dummy_relation(rtype: &str)->Relation{
     Relation::new(
         &make_own_persona_profile(
             "relation_profile",
             &PublicKey("dummy_relation_profile_id".as_bytes().to_owned()) 
         ),
-        &RelationProof::new()
+        &dummy_relation_proof()
     )
 }
 

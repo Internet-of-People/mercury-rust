@@ -155,25 +155,25 @@ use futures::{Future,Stream};
         let res = reactor.run(home);        
     }
 
-    #[test]
-    fn test_any_home_of2(){
-        let mut reactor = reactor::Core::new().unwrap();
-        let mut reactorhandle = reactor.handle();
-        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-        let profile_repo = Rc::new( mock::DummyHome::new("test_any_home_of") );
-        let home_connector = Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) );
-
-        let mut profile = make_own_persona_profile( "Chara", signo.pub_key() );
-
-        let home = ProfileGatewayImpl::any_home_of2( 
-            &profile, 
-            profile_repo,
-            home_connector, 
-            signo
-        );
-
-        let res = reactor.run(home);
-    }    
+//    #[test]
+//    fn test_any_home_of2(){
+//        let mut reactor = reactor::Core::new().unwrap();
+//        let mut reactorhandle = reactor.handle();
+//        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
+//        let profile_repo = Rc::new( mock::DummyHome::new("test_any_home_of") );
+//        let home_connector = Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) );
+//
+//        let mut profile = make_own_persona_profile( "Chara", signo.pub_key() );
+//
+//        let home = ProfileGatewayImpl::any_home_of2(
+//            &profile,
+//            profile_repo,
+//            home_connector,
+//            signo
+//        );
+//
+//        let res = reactor.run(home);
+//    }
 
     #[test]
     fn test_call(){
