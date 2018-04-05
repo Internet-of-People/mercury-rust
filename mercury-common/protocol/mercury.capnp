@@ -98,19 +98,20 @@ interface CallListener
 
 
 
-struct Event
+struct ProfileEvent
 {
     union
     {
         # TODO maybe we could optimize pairing data by omitting most fields, signature and sender profile_id is mandatory
-        pairingRequest  @0 : RelationHalfProof;
-        pairingResponse @1 : RelationProof;
+        unknown         @0 : Data;
+        pairingRequest  @1 : Signature; # RelationHalfProof;
+        pairingResponse @2 : Signature; # RelationProof;
     }
 }
 
-interface HomeEventListener
+interface ProfileEventListener
 {
-    receive @0 (event: Event);
+    receive @0 (event: ProfileEvent);
 }
 
 
@@ -119,7 +120,7 @@ interface HomeSession
     update @0 (ownProfile: OwnProfile);
     unregister @1 (newHome: Profile); # NOTE closes session after successful call
 
-    events @2 (eventListener: HomeEventListener);
+    events @2 (eventListener: ProfileEventListener);
     checkinApp @3 (app: ApplicationId, callListener: CallListener);
 
     # TODO remove after testing

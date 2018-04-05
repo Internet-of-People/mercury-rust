@@ -160,3 +160,24 @@ impl<'a> FillFrom<::RelationProof> for relation_proof::Builder<'a>
         // TODO
     }
 }
+
+
+
+impl<'a> TryFrom<profile_event::Reader<'a>> for ::ProfileEvent
+{
+    type Error = capnp::Error;
+
+    fn try_from(src: profile_event::Reader) -> Result<Self, Self::Error>
+    {
+        // TODO
+        Ok( ::ProfileEvent::Unknown( Vec::new() ) )
+    }
+}
+
+impl<'a> FillFrom<::ProfileEvent> for profile_event::Builder<'a>
+{
+    fn fill_from(mut self, src: &::ProfileEvent)
+    {
+        // TODO
+    }
+}

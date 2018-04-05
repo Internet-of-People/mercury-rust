@@ -312,10 +312,10 @@ pub trait Home: ProfileRepo
 
 pub enum ProfileEvent
 {
+    Unknown(Vec<u8>), // forward compatibility for protocol extension
     PairingRequest(RelationHalfProof),
     PairingResponse(RelationProof),
 // TODO are these events needed? What others?
-//    Unknown(Vec<u8>), // forward compatibility for protocol extension
 //    HomeBroadcast,
 //    HomeHostingExpiry,
 //    ProfileUpdated, // from a different client instance/session
