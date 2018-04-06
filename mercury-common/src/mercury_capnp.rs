@@ -42,6 +42,19 @@ impl<'a> From<&'a ::ProfileId> for &'a [u8]
 }
 
 
+impl<'a> From<&'a str> for ::ApplicationId
+{
+    fn from(src: &'a str) -> Self
+        { ::ApplicationId( src.to_owned() ) }
+}
+
+impl<'a> From<&'a ::ApplicationId> for &'a str
+{
+    fn from(src: &'a ::ApplicationId) -> Self
+        { &src.0 }
+}
+
+
 impl<'a> TryFrom<profile::Reader<'a>> for ::Profile
 {
     type Error = capnp::Error;
@@ -143,6 +156,27 @@ impl<'a> TryFrom<relation_proof::Reader<'a>> for ::RelationProof
 impl<'a> FillFrom<::RelationProof> for relation_proof::Builder<'a>
 {
     fn fill_from(mut self, src: &::RelationProof)
+    {
+        // TODO
+    }
+}
+
+
+
+impl<'a> TryFrom<profile_event::Reader<'a>> for ::ProfileEvent
+{
+    type Error = capnp::Error;
+
+    fn try_from(src: profile_event::Reader) -> Result<Self, Self::Error>
+    {
+        // TODO
+        Ok( ::ProfileEvent::Unknown( Vec::new() ) )
+    }
+}
+
+impl<'a> FillFrom<::ProfileEvent> for profile_event::Builder<'a>
+{
+    fn fill_from(mut self, src: &::ProfileEvent)
     {
         // TODO
     }

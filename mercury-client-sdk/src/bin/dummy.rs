@@ -84,7 +84,7 @@ impl Home for Dummy
         let mut ret : Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
         match own_prof.profile.facets[0] {
             ProfileFacet::Persona(ref mut persona) => {
-                persona.homes.append( &mut vec!(dummy_relation("dummy_home") ) );
+                persona.homes.append( &mut vec!(dummy_relation_proof() ) );
             },
             _ => {
                 /*Box::new( future::err( (own_prof, ErrorToBeSpecified::TODO) ) )*/

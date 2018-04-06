@@ -76,7 +76,7 @@ interface Home extends (ProfileRepo)
     login @2 (profileId : ProfileId) -> (session : HomeSession);
 
     pairRequest @3 (halfProof: RelationHalfProof);  # NOTE called on acceptor's home
-    pairResponse @4 (relationProof: RelationProof);      # NOTE called on requestor's home
+    pairResponse @4 (relationProof: RelationProof); # NOTE called on requestor's home
 
     call @5 (relation: RelationProof, app: ApplicationId, initPayload: AppMessageFrame,
              toCaller: AppMessageListener) -> (toCallee: AppMessageListener);
@@ -98,10 +98,20 @@ interface CallListener
 
 
 
-# TODO consider making this generic and merging it with AppMessageListener and maybe CallListener
-interface HomeEventListener
+struct ProfileEvent
 {
-    receive @0 (event: Data); # TODO event probably should be typed
+    union
+    {
+        # TODO maybe we could optimize pairing data by omitting most fields, signature and sender profile_id is mandatory
+        unknown         @0 : Data;
+        pairingRequest  @1 : Signature; # RelationHalfProof;
+        pairingResponse @2 : Signature; # RelationProof;
+    }
+}
+
+interface ProfileEventListener
+{
+    receive @0 (event: ProfileEvent);
 }
 
 
@@ -110,7 +120,7 @@ interface HomeSession
     update @0 (ownProfile: OwnProfile);
     unregister @1 (newHome: Profile); # NOTE closes session after successful call
 
-    events @2 (eventListener: HomeEventListener);
+    events @2 (eventListener: ProfileEventListener);
     checkinApp @3 (app: ApplicationId, callListener: CallListener);
 
     # TODO remove after testing

@@ -9,7 +9,7 @@ use super::*;
 
 pub struct HomeDispatcherCapnProto
 {
-    home: Rc<Home>,
+    home: Box<Home>,
     // TODO probably we should have a SessionFactory here
     //      instead of instantiating sessions "manually"
 }
@@ -17,7 +17,7 @@ pub struct HomeDispatcherCapnProto
 
 impl HomeDispatcherCapnProto
 {
-    pub fn new(home: Rc<Home>) -> Self
+    pub fn new(home: Box<Home>) -> Self
         { Self{ home: home } }
 }
 
@@ -200,8 +200,51 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
             mut results: mercury_capnp::home_session::PingResults<>)
         -> Promise<(), ::capnp::Error>
     {
-        let ping = pry!( pry!( params.get() ).get_txt() );
-        results.get().set_pong(ping);
-        Promise::ok( () )
+        let txt = pry!( pry!( params.get() ).get_txt() );
+        let ping_fut = self.session.ping(txt)
+            .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling
+            .map( move |pong| results.get().set_pong(&pong) );
+        Promise::from_future(ping_fut)
+    }
+
+
+    fn events(&mut self, params: mercury_capnp::home_session::EventsParams<>,
+              mut results: mercury_capnp::home_session::EventsResults<>)
+        -> Promise<(), ::capnp::Error>
+    {
+        let callback = pry!( pry!( params.get() ).get_event_listener() );
+        let events_fut = self.session.events()
+            .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling;
+            .for_each( move |event|
+            {
+                let mut request = callback.receive_request();
+                request.get().init_event().fill_from(&event);
+                request.send().promise
+                    .map( |_resp| () )
+                    // TODO .map_err() what to do here in case of an error?
+            } );
+        Promise::from_future(events_fut)
+    }
+
+
+    fn checkin_app(&mut self, params: mercury_capnp::home_session::CheckinAppParams<>,
+                   mut results: mercury_capnp::home_session::CheckinAppResults<>)
+        -> Promise<(), ::capnp::Error>
+    {
+        let params = pry!( params.get() );
+        let app_id = pry!( params.get_app() );
+        let callback = pry!( params.get_call_listener() );
+
+        let events_fut = self.session.checkin_app( &app_id.into() )
+            .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling;
+            .for_each( move |call|
+            {
+                let request = callback.receive_request();
+                // request.get().set_call(call);
+                request.send().promise
+                    .map( |_resp| () )
+                    // TODO .map_err() what to do here in case of an error?
+            } );
+        Promise::from_future(events_fut)
     }
 }

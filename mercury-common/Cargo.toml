@@ -13,5 +13,3 @@ futures = "0.1"
 multiaddr = "*"
 multihash = "*"
 tokio-core = "0.1"
-
-tokio-io = "*"
