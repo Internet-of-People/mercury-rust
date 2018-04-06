@@ -58,7 +58,6 @@ fn main(){
     // });
     // let appcontext = reactor.run(bizbasz).unwrap();
     
-    println!("Please register then log in");
     println!("Registering");
     let ownprofile = reactor.run(profilegateway.register(ProfileId("Home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None)).unwrap();
     println!("{:?}",ownprofile );

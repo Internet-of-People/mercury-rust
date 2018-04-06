@@ -35,9 +35,11 @@ pub struct Dummy{
 
 impl Dummy{
     pub fn new() -> Self {
+        let mut prof_repo : HashMap<Vec<u8>, Profile>=HashMap::new();
+        prof_repo.insert(Vec::from("Home"), mock::make_home_profile("/ip4/127.0.0.1/udp/9876","Home","HomeKey") );
         Self{
             home_id   : ProfileId( Vec::from( "DummyHome" ) ),
-            prof_repo : HashMap::new()
+            prof_repo : prof_repo,
         }
     }
 }
@@ -89,10 +91,18 @@ impl Home for Dummy
                 //ret = Box::new(future::ok(own_prof));
             },
         };
-        match self.prof_repo.insert(own_prof.profile.id.0.clone(), own_prof.profile.clone()){
-            Some(updated)=> Box::new( future::err( (own_prof, ErrorToBeSpecified::TODO) ) ) ,
-            None => Box::new(future::ok(own_prof)),
+        let ins = self.prof_repo.insert( own_prof.profile.id.0.clone(), own_prof.profile.clone() );
+        println!("--------------------------------------------------------");
+        println!("{:?}", ins);
+        match ins{
+            Some(updated) => {
+                ret = Box::new( future::err( (own_prof, ErrorToBeSpecified::TODO) ) );
+            } ,
+            None => {
+                ret = Box::new(future::ok(own_prof));
+            },
         }
+        ret
         //own_prof.priv_data = Vec::from("potato");
         
     }
@@ -125,6 +135,26 @@ impl Home for Dummy
 //    fn presence(&self, rel: Relation, app: ApplicationId) ->
 //        Box< Future<Item=Option<AppMessageFrame>, Error=ErrorToBeSpecified> >;
 }
+
+pub struct DummyConnector{
+    home : Rc<Home>
+}
+impl DummyConnector{
+    pub fn new()->Self{
+        Self{home: Rc::new(Dummy::new())}
+    }
+}
+impl HomeConnector for DummyConnector{
+    /// Initiate a permanent connection to the home server defined by `home_profile`, or return an
+    /// existing, live `Home` immediately.
+    /// `home_profile` must have a HomeFacet with at least an address filled in.
+    /// `signer` belongs to me.
+    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
+        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >{
+            Box::new( future::ok( Rc::clone( &self.home ) ) )
+    }
+}
+
 
 fn main(){
     let dummy = Dummy::new();
