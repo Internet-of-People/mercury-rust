@@ -13,3 +13,5 @@ mercury-profile-server = { path="../mercury-profile-server" }
 multiaddr = "*"
 multihash = "*"
 tokio-core = "0.1"
+
+tokio-io = "*"

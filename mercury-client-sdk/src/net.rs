@@ -7,7 +7,6 @@ use futures::future;
 use multiaddr::{Multiaddr, AddrComponent};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
-use tokio_io::AsyncRead;
 
 use super::*;
 
@@ -125,10 +124,11 @@ impl HomeConnector for SimpleTcpHomeConnector
                 use protocol_capnp::HomeClientCapnProto;
                 let home_ctx = Box::new( HomeContext::new(signer, &home_profile_clone) );
 
-                tcp_stream.set_nodelay(true).unwrap();
-                let (reader, writer) = tcp_stream.split();
-
-                Rc::new( HomeClientCapnProto::new(reader, writer, home_ctx, handle_clone) ) as Rc<Home>
+                Rc::new( HomeClientCapnProto::new_tcp(tcp_stream, home_ctx, handle_clone) ) as Rc<Home>
+//                tcp_stream.set_nodelay(true).unwrap();
+//                let (reader, writer) = tcp_stream.split();
+//
+//                Rc::new( HomeClientCapnProto::new(reader, writer, home_ctx, handle_clone) ) as Rc<Home>
             } );
         Box::new(capnp_home)
     }

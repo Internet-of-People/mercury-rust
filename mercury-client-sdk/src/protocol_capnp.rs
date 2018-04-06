@@ -43,6 +43,16 @@ impl HomeClientCapnProto
 
         Self{ context: context, home: home, repo: repo, handle: handle }
     }
+
+
+    pub fn new_tcp(tcp_stream: TcpStream, context: Box<PeerContext>, handle: reactor::Handle) -> Self
+    {
+        use tokio_io::AsyncRead;
+
+        tcp_stream.set_nodelay(true).unwrap();
+        let (reader, writer) = tcp_stream.split();
+        HomeClientCapnProto::new(reader, writer, context, handle)
+    }
 }
 
 
