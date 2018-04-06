@@ -216,6 +216,12 @@ struct ProfileEventListener
     sender: Sender<ProfileEvent>,
 }
 
+impl ProfileEventListener
+{
+    fn new(sender: Sender<ProfileEvent>) -> Self
+        { Self{ sender: sender } }
+}
+
 
 impl mercury_capnp::profile_event_listener::Server for ProfileEventListener
 {
@@ -284,7 +290,8 @@ impl HomeSession for HomeSessionClientCapnProto
     fn events(&self) -> Box< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >
     {
         let (send, recv) = futures::sync::mpsc::channel(0);
-        let listener = ProfileEventListener{ sender: send };
+        let listener = ProfileEventListener::new(send);
+        // TODO consider how to drop/unregister this object from capnp if the stream is dropped
         let listener_capnp = mercury_capnp::profile_event_listener::ToClient::new(listener)
             .from_server::<::capnp_rpc::Server>();
 

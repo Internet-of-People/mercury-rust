@@ -3,6 +3,7 @@ members = [
     "mercury-common",
     "mercury-client-sdk",
     "mercury-profile-server",
+    "mercury-test",
 ]
 
 [patch.crates-io]
