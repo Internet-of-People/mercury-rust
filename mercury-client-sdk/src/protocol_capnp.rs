@@ -3,19 +3,11 @@ use futures::{Future, Sink};
 use futures::sync::mpsc::Sender;
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
-use tokio_io::AsyncRead;
 
 use mercury_common::mercury_capnp;
 use mercury_common::mercury_capnp::*;
 
 use super::*;
-
-
-
-pub fn capnp_home(tcp_stream: TcpStream, context: Box<PeerContext>, handle: reactor::Handle) -> Rc<Home>
-{
-    Rc::new( HomeClientCapnProto::new(tcp_stream, context, handle) )
-}
 
 
 
@@ -30,16 +22,16 @@ pub struct HomeClientCapnProto
 
 impl HomeClientCapnProto
 {
-    pub fn new(tcp_stream: TcpStream, context: Box<PeerContext>,
-               handle: reactor::Handle) -> Self
+    pub fn new<R,W>(reader: R, writer: W,
+               context: Box<PeerContext>, handle: reactor::Handle) -> Self
+        where R: std::io::Read + 'static,
+              W: std::io::Write + 'static
     {
         println!("Initializing Cap'n'Proto");
-        tcp_stream.set_nodelay(true).unwrap();
-        let (reader, writer) = tcp_stream.split();
 
         // TODO maybe we should set up only single party capnp first
         let rpc_network = Box::new( capnp_rpc::twoparty::VatNetwork::new( reader, writer,
-                                                                          capnp_rpc::rpc_twoparty_capnp::Side::Client, Default::default() ) );
+            capnp_rpc::rpc_twoparty_capnp::Side::Client, Default::default() ) );
         let mut rpc_system = capnp_rpc::RpcSystem::new(rpc_network, None);
 
         let home: mercury_capnp::home::Client =

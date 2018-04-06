@@ -382,41 +382,36 @@ mod tests
 
 
 
-    #[test]
-    fn temporary_test_capnproto()
-    {
-        use std::net::ToSocketAddrs;
-        use super::protocol_capnp::*;
-
-        let mut setup = TestSetup::new();
-
-        let prof_id = ProfileId( "joooozsi".as_bytes().to_owned() );
-        let home_id = ProfileId( "HomeSweetHome".as_bytes().to_owned() );
-        let signer = Rc::new( DummySigner{ prof_id: prof_id.clone(), pub_key: PublicKey(Vec::new()) } );
-        let home_facet = HomeFacet{ addrs: Vec::new(), data: Vec::new() };
-        let home_prof = Profile::new( &home_id,
-            &PublicKey( "HomePubKey".as_bytes().to_owned() ),
-            &[ ProfileFacet::Home(home_facet) ] );
-        let home_ctx = Box::new( HomeContext::new(signer, &home_prof) );
-
-//        let profile = Profile::new( prof_id,
-//            &PublicKey( "publickey".as_bytes().to_owned() ), &[] );
-//        let own_profile = OwnProfile::new( &profile, &[] );
-
-        let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
-        let handle = setup.reactor.handle();
-        let test_fut = TcpStream::connect( &addr, &setup.reactor.handle() )
-            .map_err( |_e| ErrorToBeSpecified::TODO )
-            .and_then( move |tcp_stream|
-            {
-                let home = HomeClientCapnProto::new(tcp_stream, home_ctx, handle);
-                home.load(&prof_id)
-                //home.login(prof_id)
-            } );
-            //.and_then( |session| session.ping("hahoooo") );
-
-        let pong = setup.reactor.run(test_fut);
-        println!("Response: {:?}", pong);
-//        // TODO assert!( result.TODO );
-    }
+//    #[test]
+//    fn temporary_test_capnproto()
+//    {
+//        use std::net::ToSocketAddrs;
+//        use super::protocol_capnp::*;
+//
+//        let mut setup = TestSetup::new();
+//
+//        let prof_id = ProfileId( "joooozsi".as_bytes().to_owned() );
+//        let home_id = ProfileId( "HomeSweetHome".as_bytes().to_owned() );
+//        let signer = Rc::new( DummySigner{ prof_id: prof_id.clone(), pub_key: PublicKey(Vec::new()) } );
+//        let home_facet = HomeFacet{ addrs: Vec::new(), data: Vec::new() };
+//        let home_prof = Profile::new( &home_id,
+//            &PublicKey( "HomePubKey".as_bytes().to_owned() ),
+//            &[ ProfileFacet::Home(home_facet) ] );
+//        let home_ctx = Box::new( HomeContext::new(signer, &home_prof) );
+//
+//        let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
+//        let handle = setup.reactor.handle();
+//        let test_fut = TcpStream::connect( &addr, &setup.reactor.handle() )
+//            .map_err( |_e| ErrorToBeSpecified::TODO )
+//            .and_then( move |tcp_stream|
+//            {
+//                let home = HomeClientCapnProto::new(tcp_stream, home_ctx, handle);
+//                home.load(&prof_id)
+//                //home.login(prof_id)
+//            } );
+//            //.and_then( |session| session.ping("hahoooo") );
+//
+//        let pong = setup.reactor.run(test_fut);
+//        println!("Response: {:?}", pong);
+//    }
 }

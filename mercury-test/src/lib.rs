@@ -7,17 +7,16 @@ extern crate mercury_profile_server;
 #[test]
 fn test_events()
 {
-//    let mut reactor = reactor::Core::new().unwrap();
-//    let signer = Rc::new( mock::Signo::new( "TestKey" ) );
-//    let profile_gateway = ProfileGatewayImpl::new( signer,
-//        Rc::new( mock::DummyHome::new("test_update") ),
-//        Rc::new( SimpleTcpHomeConnector::new( reactor.handle() ) )
-//    );
+//    use mercury_sdk::mock::DummyHome;
+//    use mercury_sdk::protocol_capnp::HomeClientCapnProto;
+//    use mercury_profile_server::protocol_capnp::HomeDispatcherCapnProto;
 //
-//    let home_session = profile_gateway.update(
-//        ProfileId( Vec::from( "Tenebrae" ) ),
-//        &mock::create_ownprofile( "Noctis" ),
-//    );
+//    let mut reactor = reactor::Core::new().unwrap();
+//
+//    let home = DummyHome::new("ping_reply_msg");
+//    let dispatcher = HomeDispatcherCapnProto::new( Box::new(home) );
+//
+//    let client = HomeClientCapnProto::new();
 //
 //    let res = reactor.run(home_session);
     assert!(true);
