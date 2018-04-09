@@ -1,7 +1,7 @@
 #[cfg(test)]
 use super::*;
 
-extern crate mercury_common;
+extern crate mercury_home_protocol;
 
 extern crate multihash;
 extern crate multiaddr;
@@ -14,7 +14,7 @@ extern crate futures;
 use std::rc::Rc;
 use std::io::{BufRead, Read, Write, stdin};
 
-use mercury_common::*;
+use mercury_home_protocol::*;
 
 use ::net::*;
 use ::mock::*;

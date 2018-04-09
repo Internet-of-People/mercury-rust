@@ -1,9 +1,10 @@
 [workspace]
 members = [
-    "mercury-common",
-    "mercury-client-sdk",
-    "mercury-profile-server",
-    "mercury-test",
+    "connect",
+    "home-protocol",
+    "home-node",
+    "storage",
+    "test",
 ]
 
 [patch.crates-io]

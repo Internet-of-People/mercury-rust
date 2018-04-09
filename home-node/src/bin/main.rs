@@ -3,8 +3,8 @@ extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
 extern crate futures;
-extern crate mercury_common;
-extern crate mercury_profile_server;
+extern crate mercury_home_protocol;
+extern crate mercury_home_node;
 extern crate multiaddr;
 extern crate multihash;
 extern crate tokio_core;
@@ -18,8 +18,8 @@ use tokio_core::reactor;
 use tokio_core::net::TcpListener;
 use tokio_io::AsyncRead;
 
-use mercury_common::*;
-use mercury_profile_server::*;
+use mercury_home_protocol::*;
+use mercury_home_node::*;
 
 
 

@@ -1,6 +1,5 @@
 #![allow(unused)]
 use super::*;
-use mercury_common::*;
 
 use multihash::{encode, Hash};
 use multiaddr::{Multiaddr, ToMultiaddr};

@@ -1,6 +1,6 @@
 #![allow(unused)]
-extern crate mercury_sdk;
-extern crate mercury_common;
+extern crate mercury_connect;
+extern crate mercury_home_protocol;
 
 extern crate multihash;
 extern crate multiaddr;
@@ -15,8 +15,8 @@ mod dummy;
 use std::rc::Rc;
 use std::io::{BufRead, Read, Write, stdin};
 
-use mercury_common::*;
-use mercury_sdk::*;
+use mercury_connect::*;
+use mercury_home_protocol::*;
 use ::net::*;
 use ::mock::*;
 

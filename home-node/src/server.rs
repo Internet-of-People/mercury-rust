@@ -1,8 +1,6 @@
-use futures::future;
-use futures::{Future, Stream};
+use futures::{future, sync, Future, Stream};
 
-use mercury_common::*;
-use super::*;
+use mercury_home_protocol::*;
 
 
 
@@ -26,7 +24,7 @@ impl ProfileRepo for HomeServer
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >
     {
-        let (send, receive) = futures::sync::mpsc::channel(0);
+        let (send, receive) = sync::mpsc::channel(0);
         Box::new(receive.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
 
@@ -56,20 +54,20 @@ impl Home for HomeServer
     fn claim(&self, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 
     fn register(&mut self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
-        Box::new( futures::future::err( (own_prof,ErrorToBeSpecified::TODO) ) )
+        Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO) ) )
     }
 
 
     fn login(&self, profile: ProfileId) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 
 
@@ -77,20 +75,20 @@ impl Home for HomeServer
     fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 
     // NOTE acceptor must have this server as its home
     fn pair_response(&self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 }
 
@@ -130,7 +128,7 @@ impl HomeSession for HomeSessionServer
 
     fn events(&self) -> Box< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >
     {
-        let (sender, receiver) = futures::sync::mpsc::channel(0);
+        let (sender, receiver) = sync::mpsc::channel(0);
         Box::new( receiver.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
 
@@ -138,7 +136,7 @@ impl HomeSession for HomeSessionServer
     fn checkin_app(&self, app: &ApplicationId) ->
         Box< Stream<Item=Call, Error=ErrorToBeSpecified> >
     {
-        let (sender, receiver) = futures::sync::mpsc::channel(0);
+        let (sender, receiver) = sync::mpsc::channel(0);
         Box::new( receiver.map_err( |_| ErrorToBeSpecified::TODO ) )
     }
 

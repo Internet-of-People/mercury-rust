@@ -4,8 +4,8 @@ use futures::sync::mpsc::Sender;
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 
-use mercury_common::mercury_capnp;
-use mercury_common::mercury_capnp::*;
+use mercury_home_protocol::mercury_capnp;
+use mercury_capnp::*;
 
 use super::*;
 
@@ -13,10 +13,10 @@ use super::*;
 
 pub struct HomeClientCapnProto
 {
-    context:Box<PeerContext>,
-    repo:   mercury_capnp::profile_repo::Client,
-    home:   mercury_capnp::home::Client,
-    handle: reactor::Handle,
+    context: Box<PeerContext>,
+    repo:    profile_repo::Client,
+    home:    home::Client,
+    handle:  reactor::Handle,
 }
 
 

@@ -1,5 +1,5 @@
 [package]
-name = "hydra-blocks"
+name = "mercury-storage"
 version = "0.1.0"
 authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 license = "LGPL-3.0+"
@@ -13,7 +13,7 @@ futures = "0.1"
 futures-state-stream = "0.2"
 ipfs-api = "0.4.0-alpha"
 multibase = "0.6"
-multihash = "0.6"
+multihash = "0.7"
 serde = "1"
 serde_derive = "1"
 serde_json = "1"

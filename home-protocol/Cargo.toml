@@ -1,5 +1,5 @@
 [package]
-name = "mercury-common"
+name = "mercury-home-protocol"
 version = "0.1.0"
 authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 

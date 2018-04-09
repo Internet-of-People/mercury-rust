@@ -1,9 +1,9 @@
 use std::rc::Rc;
-
 use capnp::capability::Promise;
-use mercury_common::mercury_capnp::*;
+use futures::{Future, Stream};
 
-use super::*;
+use mercury_home_protocol::*;
+use self::mercury_capnp::*;
 
 
 
@@ -22,10 +22,10 @@ impl HomeDispatcherCapnProto
 }
 
 
-impl mercury_capnp::profile_repo::Server for HomeDispatcherCapnProto
+impl profile_repo::Server for HomeDispatcherCapnProto
 {
-    fn list(&mut self, params: mercury_capnp::profile_repo::ListParams,
-            mut results: mercury_capnp::profile_repo::ListResults,)
+    fn list(&mut self, params: profile_repo::ListParams,
+            mut results: profile_repo::ListResults,)
         -> Promise<(), ::capnp::Error>
     {
         // TODO properly implement this
@@ -33,8 +33,8 @@ impl mercury_capnp::profile_repo::Server for HomeDispatcherCapnProto
     }
 
 
-    fn load(&mut self, params: mercury_capnp::profile_repo::LoadParams,
-            mut results: mercury_capnp::profile_repo::LoadResults,)
+    fn load(&mut self, params: profile_repo::LoadParams,
+            mut results: profile_repo::LoadResults,)
         -> Promise<(), ::capnp::Error>
     {
         let profile_id_capnp = pry!( pry!( params.get() ).get_profile_id() );
@@ -46,8 +46,8 @@ impl mercury_capnp::profile_repo::Server for HomeDispatcherCapnProto
     }
 
 
-    fn resolve(&mut self, params: mercury_capnp::profile_repo::ResolveParams,
-               mut results: mercury_capnp::profile_repo::ResolveResults,)
+    fn resolve(&mut self, params: profile_repo::ResolveParams,
+               mut results: profile_repo::ResolveResults,)
         -> Promise<(), ::capnp::Error>
     {
         let profile_url = pry!( pry!( params.get() ).get_profile_url() );
@@ -61,10 +61,10 @@ impl mercury_capnp::profile_repo::Server for HomeDispatcherCapnProto
 
 
 
-impl mercury_capnp::home::Server for HomeDispatcherCapnProto
+impl home::Server for HomeDispatcherCapnProto
 {
-    fn claim(&mut self, params: mercury_capnp::home::ClaimParams,
-             mut results: mercury_capnp::home::ClaimResults,)
+    fn claim(&mut self, params: home::ClaimParams,
+             mut results: home::ClaimResults,)
         -> Promise<(), ::capnp::Error>
     {
         let profile_id_capnp = pry!( pry!( params.get() ).get_profile_id() );
@@ -77,8 +77,8 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
     }
 
 
-    fn register(&mut self, params: mercury_capnp::home::RegisterParams,
-                mut results: mercury_capnp::home::RegisterResults,)
+    fn register(&mut self, params: home::RegisterParams,
+                mut results: home::RegisterResults,)
         -> Promise<(), ::capnp::Error>
     {
         let own_prof_capnp = pry!( pry!( params.get() ).get_own_profile() );
@@ -98,8 +98,8 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
     }
 
 
-    fn login(&mut self, params: mercury_capnp::home::LoginParams,
-             mut results: mercury_capnp::home::LoginResults,)
+    fn login(&mut self, params: home::LoginParams,
+             mut results: home::LoginResults,)
         -> Promise<(), ::capnp::Error>
     {
         use server::HomeSessionServer;
@@ -107,15 +107,15 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
         // TODO profile_id must be used to build session
         let session_impl = Rc::new( HomeSessionServer::new() );
         let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl);
-        let session = mercury_capnp::home_session::ToClient::new(session_dispatcher)
+        let session = home_session::ToClient::new(session_dispatcher)
             .from_server::<::capnp_rpc::Server>();
         results.get().set_session(session);
         Promise::ok( () )
     }
 
 
-    fn pair_request(&mut self, params: mercury_capnp::home::PairRequestParams,
-                    mut results: mercury_capnp::home::PairRequestResults,)
+    fn pair_request(&mut self, params: home::PairRequestParams,
+                    mut results: home::PairRequestResults,)
         -> Promise<(), ::capnp::Error>
     {
         let half_proof_capnp = pry!( pry!( params.get() ).get_half_proof() );
@@ -128,8 +128,8 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
     }
 
 
-    fn pair_response(&mut self, params: mercury_capnp::home::PairResponseParams,
-                     mut results: mercury_capnp::home::PairResponseResults,)
+    fn pair_response(&mut self, params: home::PairResponseParams,
+                     mut results: home::PairResponseResults,)
         -> Promise<(), ::capnp::Error>
     {
         let proof_capnp = pry!( pry!( params.get() ).get_relation_proof() );
@@ -143,8 +143,8 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto
 
 
 // TODO
-//    fn call(&mut self, params: mercury_capnp::home::CallParams,
-//            mut results: mercury_capnp::home::CallResults,)
+//    fn call(&mut self, params: home::CallParams,
+//            mut results: home::CallResults,)
 //            -> Promise<(), ::capnp::Error>
 //    {
 //        Promise::ok( () )
@@ -164,10 +164,10 @@ impl HomeSessionDispatcherCapnProto
         { Self{ session: session } }
 }
 
-impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
+impl home_session::Server for HomeSessionDispatcherCapnProto
 {
-    fn update(&mut self, params: mercury_capnp::home_session::UpdateParams,
-              mut results: mercury_capnp::home_session::UpdateResults,)
+    fn update(&mut self, params: home_session::UpdateParams,
+              mut results: home_session::UpdateResults,)
         -> Promise<(), ::capnp::Error>
     {
         let own_profile_capnp = pry!( pry!( params.get() ).get_own_profile() );
@@ -180,8 +180,8 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
     }
 
 
-    fn unregister(&mut self, params: mercury_capnp::home_session::UnregisterParams,
-                   mut results: mercury_capnp::home_session::UnregisterResults,)
+    fn unregister(&mut self, params: home_session::UnregisterParams,
+                   mut results: home_session::UnregisterResults,)
         -> Promise<(), ::capnp::Error>
     {
         let new_home_res_capnp = pry!( params.get() ).get_new_home();
@@ -196,8 +196,8 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
     }
 
 
-    fn ping(&mut self, params: mercury_capnp::home_session::PingParams<>,
-            mut results: mercury_capnp::home_session::PingResults<>)
+    fn ping(&mut self, params: home_session::PingParams<>,
+            mut results: home_session::PingResults<>)
         -> Promise<(), ::capnp::Error>
     {
         let txt = pry!( pry!( params.get() ).get_txt() );
@@ -208,8 +208,8 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
     }
 
 
-    fn events(&mut self, params: mercury_capnp::home_session::EventsParams<>,
-              mut results: mercury_capnp::home_session::EventsResults<>)
+    fn events(&mut self, params: home_session::EventsParams<>,
+              mut results: home_session::EventsResults<>)
         -> Promise<(), ::capnp::Error>
     {
         let callback = pry!( pry!( params.get() ).get_event_listener() );
@@ -227,8 +227,8 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
     }
 
 
-    fn checkin_app(&mut self, params: mercury_capnp::home_session::CheckinAppParams<>,
-                   mut results: mercury_capnp::home_session::CheckinAppResults<>)
+    fn checkin_app(&mut self, params: home_session::CheckinAppParams<>,
+                   mut results: home_session::CheckinAppResults<>)
         -> Promise<(), ::capnp::Error>
     {
         let params = pry!( params.get() );

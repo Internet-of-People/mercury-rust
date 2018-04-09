@@ -1,5 +1,5 @@
 [package]
-name = "mercury-test"
+name = "mercury-home-node"
 version = "0.1.0"
 authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 
@@ -7,9 +7,7 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 capnp = "0.8"
 capnp-rpc = "0.8"
 futures = "0.1"
-mercury-common = { path="../mercury-common" }
-mercury-sdk = { path="../mercury-client-sdk" }
-mercury-profile-server = { path="../mercury-profile-server" }
+mercury-home-protocol = { path="../home-protocol" }
 multiaddr = "*"
 multihash = "*"
 tokio-core = "0.1"

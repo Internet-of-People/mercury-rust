@@ -1,9 +1,9 @@
 extern crate capnp;
 extern crate capnp_rpc;
 extern crate futures;
-extern crate mercury_common;
-extern crate mercury_sdk;
-extern crate mercury_profile_server;
+extern crate mercury_connect;
+extern crate mercury_home_protocol;
+extern crate mercury_home_node;
 extern crate tokio_core;
 extern crate tokio_io;
 
@@ -12,11 +12,11 @@ extern crate tokio_io;
 #[test]
 fn test_events()
 {
-    use mercury_common::*;
-    use mercury_sdk::HomeContext;
-    use mercury_sdk::mock::{DummyHome, Signo, make_home_profile};
-    use mercury_sdk::protocol_capnp::HomeClientCapnProto;
-    use mercury_profile_server::protocol_capnp::HomeDispatcherCapnProto;
+    use mercury_home_protocol::*;
+    use mercury_connect::HomeContext;
+    use mercury_connect::mock::{DummyHome, Signo, make_home_profile};
+    use mercury_connect::protocol_capnp::HomeClientCapnProto;
+    use mercury_home_node::protocol_capnp::HomeDispatcherCapnProto;
 
     use futures::{Future, Stream};
     use std::net::ToSocketAddrs;
