@@ -12,42 +12,34 @@ extern crate tokio_io;
 #[test]
 fn test_events()
 {
-    use mercury_home_protocol::*;
+    use std::net::ToSocketAddrs;
+    use std::rc::Rc;
+
+    use futures::{Stream};
+    use tokio_core::net::{TcpListener, TcpStream};
+    use tokio_core::reactor;
+
+    //use mercury_home_protocol::*;
     use mercury_connect::HomeContext;
     use mercury_connect::mock::{DummyHome, Signo, make_home_profile};
     use mercury_connect::protocol_capnp::HomeClientCapnProto;
     use mercury_home_node::protocol_capnp::HomeDispatcherCapnProto;
 
-    use futures::{Future, Stream};
-    use std::net::ToSocketAddrs;
-    use std::rc::Rc;
-    use tokio_core::net::{TcpListener, TcpStream};
-    use tokio_core::reactor;
-    use tokio_io::AsyncRead;
 
 
     let mut reactor = reactor::Core::new().unwrap();
 
-    let home = DummyHome::new("ping_reply_msg");
-    let dispatcher = HomeDispatcherCapnProto::new( Box::new(home) );
-
     let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
-    let server_home = mercury_capnp::home::ToClient::new(dispatcher)
-        .from_server::<::capnp_rpc::Server>();
 
     let handle1 = reactor.handle();
     let server_socket = TcpListener::bind( &addr, &reactor.handle() ).expect("Failed to bind socket");
     let server_fut = server_socket.incoming().for_each( move |(socket, _addr)|
     {
         println!("Accepted client connection, serving requests");
-        try!( socket.set_nodelay(true) );
-        let (reader, writer) = socket.split();
-        let handle = handle1.clone();
 
-        let network = capnp_rpc::twoparty::VatNetwork::new( reader, writer,
-            capnp_rpc::rpc_twoparty_capnp::Side::Server, Default::default() );
-        let rpc_system = capnp_rpc::RpcSystem::new( Box::new(network), Some( server_home.clone().client ) );
-        handle.spawn( rpc_system.map_err( |_| () ) );
+        let home = Box::new( DummyHome::new("ping_reply_msg") );
+        // let home = Box::new( server::HomeServer::new() );
+        HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle1.clone() );
         Ok( () )
     } );
 
@@ -58,7 +50,6 @@ fn test_events()
     let home_profile = make_home_profile("home_address", "home_profile", "home_public_key");
     let home_ctx = Box::new( HomeContext::new(signer, &home_profile) );
     let client = HomeClientCapnProto::new_tcp( tcp_stream, home_ctx, reactor.handle() );
-
 
 //    let res = reactor.run(home_session);
     assert!(true);

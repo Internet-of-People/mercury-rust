@@ -1,24 +1,52 @@
 use std::rc::Rc;
+
 use capnp::capability::Promise;
 use futures::{Future, Stream};
+use tokio_core::net::TcpStream;
+use tokio_core::reactor;
 
+use super::*;
 use mercury_home_protocol::*;
-use self::mercury_capnp::*;
+use mercury_home_protocol::mercury_capnp::*;
 
 
 
 pub struct HomeDispatcherCapnProto
 {
-    home: Box<Home>,
-    // TODO probably we should have a SessionFactory here
-    //      instead of instantiating sessions "manually"
+    home:   Box<Home>,
+    handle: reactor::Handle, // TODO is this member needed for streams or can be deleted?
+    // TODO probably we should have a SessionFactory here instead of instantiating sessions "manually"
 }
 
 
 impl HomeDispatcherCapnProto
 {
-    pub fn new(home: Box<Home>) -> Self
-        { Self{ home: home } }
+    // TODO how to access PeerContext in the Home implementation?
+    pub fn dispatch<R,W>(home: Box<Home>, reader: R, writer: W, handle: reactor::Handle)
+        where R: std::io::Read  + 'static,
+              W: std::io::Write + 'static
+    {
+        let dispatcher = Self{ home: home, handle: handle.clone() };
+
+        let home_capnp = mercury_capnp::home::ToClient::new(dispatcher)
+            .from_server::<::capnp_rpc::Server>();
+        let network = capnp_rpc::twoparty::VatNetwork::new( reader, writer,
+            capnp_rpc::rpc_twoparty_capnp::Side::Server, Default::default() );
+
+        let rpc_system = capnp_rpc::RpcSystem::new( Box::new(network), Some( home_capnp.clone().client ) );
+
+        handle.spawn( rpc_system.map_err( |e| println!("Capnp RPC failed: {}", e) ) );
+    }
+
+
+    pub fn dispatch_tcp(home: Box<Home>, tcp_stream: TcpStream, handle: reactor::Handle)
+    {
+        use tokio_io::AsyncRead;
+
+        tcp_stream.set_nodelay(true).unwrap();
+        let (reader, writer) = tcp_stream.split();
+        HomeDispatcherCapnProto::dispatch(home, reader, writer, handle)
+    }
 }
 
 
