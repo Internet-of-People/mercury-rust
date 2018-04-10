@@ -26,7 +26,7 @@ pub enum ErrorToBeSpecified { TODO, }
 
 
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 
 #[derive(PartialEq, Eq, Clone, Debug)]
