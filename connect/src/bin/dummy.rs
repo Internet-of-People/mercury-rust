@@ -28,32 +28,80 @@ use tokio_io::{AsyncRead, AsyncWrite};
 use futures::{future, Future,Stream};
 
 
-pub struct Dummy{
-    home_id   : ProfileId, 
-    prof_repo : HashMap<Vec<u8>, Profile>,
+pub struct Dht{
+    content : HashMap<ProfileId, Profile>,
 }
 
-impl Dummy{
+impl Dht{
     pub fn new() -> Self {
-        let mut prof_repo : HashMap<Vec<u8>, Profile>=HashMap::new();
-        prof_repo.insert(Vec::from("Home"), mock::make_home_profile("/ip4/127.0.0.1/udp/9876","Home","HomeKey") );
-        Self{
-            home_id   : ProfileId( Vec::from( "DummyHome" ) ),
-            prof_repo : prof_repo,
+        Dht{
+            content : HashMap::new(),
         }
     }
 }
 
-impl ProfileRepo for Dummy{
+impl Dht{
+    pub fn insert(&mut self, id : ProfileId, profile : Profile) -> Option<Profile>{
+        println!("Dht.add {:?}", id.0);
+        self.content.insert(id, profile)
+    }
+
+    pub fn get( &self, id : ProfileId ) -> Option<&Profile>{
+        self.content.get(&id)
+    }
+}
+
+impl ProfileRepo for Dht{
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
     Box< HomeStream<Profile, String> >{
-        //Box::new( future::err(ErrorToBeSpecified::TODO) );
-        unimplemented!();
+        Box::new( futures::stream::empty() )
     }
 
     fn load(&self, id: &ProfileId) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
-        let prof = self.prof_repo.get(&id.0);
+        println!("Dht.load {:?}", id.0);
+        let prof = self.content.get(&id);
+        match prof {
+            Some(profile) => {println!("dht.load.success");Box::new( future::ok(profile.to_owned()) )},
+            None => Box::new( future::err(ErrorToBeSpecified::TODO) ),
+        }
+    }
+
+    fn resolve(&self, url: &str) ->
+    Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
+    }
+
+}
+
+pub struct MyDummyHome{
+    pub home_profile   : Profile, 
+    pub prof_repo : Rc<Dht>,
+}
+
+impl MyDummyHome{
+    pub fn new(profile : Profile, dht : Rc<Dht>) -> Self {
+        MyDummyHome{
+            home_profile   : profile,
+            prof_repo : dht,
+        }
+    }
+    
+    pub fn insert(&mut self, id : ProfileId, profile : Profile)->Option<Profile>{
+        Rc::get_mut(&mut self.prof_repo).unwrap().insert(id, profile)
+    }
+}
+
+impl ProfileRepo for MyDummyHome{
+    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
+    Box< Stream<Item=Result<Profile, String>, Error=()> >{
+        Box::new( futures::stream::empty() )
+    }
+
+    fn load(&self, id: &ProfileId) ->
+    Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
+        println!("MyDummyHome.load");
+        let prof = self.prof_repo.get(id.to_owned());
         match prof {
             Some(profile) => Box::new( future::ok(profile.to_owned()) ),
             None => Box::new( future::err(ErrorToBeSpecified::TODO) ),
@@ -67,7 +115,7 @@ impl ProfileRepo for Dummy{
 
 }
 
-impl Home for Dummy
+impl Home for MyDummyHome
 {
     // NOTE because we support multihash, the id cannot be guessed from the public key
     fn claim(&self, profile: ProfileId) ->
@@ -91,7 +139,7 @@ impl Home for Dummy
                 //ret = Box::new(future::ok(own_prof));
             },
         };
-        let ins = self.prof_repo.insert( own_prof.profile.id.0.clone(), own_prof.profile.clone() );
+        let ins = self.insert( own_prof.profile.id.clone(), own_prof.profile.clone() );
         println!("--------------------------------------------------------");
         println!("{:?}", ins);
         match ins{
@@ -140,8 +188,12 @@ pub struct DummyConnector{
     home : Rc<Home>
 }
 impl DummyConnector{
-    pub fn new()->Self{
-        Self{home: Rc::new(Dummy::new())}
+    // pub fn new()->Self{
+    //     Self{home: Rc::new(MyDummyHome::new())}
+    // }
+
+    pub fn new_with_home(home : Rc<Home>)->Self{
+        Self{home: home}
     }
 }
 impl HomeConnector for DummyConnector{
@@ -157,5 +209,5 @@ impl HomeConnector for DummyConnector{
 
 
 fn main(){
-    let dummy = Dummy::new();
+    // let dummy = MyDummyHome::new();
 }
