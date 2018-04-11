@@ -12,6 +12,8 @@ extern crate futures;
 
 mod dummy;
 
+use dummy::{ProfileStore, MyDummyHome};
+
 use std::rc::Rc;
 use std::io::{BufRead, Read, Write, stdin};
 
@@ -41,23 +43,24 @@ fn main(){
     let homesigno = Rc::new(mock::Signo::new("makusguba"));
     
     println!("Setting up profiles");
-    let homeprof = mock::make_home_profile(&homeaddr,"home","szeretem a kakaot");
+    let homeprof = mock::make_home_profile(&homeaddr, "home", "szeretem a kakaot");
     let mut profile = make_own_persona_profile("Deusz", signo.pub_key());
     
     println!("Setting up connection");
 
+    let mut home_storage = Rc::new( ProfileStore::new() );
+    let mut home = Rc::new( MyDummyHome::new( homeprof.clone() , home_storage) );
 
+    // Rc::get_mut(&mut home).unwrap().insert(id , homeprof.clone());
 
-    let mut dht = Rc::new( dummy::Dht::new() );
-    let mut home = Rc::new( dummy::MyDummyHome::new( homeprof.clone() , dht ) );
-    let id = home.home_profile.id.clone();
-    let ins = Rc::get_mut(&mut home).unwrap().insert(id , homeprof.clone());
+    let mut dht = ProfileStore::new();
+    dht.insert(home.home_profile.id.clone(), homeprof.clone());
 
-    // let profilegateway = ProfileGatewayImpl{
-    //     signer:         signo,
-    //     profile_repo:   home.prof_repo,
-    //     home_connector: Rc::new( dummy::DummyConnector::new_with_home( home ) ),
-    // };
+    let profilegateway = ProfileGatewayImpl{
+        signer:         signo,
+        profile_repo:   Rc::new(dht),
+        home_connector: Rc::new( dummy::DummyConnector::new_with_home( home ) ),
+    };
 
     // // let bizbasz = TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap() , &reactorhandle.clone() )
     // // .map(|stream|{
@@ -65,9 +68,9 @@ fn main(){
     // // });
     // // let appcontext = reactor.run(bizbasz).unwrap();
     
-    // println!("Registering");
-    // let ownprofile = reactor.run(profilegateway.register(ProfileId("home".as_bytes().to_owned()),mock::create_ownprofile("Deusz"),None)).unwrap();
-    // println!("{:?}",ownprofile );
+    println!("Registering");
+    let ownprofile = reactor.run(profilegateway.register(ProfileId("home".as_bytes().to_owned()), mock::create_ownprofile("Deusz"), None)).unwrap();
+    println!("{:?}",ownprofile );
     
     // println!("Logging in");
     // println!("Getting session");
