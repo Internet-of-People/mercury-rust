@@ -1,6 +1,6 @@
 use capnp::capability::Promise;
 use futures::{Future, Sink};
-use futures::sync::mpsc::Sender;
+use futures::sync::mpsc::{self, Sender};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 
@@ -70,11 +70,12 @@ impl HomeClientCapnProto
 impl ProfileRepo for HomeClientCapnProto
 {
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-        Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >
+        Box< HomeStream<Profile, String> >
     {
         // TODO properly implement this
-        let (_send, recv) = futures::sync::mpsc::channel(0);
-        Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
+        let (_send, recv) = mpsc::channel(1);
+        Box::new(recv)
+        //Box::new( recv.map_err( |_| "Failed but why? TODO".to_owned() ) ) // TODO
     }
 
 
@@ -215,12 +216,12 @@ impl Home for HomeClientCapnProto
 
 struct ProfileEventListener
 {
-    sender: Sender<ProfileEvent>,
+    sender: Sender< Result<ProfileEvent, String> >,
 }
 
 impl ProfileEventListener
 {
-    fn new(sender: Sender<ProfileEvent>) -> Self
+    fn new(sender: Sender< Result<ProfileEvent, String> >) -> Self
         { Self{ sender: sender } }
 }
 
@@ -233,7 +234,19 @@ impl mercury_capnp::profile_event_listener::Server for ProfileEventListener
     {
         let event_capnp = pry!( pry!( params.get() ).get_event() );
         let event = pry!( ProfileEvent::try_from(event_capnp) );
-        let recv_fut = self.sender.clone().send(event)
+        let recv_fut = self.sender.clone().send( Ok(event) )
+            .map( |_sink| () )
+            .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}",e ) ) );
+        Promise::from_future(recv_fut)
+    }
+
+
+    fn error(&mut self, params: mercury_capnp::profile_event_listener::ErrorParams,
+             mut results: mercury_capnp::profile_event_listener::ErrorResults,)
+        -> Promise<(), ::capnp::Error>
+    {
+        let error = pry!( pry!( params.get() ).get_error() ).into();
+        let recv_fut = self.sender.clone().send( Err(error) )
             .map( |_sink| () )
             .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}",e ) ) );
         Promise::from_future(recv_fut)
@@ -289,10 +302,10 @@ impl HomeSession for HomeSessionClientCapnProto
     }
 
 
-    fn events(&self) -> Box< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >
+    fn events(&self) -> Box< HomeStream<ProfileEvent, String> >
     {
-        let (send, recv) = futures::sync::mpsc::channel(0);
-        let listener = ProfileEventListener::new(send);
+        let (send, recv) = mpsc::channel(1);
+        let listener = ProfileEventListener::new( send.clone() );
         // TODO consider how to drop/unregister this object from capnp if the stream is dropped
         let listener_capnp = mercury_capnp::profile_event_listener::ToClient::new(listener)
             .from_server::<::capnp_rpc::Server>();
@@ -300,24 +313,25 @@ impl HomeSession for HomeSessionClientCapnProto
         let mut request = self.session.events_request();
         request.get().set_event_listener(listener_capnp);
 
-        // TODO can we avoid handle.spawn() here?
         self.handle.spawn(
-            // TODO if not, how to delegate errors to close the stream?
             request.send().promise
-                .map( move |_resp| () )
-                .map_err( |_e| () )
+                .map( |_resp| () )
+                .or_else( move |e|
+                    send.send( Err( format!("Events delegation failed: {}", e) ) )
+                        .map( |_sink| () )
+                        .map_err( |_err| () ) )
         );
 
-        Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
+        Box::new(recv)
     }
 
 
     // TODO return not a Stream, but an AppSession struct containing a stream
     fn checkin_app(&self, app: &ApplicationId) ->
-        Box< Stream<Item=Call, Error=ErrorToBeSpecified> >
+        Box< HomeStream<Call, String> >
     {
-        let (_send, recv) = futures::sync::mpsc::channel(0);
-        Box::new( recv.map_err( |_| ErrorToBeSpecified::TODO ) )
+        let (_send, recv) = mpsc::channel(1);
+        Box::new(recv)
     }
 
 

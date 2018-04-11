@@ -1,4 +1,5 @@
 use futures::{future, sync, Future, Stream};
+use futures::sync::mpsc;
 
 use mercury_home_protocol::*;
 
@@ -22,10 +23,10 @@ impl HomeServer
 impl ProfileRepo for HomeServer
 {
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-        Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >
+        Box< HomeStream<Profile, String> >
     {
-        let (send, receive) = sync::mpsc::channel(0);
-        Box::new(receive.map_err( |_| ErrorToBeSpecified::TODO ) )
+        let (send, receive) = mpsc::channel(0);
+        Box::new(receive)
     }
 
     fn load(&self, id: &ProfileId) ->
@@ -126,18 +127,18 @@ impl HomeSession for HomeSessionServer
     }
 
 
-    fn events(&self) -> Box< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >
+    fn events(&self) -> Box< HomeStream<ProfileEvent, String> >
     {
         let (sender, receiver) = sync::mpsc::channel(0);
-        Box::new( receiver.map_err( |_| ErrorToBeSpecified::TODO ) )
+        Box::new(receiver)
     }
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) ->
-        Box< Stream<Item=Call, Error=ErrorToBeSpecified> >
+        Box< HomeStream<Call, String> >
     {
         let (sender, receiver) = sync::mpsc::channel(0);
-        Box::new( receiver.map_err( |_| ErrorToBeSpecified::TODO ) )
+        Box::new(receiver)
     }
 
     // TODO remove this after testing

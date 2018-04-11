@@ -8,7 +8,7 @@ extern crate tokio_core;
 use std::collections::hash_map::HashMap;
 use std::rc::Rc;
 
-use futures::{Future, IntoFuture, Sink, Stream};
+use futures::{Future, IntoFuture};
 use futures::future;
 use multiaddr::Multiaddr;
 use tokio_core::reactor;
@@ -131,12 +131,15 @@ pub trait PeerContext
 
 
 
+pub type HomeStream<T,E> = futures::Stream< Item=Result<T,E>, Error=() >;
+pub type HomeSink<T,E>   = futures::Sink< SinkItem=Result<T,E>, SinkError=() >;
+
 /// Potentially a whole network of nodes with internal routing and sharding
 pub trait ProfileRepo
 {
     /// List all profiles that can be load()'ed or resolve()'d.
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-        Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >;
+        Box< HomeStream<Profile,String> >;
 
     /// Look for specified `id` and return. This might involve searching for the latest version
     /// of the profile in the dht, but if it's the profile's home server, could come from memory, too.
@@ -259,8 +262,8 @@ pub struct AppMessageFrame(pub Vec<u8>);
 
 pub struct CallMessages
 {
-    pub incoming: Box< Stream<Item=AppMessageFrame, Error=ErrorToBeSpecified> >,
-    pub outgoing: Box< Sink<SinkItem=AppMessageFrame, SinkError=ErrorToBeSpecified> >,
+    pub incoming: Box< HomeStream<AppMessageFrame, String> >,
+    pub outgoing: Box< HomeSink<AppMessageFrame, String> >,
 }
 
 pub struct Call
@@ -332,11 +335,11 @@ pub trait HomeSession
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
 
-    fn events(&self) -> Box< Stream<Item=ProfileEvent, Error=ErrorToBeSpecified> >;
+    fn events(&self) -> Box< HomeStream<ProfileEvent, String> >;
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) ->
-        Box< Stream<Item=Call, Error=ErrorToBeSpecified> >;
+        Box< HomeStream<Call, String> >;
 
     // TODO remove this after testing
     fn ping(&self, txt: &str) ->

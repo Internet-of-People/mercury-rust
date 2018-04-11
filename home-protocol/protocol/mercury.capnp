@@ -65,6 +65,7 @@ struct OwnProfile
 interface AppMessageListener
 {
     receive @0 (message: AppMessageFrame);
+    error   @1 (error: Text);
 }
 
 
@@ -94,6 +95,7 @@ struct Call
 interface CallListener
 {
     receive @0 (call: Call) -> (toCallee: AppMessageListener);
+    error   @1 (error: Text);
 }
 
 
@@ -112,6 +114,7 @@ struct ProfileEvent
 interface ProfileEventListener
 {
     receive @0 (event: ProfileEvent);
+    error   @1 (error: Text);
 }
 
 

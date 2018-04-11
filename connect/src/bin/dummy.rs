@@ -46,7 +46,7 @@ impl Dummy{
 
 impl ProfileRepo for Dummy{
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-    Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >{
+    Box< HomeStream<Profile, String> >{
         //Box::new( future::err(ErrorToBeSpecified::TODO) );
         unimplemented!();
     }

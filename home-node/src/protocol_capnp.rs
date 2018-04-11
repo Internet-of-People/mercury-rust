@@ -243,13 +243,26 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
         let callback = pry!( pry!( params.get() ).get_event_listener() );
         let events_fut = self.session.events()
             .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling;
-            .for_each( move |event|
+            .for_each( move |item|
             {
-                let mut request = callback.receive_request();
-                request.get().init_event().fill_from(&event);
-                request.send().promise
-                    .map( |_resp| () )
-                    // TODO .map_err() what to do here in case of an error?
+                match item {
+                    Ok(event) => {
+                        let mut request = callback.receive_request();
+                        request.get().init_event().fill_from(&event);
+                        let fut = request.send().promise
+                            .map( |_resp| () );
+                        // TODO .map_err() what to do here in case of an error?
+                        Box::new(fut) as Box< Future<Item=(), Error=::capnp::Error> >
+                    },
+                    Err(err) => {
+                        let mut request = callback.error_request();
+                        request.get().set_error(&err);
+                        let fut = request.send().promise
+                            .map( |_resp| () );
+                        // TODO .map_err() what to do here in case of an error?
+                        Box::new(fut)
+                    }
+                }
             } );
         Promise::from_future(events_fut)
     }

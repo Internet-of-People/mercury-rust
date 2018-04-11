@@ -134,7 +134,7 @@ impl PeerContext for DummyHome {
 
 impl ProfileRepo for DummyHome{
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-        Box< Stream<Item=Profile, Error=ErrorToBeSpecified> >{
+        Box< HomeStream<Profile, String> >{
             println!("list");
             unimplemented!()
         }
