@@ -28,19 +28,19 @@ use tokio_io::{AsyncRead, AsyncWrite};
 use futures::{future, Future,Stream};
 
 
-pub struct Dht{
+pub struct ProfileStore{
     content : HashMap<ProfileId, Profile>,
 }
 
-impl Dht{
+impl ProfileStore{
     pub fn new() -> Self {
-        Dht{
+        ProfileStore{
             content : HashMap::new(),
         }
     }
 }
 
-impl Dht{
+impl ProfileStore{
     pub fn insert(&mut self, id : ProfileId, profile : Profile) -> Option<Profile>{
         println!("Dht.add {:?}", id.0);
         self.content.insert(id, profile)
@@ -51,7 +51,7 @@ impl Dht{
     }
 }
 
-impl ProfileRepo for Dht{
+impl ProfileRepo for ProfileStore{
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
     Box< HomeStream<Profile, String> >{
         Box::new( futures::stream::empty() )
@@ -76,18 +76,18 @@ impl ProfileRepo for Dht{
 
 pub struct MyDummyHome{
     pub home_profile   : Profile, 
-    pub prof_repo : Rc<Dht>,
+    pub prof_repo : Rc<ProfileStore>,
 }
 
 impl MyDummyHome{
-    pub fn new(profile : Profile, dht : Rc<Dht>) -> Self {
+    pub fn new(profile : Profile, dht : Rc<ProfileStore>) -> Self {
         MyDummyHome{
             home_profile   : profile,
             prof_repo : dht,
         }
     }
     
-    pub fn insert(&mut self, id : ProfileId, profile : Profile)->Option<Profile>{
+    fn insert(&mut self, id : ProfileId, profile : Profile)->Option<Profile>{
         Rc::get_mut(&mut self.prof_repo).unwrap().insert(id, profile)
     }
 }
