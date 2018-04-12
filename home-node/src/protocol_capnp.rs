@@ -130,15 +130,19 @@ impl home::Server for HomeDispatcherCapnProto
              mut results: home::LoginResults,)
         -> Promise<(), ::capnp::Error>
     {
-        use server::HomeSessionServer;
         let profile_id = pry!( pry!( params.get() ).get_profile_id() );
-        // TODO profile_id must be used to build session
-        let session_impl = Rc::new( HomeSessionServer::new() );
-        let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl);
-        let session = home_session::ToClient::new(session_dispatcher)
-            .from_server::<::capnp_rpc::Server>();
-        results.get().set_session(session);
-        Promise::ok( () )
+        let session_fut = self.home.login( profile_id.into() )
+            .map( move |session_impl|
+            {
+                let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl);
+                let session = home_session::ToClient::new(session_dispatcher)
+                    .from_server::<::capnp_rpc::Server>();
+                results.get().set_session(session);
+                ()
+            } )
+            .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+
+        Promise::from_future(session_fut)
     }
 
 
@@ -183,12 +187,12 @@ impl home::Server for HomeDispatcherCapnProto
 
 pub struct HomeSessionDispatcherCapnProto
 {
-    session: Rc<HomeSession>
+    session: Box<HomeSession>
 }
 
 impl HomeSessionDispatcherCapnProto
 {
-    pub fn new(session: Rc<HomeSession>) -> Self
+    pub fn new(session: Box<HomeSession>) -> Self
         { Self{ session: session } }
 }
 

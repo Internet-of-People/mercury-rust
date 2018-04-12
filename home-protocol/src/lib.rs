@@ -362,6 +362,9 @@ pub trait HomeSession
 #[cfg(test)]
 mod tests
 {
+    use futures::{Sink, Stream};
+    use futures::sync::mpsc;
+
     use super::*;
 
 
@@ -379,8 +382,23 @@ mod tests
     }
 
     #[test]
-    fn test_something()
+    fn test_channel_lifetime()
     {
-//        // TODO assert!( result.TODO );
+        let mut setup = TestSetup::new();
+
+        let item = "Hello".to_owned();
+        let (sender, receiver) = mpsc::channel(2);
+        let send_fut = sender.send( item.clone() );
+        let sender = setup.reactor.run(send_fut).unwrap();
+
+//        let recv_fut = receiver.take(1).collect();
+//        let recv_vec = setup.reactor.run(recv_fut).unwrap();
+//        assert_eq!( recv_vec.len(), 1 );
+//        assert_eq!( recv_vec[0], item );
+//
+//        drop(receiver);
+//        let send_fut = sender.send(item);
+//        let sender = setup.reactor.run(send_fut);
+//        assert!( sender.is_err() );
     }
 }

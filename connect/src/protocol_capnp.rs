@@ -319,6 +319,7 @@ impl HomeSession for HomeSessionClientCapnProto
                 .or_else( move |e|
                     send.send( Err( format!("Events delegation failed: {}", e) ) )
                         .map( |_sink| () )
+                        // TODO what to do if failed to send error?
                         .map_err( |_err| () ) )
         );
 
@@ -326,7 +327,6 @@ impl HomeSession for HomeSessionClientCapnProto
     }
 
 
-    // TODO return not a Stream, but an AppSession struct containing a stream
     fn checkin_app(&self, app: &ApplicationId) ->
         Box< HomeStream<Call, String> >
     {
