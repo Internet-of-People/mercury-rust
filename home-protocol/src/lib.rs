@@ -382,23 +382,48 @@ mod tests
     }
 
     #[test]
-    fn test_channel_lifetime()
+    fn test_mpsc_drop_receiver()
     {
         let mut setup = TestSetup::new();
-
-        let item = "Hello".to_owned();
         let (sender, receiver) = mpsc::channel(2);
+
+        // Send and item
+        let item = "Hello".to_owned();
         let send_fut = sender.send( item.clone() );
         let sender = setup.reactor.run(send_fut).unwrap();
 
-//        let recv_fut = receiver.take(1).collect();
-//        let recv_vec = setup.reactor.run(recv_fut).unwrap();
-//        assert_eq!( recv_vec.len(), 1 );
-//        assert_eq!( recv_vec[0], item );
-//
-//        drop(receiver);
-//        let send_fut = sender.send(item);
-//        let sender = setup.reactor.run(send_fut);
-//        assert!( sender.is_err() );
+        // Receive the sent item
+        // NOTE take() drops the receiver after the first element
+        let recv_fut = receiver.take(1).collect();
+        let recv_vec = setup.reactor.run(recv_fut).unwrap();
+        assert_eq!( recv_vec.len(), 1 );
+        assert_eq!( recv_vec[0], item );
+
+        // Further sends should fail
+        let send_fut = sender.send(item);
+        let sender = setup.reactor.run(send_fut);
+        assert!( sender.is_err() );
+    }
+
+
+    #[test]
+    fn test_mpsc_drop_sender()
+    {
+        let mut setup = TestSetup::new();
+        let (sender, receiver) = mpsc::channel(2);
+
+        // Send an item and drop the sender
+        let item = "Hello".to_owned();
+        let send_fut = sender.send( item.clone() );
+        let sender = setup.reactor.run(send_fut).unwrap();
+        drop(sender);
+
+        // Consume the stream Collecting all received elements
+        let recv_fut = receiver.collect();
+        let recv_vec = setup.reactor.run(recv_fut).unwrap();
+
+        // Stream must end after dropped sender
+        assert_eq!( recv_vec.len(), 1 );
+        assert_eq!( recv_vec[0], item );
     }
 }
