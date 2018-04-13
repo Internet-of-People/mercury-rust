@@ -50,6 +50,10 @@ impl HomeDispatcherCapnProto
 }
 
 
+impl Drop for HomeDispatcherCapnProto
+    { fn drop(&mut self) { println!("Home dropped"); } }
+
+
 impl profile_repo::Server for HomeDispatcherCapnProto
 {
     fn list(&mut self, params: profile_repo::ListParams,
@@ -195,6 +199,10 @@ impl HomeSessionDispatcherCapnProto
     pub fn new(session: Box<HomeSession>) -> Self
         { Self{ session: session } }
 }
+
+// TODO remove after debugging
+impl Drop for HomeSessionDispatcherCapnProto
+    { fn drop(&mut self) { println!("Session dropped"); } }
 
 impl home_session::Server for HomeSessionDispatcherCapnProto
 {

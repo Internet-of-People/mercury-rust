@@ -68,7 +68,7 @@ impl Home for HomeServer
     fn login(&self, profile: ProfileId) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::ok( Box::new( HomeSessionServer{} ) as Box<HomeSession> ) )
     }
 
 
@@ -145,6 +145,7 @@ impl HomeSession for HomeSessionServer
     fn ping(&self, txt: &str) ->
         Box< Future<Item=String, Error=ErrorToBeSpecified> >
     {
+        println!("Ping received `{}`, sending it back", txt);
         Box::new( future::ok( txt.to_owned() ) )
     }
 }
