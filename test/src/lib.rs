@@ -60,8 +60,7 @@ fn test_events()
             session.events() //.for_each( |event| () )
         } );
 
-    let futs = [ Box::new( server_fut.map_err( |_e| () ) ) as Box< Future<Item=(),Error=()> >,
-                 Box::new( client_fut.map( |_session| () ).map_err( |_e| () ) ) ];
+//    let futs = server_fut.select(client_fut);
 //    let both_fut = select_ok( futs.iter() ); // **i as &Future<Item=(),Error=()> ) );
 //    let result = reactor.run(both_fut);
 }

@@ -42,6 +42,19 @@ impl<'a> From<&'a ::ProfileId> for &'a [u8]
 }
 
 
+impl<'a> From<&'a [u8]> for ::AppMessageFrame
+{
+    fn from(src: &'a [u8]) -> Self
+        { ::AppMessageFrame( src.to_owned() ) }
+}
+
+impl<'a> From<&'a ::AppMessageFrame> for &'a [u8]
+{
+    fn from(src: &'a ::AppMessageFrame) -> Self
+        { &src.0 }
+}
+
+
 impl<'a> From<&'a str> for ::ApplicationId
 {
     fn from(src: &'a str) -> Self

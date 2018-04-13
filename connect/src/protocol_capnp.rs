@@ -83,7 +83,7 @@ impl ProfileRepo for HomeClientCapnProto
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
         let mut request = self.repo.load_request();
-        request.get().set_profile_id( id.0.as_slice() );
+        request.get().set_profile_id( id.into() );
 
         let resp_fut = request.send().promise
             .and_then( |resp|
@@ -191,6 +191,7 @@ impl Home for HomeClientCapnProto
         Box::new(resp_fut)
     }
 
+
     // NOTE acceptor must have this server as its home
     fn pair_response(&self, relation_proof: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
@@ -205,10 +206,97 @@ impl Home for HomeClientCapnProto
         Box::new(resp_fut)
     }
 
+
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        let (send, recv) = mpsc::channel(1);
+        let listener = AppMessageListener::new(send);
+        let listener_capnp = mercury_capnp::app_message_listener::ToClient::new(listener)
+            .from_server::<::capnp_rpc::Server>();
+
+        let mut request = self.home.call_request();
+        request.get().init_relation().fill_from(&rel);
+        request.get().set_app( (&app).into() );
+        request.get().set_init_payload( (&init_payload).into() );
+        request.get().set_to_caller(listener_capnp);
+
+        let handle_clone = self.handle.clone();
+        let resp_fut = request.send().promise
+            .and_then( move |resp|
+            {
+                resp.get()
+                    .and_then( |res| res.get_to_callee() )
+                    .and_then( |app_listener|
+                    {
+                        // TODO provide a sink that sends app_messages over capnp
+                        // TODO return a proper CallMessages result from the streams
+                        // CallMessages{ incoming: recv, outgoing: TODO }
+                        Err( ::capnp::Error::failed("TODO implement".to_owned()) )
+                    } )
+            } )
+            .map_err( |_e| ErrorToBeSpecified::TODO );
+
+        Box::new(resp_fut)
+    }
+}
+
+
+
+// TODO created trying to implement calls(), fix it or kill it
+//struct AppMessageCapnpSender
+//{
+//    stream:   HomeStream<AppMessageFrame, String>,
+//    listener: mercury_capnp::app_message_listener::Client,
+//}
+//
+//impl AppMessageCapnpSender
+//{
+//    fn new(stream: Stream< listener: ClientTodo,
+//           listener: mercury_capnp::app_message_listener::Client,
+//           handle: &reactor::Handle) -> Self
+//    {
+//        Self{ listener: listener }
+//    }
+//}
+
+
+
+// TODO consider using a single generic imlementation for all kinds of Listeners
+struct AppMessageListener
+{
+    sender: Sender< Result<AppMessageFrame, String> >,
+}
+
+impl AppMessageListener
+{
+    fn new(sender: Sender< Result<AppMessageFrame, String> >) -> Self
+        { Self{ sender: sender } }
+}
+
+impl mercury_capnp::app_message_listener::Server for AppMessageListener
+{
+    fn receive(&mut self, params: mercury_capnp::app_message_listener::ReceiveParams,
+               mut results: mercury_capnp::app_message_listener::ReceiveResults,)
+        -> Promise<(), ::capnp::Error>
+    {
+        let message = pry!( pry!( params.get() ).get_message() );
+        let recv_fut = self.sender.clone().send( Ok( message.into() ) )
+            .map( |_sink| () )
+            .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}",e ) ) );
+        Promise::from_future(recv_fut)
+    }
+
+
+    fn error(&mut self, params: mercury_capnp::app_message_listener::ErrorParams,
+             mut results: mercury_capnp::app_message_listener::ErrorResults,)
+        -> Promise<(), ::capnp::Error>
+    {
+        let error = pry!( pry!( params.get() ).get_error() ).into();
+        let recv_fut = self.sender.clone().send( Err(error) )
+            .map( |_sink| () )
+            .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}",e ) ) );
+        Promise::from_future(recv_fut)
     }
 }
 
