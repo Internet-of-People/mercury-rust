@@ -42,8 +42,11 @@ fn main(){
     let signo = Rc::new(mock::Signo::new("Deuszkulcs"));
     let homesigno = Rc::new(mock::Signo::new("makusguba"));
     
-    println!("Setting up profiles");
-    let homeprof = mock::make_home_profile(&homeaddr, "home", "szeretem a kakaot");
+    println!("Setting up home");
+    let home_id = ProfileId(mock::generate_hash("home"));
+    let home_pubkey = PublicKey(Vec::from("home public key"));
+    let homeprof = Profile::new_home(home_id.clone(), home_pubkey.clone(), homemultiaddr.clone());
+    
     let mut profile = make_own_persona_profile("Deusz", signo.pub_key());
     
     println!("Setting up connection");
@@ -69,7 +72,7 @@ fn main(){
     // // let appcontext = reactor.run(bizbasz).unwrap();
     
     println!("Registering");
-    let ownprofile = reactor.run(profilegateway.register(ProfileId("home".as_bytes().to_owned()), mock::create_ownprofile("Deusz"), None)).unwrap();
+    let ownprofile = reactor.run(profilegateway.register(home_id, mock::create_ownprofile("Deusz"), None)).unwrap();
     println!("{:?}",ownprofile );
     
     // println!("Logging in");

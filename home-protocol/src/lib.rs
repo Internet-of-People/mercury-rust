@@ -57,8 +57,6 @@ pub trait Signer
     fn sign(&self, data: &[u8]) -> Signature;
 }
 
-
-
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PersonaFacet
 {
@@ -103,7 +101,6 @@ pub enum ProfileFacet
     Unknown(RawFacet),
 }
 
-
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Profile
 {
@@ -113,11 +110,24 @@ pub struct Profile
     // TODO consider having a signature of the profile data here
 }
 
-
 impl Profile
 {
     pub fn new(id: &ProfileId, pub_key: &PublicKey, facets: &[ProfileFacet]) -> Self
         { Self{ id: id.to_owned(), pub_key: pub_key.to_owned(), facets: facets.to_owned() } }
+
+    pub fn new_home(id: ProfileId, pub_key: PublicKey, address: Multiaddr) -> Self {
+        
+        let facet = HomeFacet {
+            addrs: vec![address],
+            data: vec![],
+        };
+
+        Self {
+            id,
+            pub_key,
+            facets: vec![ProfileFacet::Home(facet)]
+        }
+    }
 }
 
 
