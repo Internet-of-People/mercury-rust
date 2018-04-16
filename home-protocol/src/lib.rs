@@ -131,8 +131,8 @@ pub trait PeerContext
 
 
 
-pub type HomeStream<T,E> = futures::Stream< Item=Result<T,E>, Error=() >;
-pub type HomeSink<T,E>   = futures::Sink< SinkItem=Result<T,E>, SinkError=() >;
+pub type HomeStream<Elem, RemoteErr> = futures::Stream< Item=Result<Elem, RemoteErr>, Error=() >;
+pub type HomeSink<Elem, RemoteErr>   = futures::Sink< SinkItem=Result<Elem, RemoteErr>, SinkError=() >;
 
 /// Potentially a whole network of nodes with internal routing and sharding
 pub trait ProfileRepo

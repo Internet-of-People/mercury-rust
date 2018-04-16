@@ -50,8 +50,9 @@ impl HomeDispatcherCapnProto
 }
 
 
-impl Drop for HomeDispatcherCapnProto
-    { fn drop(&mut self) { println!("Home dropped"); } }
+// NOTE useful for testing connection lifecycles
+//impl Drop for HomeDispatcherCapnProto
+//    { fn drop(&mut self) { println!("Home dropped"); } }
 
 
 impl profile_repo::Server for HomeDispatcherCapnProto
@@ -200,9 +201,9 @@ impl HomeSessionDispatcherCapnProto
         { Self{ session: session } }
 }
 
-// TODO remove after debugging
-impl Drop for HomeSessionDispatcherCapnProto
-    { fn drop(&mut self) { println!("Session dropped"); } }
+// NOTE useful for testing connection lifecycles
+//impl Drop for HomeSessionDispatcherCapnProto
+//    { fn drop(&mut self) { println!("Session dropped"); } }
 
 impl home_session::Server for HomeSessionDispatcherCapnProto
 {
@@ -257,7 +258,8 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
             .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling;
             .for_each( move |item|
             {
-                match item {
+                match item
+                {
                     Ok(event) => {
                         let mut request = callback.receive_request();
                         request.get().init_event().fill_from(&event);

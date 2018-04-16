@@ -211,29 +211,24 @@ impl Home for HomeClientCapnProto
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
         let (send, recv) = mpsc::channel(1);
-        let listener = AppMessageListener::new(send);
-        let listener_capnp = mercury_capnp::app_message_listener::ToClient::new(listener)
+        let to_caller = AppMessageDispatcherCapnProto::new(send);
+        let to_caller_capnp = mercury_capnp::app_message_listener::ToClient::new(to_caller)
             .from_server::<::capnp_rpc::Server>();
 
         let mut request = self.home.call_request();
         request.get().init_relation().fill_from(&rel);
         request.get().set_app( (&app).into() );
         request.get().set_init_payload( (&init_payload).into() );
-        request.get().set_to_caller(listener_capnp);
+        request.get().set_to_caller(to_caller_capnp);
 
         let handle_clone = self.handle.clone();
         let resp_fut = request.send().promise
-            .and_then( move |resp|
+            .and_then( |resp| resp.get()
+                .and_then( |res| res.get_to_callee() ) )
+            .map( move |to_callee|
             {
-                resp.get()
-                    .and_then( |res| res.get_to_callee() )
-                    .and_then( |app_listener|
-                    {
-                        // TODO provide a sink that sends app_messages over capnp
-                        // TODO return a proper CallMessages result from the streams
-                        // CallMessages{ incoming: recv, outgoing: TODO }
-                        Err( ::capnp::Error::failed("TODO implement".to_owned()) )
-                    } )
+                let callee_sink = fwd_appmsg(to_callee, handle_clone);
+                 CallMessages{ incoming: Box::new(recv), outgoing: callee_sink}
             } )
             .map_err( |_e| ErrorToBeSpecified::TODO );
 
@@ -243,38 +238,53 @@ impl Home for HomeClientCapnProto
 
 
 
-// TODO created trying to implement calls(), fix it or kill it
-//struct AppMessageCapnpSender
-//{
-//    stream:   HomeStream<AppMessageFrame, String>,
-//    listener: mercury_capnp::app_message_listener::Client,
-//}
-//
-//impl AppMessageCapnpSender
-//{
-//    fn new(stream: Stream< listener: ClientTodo,
-//           listener: mercury_capnp::app_message_listener::Client,
-//           handle: &reactor::Handle) -> Self
-//    {
-//        Self{ listener: listener }
-//    }
-//}
+fn fwd_appmsg(to_callee: mercury_capnp::app_message_listener::Client, handle: reactor::Handle)
+    -> Box< HomeSink<AppMessageFrame, String> >
+{
+    let (send, recv) = mpsc::channel::<Result<AppMessageFrame, String>>(1);
+
+    handle.spawn(
+        recv.for_each( move |message|
+        {
+            let capnp_fut = match message
+            {
+                Ok(msg) => {
+                    let mut request = to_callee.receive_request();
+                    request.get().set_message(&msg.0);
+                    let fut = request.send().promise
+                        .map( |_resp| () );
+                    Box::new(fut) as Box< Future<Item=(), Error=::capnp::Error> >
+                },
+                Err(err) => {
+                    let mut request = to_callee.error_request();
+                    request.get().set_error(&err);
+                    let fut = request.send().promise
+                        .map( |_resp| () );
+                    Box::new(fut)
+                }
+            };
+            capnp_fut.map_err( |_e| () ) // TODO what to do here with the network capnp error?
+        } )
+    );
+
+    Box::new( send.sink_map_err( |_e| () ) ) // TODO should we just drop the sent AppMsgFrame here?
+}
 
 
 
-// TODO consider using a single generic imlementation for all kinds of Listeners
-struct AppMessageListener
+// TODO consider using a single generic imlementation for all kinds of Dispatchers
+struct AppMessageDispatcherCapnProto
 {
     sender: Sender< Result<AppMessageFrame, String> >,
 }
 
-impl AppMessageListener
+impl AppMessageDispatcherCapnProto
 {
     fn new(sender: Sender< Result<AppMessageFrame, String> >) -> Self
         { Self{ sender: sender } }
 }
 
-impl mercury_capnp::app_message_listener::Server for AppMessageListener
+impl mercury_capnp::app_message_listener::Server for AppMessageDispatcherCapnProto
 {
     fn receive(&mut self, params: mercury_capnp::app_message_listener::ReceiveParams,
                mut results: mercury_capnp::app_message_listener::ReceiveResults,)
@@ -302,19 +312,19 @@ impl mercury_capnp::app_message_listener::Server for AppMessageListener
 
 
 
-struct ProfileEventListener
+struct ProfileEventDispatcherCapnProto
 {
     sender: Sender< Result<ProfileEvent, String> >,
 }
 
-impl ProfileEventListener
+impl ProfileEventDispatcherCapnProto
 {
     fn new(sender: Sender< Result<ProfileEvent, String> >) -> Self
         { Self{ sender: sender } }
 }
 
 
-impl mercury_capnp::profile_event_listener::Server for ProfileEventListener
+impl mercury_capnp::profile_event_listener::Server for ProfileEventDispatcherCapnProto
 {
     fn receive(&mut self, params: mercury_capnp::profile_event_listener::ReceiveParams,
                 mut results: mercury_capnp::profile_event_listener::ReceiveResults,)
@@ -393,7 +403,7 @@ impl HomeSession for HomeSessionClientCapnProto
     fn events(&self) -> Box< HomeStream<ProfileEvent, String> >
     {
         let (send, recv) = mpsc::channel(1);
-        let listener = ProfileEventListener::new( send.clone() );
+        let listener = ProfileEventDispatcherCapnProto::new( send.clone() );
         // TODO consider how to drop/unregister this object from capnp if the stream is dropped
         let listener_capnp = mercury_capnp::profile_event_listener::ToClient::new(listener)
             .from_server::<::capnp_rpc::Server>();
