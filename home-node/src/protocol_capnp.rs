@@ -169,7 +169,7 @@ impl home::Server for HomeDispatcherCapnProto
                      mut results: home::PairResponseResults,)
         -> Promise<(), ::capnp::Error>
     {
-        let proof_capnp = pry!( pry!( params.get() ).get_relation_proof() );
+        let proof_capnp = pry!( pry!( params.get() ).get_relation() );
         let proof = pry!( RelationProof::try_from(proof_capnp) );
 
         let pair_resp_fut = self.home.pair_response(proof)
@@ -179,13 +179,30 @@ impl home::Server for HomeDispatcherCapnProto
     }
 
 
-// TODO
-//    fn call(&mut self, params: home::CallParams,
-//            mut results: home::CallResults,)
-//            -> Promise<(), ::capnp::Error>
-//    {
-//        Promise::ok( () )
-//    }
+    fn call(&mut self, params: home::CallParams,
+            mut results: home::CallResults,)
+        -> Promise<(), ::capnp::Error>
+    {
+        let opts = pry!( params.get() );
+        let rel_capnp = pry!( opts.get_relation() );
+        let app_capnp = pry!( opts.get_app() );
+        let init_payload_capnp = pry!( opts.get_init_payload() );
+        let to_caller = pry!( opts.get_to_caller() );
+
+        let relation = pry!( RelationProof::try_from(rel_capnp) );
+        let app = ApplicationId::from(app_capnp);
+        let init_payload = AppMessageFrame::from(init_payload_capnp);
+
+        let call_fut = self.home.call(relation, app, init_payload)
+// TODO send back proper results to client
+            .map( |call|
+            {
+                ()
+            })
+            .map_err( |_e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+
+        Promise::from_future(call_fut)
+    }
 }
 
 

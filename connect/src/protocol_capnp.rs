@@ -197,7 +197,7 @@ impl Home for HomeClientCapnProto
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.pair_response_request();
-        request.get().init_relation_proof().fill_from(&relation_proof);
+        request.get().init_relation().fill_from(&relation_proof);
 
         let resp_fut = request.send().promise
             .map( |resp| () )
