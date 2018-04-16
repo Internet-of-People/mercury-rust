@@ -130,30 +130,37 @@ impl Home for MyDummyHome
     Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >{
         //make some relation magic
         //match own_prof.profile.facets[0].homes.append(dummy_relation(self.home_id));
-        let mut ret : Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
-        match own_prof.profile.facets[0] {
-            ProfileFacet::Persona(ref mut persona) => {
-                persona.homes.append( &mut vec!(dummy_relation_proof() ) );
-            },
-            _ => {
-                /*Box::new( future::err( (own_prof, ErrorToBeSpecified::TODO) ) )*/
-                //ret = Box::new(future::ok(own_prof));
-            },
+        let mut ret : Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> > = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO) ) );
+        let id = own_prof.profile.id.clone();
+        let profile = own_prof.profile.clone();
+        let mut own_profile = own_prof.clone();
+        let mut storing = false;
+        for mut facet in own_profile.profile.facets.iter_mut(){
+            match facet {
+                &mut ProfileFacet::Persona(ref mut persona) => {
+                    persona.homes.append( &mut vec!(dummy_relation_proof() ) );
+                    storing = true;
+                },
+                _ => {
+                    ret = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO) ) );
+                },
+            };
         };
-        let ins = self.insert( own_prof.profile.id.clone(), own_prof.profile.clone() );
-        println!("--------------------------------------------------------");
-        println!("{:?}", ins);
-        match ins{
-            Some(updated) => {
-                ret = Box::new( future::err( (own_prof, ErrorToBeSpecified::TODO) ) );
-            } ,
-            None => {
-                ret = Box::new(future::ok(own_prof));
-            },
+
+        if storing{
+            let ins = self.insert( id.clone(), profile.clone() );
+            println!("inserting: {:?}", ins);
+            match ins{
+                Some(updated) => {
+                    ret = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO) ) );
+                },
+                None => {
+                    ret = Box::new(future::ok(own_profile.clone()));
+                },
+            }
         }
         ret
         //own_prof.priv_data = Vec::from("potato");
-        
     }
 
     // NOTE this closes all previous sessions of the same profile

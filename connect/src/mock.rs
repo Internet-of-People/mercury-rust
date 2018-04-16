@@ -15,12 +15,12 @@ pub fn generate_hash_from_vec( base : Vec<u8>) -> Vec<u8> {
     encode(Hash::SHA2256, &base).unwrap()
 }
 
-pub fn create_ownprofile(name : &str)->OwnProfile{
-    let p = Profile{
-        id:         ProfileId(name.as_bytes().to_owned()),
-        pub_key:    PublicKey("publickey".as_bytes().to_owned()),
-        facets:     vec!(),
-    };
+pub fn create_ownprofile(p : Profile)->OwnProfile{
+    // let p = Profile{
+    //     id:         ProfileId(name.as_bytes().to_owned()),
+    //     pub_key:    PublicKey("publickey".as_bytes().to_owned()),
+    //     facets:     vec!(),
+    // };
     OwnProfile::new(&p, &[])
 }
 
