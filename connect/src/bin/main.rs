@@ -71,9 +71,9 @@ fn main(){
 
     // // });
     // // let appcontext = reactor.run(bizbasz).unwrap();
-    let persona = mock::make_own_persona_profile("name", &PublicKey( Vec::from( "pubkey" ) ) );
+
     println!("Registering");
-    let reg = profilegateway.register(home_id, mock::create_ownprofile( persona ), None);
+    let reg = profilegateway.register(home_id, mock::create_ownprofile( profile ), None);
     let ownprofile = reactor.run(reg).unwrap();
     println!("{:?}",ownprofile );
     

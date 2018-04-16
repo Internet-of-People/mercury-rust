@@ -39,9 +39,10 @@ use futures::{Future,Stream};
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
+        let persona = mock::make_own_persona_profile("Noctis", &PublicKey( Vec::from( "pubkey" ) ) );
         let ownprofile = profile_gateway.register(
                 ProfileId( Vec::from( "Insomnia" ) ),
-                mock::create_ownprofile( "Noctis" ),
+                mock::create_ownprofile( persona ),
                 None
         );
 
@@ -65,9 +66,10 @@ use futures::{Future,Stream};
         //     "FinalFantasyXV" 
         // );
 
+        let persona = mock::make_own_persona_profile("Noctis", &PublicKey( Vec::from( "pubkey" ) ) );
         let registered = profile_gateway.register(
                 ProfileId( Vec::from( "Insomnia" ) ),
-                mock::create_ownprofile( "Noctis" ),
+                mock::create_ownprofile( persona ),
                 None
         );
         let res = reactor.run(registered); 
@@ -128,9 +130,10 @@ use futures::{Future,Stream};
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
+        let persona = mock::make_own_persona_profile("Noctis", &PublicKey( Vec::from( "pubkey" ) ) );
         let home_session = profile_gateway.update(
             ProfileId( Vec::from( "Tenebrae" ) ),
-            &mock::create_ownprofile( "Noctis" ),
+            &mock::create_ownprofile( persona ),
         );
 
         let res = reactor.run(home_session);      
@@ -317,9 +320,10 @@ use futures::{Future,Stream};
         .and_then(|home|{
             println!( "register(HomeProfile_Id_WhereWeRegister, OwnProfile) -> OwnProfile_ExtendedWithNewHome" );
             
+            let deusz = mock::make_own_persona_profile("Deusz", &PublicKey( Vec::from( "pubkey" ) ) );
             Ok(own_gateway.register(
                 ProfileId( Vec::from("Home") ),
-                mock::create_ownprofile( "Deusz" ),
+                mock::create_ownprofile( deusz ),
                 None
             ))
         })
@@ -328,10 +332,11 @@ use futures::{Future,Stream};
         })
         .and_then(| otherhome |{
             println!( "register(HomeProfile_Id_WhereWeRegister, OtherProfile) -> OtherProfile_ExtendedWithNewHome" );
-            
+
+            let persona = mock::make_own_persona_profile("Noctis", &PublicKey( Vec::from( "pubkey" ) ) );
             Ok(other_gateway.register(
                 ProfileId( Vec::from("OtherHome") ),
-                mock::create_ownprofile( "Othereusz" ),
+                mock::create_ownprofile( persona ),
                 None
             ))
         })

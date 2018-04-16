@@ -15,6 +15,8 @@ use mercury_home_protocol::*;
 use ::net::*;
 use ::mock::*;
 
+use futures::sync::mpsc;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::HashMap;
@@ -26,7 +28,7 @@ use multiaddr::{Multiaddr, ToMultiaddr};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 use tokio_io::{AsyncRead, AsyncWrite};
-use futures::{future, Future,Stream};
+use futures::{future, sync, Future, Stream};
 
 
 pub struct ProfileStore{
@@ -43,7 +45,7 @@ impl ProfileStore{
 
 impl ProfileStore{
     pub fn insert(&mut self, id : ProfileId, profile : Profile) -> Option<Profile>{
-        println!("Dht.add {:?}", id.0);
+        println!("ProfileStore.add {:?}", id.0);
         self.content.insert(id, profile)
     }
 
@@ -55,21 +57,23 @@ impl ProfileStore{
 impl ProfileRepo for ProfileStore{
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
     Box< HomeStream<Profile, String> >{
+        println!("ProfileStore.list");
         Box::new( futures::stream::empty() )
     }
 
     fn load(&self, id: &ProfileId) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
-        println!("Dht.load {:?}", id.0);
+        println!("ProfileStore.load {:?}", id.0);
         let prof = self.content.get(&id);
         match prof {
-            Some(profile) => {println!("dht.load.success");Box::new( future::ok(profile.to_owned()) )},
+            Some(profile) => {println!("ProfileStore.load.success");Box::new( future::ok(profile.to_owned()) )},
             None => Box::new( future::err(ErrorToBeSpecified::TODO) ),
         }
     }
 
     fn resolve(&self, url: &str) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
+        println!("ProfileStore.resolve");
         Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 
@@ -82,6 +86,7 @@ pub struct MyDummyHome{
 
 impl MyDummyHome{
     pub fn new(profile : Profile, dht : Rc<ProfileStore>) -> Self {
+        println!("MyDummyHome.new");
         MyDummyHome{
             home_profile   : profile,
             prof_repo : dht,
@@ -89,6 +94,7 @@ impl MyDummyHome{
     }
     
     fn insert(&mut self, id : ProfileId, profile : Profile)->Option<Profile>{
+        println!("MyDummyHome.insert");
         Rc::get_mut(&mut self.prof_repo).unwrap().insert(id, profile)
     }
 }
@@ -96,6 +102,7 @@ impl MyDummyHome{
 impl ProfileRepo for MyDummyHome{
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
     Box< Stream<Item=Result<Profile, String>, Error=()> >{
+        println!("MyDummyHome.list");
         Box::new( futures::stream::empty() )
     }
 
@@ -111,6 +118,7 @@ impl ProfileRepo for MyDummyHome{
 
     fn resolve(&self, url: &str) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
+        println!("MyDummyHome.resolve");
         Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 
@@ -121,6 +129,7 @@ impl Home for MyDummyHome
     // NOTE because we support multihash, the id cannot be guessed from the public key
     fn claim(&self, profile: ProfileId) ->
     Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >{
+        println!("MyDummyHome.claim");
         Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 
@@ -130,6 +139,7 @@ impl Home for MyDummyHome
     Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >{
         //make some relation magic
         //match own_prof.profile.facets[0].homes.append(dummy_relation(self.home_id));
+        println!("MyDummyHome.register {:?}", own_prof);
         let mut ret : Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> > = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO) ) );
         let id = own_prof.profile.id.clone();
         let profile = own_prof.profile.clone();
@@ -155,6 +165,7 @@ impl Home for MyDummyHome
                     ret = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO) ) );
                 },
                 None => {
+                    println!("MyDummyHome.register.success");
                     ret = Box::new(future::ok(own_profile.clone()));
                 },
             }
@@ -165,7 +176,10 @@ impl Home for MyDummyHome
 
     // NOTE this closes all previous sessions of the same profile
     fn login(&self, profile: ProfileId) ->
-    Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >{
+    Box< Future<Item=Box<mercury_home_protocol::HomeSession>, Error=ErrorToBeSpecified> >{
+        println!("MyDummyHome.login");
+        let session = HomeSessionDummy::new( Rc::clone(&self.prof_repo) );
+        //Box::new( future::ok( Box::new( session ) ) )
         Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 
@@ -201,6 +215,7 @@ impl DummyConnector{
     // }
 
     pub fn new_with_home(home : Rc<RefCell<Home>>)->Self{
+        println!("DummyConnector.new_with_home");
         Self{home: home}
     }
 }
@@ -211,10 +226,70 @@ impl HomeConnector for DummyConnector{
     /// `signer` belongs to me.
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >{
+            println!("DummyConnector.connect");
             Box::new( future::ok( Rc::clone( &self.home ) ) )
     }
 }
 
+pub struct HomeSessionDummy
+{
+    repo : Rc<ProfileStore>
+}
+
+
+impl HomeSessionDummy
+{
+    pub fn new( repo : Rc<ProfileStore> ) -> Self{ 
+        println!("HomeSessionDummy.new");
+        Self{ repo : repo } 
+    }
+}
+
+
+impl HomeSession for HomeSessionDummy
+{
+    fn update(&self, own_prof: &OwnProfile) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        println!("HomeSessionDummy.update");
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
+    }
+
+    // NOTE newhome is a profile that contains at least one HomeFacet different than this home
+    // TODO is the ID of the new home enough here or do we need the whole profile?
+    fn unregister(&self, newhome: Option<Profile>) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        // TODO close/drop session connection after successful unregister()
+        println!("HomeSessionDummy.unregister");
+        Box::new( future::err(ErrorToBeSpecified::TODO) )
+    }
+
+
+    fn events(&self) -> Box< HomeStream<ProfileEvent, String> >
+    {
+        println!("HomeSessionDummy.events");
+        let (sender, receiver) = sync::mpsc::channel(0);
+        Box::new(receiver)
+    }
+
+    // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
+    fn checkin_app(&self, app: &ApplicationId) ->
+        Box< HomeStream<Call, String> >
+    {
+        println!("HomeSessionDummy.checkin_app");
+        let (sender, receiver) = sync::mpsc::channel(0);
+        Box::new(receiver)
+    }
+
+    // TODO remove this after testing
+    fn ping(&self, txt: &str) ->
+        Box< Future<Item=String, Error=ErrorToBeSpecified> >
+    {
+        println!("Ping received `{}`, sending it back", txt);
+        Box::new( future::ok( txt.to_owned() ) )
+    }
+}
 
 fn main(){
     // let dummy = MyDummyHome::new();
