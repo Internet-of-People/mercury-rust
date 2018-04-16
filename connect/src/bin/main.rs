@@ -14,6 +14,7 @@ mod dummy;
 
 use dummy::{ProfileStore, MyDummyHome};
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::io::{BufRead, Read, Write, stdin};
 
@@ -52,12 +53,12 @@ fn main(){
     println!("Setting up connection");
 
     let mut home_storage = Rc::new( ProfileStore::new() );
-    let mut home = Rc::new( MyDummyHome::new( homeprof.clone() , home_storage) );
+    let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage) ) );
 
     // Rc::get_mut(&mut home).unwrap().insert(id , homeprof.clone());
 
     let mut dht = ProfileStore::new();
-    dht.insert(home.home_profile.id.clone(), homeprof.clone());
+    dht.insert(home.borrow().home_profile.id.clone(), homeprof.clone());
 
     let profilegateway = ProfileGatewayImpl{
         signer:         signo,

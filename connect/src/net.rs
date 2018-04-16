@@ -1,6 +1,7 @@
 #![allow(unused)]
 use std::net::{SocketAddr, IpAddr};
 
+use std::cell::RefCell;
 use capnp::capability::Promise;
 use futures::{Future};
 use futures::future;
@@ -39,7 +40,7 @@ pub struct TcpHomeConnector
 impl HomeConnector for TcpHomeConnector
 {
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >
     {
         // TODO in case of TCP addresses, use StunTurnTcpConnector to build an async TcpStream
         //      to it and build a Home proxy on top of it
@@ -104,7 +105,7 @@ impl SimpleTcpHomeConnector
 impl HomeConnector for SimpleTcpHomeConnector
 {
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >
     {
         let handle_clone = self.handle.clone();
         let tcp_conns = home_profile.facets.iter()
@@ -124,11 +125,11 @@ impl HomeConnector for SimpleTcpHomeConnector
                 use protocol_capnp::HomeClientCapnProto;
                 let home_ctx = Box::new( HomeContext::new(signer, &home_profile_clone) );
 
-                Rc::new( HomeClientCapnProto::new_tcp(tcp_stream, home_ctx, handle_clone) ) as Rc<Home>
+                Rc::new( RefCell::new( HomeClientCapnProto::new_tcp(tcp_stream, home_ctx, handle_clone) ) ) as Rc<RefCell<Home>>
 //                tcp_stream.set_nodelay(true).unwrap();
 //                let (reader, writer) = tcp_stream.split();
 //
-//                Rc::new( HomeClientCapnProto::new(reader, writer, home_ctx, handle_clone) ) as Rc<Home>
+//                Rc::new( HomeClientCapnProto::new(reader, writer, home_ctx, handle_clone) ) as Rc<RefCell<Home>>
             } );
         Box::new(capnp_home)
     }

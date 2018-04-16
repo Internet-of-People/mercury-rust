@@ -4,6 +4,7 @@ use super::*;
 use multihash::{encode, Hash};
 use multiaddr::{Multiaddr, ToMultiaddr};
 
+use std::cell::RefCell;
 use futures::{Async, Future, IntoFuture, Sink, Stream};
 
 pub fn generate_hash( base : &str) -> Vec<u8> {
@@ -87,7 +88,7 @@ impl DummyHomeConnector{
 }
 impl HomeConnector for DummyHomeConnector{
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >{
+        Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >{
             println!("connect");
             unimplemented!();
             //Box::new(futures::future::ok(Rc::new(&self.home)))

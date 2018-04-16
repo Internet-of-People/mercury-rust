@@ -15,6 +15,7 @@ use mercury_home_protocol::*;
 use ::net::*;
 use ::mock::*;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::HashMap;
 use std::io::{BufRead, Read, Write, stdin};
@@ -183,16 +184,16 @@ impl Home for MyDummyHome
 //    fn presence(&self, rel: Relation, app: ApplicationId) ->
 //        Box< Future<Item=Option<AppMessageFrame>, Error=ErrorToBeSpecified> >;
 }
-
+ 
 pub struct DummyConnector{
-    home : Rc<Home>
+    home : Rc<RefCell<Home>>
 }
 impl DummyConnector{
     // pub fn new()->Self{
     //     Self{home: Rc::new(MyDummyHome::new())}
     // }
 
-    pub fn new_with_home(home : Rc<Home>)->Self{
+    pub fn new_with_home(home : Rc<RefCell<Home>>)->Self{
         Self{home: home}
     }
 }
@@ -202,7 +203,7 @@ impl HomeConnector for DummyConnector{
     /// `home_profile` must have a HomeFacet with at least an address filled in.
     /// `signer` belongs to me.
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >{
+        Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >{
             Box::new( future::ok( Rc::clone( &self.home ) ) )
     }
 }

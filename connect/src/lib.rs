@@ -9,8 +9,9 @@ extern crate multihash;
 extern crate tokio_core;
 extern crate tokio_io;
 
+use std::cell::RefCell;
 use std::rc::Rc;
-use std::borrow::BorrowMut;
+//use std::borrow::BorrowMut;
 
 use futures::{Future, Stream}; // IntoFuture, Sink
 use futures::future;
@@ -29,7 +30,7 @@ pub trait HomeConnector
     /// `home_profile` must have a HomeFacet with at least an address filled in.
     /// `signer` belongs to me.
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >;
 }
 
 
@@ -151,7 +152,7 @@ impl ProfileGatewayImpl
     }
 
     pub fn connect_home(&self, home_profile_id: &ProfileId) ->
-        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >
     {
         let home_connector_clone = self.home_connector.clone();
         let signer_clone = self.signer.clone();
@@ -163,7 +164,7 @@ impl ProfileGatewayImpl
 
 
     pub fn any_home_of(&self, profile: &Profile) ->
-        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >
     {
         let profile_repo_clone = self.profile_repo.clone();
         let home_connector_clone = self.home_connector.clone();
@@ -174,7 +175,7 @@ impl ProfileGatewayImpl
 
     fn any_home_of2(profile: &Profile, prof_repo: Rc<ProfileRepo>,
                     connector: Rc<HomeConnector>, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >
     {
         let home_conn_futs = profile.facets.iter()
             .flat_map( |facet|
@@ -251,7 +252,7 @@ impl ProfileGateway for ProfileGatewayImpl
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
     {
         let claim_fut = self.connect_home(&home_id)
-            .and_then( move |home| home.claim(profile) );
+            .and_then( move |home| home.borrow().claim(profile) );
         Box::new(claim_fut)
     }
 
@@ -262,7 +263,7 @@ impl ProfileGateway for ProfileGatewayImpl
         let own_prof_clone = own_prof.clone();
         let reg_fut = self.connect_home(&home_id)
             .map_err( move |e| (own_prof_clone, e) )
-            .and_then( move |mut home : Rc<Home>| Rc::get_mut(&mut home).unwrap().register(own_prof, invite) );
+            .and_then( move | home : Rc<RefCell<Home>>| home.borrow_mut().register(own_prof, invite) );
         Box::new(reg_fut)
     }
 
@@ -272,7 +273,7 @@ impl ProfileGateway for ProfileGatewayImpl
         let own_profile_clone = own_prof.clone();
         let own_profile_id_clone = own_prof.profile.id.clone();
         let upd_fut = self.connect_home(&home_id)
-            .and_then( move |home| home.login(own_profile_id_clone) )
+            .and_then( move |home| home.borrow().login(own_profile_id_clone) )
             .and_then( move |session| session.update(&own_profile_clone) );
         Box::new(upd_fut)
     }
@@ -281,7 +282,7 @@ impl ProfileGateway for ProfileGatewayImpl
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let unreg_fut = self.connect_home(&home_id)
-            .and_then( move |home| home.login(own_prof) )
+            .and_then( move |home| home.borrow().login(own_prof) )
             .and_then( move |session| session.unregister(newhome_id) );
         Box::new(unreg_fut)
     }
@@ -297,7 +298,7 @@ impl ProfileGateway for ProfileGatewayImpl
         let log_fut = self.profile_repo.load( &self.signer.prof_id() )
             .and_then( move |profile| ProfileGatewayImpl::any_home_of2(
                 &profile, profile_repo_clone, home_conn_clone, signer_clone) )
-            .and_then( move |home| home.login(prof_id) ) ;
+            .and_then( move |home| home.borrow().login(prof_id) ) ;
 
         Box::new(log_fut)
     }
@@ -317,7 +318,7 @@ impl ProfileGateway for ProfileGatewayImpl
             {
                 let half_proof = ProfileGatewayImpl::new_half_proof(rel_type_clone.as_str(), &profile.id, signer_clone.clone() );
                 ProfileGatewayImpl::any_home_of2(&profile, profile_repo_clone, home_connector_clone, signer_clone)
-                    .and_then( move |home| home.pair_request(half_proof) )
+                    .and_then( move |home| home.borrow().pair_request(half_proof) )
             } );
 
         Box::new(pair_fut)
@@ -328,7 +329,7 @@ impl ProfileGateway for ProfileGatewayImpl
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let pair_fut = self.any_home_of(&rel.profile)
-            .and_then( move |home| home.pair_response(rel.proof) );
+            .and_then( move |home| home.borrow().pair_response(rel.proof) );
         Box::new(pair_fut)
     }
 
@@ -338,7 +339,7 @@ impl ProfileGateway for ProfileGatewayImpl
     {
         let call_fut = self.any_home_of(&rel.profile)
             .and_then( move |home|
-                home.call(rel.proof, app, init_payload) ) ;
+                home.borrow().call(rel.proof, app, init_payload) ) ;
         Box::new(call_fut)
     }
 }
