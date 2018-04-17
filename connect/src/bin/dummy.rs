@@ -30,7 +30,8 @@ use tokio_core::net::TcpStream;
 use tokio_io::{AsyncRead, AsyncWrite};
 use futures::{future, sync, Future, Stream};
 
-
+ 
+#[derive(Debug)]
 pub struct ProfileStore{
     content : HashMap<ProfileId, Profile>,
 }
@@ -64,10 +65,11 @@ impl ProfileRepo for ProfileStore{
     fn load(&self, id: &ProfileId) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
         println!("ProfileStore.load {:?}", id.0);
+        //println!("\nProfileStoreContent:::: {:?}", &self.content);
         let prof = self.content.get(&id);
         match prof {
             Some(profile) => {println!("ProfileStore.load.success");Box::new( future::ok(profile.to_owned()) )},
-            None => Box::new( future::err(ErrorToBeSpecified::TODO) ),
+            None => {println!("ProfileStore.load.fail"); Box::new( future::err(ErrorToBeSpecified::TODO) )},
         }
     }
 
@@ -81,21 +83,21 @@ impl ProfileRepo for ProfileStore{
 
 pub struct MyDummyHome{
     pub home_profile   : Profile, 
-    pub prof_repo : Rc<ProfileStore>,
+    pub prof_repo : Rc<RefCell<ProfileStore>>,
 }
 
 impl MyDummyHome{
-    pub fn new(profile : Profile, dht : Rc<ProfileStore>) -> Self {
+    pub fn new(profile : Profile, dht : Rc<RefCell<ProfileStore>>) -> Self {
         println!("MyDummyHome.new");
         MyDummyHome{
-            home_profile   : profile,
+            home_profile : profile,
             prof_repo : dht,
         }
     }
     
-    fn insert(&mut self, id : ProfileId, profile : Profile)->Option<Profile>{
+    pub fn insert(&mut self, id : ProfileId, profile : Profile)->Option<Profile>{
         println!("MyDummyHome.insert");
-        Rc::get_mut(&mut self.prof_repo).unwrap().insert(id, profile)
+        self.prof_repo.borrow_mut().insert(id, profile)
     }
 }
 
@@ -109,7 +111,9 @@ impl ProfileRepo for MyDummyHome{
     fn load(&self, id: &ProfileId) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
         println!("MyDummyHome.load");
-        let prof = self.prof_repo.get(id.to_owned());
+        let pr = self.prof_repo.borrow();
+        let prof = pr.get(id.to_owned());
+        //println!("MyDummyHome.prof_repo.content::::{:?}", &self.prof_repo.borrow().content);
         match prof {
             Some(profile) => Box::new( future::ok(profile.to_owned()) ),
             None => Box::new( future::err(ErrorToBeSpecified::TODO) ),
@@ -121,7 +125,7 @@ impl ProfileRepo for MyDummyHome{
         println!("MyDummyHome.resolve");
         Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
-
+ 
 }
 
 impl Home for MyDummyHome
@@ -176,11 +180,12 @@ impl Home for MyDummyHome
 
     // NOTE this closes all previous sessions of the same profile
     fn login(&self, profile: ProfileId) ->
-    Box< Future<Item=Box<mercury_home_protocol::HomeSession>, Error=ErrorToBeSpecified> >{
+    Box< Future< Item=Box< HomeSession >, Error=ErrorToBeSpecified > >{
         println!("MyDummyHome.login");
         let session = HomeSessionDummy::new( Rc::clone(&self.prof_repo) );
         //Box::new( future::ok( Box::new( session ) ) )
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        //Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new(future::empty())
     }
 
 
@@ -231,15 +236,16 @@ impl HomeConnector for DummyConnector{
     }
 }
 
+#[derive(Debug)]
 pub struct HomeSessionDummy
 {
-    repo : Rc<ProfileStore>
+    repo : Rc<RefCell<ProfileStore>>
 }
 
 
 impl HomeSessionDummy
 {
-    pub fn new( repo : Rc<ProfileStore> ) -> Self{ 
+    pub fn new( repo : Rc<RefCell<ProfileStore>> ) -> Self{ 
         println!("HomeSessionDummy.new");
         Self{ repo : repo } 
     }

@@ -30,6 +30,7 @@ use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 use tokio_io::{AsyncRead, AsyncWrite};
 use futures::{Future,Stream};
+use std::borrow::BorrowMut;
 
 fn main(){
     //print!("{}[2J", 27 as char);
@@ -40,29 +41,32 @@ fn main(){
     let homemultiaddr = homeaddr.to_multiaddr().unwrap();
     
     println!("Setting up signers");
-    let signo = Rc::new(mock::Signo::new("Deuszkulcs"));
+    let signo = Rc::new(mock::Signo::new("Deusz"));
     let homesigno = Rc::new(mock::Signo::new("makusguba"));
     
     println!("Setting up home");
     let home_id = ProfileId(mock::generate_hash("home"));
-    let home_pubkey = PublicKey(Vec::from("home public key"));
+    let home_pubkey = PublicKey(generate_hash("home public key"));
     let homeprof = Profile::new_home(home_id.clone(), home_pubkey.clone(), homemultiaddr.clone());
     
     let mut profile = make_own_persona_profile("Deusz", signo.pub_key());
     
     println!("Setting up connection");
 
-    let mut home_storage = Rc::new( ProfileStore::new() );
-    let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage) ) );
+    let mut dht = ProfileStore::new();
+    dht.insert(homeprof.id.clone(), homeprof.clone());
+    let mut home_storage = Rc::new( RefCell::new(dht) );
+    let mut store_rc = Rc::clone(&home_storage);
+    let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
 
     // Rc::get_mut(&mut home).unwrap().insert(id , homeprof.clone());
 
-    let mut dht = ProfileStore::new();
-    dht.insert(home.borrow().home_profile.id.clone(), homeprof.clone());
+ 
+
 
     let profilegateway = ProfileGatewayImpl{
         signer:         signo,
-        profile_repo:   Rc::new(dht),
+        profile_repo:   store_rc,
         home_connector: Rc::new( dummy::DummyConnector::new_with_home( home ) ),
     };
 
@@ -79,6 +83,8 @@ fn main(){
     
     println!("Logging in");
     println!("Getting session");
+
+
     let session = reactor.run( profilegateway.login() ).unwrap();
     
     println!("All set up");
@@ -96,7 +102,6 @@ fn main(){
                 println!("connect");
     
             },
-            //call dies miserably 
             "2" =>{
                 profilegateway.call(
                     mock::dummy_relation("work"), 

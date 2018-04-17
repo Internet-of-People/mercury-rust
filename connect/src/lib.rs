@@ -130,7 +130,7 @@ pub struct ProfileGatewayImpl
 {
     pub signer:         Rc<Signer>,
     //local profile repository?
-    pub profile_repo:   Rc<ProfileRepo>,
+    pub profile_repo:   Rc<RefCell<ProfileRepo>>,
     pub home_connector: Rc<HomeConnector>,
 }
 
@@ -139,7 +139,7 @@ impl ProfileGatewayImpl
 {
     pub fn new(    
         signer:         Rc<Signer>,
-        profile_repo:   Rc<ProfileRepo>,
+        profile_repo:   Rc<RefCell<ProfileRepo>>,
         home_connector: Rc<HomeConnector>,
     ) -> Self
     {
@@ -156,7 +156,7 @@ impl ProfileGatewayImpl
     {
         let home_connector_clone = self.home_connector.clone();
         let signer_clone = self.signer.clone();
-        let home_conn_fut = self.profile_repo.load(home_profile_id)
+        let home_conn_fut = self.profile_repo.borrow().load(home_profile_id)
             .and_then( move |home_profile|
                 home_connector_clone.connect(&home_profile, signer_clone) );
         Box::new(home_conn_fut)
@@ -173,7 +173,7 @@ impl ProfileGatewayImpl
     }
 
 
-    fn any_home_of2(profile: &Profile, prof_repo: Rc<ProfileRepo>,
+    fn any_home_of2(profile: &Profile, prof_repo: Rc<RefCell<ProfileRepo>>,
                     connector: Rc<HomeConnector>, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >
     {
@@ -191,7 +191,7 @@ impl ProfileGatewayImpl
             {
                 let connector_clone = connector.clone();
                 let signer_clone = signer.clone();
-                prof_repo.load(&home_relation_proof.peer_id)
+                prof_repo.borrow().load(&home_relation_proof.peer_id)
                     .and_then( move |home_profile|
                     {
                         // Load profiles from home ids
@@ -295,7 +295,7 @@ impl ProfileGateway for ProfileGatewayImpl
         let home_conn_clone = self.home_connector.clone();
         let signer_clone = self.signer.clone();
         let prof_id = self.signer.prof_id().clone();
-        let log_fut = self.profile_repo.load( &self.signer.prof_id() )
+        let log_fut = self.profile_repo.borrow().load( &self.signer.prof_id() )
             .and_then( move |profile| ProfileGatewayImpl::any_home_of2(
                 &profile, profile_repo_clone, home_conn_clone, signer_clone) )
             .and_then( move |home| home.borrow().login(prof_id) ) ;
@@ -312,7 +312,7 @@ impl ProfileGateway for ProfileGatewayImpl
         let signer_clone = self.signer.clone();
         let rel_type_clone = relation_type.to_owned();
 
-        let pair_fut = self.profile_repo
+        let pair_fut = self.profile_repo.borrow()
             .resolve(with_profile_url)
             .and_then( move |profile|
             {
