@@ -144,7 +144,7 @@ impl Home for MyDummyHome
         //make some relation magic
         //match own_prof.profile.facets[0].homes.append(dummy_relation(self.home_id));
         println!("MyDummyHome.register {:?}", own_prof);
-        let mut ret : Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> > = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO) ) );
+
         let id = own_prof.profile.id.clone();
         let profile = own_prof.profile.clone();
         let mut own_profile = own_prof.clone();
@@ -156,11 +156,13 @@ impl Home for MyDummyHome
                     storing = true;
                 },
                 _ => {
-                    ret = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO) ) );
+                    return Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO) ) );
                 },
             };
         };
 
+        let mut ret : Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> > = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO) ) );
+        
         if storing{
             let ins = self.insert( id.clone(), profile.clone() );
             println!("inserting: {:?}", ins);
@@ -182,11 +184,11 @@ impl Home for MyDummyHome
     fn login(&self, profile: ProfileId) ->
     Box< Future< Item=Box< HomeSession >, Error=ErrorToBeSpecified > >{
         println!("MyDummyHome.login");
-        let session = HomeSessionDummy::new( Rc::clone(&self.prof_repo) );
-        //Box::new( future::ok( Box::new( session ) ) )
+        let session = Box::new(HomeSessionDummy::new( Rc::clone(&self.prof_repo) )) as Box<HomeSession>;
+        Box::new( future::ok( session ) )
         //Box::new( future::err(ErrorToBeSpecified::TODO) )
-        Box::new(future::empty())
-    }
+        //Box::new(future::empty())
+    } 
 
 
     // NOTE acceptor must have this server as its home
