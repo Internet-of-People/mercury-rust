@@ -11,6 +11,7 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate futures;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::io::{BufRead, Read, Write, stdin};
 
@@ -35,7 +36,7 @@ use futures::{Future,Stream};
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new(mock::DummyHome::new("Insomnia")),
+            Rc::new( RefCell::new(mock::DummyHome::new("Insomnia") ) ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -56,7 +57,7 @@ use futures::{Future,Stream};
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new(mock::DummyHome::new("test_unregister")),
+            Rc::new(RefCell::new(mock::DummyHome::new("test_unregister"))),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -91,7 +92,7 @@ use futures::{Future,Stream};
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new( mock::DummyHome::new("test_login") ),
+            Rc::new( RefCell::new(mock::DummyHome::new("test_login")) ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -107,7 +108,7 @@ use futures::{Future,Stream};
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new( mock::DummyHome::new("test_claim") ),
+            Rc::new( RefCell::new(mock::DummyHome::new("test_claim")) ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -126,7 +127,7 @@ use futures::{Future,Stream};
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new( mock::DummyHome::new("test_update") ),
+            Rc::new( RefCell::new(mock::DummyHome::new("test_update") )),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -185,7 +186,7 @@ use futures::{Future,Stream};
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new( mock::DummyHome::new("test_call") ),
+            Rc::new(RefCell::new( mock::DummyHome::new("test_call")) ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -205,7 +206,7 @@ use futures::{Future,Stream};
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new( mock::DummyHome::new("test_ping") ),
+            Rc::new(RefCell::new( mock::DummyHome::new("test_ping")) ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -240,7 +241,7 @@ use futures::{Future,Stream};
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new( mock::DummyHome::new("test_pair_req") ),
+            Rc::new( RefCell::new(mock::DummyHome::new("test_pair_req")) ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -256,7 +257,7 @@ use futures::{Future,Stream};
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new( mock::DummyHome::new("test_pair_res") ),
+            Rc::new(RefCell::new( mock::DummyHome::new("test_pair_res")) ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -272,7 +273,7 @@ use futures::{Future,Stream};
         let signo = Rc::new( mock::Signo::new( "TestKey" ) );
         let profile_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new( mock::DummyHome::new("test_relations") ),
+            Rc::new(RefCell::new( mock::DummyHome::new("test_relations")) ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
@@ -305,13 +306,13 @@ use futures::{Future,Stream};
         println!( "ProfileGateway: ProfileSigner, DummyHome(as profile repo), HomeConnector" );
         let own_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new( mock::DummyHome::new("ein") ),
+            Rc::new(RefCell::new( mock::DummyHome::new("ein") )),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
         let other_gateway = ProfileGatewayImpl::new(
             other_signo,
-            Rc::new( mock::DummyHome::new("zwei") ),
+            Rc::new(RefCell::new( mock::DummyHome::new("zwei")) ),
             Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
         );
 
