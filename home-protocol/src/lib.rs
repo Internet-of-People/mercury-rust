@@ -262,8 +262,8 @@ pub struct AppMessageFrame(pub Vec<u8>);
 
 pub struct CallMessages
 {
-    pub incoming: Box< HomeStream<AppMessageFrame, String> >,
-    pub outgoing: Box< HomeSink<AppMessageFrame, String> >,
+    pub incoming: Option<Box< HomeStream<AppMessageFrame, String> >>,
+    pub outgoing: Option<Box< HomeSink<AppMessageFrame, String> >>,
 }
 
 pub struct Call
@@ -271,7 +271,7 @@ pub struct Call
     pub caller:         ProfileId,
     pub init_payload:   AppMessageFrame,
     // NOTE A missed call will contain Option::None
-    pub messages:       Option<CallMessages>,
+    pub messages:       CallMessages,
 }
 
 
@@ -303,7 +303,10 @@ pub trait Home: ProfileRepo
     fn pair_response(&self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame) ->
+    // NOTE initiating P2P connection, we must pass some message channel to ourselves,
+    //      a successful call returns a channel to callee
+    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
+            to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
 
 // TODO consider how to do this in a later milestone

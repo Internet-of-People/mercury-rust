@@ -187,13 +187,15 @@ impl home::Server for HomeDispatcherCapnProto
         let rel_capnp = pry!( opts.get_relation() );
         let app_capnp = pry!( opts.get_app() );
         let init_payload_capnp = pry!( opts.get_init_payload() );
-        let to_caller = pry!( opts.get_to_caller() );
+        // TODO wrap a homesink around capnp object
+        let to_caller = opts.get_to_caller();
 
         let relation = pry!( RelationProof::try_from(rel_capnp) );
         let app = ApplicationId::from(app_capnp);
         let init_payload = AppMessageFrame::from(init_payload_capnp);
 
-        let call_fut = self.home.call(relation, app, init_payload)
+        // TODO properly delegate homesink to business logic
+        let call_fut = self.home.call(relation, app, init_payload, None)
 // TODO send back proper results to client
             .map( |call|
             {

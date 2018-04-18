@@ -189,7 +189,8 @@ use futures::{Future,Stream};
         let call_messages = profile_gateway.call(
             mock::dummy_relation( "NewGame+" ), 
             ApplicationId( String::from( "Undertale" ) ), 
-            AppMessageFrame( Vec::from( "Megalovania" ) ) 
+            AppMessageFrame( Vec::from( "Megalovania" ) ),
+            None
         );
 
         let res = reactor.run(call_messages);      
@@ -376,7 +377,8 @@ use futures::{Future,Stream};
             own_gateway.call(
                 mock::dummy_relation( "work" ), 
                 ApplicationId( String::from( "SampleApp" ) ), 
-                AppMessageFrame( Vec::from( "whatever" ) ) 
+                AppMessageFrame( Vec::from( "whatever" ) ),
+                None
             )        
         })
         .and_then(|_|{
@@ -385,7 +387,8 @@ use futures::{Future,Stream};
             other_gateway.call(
                 mock::dummy_relation( "work" ), 
                 ApplicationId( String::from( "SampleApp" ) ), 
-                AppMessageFrame( Vec::from( "whetavar" ) ) 
+                AppMessageFrame( Vec::from( "whetavar" ) ),
+                None
             )
         });
 

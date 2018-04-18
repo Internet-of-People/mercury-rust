@@ -86,7 +86,8 @@ fn main(){
                 profilegateway.call(
                     mock::dummy_relation("work"), 
                     ApplicationId( String::from("SampleApp") ), 
-                    AppMessageFrame("whatever".as_bytes().to_owned() ) 
+                    AppMessageFrame("whatever".as_bytes().to_owned() ),
+                    None
                 );
     
             }

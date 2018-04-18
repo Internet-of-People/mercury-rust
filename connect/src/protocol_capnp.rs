@@ -207,9 +207,12 @@ impl Home for HomeClientCapnProto
     }
 
 
-    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame) ->
+    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
+            to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
+        // TODO this should be coming from the fn argument to_caller,
+        // we should move it to a factory method near HomeConnector
         let (send, recv) = mpsc::channel(1);
         let to_caller = AppMessageDispatcherCapnProto::new(send);
         let to_caller_capnp = mercury_capnp::app_message_listener::ToClient::new(to_caller)
@@ -228,7 +231,7 @@ impl Home for HomeClientCapnProto
             .map( move |to_callee|
             {
                 let callee_sink = fwd_appmsg(to_callee, handle_clone);
-                 CallMessages{ incoming: Box::new(recv), outgoing: callee_sink}
+                CallMessages{ incoming: Some( Box::new(recv) ), outgoing: Some(callee_sink) }
             } )
             .map_err( |_e| ErrorToBeSpecified::TODO );
 
