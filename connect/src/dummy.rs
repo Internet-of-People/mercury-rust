@@ -1,5 +1,4 @@
 #![allow(unused)]
-extern crate mercury_connect;
 extern crate mercury_home_protocol;
 
 extern crate multihash;
@@ -10,12 +9,10 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate futures;
 
-use mercury_connect::*;
 use mercury_home_protocol::*;
-use ::net::*;
-use ::mock::*;
 
-use futures::sync::mpsc;
+use super::*;
+use ::net::*;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -28,8 +25,282 @@ use multiaddr::{Multiaddr, ToMultiaddr};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 use tokio_io::{AsyncRead, AsyncWrite};
-use futures::{future, sync, Future, Stream};
 
+use futures::sync::mpsc;
+use futures::{future, Async, sync, Future, IntoFuture, Sink, Stream};
+
+pub fn generate_hash( base : &str) -> Vec<u8> {
+    encode(Hash::SHA2256, base.as_bytes()).unwrap()
+}
+
+pub fn generate_hash_from_vec( base : Vec<u8>) -> Vec<u8> {
+    encode(Hash::SHA2256, &base).unwrap()
+}
+
+pub struct TestSetup{
+    pub homeprofile: Profile,
+    pub homeprofileid: ProfileId,
+    pub homesigner: Rc<Signer>,
+    pub homeaddr: String,
+    pub homemultiaddr: Multiaddr,
+    pub home: Rc< RefCell< MyDummyHome > >,
+    pub user: Profile,
+    pub userid: ProfileId,
+    pub usersinger: Rc<Signer>,
+    pub userownprofile : OwnProfile, 
+    pub profilegate: ProfileGatewayImpl,
+}
+
+impl TestSetup{
+    pub fn setup()-> Self {
+        let homesigner = Rc::new(Signo::new("homesigner"));
+        let homeaddr = String::from("/ip4/127.0.0.1/udp/9876");
+        let homemultiaddr = homeaddr.to_multiaddr().unwrap();
+        let homeprofileid =  ProfileId(generate_hash("home"));
+        let homeprof = Profile::new_home(ProfileId(generate_hash("home")), homesigner.pub_key().clone(), homemultiaddr.clone());
+
+        let usersigner = Rc::new(Signo::new("Deusz"));
+        let userid = ProfileId( generate_hash_from_vec( usersigner.pub_key().0.clone() ) );
+        let user = make_own_persona_profile(&usersigner.pub_key().clone());
+        let userownprofile = create_ownprofile(user.clone());
+
+        let mut dht = ProfileStore::new();
+        dht.insert(homeprofileid.clone(), homeprof.clone());
+        let mut home_storage = Rc::new( RefCell::new(dht) );
+        let mut store_rc = Rc::clone(&home_storage);
+        let homeprof = Profile::new_home(homeprofileid.clone(), homesigner.pub_key().clone(), homemultiaddr.clone());
+        let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
+        let homerc = Rc::clone(&home);
+
+        let profilegateway = ProfileGatewayImpl{
+            signer:         usersigner.clone(),
+            profile_repo:   store_rc,
+            home_connector: Rc::new( dummy::DummyConnector::new_with_home( home ) ),
+        };
+
+        Self{
+            homeprofile: homeprof,
+            homeprofileid: homeprofileid,
+            homesigner: homesigner,
+            homeaddr: homeaddr,
+            homemultiaddr: homemultiaddr,
+            home: homerc,
+            user: user,
+            userid: userid,
+            usersinger: usersigner,
+            userownprofile: userownprofile,
+            profilegate: profilegateway,
+        }
+    }
+}
+
+
+pub fn create_ownprofile(p : Profile)->OwnProfile{
+    OwnProfile::new(&p, &[])
+}
+
+pub fn make_own_persona_profile(pubkey : &PublicKey)->Profile{
+    let id = generate_hash_from_vec(pubkey.0.clone());
+    let empty = vec![];
+    let homes = vec![];
+    Profile::new(
+        &ProfileId(id), 
+        &pubkey,
+        &[ProfileFacet::Persona( PersonaFacet{ homes : homes , data : empty } )] 
+    )
+}
+
+pub fn make_home_profile(addr : &str, pubkey : &PublicKey)->Profile{
+    let homeaddr = addr.to_multiaddr().unwrap();
+    let home_hash = generate_hash_from_vec(pubkey.0.clone());
+    let empty = vec![];
+    let homevec = vec![homeaddr];
+    Profile::new(
+        &ProfileId(home_hash), 
+        &pubkey,
+        &[ProfileFacet::Home( HomeFacet{ addrs : homevec , data : empty } ) ] 
+    )
+}
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct Signo{
+    prof_id : ProfileId,
+    pubkey : PublicKey,
+    privkey : Vec<u8>,
+}
+
+impl Signo{
+    pub fn new( whatever : &str)->Self{
+        Signo{
+            prof_id : ProfileId( generate_hash(whatever) ),
+            pubkey : PublicKey( generate_hash_from_vec( generate_hash(whatever) ) ),
+            privkey : generate_hash(whatever),
+        }
+    }
+}
+
+impl Signer for Signo{
+    fn prof_id(&self) -> &ProfileId{
+        &self.prof_id
+    }
+    fn pub_key(&self) -> &PublicKey{
+        &self.pubkey
+    }
+    fn sign(&self, data: &[u8]) -> Signature{
+        let mut sig = String::new();
+        sig.push_str( std::str::from_utf8(&data).unwrap() );
+        sig.push_str( std::str::from_utf8(&self.privkey).unwrap() );
+        Signature( sig.into_bytes() )
+    }
+}
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct DummyHomeConnector{
+    pub home : DummyHome,
+}
+impl DummyHomeConnector{
+    fn dconnect(&self){
+        unimplemented!();
+    }
+}
+impl HomeConnector for DummyHomeConnector{
+    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
+        Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >{
+            println!("connect");
+            unimplemented!();
+            //Box::new(futures::future::ok(Rc::new(&self.home)))
+        }
+}
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct DummyHome {
+    pub signer : Signo,
+    pub ping_reply: String,
+}
+
+impl DummyHome {
+    pub fn new(ping_reply: &str) -> DummyHome {
+        DummyHome {
+            signer: Signo::new("Mockarony"),
+            ping_reply: String::from(ping_reply),
+        }
+    }
+}
+
+impl Future for DummyHome{
+    type Item = DummyHome;
+    type Error =ErrorToBeSpecified;
+    fn poll(
+        &mut self
+    ) -> Result<Async<Self::Item>, Self::Error>{
+        println!("poll");
+        unimplemented!();
+    }
+}
+impl PeerContext for DummyHome {
+    fn my_signer(&self) -> &Signer {
+        &self.signer
+    }
+    fn peer(&self) -> Option<Profile>{
+        println!("peer");
+        None
+    }
+    fn peer_pubkey(&self) -> Option<PublicKey>{
+        println!("peer_pubkey");
+        None
+    }
+}
+
+impl ProfileRepo for DummyHome{
+    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
+        Box< HomeStream<Profile, String> >{
+            println!("list");
+            unimplemented!()
+        }
+
+    fn load(&self, id: &ProfileId) ->
+        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
+            println!("load: {:?}" , id );
+            unimplemented!()
+        }
+
+    // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
+    fn resolve(&self, url: &str) ->
+        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
+            println!("resolve");
+            unimplemented!()
+        }
+
+    // TODO notifications on profile updates should be possible
+}
+
+impl Home for DummyHome{
+    // NOTE because we support multihash, the id cannot be guessed from the public key
+    fn claim(&self, profile: ProfileId) ->
+        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >{
+            println!("claim");
+            unimplemented!()
+        }
+
+    // TODO consider how to enforce overwriting the original ownprofile with the modified one
+    //      with the pairing proof, especially the error case
+    fn register(&mut self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
+        Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >{
+            println!("register: {:?}", own_prof.profile.id);
+            unimplemented!()
+        }
+
+    // NOTE this closes all previous sessions of the same profile
+    fn login(&self, profile: ProfileId) ->
+        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >{
+            println!("login: {:?}", profile);
+            unimplemented!()
+        }
+
+
+    // NOTE acceptor must have this server as its home
+    // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
+    fn pair_request(&self, half_proof: RelationHalfProof) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >{
+            println!("pair_request");
+            unimplemented!()
+        }
+
+    fn pair_response(&self, rel: RelationProof) ->
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >{
+            println!("pair_response");
+            unimplemented!()
+        }
+
+    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame) ->
+        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >{
+            println!("call");
+            unimplemented!()
+        }
+
+// TODO consider how to do this in a later milestone
+//    fn presence(&self, rel: Relation, app: ApplicationId) ->
+//        Box< Future<Item=Option<AppMessageFrame>, Error=ErrorToBeSpecified> >;
+}
+
+pub fn dummy_half_proof(rtype: &str)->RelationHalfProof{
+    RelationHalfProof{
+        relation_type:  String::from(rtype),
+        my_id:          ProfileId("my_id".as_bytes().to_owned()),
+        my_sign:        Signature("my_sign".as_bytes().to_owned()),
+        peer_id:        ProfileId("peer_id".as_bytes().to_owned()),
+    }
+}
+
+pub fn dummy_relation_proof()->RelationProof {
+    RelationProof::new()
+}
+
+pub fn dummy_relation(rtype: &str)->Relation{
+    Relation::new(
+        &make_own_persona_profile(
+            &PublicKey("dummy_relation_profile_id".as_bytes().to_owned()) 
+        ),
+        &dummy_relation_proof()
+    )
+}
  
 #[derive(Debug)]
 pub struct ProfileStore{
@@ -187,7 +458,7 @@ impl Home for MyDummyHome
         let session = Box::new(HomeSessionDummy::new( Rc::clone(&self.prof_repo) )) as Box<HomeSession>;
         Box::new( future::ok( session ) )
         //Box::new( future::err(ErrorToBeSpecified::TODO) )
-        //Box::new(future::empty())
+
     } 
 
 

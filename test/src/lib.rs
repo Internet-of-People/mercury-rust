@@ -15,13 +15,13 @@ fn test_events()
     use std::net::ToSocketAddrs;
     use std::rc::Rc;
 
-    use futures::{select_ok, Future, Stream};
+    use futures::{Future, Stream};
     use tokio_core::net::{TcpListener, TcpStream};
     use tokio_core::reactor;
 
     use mercury_home_protocol::*;
     use mercury_connect::HomeContext;
-    use mercury_connect::mock::{DummyHome, Signo, make_home_profile};
+    use mercury_connect::dummy::{ MyDummyHome, Signo, make_home_profile};
     use mercury_connect::protocol_capnp::HomeClientCapnProto;
     use mercury_home_node::protocol_capnp::HomeDispatcherCapnProto;
 
@@ -37,7 +37,7 @@ fn test_events()
     {
         println!("Accepted client connection, serving requests");
 
-        let home = Box::new( DummyHome::new("ping_reply_msg") );
+        let home = Box::new( mercury_connect::dummy::DummyHome::new("ping_reply_msg") );
         // let home = Box::new( server::HomeServer::new() );
         HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle1.clone() );
         Ok( () )
@@ -50,7 +50,7 @@ fn test_events()
         {
             let signer = Rc::new( Signo::new("privatekey") );
             let my_profile = signer.prof_id().clone();
-            let home_profile = make_home_profile("home_address", "home_profile", "home_public_key");
+            let home_profile = make_home_profile("localhost:9876", signer.pub_key());
             let home_ctx = Box::new( HomeContext::new(signer, &home_profile) );
             let client = HomeClientCapnProto::new_tcp( tcp_stream, home_ctx, handle2 );
             client.login(my_profile) // TODO maybe we should require only a reference in login()

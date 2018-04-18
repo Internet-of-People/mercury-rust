@@ -10,10 +10,6 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate futures;
 
-mod dummy;
-
-use dummy::{ProfileStore, MyDummyHome};
-
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::io::{BufRead, Read, Write, stdin};
@@ -21,7 +17,7 @@ use std::io::{BufRead, Read, Write, stdin};
 use mercury_connect::*;
 use mercury_home_protocol::*;
 use ::net::*;
-use ::mock::*;
+use ::dummy::*;
 
 use multihash::{encode, Hash};
 use multiaddr::{Multiaddr, ToMultiaddr};
@@ -41,15 +37,15 @@ fn main(){
     let homemultiaddr = homeaddr.to_multiaddr().unwrap();
     
     println!("Setting up signers");
-    let signo = Rc::new(mock::Signo::new("Deusz"));
-    let homesigno = Rc::new(mock::Signo::new("makusguba"));
+    let signo = Rc::new(dummy::Signo::new("Deusz"));
+    let homesigno = Rc::new(dummy::Signo::new("makusguba"));
     
     println!("Setting up home");
-    let home_id = ProfileId(mock::generate_hash("home"));
+    let home_id = ProfileId(dummy::generate_hash("home"));
     let home_pubkey = PublicKey(generate_hash("home public key"));
     let homeprof = Profile::new_home(home_id.clone(), home_pubkey.clone(), homemultiaddr.clone());
     
-    let mut profile = make_own_persona_profile("Deusz", signo.pub_key());
+    let mut profile = make_own_persona_profile(signo.pub_key());
     
     println!("Setting up connection");
 
@@ -77,7 +73,7 @@ fn main(){
     // // let appcontext = reactor.run(bizbasz).unwrap();
 
     println!("Registering");
-    let reg = profilegateway.register(home_id, mock::create_ownprofile( profile ), None);
+    let reg = profilegateway.register(home_id, dummy::create_ownprofile( profile ), None);
     let ownprofile = reactor.run(reg).unwrap();
     println!("{:?}",ownprofile );
     
@@ -104,7 +100,7 @@ fn main(){
             },
             "2" =>{
                 profilegateway.call(
-                    mock::dummy_relation("work"), 
+                    dummy::dummy_relation("work"), 
                     ApplicationId( String::from("SampleApp") ), 
                     AppMessageFrame("whatever".as_bytes().to_owned() ) 
                 );

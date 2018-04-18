@@ -18,10 +18,10 @@ use futures::future;
 
 use mercury_home_protocol::*;
 
+pub mod dummy;
 pub mod net;
 pub mod protocol_capnp;
 pub mod test;
-pub mod mock;
 
 pub trait HomeConnector
 {
@@ -201,7 +201,7 @@ impl ProfileGatewayImpl
 
         // NOTE needed because select_ok() panics for empty lists instead of simply returning an error
         if home_conn_futs.len() == 0
-            { return Box::new( Err(ErrorToBeSpecified::TODO).into_future() ) }
+            { return Box::new( Err(ErrorToBeSpecified::NoHomeFound).into_future() ) }
 
         // Pick first successful home connection
         let home_conn_fut = future::select_ok( home_conn_futs )

@@ -22,7 +22,7 @@ pub mod mercury_capnp;
 
 // TODO
 #[derive(PartialEq, Eq, Clone, Debug)]
-pub enum ErrorToBeSpecified { TODO, }
+pub enum ErrorToBeSpecified { TODO, NoHomeFound }
 
 
 
