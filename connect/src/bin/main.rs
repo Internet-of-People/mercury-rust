@@ -10,29 +10,29 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate futures;
 
+use ::net::*;
+use ::dummy::*;
+
+use mercury_connect::*;
+use mercury_home_protocol::*;
+
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::io::{BufRead, Read, Write, stdin};
 
-use mercury_connect::*;
-use mercury_home_protocol::*;
-use ::net::*;
-use ::dummy::*;
-
-use multihash::{encode, Hash};
 use multiaddr::{Multiaddr, ToMultiaddr};
 
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 use tokio_io::{AsyncRead, AsyncWrite};
-use futures::{Future,Stream};
-use std::borrow::BorrowMut;
+
+use futures::{Future, Stream};
 
 fn main(){
     //print!("{}[2J", 27 as char);
     println!("Setting up config");
     let mut reactor = reactor::Core::new().unwrap();
-    let mut reactorhandle = reactor.handle();
+    let reactorhandle = reactor.handle();
     let homeaddr = "/ip4/127.0.0.1/udp/9876";
     let homemultiaddr = homeaddr.to_multiaddr().unwrap();
     
@@ -41,11 +41,9 @@ fn main(){
     let homesigno = Rc::new(dummy::Signo::new("makusguba"));
     
     println!("Setting up home");
-    let home_id = ProfileId(dummy::generate_hash("home"));
-    let home_pubkey = PublicKey(generate_hash("home public key"));
-    let homeprof = Profile::new_home(home_id.clone(), home_pubkey.clone(), homemultiaddr.clone());
-    
-    let mut profile = make_own_persona_profile(signo.pub_key());
+
+    let homeprof = Profile::new_home(homesigno.prof_id().to_owned(), homesigno.pub_key().to_owned(), homemultiaddr.clone());
+    let profile = make_own_persona_profile(signo.pub_key());
     
     println!("Setting up connection");
 
@@ -55,38 +53,25 @@ fn main(){
     let mut store_rc = Rc::clone(&home_storage);
     let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
 
-    // Rc::get_mut(&mut home).unwrap().insert(id , homeprof.clone());
-
- 
-
-
     let profilegateway = ProfileGatewayImpl{
         signer:         signo,
         profile_repo:   store_rc,
         home_connector: Rc::new( dummy::DummyConnector::new_with_home( home ) ),
     };
 
-    // // let bizbasz = TcpStream::connect( &multiaddr_to_socketaddr(&homemultiaddr).unwrap() , &reactorhandle.clone() )
-    // // .map(|stream|{
-
-    // // });
-    // // let appcontext = reactor.run(bizbasz).unwrap();
-
     println!("Registering");
-    let reg = profilegateway.register(home_id, dummy::create_ownprofile( profile ), None);
+    let reg = profilegateway.register(homesigno.prof_id().to_owned(), dummy::create_ownprofile( profile ), None);
     let ownprofile = reactor.run(reg).unwrap();
-    println!("{:?}",ownprofile );
+    println!("{:?}", ownprofile );
     
     println!("Logging in");
     println!("Getting session");
-
 
     let session = reactor.run( profilegateway.login() ).unwrap();
     
     println!("All set up");
     
     println!("Menu\n1. Connect\n2. Call(crashes)\n3. Pair\n4. Ping\n5. Show profile\nExit with ctrl+d");
-    let mut buffer = String::new();
     let stdin = tokio_stdin_stdout::stdin(1);
     let bufreader = std::io::BufReader::new(stdin);
     let instream = tokio_io::io::lines(bufreader);
@@ -125,5 +110,5 @@ fn main(){
         };
         futures::future::ok::<(),std::io::Error>(())
     });
-    reactor.run(stdin_closed);
+    let crash = reactor.run(stdin_closed).unwrap();
 }

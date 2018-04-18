@@ -295,6 +295,7 @@ impl ProfileGateway for ProfileGatewayImpl
     fn login(&self) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
     {
+        println!("profilegateway.login");
         let profile_repo_clone = self.profile_repo.clone();
         let home_conn_clone = self.home_connector.clone();
         let signer_clone = self.signer.clone();

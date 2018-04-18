@@ -131,8 +131,8 @@ pub struct Signo{
 impl Signo{
     pub fn new( whatever : &str)->Self{
         Signo{
-            prof_id : ProfileId( generate_hash(whatever) ),
-            pubkey : PublicKey( generate_hash_from_vec( generate_hash(whatever) ) ),
+            prof_id : ProfileId( generate_hash_from_vec( generate_hash(whatever) ) ),
+            pubkey : PublicKey( generate_hash(whatever) ),
             privkey : generate_hash(whatever),
         }
     }
