@@ -13,7 +13,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 //use std::borrow::BorrowMut;
 
-use futures::{Future, Stream}; // IntoFuture, Sink
+use futures::{Future, IntoFuture, Stream}; // IntoFuture, Sink
 use futures::future;
 
 use mercury_home_protocol::*;
@@ -197,7 +197,11 @@ impl ProfileGatewayImpl
                         // Load profiles from home ids
                         connector_clone.connect(&home_profile, signer_clone)
                     } )
-            } );
+            } ).collect::<Vec<_>>();
+
+        // NOTE needed because select_ok() panics for empty lists instead of simply returning an error
+        if home_conn_futs.len() == 0
+            { return Box::new( Err(ErrorToBeSpecified::TODO).into_future() ) }
 
         // Pick first successful home connection
         let home_conn_fut = future::select_ok( home_conn_futs )
