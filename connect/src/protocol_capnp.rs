@@ -93,7 +93,7 @@ impl ProfileRepo for HomeClientCapnProto
                 let profile = Profile::try_from(profile_capnp);
                 Promise::result(profile)
             } )
-            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.load ")) );
+            .map_err(  |e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.load ")) );
 
         Box::new(resp_fut)
     }
@@ -112,7 +112,7 @@ impl ProfileRepo for HomeClientCapnProto
                 let profile = Profile::try_from(profile_capnp);
                 Promise::result(profile)
             } )
-            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.resolve ")) );
+            .map_err(  |e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.resolve ")) );
 
         Box::new(resp_fut)
     }
@@ -133,7 +133,7 @@ impl Home for HomeClientCapnProto
                 resp.get()
                     .and_then( |res| res.get_own_profile() )
                     .and_then( |own_prof_capnp| OwnProfile::try_from(own_prof_capnp) ) )
-            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.claim ")) );;
+            .map_err(  |e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.claim ")) );;
 
         Box::new(resp_fut)
     }
@@ -151,7 +151,7 @@ impl Home for HomeClientCapnProto
                 resp.get()
                     .and_then( |res| res.get_own_profile() )
                     .and_then( |own_prof_capnp| OwnProfile::try_from(own_prof_capnp) ) )
-            .map_err( move |_e| (own_profile, ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.register "))) );;
+            .map_err( move  |e| (own_profile, ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.register "))) );;
 
         Box::new(resp_fut)
     }
@@ -172,7 +172,7 @@ impl Home for HomeClientCapnProto
                     .map( |session_client| Box::new(
                         HomeSessionClientCapnProto::new(session_client, handle_clone) ) as Box<HomeSession> )
             } )
-            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.login ")) );;
+            .map_err(  |e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.login ")) );;
 
         Box::new(resp_fut)
     }
@@ -186,8 +186,8 @@ impl Home for HomeClientCapnProto
         request.get().init_half_proof().fill_from(&half_proof);
 
         let resp_fut = request.send().promise
-            .map( |_resp| () )
-            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.pair_request ")) );;
+            .map(  |resp| () )
+            .map_err(  |e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.pair_request ")) );;
 
         Box::new(resp_fut)
     }
@@ -201,15 +201,15 @@ impl Home for HomeClientCapnProto
         request.get().init_relation().fill_from(&relation_proof);
 
         let resp_fut = request.send().promise
-            .map( |_resp| () )
-            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.pair_response ")) );
+            .map(  |resp| () )
+            .map_err(  |e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.pair_response ")) );
 
         Box::new(resp_fut)
     }
 
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
-            _to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
+            to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
         // TODO this should be coming from the fn argument to_caller,
@@ -234,7 +234,7 @@ impl Home for HomeClientCapnProto
                 let callee_sink = fwd_appmsg(to_callee, handle_clone);
                 CallMessages{ incoming: Some( Box::new(recv) ), outgoing: Some(callee_sink) }
             } )
-            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.call ")) );
+            .map_err(  |e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.call ")) );
 
         Box::new(resp_fut)
     }
@@ -256,22 +256,22 @@ fn fwd_appmsg(to_callee: mercury_capnp::app_message_listener::Client, handle: re
                     let mut request = to_callee.receive_request();
                     request.get().set_message(&msg.0);
                     let fut = request.send().promise
-                        .map( |_resp| () );
+                        .map(  |resp| () );
                     Box::new(fut) as Box< Future<Item=(), Error=::capnp::Error> >
                 },
                 Err(err) => {
                     let mut request = to_callee.error_request();
                     request.get().set_error(&err);
                     let fut = request.send().promise
-                        .map( |_resp| () );
+                        .map(  |resp| () );
                     Box::new(fut)
                 }
             };
-            capnp_fut.map_err( |_e| () ) // TODO what to do here with the network capnp error?
+            capnp_fut.map_err(  |e| () ) // TODO what to do here with the network capnp error?
         } )
     );
 
-    Box::new( send.sink_map_err( |_e| () ) ) // TODO should we just drop the sent AppMsgFrame here?
+    Box::new( send.sink_map_err(  |e| () ) ) // TODO should we just drop the sent AppMsgFrame here?
 }
 
 
@@ -291,24 +291,24 @@ impl AppMessageDispatcherCapnProto
 impl mercury_capnp::app_message_listener::Server for AppMessageDispatcherCapnProto
 {
     fn receive(&mut self, params: mercury_capnp::app_message_listener::ReceiveParams,
-                _results: mercury_capnp::app_message_listener::ReceiveResults,)
+                results: mercury_capnp::app_message_listener::ReceiveResults,)
         -> Promise<(), ::capnp::Error>
     {
         let message = pry!( pry!( params.get() ).get_message() );
         let recv_fut = self.sender.clone().send( Ok( message.into() ) )
-            .map( |_sink| () )
+            .map(  |sink| () )
             .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}",e ) ) );
         Promise::from_future(recv_fut)
     }
 
 
     fn error(&mut self, params: mercury_capnp::app_message_listener::ErrorParams,
-              _results: mercury_capnp::app_message_listener::ErrorResults,)
+              results: mercury_capnp::app_message_listener::ErrorResults,)
         -> Promise<(), ::capnp::Error>
     {
         let error = pry!( pry!( params.get() ).get_error() ).into();
         let recv_fut = self.sender.clone().send( Err(error) )
-            .map( |_sink| () )
+            .map(  |sink| () )
             .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}",e ) ) );
         Promise::from_future(recv_fut)
     }
@@ -331,25 +331,25 @@ impl ProfileEventDispatcherCapnProto
 impl mercury_capnp::profile_event_listener::Server for ProfileEventDispatcherCapnProto
 {
     fn receive(&mut self, params: mercury_capnp::profile_event_listener::ReceiveParams,
-                 _results: mercury_capnp::profile_event_listener::ReceiveResults,)
+                 results: mercury_capnp::profile_event_listener::ReceiveResults,)
         -> Promise<(), ::capnp::Error>
     {
         let event_capnp = pry!( pry!( params.get() ).get_event() );
         let event = pry!( ProfileEvent::try_from(event_capnp) );
         let recv_fut = self.sender.clone().send( Ok(event) )
-            .map( |_sink| () )
+            .map(  |sink| () )
             .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}",e ) ) );
         Promise::from_future(recv_fut)
     }
 
 
     fn error(&mut self, params: mercury_capnp::profile_event_listener::ErrorParams,
-              _results: mercury_capnp::profile_event_listener::ErrorResults,)
+              results: mercury_capnp::profile_event_listener::ErrorResults,)
         -> Promise<(), ::capnp::Error>
     {
         let error = pry!( pry!( params.get() ).get_error() ).into();
         let recv_fut = self.sender.clone().send( Err(error) )
-            .map( |_sink| () )
+            .map(  |sink| () )
             .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}",e ) ) );
         Promise::from_future(recv_fut)
     }
@@ -381,8 +381,8 @@ impl HomeSession for HomeSessionClientCapnProto
         request.get().init_own_profile().fill_from(&own_prof);
 
         let resp_fut = request.send().promise
-            .map( |_resp| () )
-            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeSessionClientCapnProto.update ")) );
+            .map(  |resp| () )
+            .map_err(  |e| ErrorToBeSpecified::TODO(String::from("HomeSessionClientCapnProto.update ")) );
 
         Box::new(resp_fut)
     }
@@ -397,8 +397,8 @@ impl HomeSession for HomeSessionClientCapnProto
             { request.get().init_new_home().fill_from(&new_home_profile); }
 
         let resp_fut = request.send().promise
-            .map( |_resp| () )
-            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeSessionClientCapnproto.unregister ")) );
+            .map(  |resp| () )
+            .map_err(  |e| ErrorToBeSpecified::TODO(String::from("HomeSessionClientCapnproto.unregister ")) );
 
         Box::new(resp_fut)
     }
@@ -417,19 +417,19 @@ impl HomeSession for HomeSessionClientCapnProto
 
         self.handle.spawn(
             request.send().promise
-                .map( |_resp| () )
+                .map(  |resp| () )
                 .or_else( move |e|
                     send.send( Err( format!("Events delegation failed: {}", e) ) )
-                        .map( |_sink| () )
+                        .map(  |sink| () )
                         // TODO what to do if failed to send error?
-                        .map_err( |_err| () ) )
+                        .map_err(  |err| () ) )
         );
 
         Box::new(recv)
     }
 
 
-    fn checkin_app(&self, _app: &ApplicationId) ->
+    fn checkin_app(&self, app: &ApplicationId) ->
         Box< HomeStream<Call, String> >
     {
         let (_send, recv) = mpsc::channel(1);
@@ -450,7 +450,7 @@ impl HomeSession for HomeSessionClientCapnProto
                     .and_then( |res| res.get_pong() )
                     .map( |pong| pong.to_owned() )
             } )
-            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeSessionClientCapnProto.ping ")) );
+            .map_err(  |e| ErrorToBeSpecified::TODO(String::from("HomeSessionClientCapnProto.ping ")) );
 
         Box::new(resp_fut)
     }
@@ -516,7 +516,7 @@ mod tests
         let handle2 = setup.reactor.handle();
         let handle3 = setup.reactor.handle();
         let test_fut = TcpStream::connect( &addr, &setup.reactor.handle() )
-            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("temporaty_test_capnproto fails at connect ")) )
+            .map_err( | e| ErrorToBeSpecified::TODO(String::from("temporaty_test_capnproto fails at connect ")) )
             .and_then( move |tcp_stream|
             {
                 let home = HomeClientCapnProto::new_tcp(tcp_stream, home_ctx, handle);

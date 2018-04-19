@@ -206,7 +206,7 @@ impl ProfileGatewayImpl
 
         // Pick first successful home connection
         let result = future::select_ok(home_conn_futs)
-            .map( |(home_conn, _pending_conn_futs)| home_conn );
+            .map( |(home_conn, pending_conn_futs)| home_conn );
         Box::new(result)
     }
 
@@ -246,7 +246,7 @@ impl ProfileGateway for ProfileGatewayImpl
 //        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
 //    }
 
-    fn relations(&self, _profile: &ProfileId) ->
+    fn relations(&self, profile: &ProfileId) ->
         Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO(String::from("ProfileGateway.relations "))) )
@@ -307,7 +307,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
         Box::new(log_fut)
     }
-    
+
 
     fn pair_request(&self, relation_type: &str, with_profile_url: &str) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >

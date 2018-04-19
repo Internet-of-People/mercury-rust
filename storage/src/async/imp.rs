@@ -316,11 +316,11 @@ impl HashSpace<Vec<u8>, String> for Ipfs
         Box::new(cat_fut)
     }
 
-    fn validate(&self, _object: &Vec<u8>, hash: &String)
+    fn validate(&self, object: &Vec<u8>, hash: &String)
         -> Box< Future<Item=bool, Error=HashSpaceError> >
     {
         let val_fut = self.resolve(hash)
-            .map( |_bytes| true );
+            .map( | bytes| true );
         Box::new(val_fut)
     }
 }
@@ -487,7 +487,7 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
                 conn.execute(&stmt, &[&key_str, &value])
             } )
             .map_err( |(e,_conn)| StorageError::Other( Box::new(e) ) )
-            .map( |_exec_res| () );
+            .map( | exec_res| () );
         Box::new(result)
     }
 

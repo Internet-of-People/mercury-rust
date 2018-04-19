@@ -126,9 +126,9 @@ impl Error for HashSpaceError {
             HashSpaceError::HashError(ref e)        => e.description(),
             HashSpaceError::StorageError(ref e)     => e.description(),
             HashSpaceError::StringCoderError(ref e) => e.description(),
-            HashSpaceError::LinkFormatError(ref _s)  => "Invalid link: {:?}", // TODO format!(, s),
-            HashSpaceError::UnknownHashSpace(ref _s) => "Unknown hashspace identifier: {:?}", // TODO format!(, s),
-            HashSpaceError::UnsupportedHashSpace(ref _s) => "Hashspace is not supporteD: {:?}", // TODO format!(, s),
+            HashSpaceError::LinkFormatError(ref s)  => "Invalid link: {:?}", // TODO format!(, s),
+            HashSpaceError::UnknownHashSpace(ref s) => "Unknown hashspace identifier: {:?}", // TODO format!(, s),
+            HashSpaceError::UnsupportedHashSpace(ref s) => "Hashspace is not supporteD: {:?}", // TODO format!(, s),
             HashSpaceError::Other(ref e)            => e.description(),
         }
     }

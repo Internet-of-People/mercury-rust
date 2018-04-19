@@ -28,7 +28,7 @@ fn main()
 
     println!("Waiting for clients");
     let handle1 = handle.clone();
-    let done = socket.incoming().for_each(move |(socket, _addr)|
+    let done = socket.incoming().for_each(move |(socket, addr)|
     {
         println!("Accepted client connection, serving requests");
 

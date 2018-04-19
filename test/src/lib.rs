@@ -33,7 +33,7 @@ fn test_events()
 
     let handle1 = reactor.handle();
     let server_socket = TcpListener::bind( &addr, &reactor.handle() ).expect("Failed to bind socket");
-    let server_fut = server_socket.incoming().for_each( move |(socket, _addr)|
+    let server_fut = server_socket.incoming().for_each( move |(socket, addr)|
     {
         println!("Accepted client connection, serving requests");
 
@@ -45,7 +45,7 @@ fn test_events()
 
     let handle2 = reactor.handle();
     let client_fut = TcpStream::connect( &addr, &reactor.handle() )
-        .map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")))
+        .map_err( |e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")))
         .and_then( |tcp_stream|
         {
             let signer = Rc::new( Signo::new("privatekey") );

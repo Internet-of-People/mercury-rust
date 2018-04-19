@@ -20,7 +20,7 @@ pub struct StunTurnTcpConnector
 
 impl StunTurnTcpConnector
 {
-    pub fn connect(&self, _addr: &SocketAddr) ->
+    pub fn connect(&self, addr: &SocketAddr) ->
         Box< Future<Item=TcpStream, Error=ErrorToBeSpecified> >
     {
         // TODO
@@ -38,7 +38,7 @@ pub struct TcpHomeConnector
 
 impl HomeConnector for TcpHomeConnector
 {
-    fn connect(&self, _home_profile: &Profile, _signer: Rc<Signer>) ->
+    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >
     {
         // TODO in case of TCP addresses, use StunTurnTcpConnector to build an async TcpStream
@@ -119,7 +119,7 @@ impl HomeConnector for SimpleTcpHomeConnector
         let home_profile_clone = home_profile.clone();
         let handle_clone = self.handle.clone();
         let capnp_home = future::select_ok(tcp_conns)
-            .map( move |(tcp_stream, _pending_futs)|
+            .map( move |(tcp_stream, pending_futs)|
             {
                 use protocol_capnp::HomeClientCapnProto;
                 let home_ctx = Box::new( HomeContext::new(signer, &home_profile_clone) );
