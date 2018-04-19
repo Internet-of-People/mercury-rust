@@ -74,7 +74,7 @@ impl ProfileRepo for HomeClientCapnProto
         Box< HomeStream<Profile, String> >
     {
         // TODO properly implement this
-        let (_send, recv) = mpsc::channel(1);
+        let (send, recv) = mpsc::channel(1);
         Box::new(recv)
         //Box::new( recv.map_err( |_| "Failed but why? TODO".to_owned() ) ) // TODO
     }
@@ -432,7 +432,7 @@ impl HomeSession for HomeSessionClientCapnProto
     fn checkin_app(&self, app: &ApplicationId) ->
         Box< HomeStream<Call, String> >
     {
-        let (_send, recv) = mpsc::channel(1);
+        let (send, recv) = mpsc::channel(1);
         Box::new(recv)
     }
 
