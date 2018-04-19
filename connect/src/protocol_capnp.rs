@@ -93,7 +93,7 @@ impl ProfileRepo for HomeClientCapnProto
                 let profile = Profile::try_from(profile_capnp);
                 Promise::result(profile)
             } )
-            .map_err( |_e| ErrorToBeSpecified::TODO );
+            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.load ")) );
 
         Box::new(resp_fut)
     }
@@ -112,7 +112,7 @@ impl ProfileRepo for HomeClientCapnProto
                 let profile = Profile::try_from(profile_capnp);
                 Promise::result(profile)
             } )
-            .map_err( |_e| ErrorToBeSpecified::TODO );
+            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.resolve ")) );
 
         Box::new(resp_fut)
     }
@@ -133,7 +133,7 @@ impl Home for HomeClientCapnProto
                 resp.get()
                     .and_then( |res| res.get_own_profile() )
                     .and_then( |own_prof_capnp| OwnProfile::try_from(own_prof_capnp) ) )
-            .map_err( |_e| ErrorToBeSpecified::TODO );;
+            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.claim ")) );;
 
         Box::new(resp_fut)
     }
@@ -151,7 +151,7 @@ impl Home for HomeClientCapnProto
                 resp.get()
                     .and_then( |res| res.get_own_profile() )
                     .and_then( |own_prof_capnp| OwnProfile::try_from(own_prof_capnp) ) )
-            .map_err( move |_e| (own_profile, ErrorToBeSpecified::TODO) );;
+            .map_err( move |_e| (own_profile, ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.register "))) );;
 
         Box::new(resp_fut)
     }
@@ -172,7 +172,7 @@ impl Home for HomeClientCapnProto
                     .map( |session_client| Box::new(
                         HomeSessionClientCapnProto::new(session_client, handle_clone) ) as Box<HomeSession> )
             } )
-            .map_err( |_e| ErrorToBeSpecified::TODO );;
+            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.login ")) );;
 
         Box::new(resp_fut)
     }
@@ -187,7 +187,7 @@ impl Home for HomeClientCapnProto
 
         let resp_fut = request.send().promise
             .map( |_resp| () )
-            .map_err( |_e| ErrorToBeSpecified::TODO );;
+            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.pair_request ")) );;
 
         Box::new(resp_fut)
     }
@@ -202,7 +202,7 @@ impl Home for HomeClientCapnProto
 
         let resp_fut = request.send().promise
             .map( |_resp| () )
-            .map_err( |_e| ErrorToBeSpecified::TODO );
+            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.pair_response ")) );
 
         Box::new(resp_fut)
     }
@@ -234,7 +234,7 @@ impl Home for HomeClientCapnProto
                 let callee_sink = fwd_appmsg(to_callee, handle_clone);
                 CallMessages{ incoming: Some( Box::new(recv) ), outgoing: Some(callee_sink) }
             } )
-            .map_err( |_e| ErrorToBeSpecified::TODO );
+            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.call ")) );
 
         Box::new(resp_fut)
     }
@@ -382,7 +382,7 @@ impl HomeSession for HomeSessionClientCapnProto
 
         let resp_fut = request.send().promise
             .map( |_resp| () )
-            .map_err( |_e| ErrorToBeSpecified::TODO );
+            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeSessionClientCapnProto.update ")) );
 
         Box::new(resp_fut)
     }
@@ -398,7 +398,7 @@ impl HomeSession for HomeSessionClientCapnProto
 
         let resp_fut = request.send().promise
             .map( |_resp| () )
-            .map_err( |_e| ErrorToBeSpecified::TODO );
+            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeSessionClientCapnproto.unregister ")) );
 
         Box::new(resp_fut)
     }
@@ -450,7 +450,7 @@ impl HomeSession for HomeSessionClientCapnProto
                     .and_then( |res| res.get_pong() )
                     .map( |pong| pong.to_owned() )
             } )
-            .map_err( |_e| ErrorToBeSpecified::TODO );
+            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("HomeSessionClientCapnProto.ping ")) );
 
         Box::new(resp_fut)
     }

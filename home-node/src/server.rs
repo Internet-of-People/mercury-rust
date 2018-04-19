@@ -44,7 +44,7 @@ impl ProfileRepo for HomeServer
     fn resolve(&self, url: &str) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeServer/ProfileRepo.resolve"))) )
     }
 }
 
@@ -55,13 +55,13 @@ impl Home for HomeServer
     fn claim(&self, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeServer.claim "))) )
     }
 
     fn register(&mut self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
-        Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO) ) )
+        Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO(String::from("HomeSession.register "))) ) )
     }
 
 
@@ -76,21 +76,21 @@ impl Home for HomeServer
     fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_request "))) )
     }
 
     // NOTE acceptor must have this server as its home
     fn pair_response(&self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_response "))) )
     }
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
             to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.call "))) )
     }
 }
 
@@ -115,7 +115,7 @@ impl HomeSession for HomeSessionServer
     fn update(&self, own_prof: &OwnProfile) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.update "))) )
     }
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home
@@ -124,7 +124,7 @@ impl HomeSession for HomeSessionServer
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         // TODO close/drop session connection after successful unregister()
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.unregister "))) )
     }
 
 

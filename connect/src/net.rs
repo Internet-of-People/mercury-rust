@@ -24,7 +24,7 @@ impl StunTurnTcpConnector
         Box< Future<Item=TcpStream, Error=ErrorToBeSpecified> >
     {
         // TODO
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("StunTurnTcpConnector.connect "))) )
     }
 }
 
@@ -43,7 +43,7 @@ impl HomeConnector for TcpHomeConnector
     {
         // TODO in case of TCP addresses, use StunTurnTcpConnector to build an async TcpStream
         //      to it and build a Home proxy on top of it
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("TcpHomeConnector.connect "))) )
     }
 }
 
@@ -58,14 +58,14 @@ pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Result<SocketAddr, Erro
         {
             Some( AddrComponent::IP4(address) ) => IpAddr::from(address),
             Some( AddrComponent::IP6(address) ) => IpAddr::from(address),
-            _ => return Err(ErrorToBeSpecified::TODO),
+            _ => return Err(ErrorToBeSpecified::TODO(String::from("multiaddr_to_socketaddr fails at ip "))),
         };
 
     let ip_port = match components.next()
         {
             Some( AddrComponent::TCP(port) ) => port,
             Some( AddrComponent::UDP(port) ) => port,
-            _ => return Err(ErrorToBeSpecified::TODO),
+            _ => return Err(ErrorToBeSpecified::TODO(String::from("multiaddr_to_socketaddr fails at port "))),
         };
 
     Ok( SocketAddr::new(ip_address, ip_port) )
@@ -91,11 +91,11 @@ impl SimpleTcpHomeConnector
         let tcp_addr = match multiaddr_to_socketaddr(addr)
         {
             Ok(res) => res,
-            Err(_) => return Box::new( future::err(ErrorToBeSpecified::TODO) )
+            Err(_) => return Box::new( future::err(ErrorToBeSpecified::TODO(String::from("SimpleTcpHomeConnector.connect_addr fails at multiaddr_to_socketaddr "))) )
         };
 
         let tcp_str = TcpStream::connect(&tcp_addr, handle)
-            .map_err( |_| ErrorToBeSpecified::TODO );
+            .map_err( |_| ErrorToBeSpecified::TODO(String::from("SimpleTcpHomeConnector.connect_addr fails at TcpStream::connect")) );
         Box::new(tcp_str)
     }
 }

@@ -341,14 +341,14 @@ impl ProfileRepo for ProfileStore{
         let prof = self.content.get(&id);
         match prof {
             Some(profile) => {println!("ProfileStore.load.success");Box::new( future::ok(profile.to_owned()) )},
-            None => {println!("ProfileStore.load.fail"); Box::new( future::err(ErrorToBeSpecified::TODO) )},
+            None => {println!("ProfileStore.load.fail"); Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.load "))) )},
         }
     }
 
     fn resolve(&self, url: &str) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
         println!("ProfileStore.resolve");
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.resolve "))) )
     }
 
 }
@@ -388,14 +388,14 @@ impl ProfileRepo for MyDummyHome{
         //println!("MyDummyHome.prof_repo.content::::{:?}", &self.prof_repo.borrow().content);
         match prof {
             Some(profile) => Box::new( future::ok(profile.to_owned()) ),
-            None => Box::new( future::err(ErrorToBeSpecified::TODO) ),
+            None => Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.load "))) ),
         }
     }
 
     fn resolve(&self, url: &str) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
         println!("MyDummyHome.resolve");
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.resolve "))) )
     }
  
 }
@@ -406,7 +406,7 @@ impl Home for MyDummyHome
     fn claim(&self, profile: ProfileId) ->
     Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >{
         println!("MyDummyHome.claim");
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDmmyHome.claim "))) )
     }
 
     // TODO consider how to enforce overwriting the original ownprofile with the modified one
@@ -428,19 +428,20 @@ impl Home for MyDummyHome
                     storing = true;
                 },
                 _ => {
-                    return Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO) ) );
+                    return Box::new( future::err( (own_prof.clone(), 
+                    ErrorToBeSpecified::TODO(String::from("MyDummyHome.register fails at finding Persona Facet on given profile "))) ) );
                 },
             };
         };
 
-        let mut ret : Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> > = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO) ) );
+        let mut ret : Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> > = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO(String::from("MyDummyHome.register had unknown error "))) ) );
         
         if storing{
             let ins = self.insert( id.clone(), profile.clone() );
             println!("inserting: {:?}", ins);
             match ins{
                 Some(updated) => {
-                    ret = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO) ) );
+                    ret = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO(String::from("MyDummyHome.register already had given profile stored "))) ) );
                 },
                 None => {
                     println!("MyDummyHome.register.success");
@@ -458,7 +459,7 @@ impl Home for MyDummyHome
         println!("MyDummyHome.login");
         let session = Box::new(HomeSessionDummy::new( Rc::clone(&self.prof_repo) )) as Box<HomeSession>;
         Box::new( future::ok( session ) )
-        //Box::new( future::err(ErrorToBeSpecified::TODO) )
+        //Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.login "))) )
 
     } 
 
@@ -467,18 +468,18 @@ impl Home for MyDummyHome
     // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
     fn pair_request(&self, half_proof: RelationHalfProof) ->
     Box< Future<Item=(), Error=ErrorToBeSpecified> >{
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_request "))) )
     }
 
     fn pair_response(&self, rel: RelationProof) ->
     Box< Future<Item=(), Error=ErrorToBeSpecified> >{
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_response "))) )
     }
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
             to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >{
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.call "))) )
     }
 
 // TODO consider how to do this in a later milestone
@@ -533,7 +534,7 @@ impl HomeSession for HomeSessionDummy
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         println!("HomeSessionDummy.update");
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionDummy.update "))) )
     }
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home
@@ -543,7 +544,7 @@ impl HomeSession for HomeSessionDummy
     {
         // TODO close/drop session connection after successful unregister()
         println!("HomeSessionDummy.unregister");
-        Box::new( future::err(ErrorToBeSpecified::TODO) )
+        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionDummy.unregister "))) )
     }
 
 

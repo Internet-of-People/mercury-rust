@@ -202,7 +202,7 @@ impl ProfileGatewayImpl
 
         // NOTE needed because select_ok() panics for empty lists instead of simply returning an error
         if home_conn_futs.len() == 0
-            { return Box::new( future::err(ErrorToBeSpecified::TODO) ) }
+            { return Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileGateway.any_home_of2 found no homes"))) ) }
 
         // Pick first successful home connection
         let result = future::select_ok(home_conn_futs)
@@ -249,7 +249,7 @@ impl ProfileGateway for ProfileGatewayImpl
     fn relations(&self, _profile: &ProfileId) ->
         Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
+        Box::new( futures::future::err(ErrorToBeSpecified::TODO(String::from("ProfileGateway.relations "))) )
     }
 
 
@@ -307,7 +307,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
         Box::new(log_fut)
     }
-
+    
 
     fn pair_request(&self, relation_type: &str, with_profile_url: &str) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
