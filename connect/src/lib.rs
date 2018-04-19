@@ -1,4 +1,3 @@
-#![allow(unused)]
 extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
@@ -12,7 +11,7 @@ extern crate tokio_io;
 use std::rc::Rc;
 use std::borrow::BorrowMut;
 
-use futures::{Future, IntoFuture, Stream}; // IntoFuture, Sink
+use futures::{Future, Stream};
 use futures::future;
 
 use mercury_home_protocol::*;
@@ -202,7 +201,7 @@ impl ProfileGatewayImpl
 
         // NOTE needed because select_ok() panics for empty lists instead of simply returning an error
         if home_conn_futs.len() == 0
-            { return Box::new( Err(ErrorToBeSpecified::TODO).into_future() ) }
+            { return Box::new( future::err(ErrorToBeSpecified::TODO) ) }
 
         // Pick first successful home connection
         let result = future::select_ok(home_conn_futs)

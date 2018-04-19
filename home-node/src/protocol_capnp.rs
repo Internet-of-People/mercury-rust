@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use capnp::capability::Promise;
 use futures::{Future, Stream};
 use tokio_core::net::TcpStream;
@@ -152,7 +150,7 @@ impl home::Server for HomeDispatcherCapnProto
 
 
     fn pair_request(&mut self, params: home::PairRequestParams,
-                    mut results: home::PairRequestResults,)
+                    mut _results: home::PairRequestResults,)
         -> Promise<(), ::capnp::Error>
     {
         let half_proof_capnp = pry!( pry!( params.get() ).get_half_proof() );
@@ -166,7 +164,7 @@ impl home::Server for HomeDispatcherCapnProto
 
 
     fn pair_response(&mut self, params: home::PairResponseParams,
-                     mut results: home::PairResponseResults,)
+                     mut _results: home::PairResponseResults,)
         -> Promise<(), ::capnp::Error>
     {
         let proof_capnp = pry!( pry!( params.get() ).get_relation() );
@@ -227,7 +225,7 @@ impl HomeSessionDispatcherCapnProto
 impl home_session::Server for HomeSessionDispatcherCapnProto
 {
     fn update(&mut self, params: home_session::UpdateParams,
-              mut results: home_session::UpdateResults,)
+              mut _results: home_session::UpdateResults,)
         -> Promise<(), ::capnp::Error>
     {
         let own_profile_capnp = pry!( pry!( params.get() ).get_own_profile() );
@@ -241,7 +239,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
 
 
     fn unregister(&mut self, params: home_session::UnregisterParams,
-                   mut results: home_session::UnregisterResults,)
+                   mut _results: home_session::UnregisterResults,)
         -> Promise<(), ::capnp::Error>
     {
         let new_home_res_capnp = pry!( params.get() ).get_new_home();
@@ -269,7 +267,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
 
 
     fn events(&mut self, params: home_session::EventsParams<>,
-              mut results: home_session::EventsResults<>)
+              mut _results: home_session::EventsResults<>)
         -> Promise<(), ::capnp::Error>
     {
         let callback = pry!( pry!( params.get() ).get_event_listener() );

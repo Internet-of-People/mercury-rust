@@ -1,18 +1,13 @@
-#![allow(unused)]
 extern crate capnp;
 extern crate futures;
 extern crate multiaddr;
 extern crate multihash;
 extern crate tokio_core;
 
-use std::collections::hash_map::HashMap;
 use std::rc::Rc;
 
-use futures::{Future, IntoFuture};
-use futures::future;
+use futures::Future;
 use multiaddr::Multiaddr;
-use tokio_core::reactor;
-use tokio_core::net::TcpStream;
 
 
 

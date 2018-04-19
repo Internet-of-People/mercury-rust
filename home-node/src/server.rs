@@ -1,4 +1,4 @@
-use futures::{future, sync, Future, Stream};
+use futures::{future, sync, Future};
 use futures::sync::mpsc;
 
 use mercury_home_protocol::*;

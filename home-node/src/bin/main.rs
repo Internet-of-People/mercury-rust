@@ -1,4 +1,3 @@
-#![allow(unused)]
 extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
@@ -11,14 +10,10 @@ extern crate tokio_core;
 extern crate tokio_io;
 
 
-use std::rc::Rc;
-
-use futures::{Future, Stream};
+use futures::Stream;
 use tokio_core::reactor;
 use tokio_core::net::TcpListener;
-use tokio_io::AsyncRead;
 
-use mercury_home_protocol::*;
 use mercury_home_node::*;
 
 

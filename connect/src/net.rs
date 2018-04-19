@@ -1,4 +1,3 @@
-#![allow(unused)]
 use std::net::{SocketAddr, IpAddr};
 
 use capnp::capability::Promise;
