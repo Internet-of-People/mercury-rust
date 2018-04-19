@@ -362,6 +362,7 @@ mod tests
 {
     use futures::{Sink, Stream};
     use futures::sync::mpsc;
+    use tokio_core::reactor;
 
     use super::*;
 

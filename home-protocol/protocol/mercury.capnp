@@ -1,6 +1,9 @@
 @0xbf11c96f54b8924d;
 
 
+### TODO returning errors from the server and differentiating
+#        remote errors from internal capnp errors is not solved/implemented yet
+
 
 using PublicKey = Data;
 using ProfileId = Data;
