@@ -1,3 +1,5 @@
+#![allow(unused, non_snake_case)]
+
 use std::collections::{HashMap}; //, HashSet};
 use std::hash::Hash;
 //use std::net::{SocketAddr, Ipv4Addr, SocketAddrV4, ToSocketAddrs};

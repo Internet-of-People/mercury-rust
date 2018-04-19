@@ -1,3 +1,5 @@
+#![allow(unused, non_snake_case, non_upper_case_globals)]
+
 use std::rc::Rc;
 
 use futures::prelude::*;

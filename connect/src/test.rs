@@ -11,13 +11,14 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate futures;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::io::{BufRead, Read, Write, stdin};
 
 use mercury_home_protocol::*;
 
+use ::dummy::*;
 use ::net::*;
-use ::mock::*;
 use ::protocol_capnp::*;
 
 use multihash::{encode, Hash};
@@ -32,16 +33,11 @@ use futures::{Future,Stream};
     fn test_register(){
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
-        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-        let profile_gateway = ProfileGatewayImpl::new(
-            signo,
-            Rc::new(mock::DummyHome::new("Insomnia")),
-            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
-        );
+        let setup = dummy::TestSetup::setup();
 
-        let ownprofile = profile_gateway.register(
-                ProfileId( Vec::from( "Insomnia" ) ),
-                mock::create_ownprofile( "Noctis" ),
+        let ownprofile = setup.profilegate.register(
+                setup.homeprofileid,
+                setup.userownprofile,
                 None
         );
 
@@ -52,48 +48,34 @@ use futures::{Future,Stream};
     fn test_unregister(){
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
-        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-        let profile_gateway = ProfileGatewayImpl::new(
-            signo,
-            Rc::new(mock::DummyHome::new("test_unregister")),
-            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
-        );
+        let setup = dummy::TestSetup::setup();
 
-        // let home_prof = mock::make_home_profile( 
-        //     "/ip4/127.0.0.1/udp/9876", 
-        //     "Insomnia", 
-        //     "FinalFantasyXV" 
-        // );
-
-        let registered = profile_gateway.register(
-                ProfileId( Vec::from( "Insomnia" ) ),
-                mock::create_ownprofile( "Noctis" ),
+        let registered = setup.profilegate.register(
+                setup.homeprofileid.clone(),
+                setup.userownprofile,
                 None
         );
         let res = reactor.run(registered); 
-        //assert
+        //assert if registered
 
-        let unregistered = profile_gateway.unregister(
-                ProfileId( Vec::from( "Insomnia" ) ),
-                ProfileId( Vec::from( "Noctis" ) ),
+        let unregistered = setup.profilegate.unregister(
+                setup.homeprofileid,
+                setup.userid,
                 None
         );
 
-        let res = reactor.run(unregistered);      
+        let res = reactor.run(unregistered);     
+
+        //assert if unregistered 
     }
 
     #[test]
     fn test_login(){
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
-        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-        let profile_gateway = ProfileGatewayImpl::new(
-            signo,
-            Rc::new( mock::DummyHome::new("test_login") ),
-            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
-        );
+        let setup = dummy::TestSetup::setup();
 
-        let home_session = profile_gateway.login();
+        let home_session = setup.profilegate.login();
 
         let res = reactor.run(home_session);      
     }
@@ -102,16 +84,11 @@ use futures::{Future,Stream};
     fn test_claim(){
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
-        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-        let profile_gateway = ProfileGatewayImpl::new(
-            signo,
-            Rc::new( mock::DummyHome::new("test_claim") ),
-            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
-        );
+        let setup = dummy::TestSetup::setup();
 
-        let home_session = profile_gateway.claim(
-            ProfileId( Vec::from( "Insomnia" ) ),
-            ProfileId( Vec::from( "Noctis" ) ),
+        let home_session = setup.profilegate.claim(
+                setup.homeprofileid,
+                setup.userid,
         );
 
         let res = reactor.run(home_session);      
@@ -121,73 +98,27 @@ use futures::{Future,Stream};
     fn test_update(){
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
-        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-        let profile_gateway = ProfileGatewayImpl::new(
-            signo,
-            Rc::new( mock::DummyHome::new("test_update") ),
-            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
-        );
+        let setup = dummy::TestSetup::setup();
+        let other_home_signer = Signo::new("otherhome");
+        let otherhome = make_home_profile("/ip4/127.0.0.1/udp/9876", other_home_signer.pub_key());
 
-        let home_session = profile_gateway.update(
-            ProfileId( Vec::from( "Tenebrae" ) ),
-            &mock::create_ownprofile( "Noctis" ),
+        setup.home.borrow_mut().insert(otherhome.id.clone(), otherhome.clone());
+        let home_session = setup.profilegate.update(
+            otherhome.id,
+            &setup.userownprofile,
         );
 
         let res = reactor.run(home_session);      
     }
 
-//    #[test]
-//    fn test_any_home_of(){
-//        let mut reactor = reactor::Core::new().unwrap();
-//        let mut reactorhandle = reactor.handle();
-//        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-//
-//        let mut profile = make_own_persona_profile( "Chara", &signo.pub_key().clone() );
-//
-//        let profile_gateway = ProfileGatewayImpl::new(
-//            signo,
-//            Rc::new( mock::DummyHome::new("test_any_home_of") ),
-//            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) )
-//        );
-//
-//        let home = profile_gateway.any_home_of(&profile);
-//
-//        let res = reactor.run(home);
-//    }
-
-//    #[test]
-//    fn test_any_home_of2(){
-//        let mut reactor = reactor::Core::new().unwrap();
-//        let mut reactorhandle = reactor.handle();
-//        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-//        let profile_repo = Rc::new( mock::DummyHome::new("test_any_home_of") );
-//        let home_connector = Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) );
-//
-//        let mut profile = make_own_persona_profile( "Chara", signo.pub_key() );
-//
-//        let home = ProfileGatewayImpl::any_home_of2(
-//            &profile,
-//            profile_repo,
-//            home_connector,
-//            signo
-//        );
-//
-//        let res = reactor.run(home);
-//    }
-
     #[test]
     fn test_call(){
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
-        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-        let profile_gateway = ProfileGatewayImpl::new(
-            signo,
-            Rc::new( mock::DummyHome::new("test_call") ),
-            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
-        );
+        let setup = dummy::TestSetup::setup();
 
-        let call_messages = profile_gateway.call(
-            mock::dummy_relation( "NewGame+" ), 
+        let call_messages = setup.profilegate.call(
+            dummy::dummy_relation( "NewGame+" ), 
             ApplicationId( String::from( "Undertale" ) ), 
             AppMessageFrame( Vec::from( "Megalovania" ) ),
             None
@@ -200,14 +131,9 @@ use futures::{Future,Stream};
     fn test_ping(){
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
-        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-        let profile_gateway = ProfileGatewayImpl::new(
-            signo,
-            Rc::new( mock::DummyHome::new("test_ping") ),
-            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
-        );
+        let setup = dummy::TestSetup::setup();
 
-        let response = profile_gateway.login()
+        let response = setup.profilegate.login()
         .and_then(|home_session|{
             home_session.ping( "test_ping" )
         });
@@ -215,34 +141,14 @@ use futures::{Future,Stream};
         let res = reactor.run(response);      
     }
 
-    //based on private method
-    //  #[test]
-    // fn test_new_half_proof(){
-    //     let mut reactor = reactor::Core::new().unwrap();
-    //     let mut reactorhandle = reactor.handle();
-    //     let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-
-    //     let half_proof = ProfileGatewayImpl::new_half_proof( 
-    //         "test",
-    //         ProfileId( Vec::from("Chara") ),
-    //         signo
-    //     );
-
-    //     let res = reactor.run(half_proof);      
-    // }
-
     #[test]
     fn test_pair_req(){
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
-        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-        let profile_gateway = ProfileGatewayImpl::new(
-            signo,
-            Rc::new( mock::DummyHome::new("test_pair_req") ),
-            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
-        );
+        let signo = Rc::new( dummy::Signo::new( "TestKey" ) );
+        let setup = dummy::TestSetup::setup();
 
-        let zero = profile_gateway.pair_request( "test_relation", "test_url" );
+        let zero = setup.profilegate.pair_request( "test_relation", "test_url" );
 
         let res = reactor.run(zero);   
     }
@@ -251,14 +157,8 @@ use futures::{Future,Stream};
     fn test_pair_res(){
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
-        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-        let profile_gateway = ProfileGatewayImpl::new(
-            signo,
-            Rc::new( mock::DummyHome::new("test_pair_res") ),
-            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
-        );
-
-        let zero = profile_gateway.pair_response( dummy_relation( "test_relation" ) );
+        let setup = dummy::TestSetup::setup();
+        let zero = setup.profilegate.pair_response( dummy_relation( "test_relation" ) );
 
         let res = reactor.run(zero);      
     }
@@ -267,14 +167,9 @@ use futures::{Future,Stream};
     fn test_relations(){
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
-        let signo = Rc::new( mock::Signo::new( "TestKey" ) );
-        let profile_gateway = ProfileGatewayImpl::new(
-            signo,
-            Rc::new( mock::DummyHome::new("test_relations") ),
-            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
-        );
+        let setup = dummy::TestSetup::setup();
 
-        let zero = profile_gateway.relations( &ProfileId( Vec::from( "Noctis" ) ) );
+        let zero = setup.profilegate.relations( &setup.userid );
 
         let res = reactor.run(zero);
     }
@@ -289,28 +184,41 @@ use futures::{Future,Stream};
         let homemultiaddr = homeaddr.to_multiaddr().unwrap();
         
         println!( "Setting up signers" );
-        let signo = Rc::new( mock::Signo::new( "Deuszkulcs" ) );
-        let other_signo = Rc::new( mock::Signo::new( "Othereusz" ) );
-        let homesigno = Rc::new( mock::Signo::new( "makusguba" ) );
-        let other_homesigno = Rc::new( mock::Signo::new( "tulfozotttea" ) );
+        let signo = Rc::new( dummy::Signo::new( "Deuszkulcs" ) );
+        let other_signo = Rc::new( dummy::Signo::new( "Othereusz" ) );
+        let homesigno = Rc::new( dummy::Signo::new( "makusguba" ) );
+        let other_homesigno = Rc::new( dummy::Signo::new( "tulfozotttea" ) );
 
         println!("Setting up profiles");
-        let homeprof = mock::make_home_profile( &homeaddr,"home","szeretem a kakaot" );
-        let other_homeprof = mock::make_home_profile( &homeaddr,"otherhome","konyhalevel100" );
-        let mut profile = make_own_persona_profile( "Deusz", signo.pub_key() );
-        let mut other_profile = make_own_persona_profile( "Othereusz", signo.pub_key() );
+        let homeprof = dummy::make_home_profile( &homeaddr ,homesigno.pub_key() );
+        let other_homeprof = dummy::make_home_profile( &homeaddr ,other_homesigno.pub_key() );
+
+        let mut profile = make_own_persona_profile(signo.pub_key() );
+        let mut other_profile = make_own_persona_profile(other_signo.pub_key() );
 
         println!( "ProfileGateway: ProfileSigner, DummyHome(as profile repo), HomeConnector" );
+
+        let mut dht = ProfileStore::new();
+        dht.insert(homeprof.id.clone(), homeprof.clone());
+        dht.insert(other_homeprof.id.clone(), other_homeprof.clone());
+
+        let mut home_storage = Rc::new( RefCell::new(dht) );
+        let mut home_storage_other = Rc::clone(&home_storage);
+        let mut store_rc = Rc::clone(&home_storage);
+        let mut store_rc_other = Rc::clone(&home_storage);
+        let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
+        let mut other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage_other ) ) );
+
         let own_gateway = ProfileGatewayImpl::new(
             signo,
-            Rc::new( mock::DummyHome::new("ein") ),
-            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
+            store_rc,
+            Rc::new( dummy::DummyConnector::new_with_home( home ) ),
         );
 
         let other_gateway = ProfileGatewayImpl::new(
             other_signo,
-            Rc::new( mock::DummyHome::new("zwei") ),
-            Rc::new( SimpleTcpHomeConnector::new( reactorhandle.clone() ) ) 
+            store_rc_other,
+            Rc::new( dummy::DummyConnector::new_with_home( other_home ) ),
         );
 
         println!( "any_home_of(profile) -> Home" );
@@ -318,9 +226,10 @@ use futures::{Future,Stream};
         .and_then(|home|{
             println!( "register(HomeProfile_Id_WhereWeRegister, OwnProfile) -> OwnProfile_ExtendedWithNewHome" );
             
+            let deusz = dummy::make_own_persona_profile(&PublicKey( Vec::from( "pubkey" ) ) );
             Ok(own_gateway.register(
                 ProfileId( Vec::from("Home") ),
-                mock::create_ownprofile( "Deusz" ),
+                dummy::create_ownprofile( deusz ),
                 None
             ))
         })
@@ -329,10 +238,11 @@ use futures::{Future,Stream};
         })
         .and_then(| otherhome |{
             println!( "register(HomeProfile_Id_WhereWeRegister, OtherProfile) -> OtherProfile_ExtendedWithNewHome" );
-            
+
+            let persona = dummy::make_own_persona_profile(&PublicKey( Vec::from( "pubkey" ) ) );
             Ok(other_gateway.register(
                 ProfileId( Vec::from("OtherHome") ),
-                mock::create_ownprofile( "Othereusz" ),
+                dummy::create_ownprofile( persona ),
                 None
             ))
         })
@@ -375,7 +285,7 @@ use futures::{Future,Stream};
             println!( "call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
 
             own_gateway.call(
-                mock::dummy_relation( "work" ), 
+                dummy::dummy_relation( "work" ), 
                 ApplicationId( String::from( "SampleApp" ) ), 
                 AppMessageFrame( Vec::from( "whatever" ) ),
                 None
@@ -385,7 +295,7 @@ use futures::{Future,Stream};
             println!( "call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
 
             other_gateway.call(
-                mock::dummy_relation( "work" ), 
+                dummy::dummy_relation( "work" ), 
                 ApplicationId( String::from( "SampleApp" ) ), 
                 AppMessageFrame( Vec::from( "whetavar" ) ),
                 None
