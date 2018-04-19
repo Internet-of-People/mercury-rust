@@ -516,7 +516,7 @@ mod tests
         let handle2 = setup.reactor.handle();
         let handle3 = setup.reactor.handle();
         let test_fut = TcpStream::connect( &addr, &setup.reactor.handle() )
-            .map_err( |_e| ErrorToBeSpecified::TODO )
+            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("temporaty_test_capnproto fails at connect ")) )
             .and_then( move |tcp_stream|
             {
                 let home = HomeClientCapnProto::new_tcp(tcp_stream, home_ctx, handle);
@@ -525,14 +525,14 @@ mod tests
             } )
             .and_then( |session| reactor::Timeout::new( Duration::from_secs(5), &handle2 ).unwrap()
                 .map( move |_| session )
-                .map_err( |_| ErrorToBeSpecified::TODO ) )
+                .map_err( |_| ErrorToBeSpecified::TODO(String::from("temporary_test_capnproto fails at session ")) ) )
             .and_then( |session| session.ping("hahoooo") )
             .and_then( |pong|
             {
                 println!("Got pong {}", pong);
                 reactor::Timeout::new( Duration::from_secs(5), &handle3 ).unwrap()
                     .map( move |_| pong )
-                    .map_err( |_| ErrorToBeSpecified::TODO )
+                    .map_err( |_| ErrorToBeSpecified::TODO(String::from("temporary_test_capnproto can't play ping-pong ")) )
             } );
 
         let pong = setup.reactor.run(test_fut);

@@ -45,7 +45,7 @@ fn test_events()
 
     let handle2 = reactor.handle();
     let client_fut = TcpStream::connect( &addr, &reactor.handle() )
-        .map_err( |_e| ErrorToBeSpecified::TODO)
+        .map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")))
         .and_then( |tcp_stream|
         {
             let signer = Rc::new( Signo::new("privatekey") );

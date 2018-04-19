@@ -152,6 +152,6 @@ mod tests
 
         let multiaddr = "/ip4/127.0.0.1/utp".parse::<Multiaddr>().unwrap();
         let socketaddr = multiaddr_to_socketaddr(&multiaddr);
-        assert_eq!(socketaddr, Result::Err(ErrorToBeSpecified::TODO));
+        assert_eq!(socketaddr, Result::Err(ErrorToBeSpecified::TODO(String::from("multiaddr_to_socketaddr fails at port "))));
     }
 }
