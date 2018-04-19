@@ -9,6 +9,7 @@ use mercury_capnp::*;
 
 use super::*;
 
+use futures::Stream;
 
 
 pub struct HomeClientCapnProto
@@ -185,7 +186,7 @@ impl Home for HomeClientCapnProto
         request.get().init_half_proof().fill_from(&half_proof);
 
         let resp_fut = request.send().promise
-            .map( |resp| () )
+            .map( |_resp| () )
             .map_err( |_e| ErrorToBeSpecified::TODO );;
 
         Box::new(resp_fut)
@@ -200,7 +201,7 @@ impl Home for HomeClientCapnProto
         request.get().init_relation().fill_from(&relation_proof);
 
         let resp_fut = request.send().promise
-            .map( |resp| () )
+            .map( |_resp| () )
             .map_err( |_e| ErrorToBeSpecified::TODO );
 
         Box::new(resp_fut)
@@ -208,7 +209,7 @@ impl Home for HomeClientCapnProto
 
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
+            _to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
     {
         // TODO this should be coming from the fn argument to_caller,
@@ -290,7 +291,7 @@ impl AppMessageDispatcherCapnProto
 impl mercury_capnp::app_message_listener::Server for AppMessageDispatcherCapnProto
 {
     fn receive(&mut self, params: mercury_capnp::app_message_listener::ReceiveParams,
-               mut results: mercury_capnp::app_message_listener::ReceiveResults,)
+                _results: mercury_capnp::app_message_listener::ReceiveResults,)
         -> Promise<(), ::capnp::Error>
     {
         let message = pry!( pry!( params.get() ).get_message() );
@@ -302,7 +303,7 @@ impl mercury_capnp::app_message_listener::Server for AppMessageDispatcherCapnPro
 
 
     fn error(&mut self, params: mercury_capnp::app_message_listener::ErrorParams,
-             mut results: mercury_capnp::app_message_listener::ErrorResults,)
+              _results: mercury_capnp::app_message_listener::ErrorResults,)
         -> Promise<(), ::capnp::Error>
     {
         let error = pry!( pry!( params.get() ).get_error() ).into();
@@ -330,7 +331,7 @@ impl ProfileEventDispatcherCapnProto
 impl mercury_capnp::profile_event_listener::Server for ProfileEventDispatcherCapnProto
 {
     fn receive(&mut self, params: mercury_capnp::profile_event_listener::ReceiveParams,
-                mut results: mercury_capnp::profile_event_listener::ReceiveResults,)
+                 _results: mercury_capnp::profile_event_listener::ReceiveResults,)
         -> Promise<(), ::capnp::Error>
     {
         let event_capnp = pry!( pry!( params.get() ).get_event() );
@@ -343,7 +344,7 @@ impl mercury_capnp::profile_event_listener::Server for ProfileEventDispatcherCap
 
 
     fn error(&mut self, params: mercury_capnp::profile_event_listener::ErrorParams,
-             mut results: mercury_capnp::profile_event_listener::ErrorResults,)
+              _results: mercury_capnp::profile_event_listener::ErrorResults,)
         -> Promise<(), ::capnp::Error>
     {
         let error = pry!( pry!( params.get() ).get_error() ).into();
@@ -380,7 +381,7 @@ impl HomeSession for HomeSessionClientCapnProto
         request.get().init_own_profile().fill_from(&own_prof);
 
         let resp_fut = request.send().promise
-            .map( |resp| () )
+            .map( |_resp| () )
             .map_err( |_e| ErrorToBeSpecified::TODO );
 
         Box::new(resp_fut)
@@ -396,7 +397,7 @@ impl HomeSession for HomeSessionClientCapnProto
             { request.get().init_new_home().fill_from(&new_home_profile); }
 
         let resp_fut = request.send().promise
-            .map( |resp| () )
+            .map( |_resp| () )
             .map_err( |_e| ErrorToBeSpecified::TODO );
 
         Box::new(resp_fut)
@@ -428,7 +429,7 @@ impl HomeSession for HomeSessionClientCapnProto
     }
 
 
-    fn checkin_app(&self, app: &ApplicationId) ->
+    fn checkin_app(&self, _app: &ApplicationId) ->
         Box< HomeStream<Call, String> >
     {
         let (_send, recv) = mpsc::channel(1);

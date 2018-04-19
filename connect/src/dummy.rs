@@ -269,7 +269,8 @@ impl Home for DummyHome{
             unimplemented!()
         }
 
-    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame) ->
+    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
+            to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
         Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >{
             println!("call");
             unimplemented!()
@@ -474,8 +475,9 @@ impl Home for MyDummyHome
         Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 
-    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame) ->
-    Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >{
+    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
+            to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
+        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >{
         Box::new( future::err(ErrorToBeSpecified::TODO) )
     }
 

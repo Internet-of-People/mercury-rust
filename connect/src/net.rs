@@ -1,7 +1,7 @@
 use std::net::{SocketAddr, IpAddr};
 
 use std::cell::RefCell;
-use capnp::capability::Promise;
+//use capnp::capability::Promise;
 use futures::{Future};
 use futures::future;
 use multiaddr::{Multiaddr, AddrComponent};
@@ -20,7 +20,7 @@ pub struct StunTurnTcpConnector
 
 impl StunTurnTcpConnector
 {
-    pub fn connect(&self, addr: &SocketAddr) ->
+    pub fn connect(&self, _addr: &SocketAddr) ->
         Box< Future<Item=TcpStream, Error=ErrorToBeSpecified> >
     {
         // TODO
@@ -38,7 +38,7 @@ pub struct TcpHomeConnector
 
 impl HomeConnector for TcpHomeConnector
 {
-    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
+    fn connect(&self, _home_profile: &Profile, _signer: Rc<Signer>) ->
         Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >
     {
         // TODO in case of TCP addresses, use StunTurnTcpConnector to build an async TcpStream

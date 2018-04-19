@@ -12,7 +12,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 //use std::borrow::BorrowMut;
 
-use futures::{Future, Stream};
+use futures::{Future};
 use futures::future;
 
 use mercury_home_protocol::*;
@@ -246,7 +246,7 @@ impl ProfileGateway for ProfileGatewayImpl
 //        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
 //    }
 
-    fn relations(&self, profile: &ProfileId) ->
+    fn relations(&self, _profile: &ProfileId) ->
         Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
@@ -345,7 +345,7 @@ impl ProfileGateway for ProfileGatewayImpl
     {
         let call_fut = self.any_home_of(&rel.profile)
             .and_then( move |home|
-                home.borrow().call(rel.proof, app, init_payload) ) ;
+                home.borrow().call(rel.proof, app, init_payload, to_caller) ) ;
         Box::new(call_fut)
     }
 }
