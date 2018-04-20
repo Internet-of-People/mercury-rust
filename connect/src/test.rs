@@ -1,3 +1,4 @@
+#[allow(unused)]
 #[cfg(test)]
 use super::*;
 
