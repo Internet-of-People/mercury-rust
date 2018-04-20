@@ -237,6 +237,20 @@ impl RelationProof
             peer_sign: peer_sign.clone(),
         }
     }
+
+    pub fn register_relation(    
+        my_id:          &ProfileId,
+        my_sign:        &Signature,
+        peer_id:        &ProfileId,
+        peer_sign:      &Signature)->Self{
+            Self{
+                relation_type: String::from("home"),
+                my_id:          my_id.to_owned(),
+                my_sign:        my_sign.to_owned(),
+                peer_id:        peer_id.to_owned(),
+                peer_sign:      peer_sign.to_owned()               
+            }
+        }
 }
 
 

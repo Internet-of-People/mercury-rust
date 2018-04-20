@@ -212,7 +212,7 @@ impl ProfileRepo for ProfileStore{
         //println!("\nProfileStoreContent:::: {:?}", &self.content);
         let prof = self.content.get(&id);
         match prof {
-            Some(profile) => {println!("ProfileStore.load.success");Box::new( future::ok(profile.to_owned()) )},
+            Some(profile) => {println!("ProfileStore.load.success{:?}", prof);Box::new( future::ok(profile.to_owned()) )},
             None => {println!("ProfileStore.load.fail"); Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.load "))) )},
         }
     }
@@ -296,7 +296,12 @@ impl Home for MyDummyHome
         for mut facet in own_profile.profile.facets.iter_mut(){
             match facet {
                 &mut ProfileFacet::Persona(ref mut persona) => {
-                    persona.homes.append( &mut vec!(dummy_relation_proof() ) );
+
+                    let relation_proof = RelationProof::register_relation(
+                        &profile.id, &Signature(profile.pub_key.0.clone()), &self.home_profile.id, &Signature(self.home_profile.pub_key.0.clone())
+                        );
+                    
+                    persona.homes.append( &mut vec!(relation_proof ) );
                     storing = true;
                 },
                 _ => {
@@ -309,8 +314,7 @@ impl Home for MyDummyHome
         let mut ret : Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> > = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO(String::from("MyDummyHome.register had unknown error "))) ) );
         
         if storing{
-            let ins = self.insert( id.clone(), profile.clone() );
-            println!("inserting: {:?}", ins);
+            let ins = self.insert( id.clone(), own_profile.profile.clone() );
             match ins{
                 Some(updated) => {
                     ret = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO(String::from("MyDummyHome.register already had given profile stored "))) ) );
@@ -321,6 +325,7 @@ impl Home for MyDummyHome
                 },
             }
         }
+        println!("register.ret.own_profile {:?} ", own_profile);
         ret
         //own_prof.priv_data = Vec::from("potato");
     }
