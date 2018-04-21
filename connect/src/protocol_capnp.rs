@@ -71,11 +71,11 @@ impl HomeClientCapnProto
 impl ProfileRepo for HomeClientCapnProto
 {
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-        Box< HomeStream<Profile, String> >
+        HomeStream<Profile, String>
     {
         // TODO properly implement this
         let (send, recv) = mpsc::channel(1);
-        Box::new(recv)
+        recv
         //Box::new( recv.map_err( |_| "Failed but why? TODO".to_owned() ) ) // TODO
     }
 
@@ -209,108 +209,33 @@ impl Home for HomeClientCapnProto
 
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
-        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
+            to_caller: Option<AppMsgSink>) ->
+        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
-        // TODO this should be coming from the fn argument to_caller,
-        // we should move it to a factory method near HomeConnector
-        let (send, recv) = mpsc::channel(1);
-        let to_caller = AppMessageDispatcherCapnProto::new(send);
-        let to_caller_capnp = mercury_capnp::app_message_listener::ToClient::new(to_caller)
-            .from_server::<::capnp_rpc::Server>();
-
         let mut request = self.home.call_request();
         request.get().init_relation().fill_from(&rel);
         request.get().set_app( (&app).into() );
         request.get().set_init_payload( (&init_payload).into() );
-        request.get().set_to_caller(to_caller_capnp);
+
+        if let Some(send) = to_caller
+        {
+            let to_caller_dispatch = mercury_capnp::AppMessageDispatcherCapnProto::new(send);
+            let to_caller_capnp = mercury_capnp::app_message_listener::ToClient::new(to_caller_dispatch)
+                .from_server::<::capnp_rpc::Server>();
+            request.get().set_to_caller(to_caller_capnp);
+        }
 
         let handle_clone = self.handle.clone();
         let resp_fut = request.send().promise
             .and_then( |resp| resp.get()
-                .and_then( |res| res.get_to_callee() ) )
-            .map( move |to_callee|
-            {
-                let callee_sink = fwd_appmsg(to_callee, handle_clone);
-                CallMessages{ incoming: Some( Box::new(recv) ), outgoing: Some(callee_sink) }
-            } )
+                .map( |res| res.get_to_callee()
+                    .map( |to_callee_capnp| mercury_capnp::fwd_appmsg(to_callee_capnp, handle_clone) )
+                    .ok()
+                )
+            )
             .map_err(  |e| ErrorToBeSpecified::TODO(String::from("HomeClientCapnProto.call ")) );
 
         Box::new(resp_fut)
-    }
-}
-
-
-
-fn fwd_appmsg(to_callee: mercury_capnp::app_message_listener::Client, handle: reactor::Handle)
-    -> Box< HomeSink<AppMessageFrame, String> >
-{
-    let (send, recv) = mpsc::channel::<Result<AppMessageFrame, String>>(1);
-
-    handle.spawn(
-        recv.for_each( move |message|
-        {
-            let capnp_fut = match message
-            {
-                Ok(msg) => {
-                    let mut request = to_callee.receive_request();
-                    request.get().set_message(&msg.0);
-                    let fut = request.send().promise
-                        .map(  |resp| () );
-                    Box::new(fut) as Box< Future<Item=(), Error=::capnp::Error> >
-                },
-                Err(err) => {
-                    let mut request = to_callee.error_request();
-                    request.get().set_error(&err);
-                    let fut = request.send().promise
-                        .map(  |resp| () );
-                    Box::new(fut)
-                }
-            };
-            capnp_fut.map_err(  |e| () ) // TODO what to do here with the network capnp error?
-        } )
-    );
-
-    Box::new( send.sink_map_err(  |e| () ) ) // TODO should we just drop the sent AppMsgFrame here?
-}
-
-
-
-// TODO consider using a single generic imlementation for all kinds of Dispatchers
-struct AppMessageDispatcherCapnProto
-{
-    sender: Sender< Result<AppMessageFrame, String> >,
-}
-
-impl AppMessageDispatcherCapnProto
-{
-    fn new(sender: Sender< Result<AppMessageFrame, String> >) -> Self
-        { Self{ sender: sender } }
-}
-
-impl mercury_capnp::app_message_listener::Server for AppMessageDispatcherCapnProto
-{
-    fn receive(&mut self, params: mercury_capnp::app_message_listener::ReceiveParams,
-                results: mercury_capnp::app_message_listener::ReceiveResults,)
-        -> Promise<(), ::capnp::Error>
-    {
-        let message = pry!( pry!( params.get() ).get_message() );
-        let recv_fut = self.sender.clone().send( Ok( message.into() ) )
-            .map(  |sink| () )
-            .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}",e ) ) );
-        Promise::from_future(recv_fut)
-    }
-
-
-    fn error(&mut self, params: mercury_capnp::app_message_listener::ErrorParams,
-              results: mercury_capnp::app_message_listener::ErrorResults,)
-        -> Promise<(), ::capnp::Error>
-    {
-        let error = pry!( pry!( params.get() ).get_error() ).into();
-        let recv_fut = self.sender.clone().send( Err(error) )
-            .map(  |sink| () )
-            .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}",e ) ) );
-        Promise::from_future(recv_fut)
     }
 }
 

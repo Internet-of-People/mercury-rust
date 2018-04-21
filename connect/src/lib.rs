@@ -117,8 +117,8 @@ pub trait ProfileGateway
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
-        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
+            to_caller: Option<AppMsgSink>) ->
+        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >;
 
     // TODO what else is needed here?
 }
@@ -340,8 +340,8 @@ impl ProfileGateway for ProfileGatewayImpl
 
 
     fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
-        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >
+            to_caller: Option<AppMsgSink>) ->
+        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
         let call_fut = self.any_home_of(&rel.profile)
             .and_then( move |home|
