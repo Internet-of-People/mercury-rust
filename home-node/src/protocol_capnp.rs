@@ -1,5 +1,5 @@
 use capnp::capability::Promise;
-use futures::{Future, Stream};
+use futures::{Future, Stream, sync::mpsc};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
@@ -185,20 +185,27 @@ impl home::Server for HomeDispatcherCapnProto
         let rel_capnp = pry!( opts.get_relation() );
         let app_capnp = pry!( opts.get_app() );
         let init_payload_capnp = pry!( opts.get_init_payload() );
-        // TODO wrap a homesink around capnp object
-        let to_caller = opts.get_to_caller();
+
+        let handle_clone = self.handle.clone();
+        let to_caller = opts.get_to_caller()
+            .map( |to_caller_capnp | mercury_capnp::fwd_appmsg(to_caller_capnp, handle_clone) )
+            .ok();
 
         let relation = pry!( RelationProof::try_from(rel_capnp) );
         let app = ApplicationId::from(app_capnp);
         let init_payload = AppMessageFrame::from(init_payload_capnp);
 
-        // TODO properly delegate homesink to business logic
-        let call_fut = self.home.call(relation, app, init_payload, None)
-// TODO send back proper results to client
-            .map( |call|
+        let call_fut = self.home.call(relation, app, init_payload, to_caller)
+            .map( |to_callee_opt|
             {
-                ()
-            })
+                to_callee_opt.map( move |to_callee|
+                {
+                    let to_callee_dispatch = mercury_capnp::AppMessageDispatcherCapnProto::new(to_callee);
+                    let to_callee_capnp = mercury_capnp::app_message_listener::ToClient::new(to_callee_dispatch)
+                        .from_server::<::capnp_rpc::Server>();
+                    results.get().set_to_callee(to_callee_capnp);
+                } );
+            } )
             .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
 
         Promise::from_future(call_fut)

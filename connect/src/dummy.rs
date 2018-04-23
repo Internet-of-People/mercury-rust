@@ -201,9 +201,10 @@ impl ProfileStore{
 
 impl ProfileRepo for ProfileStore{
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-    Box< HomeStream<Profile, String> >{
+    HomeStream<Profile, String>{
         println!("ProfileStore.list");
-        Box::new( futures::stream::empty() )
+        let (send, recv) = futures::sync::mpsc::channel(0);
+        recv
     }
 
     fn load(&self, id: &ProfileId) ->
@@ -251,9 +252,10 @@ impl MyDummyHome{
 
 impl ProfileRepo for MyDummyHome{
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-    Box< Stream<Item=Result<Profile, String>, Error=()> >{
+    HomeStream<Profile, String>{
         println!("MyDummyHome.list");
-        Box::new( futures::stream::empty() )
+        let (send, recv) = futures::sync::mpsc::channel(0);
+        recv
     }
 
     fn load(&self, id: &ProfileId) ->
@@ -367,8 +369,8 @@ impl Home for MyDummyHome
     }
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
-        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >{
+            to_caller: Option<AppMsgSink>) ->
+        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >{
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.call "))) )
     }
 
