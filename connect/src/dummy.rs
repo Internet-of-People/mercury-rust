@@ -153,27 +153,6 @@ impl Signer for Signo{
     }
 }
 
-pub fn dummy_half_proof(rtype: &str)->RelationHalfProof{
-    RelationHalfProof{
-        relation_type:  String::from(rtype),
-        my_id:          ProfileId("my_id".as_bytes().to_owned()),
-        my_sign:        Signature("my_sign".as_bytes().to_owned()),
-        peer_id:        ProfileId("peer_id".as_bytes().to_owned()),
-    }
-}
-
-pub fn dummy_relation_proof()->RelationProof {
-    RelationProof::new()
-}
-
-pub fn dummy_relation(rtype: &str)->Relation{
-    Relation::new(
-        &make_own_persona_profile(
-            &PublicKey("dummy_relation_profile_id".as_bytes().to_owned()) 
-        ),
-        &dummy_relation_proof()
-    )
-}
  
 #[derive(Debug)]
 pub struct ProfileStore{
@@ -309,8 +288,8 @@ impl Home for MyDummyHome
             match facet {
                 &mut ProfileFacet::Persona(ref mut persona) => {
 
-                    let relation_proof = RelationProof::register_relation(
-                        &profile.id, &Signature(profile.pub_key.0.clone()), &self.home_profile.id, &Signature(self.home_profile.pub_key.0.clone())
+                    let relation_proof = RelationProof::new(
+                        "home", &profile.id, &Signature(profile.pub_key.0.clone()), &self.home_profile.id, &Signature(self.home_profile.pub_key.0.clone())
                         );
                     
                     persona.homes.append( &mut vec!(relation_proof ) );

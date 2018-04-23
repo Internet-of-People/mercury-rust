@@ -81,15 +81,15 @@ fn main(){
                 println!("connect");
     
             },
-            "2" =>{
-                profilegateway.call(
-                    dummy::dummy_relation("work"), 
-                    ApplicationId( String::from("SampleApp") ), 
-                    AppMessageFrame("whatever".as_bytes().to_owned() ),
-                    None
-                );
+            // "2" =>{
+            //     profilegateway.call(
+            //         dummy::dummy_relation("work"), 
+            //         ApplicationId( String::from("SampleApp") ), 
+            //         AppMessageFrame("whatever".as_bytes().to_owned() ),
+            //         None
+            //     );
     
-            }
+            // }
             "3" =>{
                 profilegateway.pair_request("relation_dummy_type", "url");
     
