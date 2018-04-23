@@ -8,7 +8,7 @@ extern crate tokio_core;
 
 use std::rc::Rc;
 
-use futures::Future;
+use futures::{Future, sync::mpsc};
 use multiaddr::Multiaddr;
 
 
@@ -45,10 +45,10 @@ pub trait Seed
 
 
 /// Something that can sign data, but cannot give out the private key.
-/// Usually implemented using a private key internally.
+/// Usually implemented using a private key internally, but also enables hardware wallets.
 pub trait Signer
 {
-    fn prof_id(&self) -> &ProfileId; // TODO is this really needed here?
+    fn prof_id(&self) -> &ProfileId; // TODO is this really needed here and not in connection PeerContext?
     fn pub_key(&self) -> &PublicKey;
     // NOTE the data to be signed ideally will be the output from Mudlee's multicodec lib
     fn sign(&self, data: &[u8]) -> Signature;
@@ -138,8 +138,8 @@ pub trait PeerContext
 
 
 
-pub type HomeStream<Elem, RemoteErr> = futures::sync::mpsc::Receiver< Result<Elem, RemoteErr> >;
-pub type HomeSink<Elem, RemoteErr>   = futures::sync::mpsc::Sender< Result<Elem, RemoteErr> >;
+pub type HomeStream<Elem, RemoteErr> = mpsc::Receiver< Result<Elem, RemoteErr> >;
+pub type HomeSink<Elem, RemoteErr>   = mpsc::Sender< Result<Elem, RemoteErr> >;
 
 /// Potentially a whole network of nodes with internal routing and sharding
 pub trait ProfileRepo
@@ -270,10 +270,6 @@ pub struct AppMessageFrame(pub Vec<u8>);
 pub type AppMsgStream = HomeStream<AppMessageFrame, String>;
 pub type AppMsgSink   = HomeSink<AppMessageFrame, String>;
 
-pub struct CallMessages
-{
-
-}
 
 pub struct Call
 {
