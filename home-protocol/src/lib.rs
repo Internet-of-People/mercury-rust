@@ -1,4 +1,6 @@
 extern crate capnp;
+#[macro_use]
+extern crate capnp_rpc;
 extern crate futures;
 extern crate multiaddr;
 extern crate multihash;
@@ -6,7 +8,7 @@ extern crate tokio_core;
 
 use std::rc::Rc;
 
-use futures::Future;
+use futures::{Future, sync::mpsc};
 use multiaddr::Multiaddr;
 
 
@@ -43,10 +45,10 @@ pub trait Seed
 
 
 /// Something that can sign data, but cannot give out the private key.
-/// Usually implemented using a private key internally.
+/// Usually implemented using a private key internally, but also enables hardware wallets.
 pub trait Signer
 {
-    fn prof_id(&self) -> &ProfileId; // TODO is this really needed here?
+    fn prof_id(&self) -> &ProfileId; // TODO is this really needed here and not in connection PeerContext?
     fn pub_key(&self) -> &PublicKey;
     // NOTE the data to be signed ideally will be the output from Mudlee's multicodec lib
     fn sign(&self, data: &[u8]) -> Signature;
@@ -136,15 +138,15 @@ pub trait PeerContext
 
 
 
-pub type HomeStream<Elem, RemoteErr> = futures::Stream< Item=Result<Elem, RemoteErr>, Error=() >;
-pub type HomeSink<Elem, RemoteErr>   = futures::Sink< SinkItem=Result<Elem, RemoteErr>, SinkError=() >;
+pub type HomeStream<Elem, RemoteErr> = mpsc::Receiver< Result<Elem, RemoteErr> >;
+pub type HomeSink<Elem, RemoteErr>   = mpsc::Sender< Result<Elem, RemoteErr> >;
 
 /// Potentially a whole network of nodes with internal routing and sharding
 pub trait ProfileRepo
 {
     /// List all profiles that can be load()'ed or resolve()'d.
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-        Box< HomeStream<Profile,String> >;
+        HomeStream<Profile,String>;
 
     /// Look for specified `id` and return. This might involve searching for the latest version
     /// of the profile in the dht, but if it's the profile's home server, could come from memory, too.
@@ -265,18 +267,17 @@ pub struct ApplicationId(pub String);
 pub struct AppMessageFrame(pub Vec<u8>);
 
 
-pub struct CallMessages
-{
-    pub incoming: Option<Box< HomeStream<AppMessageFrame, String> >>,
-    pub outgoing: Option<Box< HomeSink<AppMessageFrame, String> >>,
-}
+pub type AppMsgStream = HomeStream<AppMessageFrame, String>;
+pub type AppMsgSink   = HomeSink<AppMessageFrame, String>;
+
 
 pub struct Call
 {
     pub caller:         ProfileId,
     pub init_payload:   AppMessageFrame,
-    // NOTE A missed call will contain Option::None
-    pub messages:       CallMessages,
+    // NOTE A missed call or p2p connection failure will result Option::None
+    pub incoming:       Option<AppMsgStream>,
+    pub outgoing:       Option<AppMsgSink>,
 }
 
 
@@ -308,11 +309,12 @@ pub trait Home: ProfileRepo
     fn pair_response(&self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    // NOTE initiating P2P connection, we must pass some message channel to ourselves,
-    //      a successful call returns a channel to callee
+    // NOTE initiating a real P2P connection (vs a single frame push notification),
+    //      the caller must pass some message channel to itself.
+    //      A successful call returns a channel to callee.
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<Box< HomeSink<AppMessageFrame, String> >>) ->
-        Box< Future<Item=CallMessages, Error=ErrorToBeSpecified> >;
+            to_caller: Option<AppMsgSink>) ->
+        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >;
 
 // TODO consider how to do this in a later milestone
 //    fn presence(&self, rel: Relation, app: ApplicationId) ->
