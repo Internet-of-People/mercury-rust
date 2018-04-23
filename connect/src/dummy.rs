@@ -227,7 +227,9 @@ impl ProfileRepo for ProfileStore{
 
 pub struct MyDummyHome{
     pub home_profile   : Profile, 
-    pub prof_repo : Rc<RefCell<ProfileStore>>,
+    pub local_prof_store : HashMap<ProfileId, Vec<u8>>,
+    pub storage_layer : Rc<RefCell<ProfileStore>>,
+    pub events : HashMap<ProfileId, Vec<ProfileEvent>>,
 }
 
 impl MyDummyHome{
@@ -235,13 +237,15 @@ impl MyDummyHome{
         println!("MyDummyHome.new");
         MyDummyHome{
             home_profile : profile,
-            prof_repo : dht,
+            local_prof_store : HashMap::new(),
+            storage_layer : dht,
+            events : HashMap::new()
         }
     }
     
     pub fn insert(&mut self, id : ProfileId, profile : Profile)->Option<Profile>{
         println!("MyDummyHome.insert");
-        self.prof_repo.borrow_mut().insert(id, profile)
+        self.storage_layer.borrow_mut().insert(id, profile)
     }
 }
 
@@ -255,9 +259,9 @@ impl ProfileRepo for MyDummyHome{
     fn load(&self, id: &ProfileId) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
         println!("MyDummyHome.load");
-        let pr = self.prof_repo.borrow();
+        let pr = self.storage_layer.borrow();
         let prof = pr.get(id.to_owned());
-        //println!("MyDummyHome.prof_repo.content::::{:?}", &self.prof_repo.borrow().content);
+        //println!("MyDummyHome.storage_layer.content::::{:?}", &self.storage_layer.borrow().content);
         match prof {
             Some(profile) => Box::new( future::ok(profile.to_owned()) ),
             None => Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.load "))) ),
@@ -278,7 +282,15 @@ impl Home for MyDummyHome
     fn claim(&self, profile: ProfileId) ->
     Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >{
         println!("MyDummyHome.claim");
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDmmyHome.claim "))) )
+        match self.storage_layer.borrow().get(profile.clone()){
+            Some(own) => {
+                match self.local_prof_store.get(&profile){
+                        Some(privdata) => Box::new( future::ok( OwnProfile::new( own, privdata ) ) ),
+                        None => Box::new( future::ok( OwnProfile::new( own, &Vec::new()) ) )
+                }
+            },
+            None => Box::new( future::err( ErrorToBeSpecified::TODO( String::from( "MyDummyHome.claim" ) ) ) )
+        }
     }
 
     // TODO consider how to enforce overwriting the original ownprofile with the modified one
@@ -321,6 +333,7 @@ impl Home for MyDummyHome
                 },
                 None => {
                     println!("MyDummyHome.register.success");
+                    self.local_prof_store.insert(id, own_profile.priv_data.clone());
                     ret = Box::new(future::ok(own_profile.clone()));
                 },
             }
@@ -334,7 +347,7 @@ impl Home for MyDummyHome
     fn login(&self, profile: ProfileId) ->
     Box< Future< Item=Box< HomeSession >, Error=ErrorToBeSpecified > >{
         println!("MyDummyHome.login");
-        let session = Box::new(HomeSessionDummy::new( Rc::clone(&self.prof_repo) )) as Box<HomeSession>;
+        let session = Box::new(HomeSessionDummy::new( profile ,Rc::clone(&self.storage_layer) )) as Box<HomeSession>;
         Box::new( future::ok( session ) )
         //Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.login "))) )
 
@@ -392,15 +405,16 @@ impl HomeConnector for DummyConnector{
 #[derive(Debug)]
 pub struct HomeSessionDummy
 {
+    prof : ProfileId,
     repo : Rc<RefCell<ProfileStore>>
 }
 
 
 impl HomeSessionDummy
 {
-    pub fn new( repo : Rc<RefCell<ProfileStore>> ) -> Self{ 
+    pub fn new( prof : ProfileId, repo : Rc<RefCell<ProfileStore>> ) -> Self{ 
         println!("HomeSessionDummy.new");
-        Self{ repo : repo } 
+        Self{ prof : prof, repo : repo } 
     }
 }
 
