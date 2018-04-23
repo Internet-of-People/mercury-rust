@@ -38,6 +38,8 @@ pub fn generate_hash_from_vec( base : Vec<u8>) -> Vec<u8> {
 }
 
 pub struct TestSetup{
+    pub reactor : tokio_core::reactor::Core,
+    pub handle : tokio_core::reactor::Handle,
     pub homeprofile: Profile,
     pub homeprofileid: ProfileId,
     pub homesigner: Rc<Signer>,
@@ -78,7 +80,12 @@ impl TestSetup{
             home_connector: Rc::new( dummy::DummyConnector::new_with_home( home ) ),
         };
 
+        let reactor = tokio_core::reactor::Core::new().unwrap();
+        let handle = reactor.handle();
+
         Self{
+            reactor: reactor,
+            handle: handle,
             homeprofile: homeprof,
             homeprofileid: homeprofileid,
             homesigner: homesigner,

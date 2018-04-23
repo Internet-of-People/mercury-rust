@@ -32,9 +32,8 @@ use futures::{Future,Stream};
 
     #[test]
     fn test_register(){
-        let mut reactor = reactor::Core::new().unwrap();
-        let mut reactorhandle = reactor.handle();
-        let setup = dummy::TestSetup::setup();
+
+        let mut setup = dummy::TestSetup::setup();
 
         let ownprofile = setup.profilegate.register(
                 setup.homeprofileid,
@@ -42,21 +41,20 @@ use futures::{Future,Stream};
                 None
         );
 
-        let res = reactor.run(ownprofile);      
+        let res = setup.reactor.run(ownprofile);      
     }
 
     #[test]
     fn test_unregister(){
-        let mut reactor = reactor::Core::new().unwrap();
-        let mut reactorhandle = reactor.handle();
-        let setup = dummy::TestSetup::setup();
+
+        let mut setup = dummy::TestSetup::setup();
 
         let registered = setup.profilegate.register(
                 setup.homeprofileid.clone(),
                 setup.userownprofile,
                 None
         );
-        let res = reactor.run(registered); 
+        let res = setup.reactor.run(registered); 
         //assert if registered
 
         let unregistered = setup.profilegate.unregister(
@@ -65,41 +63,38 @@ use futures::{Future,Stream};
                 None
         );
 
-        let res = reactor.run(unregistered);     
+        let res = setup.reactor.run(unregistered);     
 
         //assert if unregistered 
     }
 
     #[test]
     fn test_login(){
-        let mut reactor = reactor::Core::new().unwrap();
-        let mut reactorhandle = reactor.handle();
-        let setup = dummy::TestSetup::setup();
+
+        let mut setup = dummy::TestSetup::setup();
 
         let home_session = setup.profilegate.login();
 
-        let res = reactor.run(home_session);      
+        let res = setup.reactor.run(home_session);      
     }
 
     #[test]
     fn test_claim(){
-        let mut reactor = reactor::Core::new().unwrap();
-        let mut reactorhandle = reactor.handle();
-        let setup = dummy::TestSetup::setup();
+
+        let mut setup = dummy::TestSetup::setup();
 
         let home_session = setup.profilegate.claim(
                 setup.homeprofileid,
                 setup.userid,
         );
 
-        let res = reactor.run(home_session);      
+        let res = setup.reactor.run(home_session);      
     }
     
     #[test]
     fn test_update(){
-        let mut reactor = reactor::Core::new().unwrap();
-        let mut reactorhandle = reactor.handle();
-        let setup = dummy::TestSetup::setup();
+
+        let mut setup = dummy::TestSetup::setup();
         let other_home_signer = Signo::new("otherhome");
         let otherhome = make_home_profile("/ip4/127.0.0.1/udp/9876", other_home_signer.pub_key());
 
@@ -109,14 +104,13 @@ use futures::{Future,Stream};
             &setup.userownprofile,
         );
 
-        let res = reactor.run(home_session);      
+        let res = setup.reactor.run(home_session);      
     }
 
     #[test]
     fn test_call(){
-        let mut reactor = reactor::Core::new().unwrap();
-        let mut reactorhandle = reactor.handle();
-        let setup = dummy::TestSetup::setup();
+
+        let mut setup = dummy::TestSetup::setup();
 
         let call_messages = setup.profilegate.call(
             dummy::dummy_relation("test_relation"),
@@ -125,63 +119,60 @@ use futures::{Future,Stream};
             None
         );
 
-        let res = reactor.run(call_messages);      
+        let res = setup.reactor.run(call_messages);      
     }
 
     #[test]
     fn test_ping(){
-        let mut reactor = reactor::Core::new().unwrap();
-        let mut reactorhandle = reactor.handle();
-        let setup = dummy::TestSetup::setup();
+
+        let mut setup = dummy::TestSetup::setup();
 
         let response = setup.profilegate.login()
         .and_then(|home_session|{
             home_session.ping( "test_ping" )
         });
 
-        let res = reactor.run(response);      
+        let res = setup.reactor.run(response);      
     }
 
     #[test]
     fn test_pair_req(){
-        let mut reactor = reactor::Core::new().unwrap();
-        let mut reactorhandle = reactor.handle();
+
         let signo = Rc::new( dummy::Signo::new( "TestKey" ) );
-        let setup = dummy::TestSetup::setup();
+        let mut setup = dummy::TestSetup::setup();
 
         let zero = setup.profilegate.pair_request( "test_relation", "test_url" );
 
-        let res = reactor.run(zero);   
+        let res = setup.reactor.run(zero);   
     }
 
     #[test]
     fn test_pair_res(){
-        let mut reactor = reactor::Core::new().unwrap();
-        let mut reactorhandle = reactor.handle();
-        let setup = dummy::TestSetup::setup();
+
+        let mut setup = dummy::TestSetup::setup();
         let zero = setup.profilegate.pair_response(
                 dummy::dummy_relation("test_relation"));
 
-        let res = reactor.run(zero);      
+        let res = setup.reactor.run(zero);      
     }
 
     #[test]
     fn test_relations(){
-        let mut reactor = reactor::Core::new().unwrap();
-        let mut reactorhandle = reactor.handle();
-        let setup = dummy::TestSetup::setup();
+
+        let mut setup = dummy::TestSetup::setup();
 
         let zero = setup.profilegate.relations( &setup.userid );
 
-        let res = reactor.run(zero);
+        let res = setup.reactor.run(zero);
     }
 
     #[test]
     fn and_then_story(){
         //print!("{}[2J", 27 as char);
         println!( "Setting up config" );
-        let mut reactor = reactor::Core::new().unwrap();
-        let mut reactorhandle = reactor.handle();
+        let mut reactor = tokio_core::reactor::Core::new().unwrap();
+        let handle = reactor.handle();
+
         let homeaddr = "/ip4/127.0.0.1/udp/9876";
         let homemultiaddr = homeaddr.to_multiaddr().unwrap();
         
