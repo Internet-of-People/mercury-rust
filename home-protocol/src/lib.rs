@@ -216,15 +216,20 @@ pub struct RelationProof
 impl RelationProof
 {
     // TODO add params and properly initialize
-    pub fn new() -> Self
+    pub fn new(
+        rel_type :      &str,
+        my_id:          &ProfileId,
+        my_sign:        &Signature,
+        peer_id:        &ProfileId,
+        peer_sign:      &Signature) -> Self
     {
         Self
         {
-            relation_type: String::new(),
-            my_id: ProfileId(Vec::new()),
-            my_sign: Signature(Vec::new()),
-            peer_id: ProfileId(Vec::new()),
-            peer_sign: Signature(Vec::new()),
+            relation_type: rel_type.to_owned(),
+            my_id: my_id.to_owned(),
+            my_sign: my_sign.to_owned(),
+            peer_id: peer_id.to_owned(),
+            peer_sign: peer_sign.to_owned(),
         }
     }
 

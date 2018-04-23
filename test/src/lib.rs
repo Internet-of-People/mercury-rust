@@ -6,7 +6,7 @@ extern crate mercury_home_protocol;
 extern crate mercury_home_node;
 extern crate tokio_core;
 extern crate tokio_io;
-
+extern crate multiaddr;
 
 
 #[test]
@@ -14,6 +14,9 @@ fn test_events()
 {
     use std::net::ToSocketAddrs;
     use std::rc::Rc;
+    use std::cell::RefCell;
+
+    use multiaddr::{ToMultiaddr, Multiaddr};
 
     use futures::{Future, Stream};
     use tokio_core::net::{TcpListener, TcpStream};
@@ -21,7 +24,7 @@ fn test_events()
 
     use mercury_home_protocol::*;
     use mercury_connect::HomeContext;
-    use mercury_connect::dummy::{ MyDummyHome, Signo, make_home_profile};
+    use mercury_connect::dummy::{ MyDummyHome, Signo, make_home_profile, ProfileStore, };
     use mercury_connect::protocol_capnp::HomeClientCapnProto;
     use mercury_home_node::protocol_capnp::HomeDispatcherCapnProto;
 
@@ -29,16 +32,25 @@ fn test_events()
 
     let mut reactor = reactor::Core::new().unwrap();
 
-    let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
+    let homeaddr = "127.0.0.1:9876";
+    let addr = homeaddr.clone().to_socket_addrs().unwrap().next().expect("Failed to parse address");
+
+    let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
+    let homesigno = Rc::new(Signo::new("makusguba"));
+    let homeprof = Profile::new_home(homesigno.prof_id().to_owned(), homesigno.pub_key().to_owned(), homemultiaddr.clone());
+
+    let mut dht = ProfileStore::new();
+    dht.insert(homeprof.id.clone(), homeprof.clone());
+    let mut home_storage = Rc::new( RefCell::new(dht) );
 
     let handle1 = reactor.handle();
     let server_socket = TcpListener::bind( &addr, &reactor.handle() ).expect("Failed to bind socket");
     let server_fut = server_socket.incoming().for_each( move |(socket, addr)|
     {
         println!("Accepted client connection, serving requests");
-
-        let home = Box::new( mercury_connect::dummy::DummyHome::new("ping_reply_msg") );
-        // let home = Box::new( server::HomeServer::new() );
+        //let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
+        let mut store_clone = Rc::clone(&home_storage);
+        let home = Box::new( MyDummyHome::new( homeprof.clone() , store_clone ) );
         HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle1.clone() );
         Ok( () )
     } );

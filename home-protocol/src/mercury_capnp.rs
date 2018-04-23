@@ -166,7 +166,7 @@ impl<'a> TryFrom<relation_proof::Reader<'a>> for ::RelationProof
     fn try_from(src: relation_proof::Reader) -> Result<Self, Self::Error>
     {
         // TODO
-        Ok( ::RelationProof::new() )
+        Err( capnp::Error::failed(String::from("unimplemented try_from")) )
     }
 }
 

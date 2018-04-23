@@ -1,3 +1,4 @@
+#[allow(unused)]
 #[cfg(test)]
 use super::*;
 
@@ -118,7 +119,7 @@ use futures::{Future,Stream};
         let setup = dummy::TestSetup::setup();
 
         let call_messages = setup.profilegate.call(
-            dummy::dummy_relation( "NewGame+" ), 
+            dummy::dummy_relation("test_relation"),
             ApplicationId( String::from( "Undertale" ) ), 
             AppMessageFrame( Vec::from( "Megalovania" ) ),
             None
@@ -158,7 +159,8 @@ use futures::{Future,Stream};
         let mut reactor = reactor::Core::new().unwrap();
         let mut reactorhandle = reactor.handle();
         let setup = dummy::TestSetup::setup();
-        let zero = setup.profilegate.pair_response( dummy_relation( "test_relation" ) );
+        let zero = setup.profilegate.pair_response(
+                dummy::dummy_relation("test_relation"));
 
         let res = reactor.run(zero);      
     }
@@ -278,14 +280,15 @@ use futures::{Future,Stream};
 
             println!( "request pair() -> (gives back nothing or error)" );
             
-            other_gateway.pair_response( dummy_relation( "relation_dummy_type" ) )
-            
+            other_gateway.pair_response(
+                dummy::dummy_relation("test_relation"),
+            )
         })
         .and_then(|()|{
             println!( "call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
 
             own_gateway.call(
-                dummy::dummy_relation( "work" ), 
+                dummy::dummy_relation("test_relation"),
                 ApplicationId( String::from( "SampleApp" ) ), 
                 AppMessageFrame( Vec::from( "whatever" ) ),
                 None
@@ -295,7 +298,7 @@ use futures::{Future,Stream};
             println!( "call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
 
             other_gateway.call(
-                dummy::dummy_relation( "work" ), 
+                dummy::dummy_relation("test_relation"), 
                 ApplicationId( String::from( "SampleApp" ) ), 
                 AppMessageFrame( Vec::from( "whetavar" ) ),
                 None

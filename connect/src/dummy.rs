@@ -152,157 +152,24 @@ impl Signer for Signo{
         Signature( sig.into_bytes() )
     }
 }
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct DummyHomeConnector{
-    pub home : DummyHome,
-}
-impl DummyHomeConnector{
-    fn dconnect(&self){
-        unimplemented!();
-    }
-}
-impl HomeConnector for DummyHomeConnector{
-    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >{
-            println!("connect");
-            unimplemented!();
-            //Box::new(futures::future::ok(Rc::new(&self.home)))
-        }
-}
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct DummyHome {
-    pub signer : Signo,
-    pub ping_reply: String,
-}
 
-impl DummyHome {
-    pub fn new(ping_reply: &str) -> DummyHome {
-        DummyHome {
-            signer: Signo::new("Mockarony"),
-            ping_reply: String::from(ping_reply),
-        }
-    }
-}
-
-impl Future for DummyHome{
-    type Item = DummyHome;
-    type Error =ErrorToBeSpecified;
-    fn poll(
-        &mut self
-    ) -> Result<Async<Self::Item>, Self::Error>{
-        println!("poll");
-        unimplemented!();
-    }
-}
-impl PeerContext for DummyHome {
-    fn my_signer(&self) -> &Signer {
-        &self.signer
-    }
-    fn peer(&self) -> Option<Profile>{
-        println!("peer");
-        None
-    }
-    fn peer_pubkey(&self) -> Option<PublicKey>{
-        println!("peer_pubkey");
-        None
-    }
-}
-
-impl ProfileRepo for DummyHome{
-    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-        HomeStream<Profile, String>{
-            println!("list");
-            unimplemented!()
-        }
-
-    fn load(&self, id: &ProfileId) ->
-        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
-            println!("load: {:?}" , id );
-            unimplemented!()
-        }
-
-    // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
-    fn resolve(&self, url: &str) ->
-        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
-            println!("resolve");
-            unimplemented!()
-        }
-
-    // TODO notifications on profile updates should be possible
-}
-
-impl Home for DummyHome{
-    // NOTE because we support multihash, the id cannot be guessed from the public key
-    fn claim(&self, profile: ProfileId) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >{
-            println!("claim");
-            unimplemented!()
-        }
-
-    // TODO consider how to enforce overwriting the original ownprofile with the modified one
-    //      with the pairing proof, especially the error case
-    fn register(&mut self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >{
-            println!("register: {:?}", own_prof.profile.id);
-            unimplemented!()
-        }
-
-    // NOTE this closes all previous sessions of the same profile
-    fn login(&self, profile: ProfileId) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >{
-            println!("login: {:?}", profile);
-            unimplemented!()
-        }
-
-
-    // NOTE acceptor must have this server as its home
-    // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
-    fn pair_request(&self, half_proof: RelationHalfProof) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >{
-            println!("pair_request");
-            unimplemented!()
-        }
-
-    fn pair_response(&self, rel: RelationProof) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >{
-            println!("pair_response");
-            unimplemented!()
-        }
-
-    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<AppMsgSink>) ->
-        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >{
-            println!("call");
-            unimplemented!()
-        }
-
-// TODO consider how to do this in a later milestone
-//    fn presence(&self, rel: Relation, app: ApplicationId) ->
-//        Box< Future<Item=Option<AppMessageFrame>, Error=ErrorToBeSpecified> >;
-}
-
-pub fn dummy_half_proof(rtype: &str)->RelationHalfProof{
-    RelationHalfProof{
-        relation_type:  String::from(rtype),
-        my_id:          ProfileId("my_id".as_bytes().to_owned()),
-        my_sign:        Signature("my_sign".as_bytes().to_owned()),
-        peer_id:        ProfileId("peer_id".as_bytes().to_owned()),
-    }
-}
-
-pub fn dummy_relation_proof()->RelationProof {
-    RelationProof::new()
-}
-
-pub fn dummy_relation(rtype: &str)->Relation{
+pub fn dummy_relation(rel_type: &str) -> Relation{
     Relation::new(
-        &make_own_persona_profile(
-            &PublicKey("dummy_relation_profile_id".as_bytes().to_owned()) 
-        ),
-        &dummy_relation_proof()
+        &make_own_persona_profile( &PublicKey( Vec::from( "too_hot_today" ) ) ),
+        &dummy_relation_proof(rel_type)
     )
 }
- 
+
+pub fn dummy_relation_proof(rel_type: &str)->RelationProof{
+    RelationProof::new( 
+        rel_type, 
+        &ProfileId(Vec::from("TestMe")),
+        &Signature(Vec::from("TestMe")),
+        &ProfileId(Vec::from("TestOther")),
+        &Signature(Vec::from("TestOther"))
+        )
+} 
+
 #[derive(Debug)]
 pub struct ProfileStore{
     content : HashMap<ProfileId, Profile>,
@@ -341,7 +208,7 @@ impl ProfileRepo for ProfileStore{
         //println!("\nProfileStoreContent:::: {:?}", &self.content);
         let prof = self.content.get(&id);
         match prof {
-            Some(profile) => {println!("ProfileStore.load.success");Box::new( future::ok(profile.to_owned()) )},
+            Some(profile) => {println!("ProfileStore.load.success{:?}", prof);Box::new( future::ok(profile.to_owned()) )},
             None => {println!("ProfileStore.load.fail"); Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.load "))) )},
         }
     }
@@ -356,7 +223,9 @@ impl ProfileRepo for ProfileStore{
 
 pub struct MyDummyHome{
     pub home_profile   : Profile, 
-    pub prof_repo : Rc<RefCell<ProfileStore>>,
+    pub local_prof_store : HashMap<ProfileId, Vec<u8>>,
+    pub storage_layer : Rc<RefCell<ProfileStore>>,
+    pub events : HashMap<ProfileId, Vec<ProfileEvent>>,
 }
 
 impl MyDummyHome{
@@ -364,13 +233,15 @@ impl MyDummyHome{
         println!("MyDummyHome.new");
         MyDummyHome{
             home_profile : profile,
-            prof_repo : dht,
+            local_prof_store : HashMap::new(),
+            storage_layer : dht,
+            events : HashMap::new()
         }
     }
     
     pub fn insert(&mut self, id : ProfileId, profile : Profile)->Option<Profile>{
         println!("MyDummyHome.insert");
-        self.prof_repo.borrow_mut().insert(id, profile)
+        self.storage_layer.borrow_mut().insert(id, profile)
     }
 }
 
@@ -385,9 +256,9 @@ impl ProfileRepo for MyDummyHome{
     fn load(&self, id: &ProfileId) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
         println!("MyDummyHome.load");
-        let pr = self.prof_repo.borrow();
+        let pr = self.storage_layer.borrow();
         let prof = pr.get(id.to_owned());
-        //println!("MyDummyHome.prof_repo.content::::{:?}", &self.prof_repo.borrow().content);
+        //println!("MyDummyHome.storage_layer.content::::{:?}", &self.storage_layer.borrow().content);
         match prof {
             Some(profile) => Box::new( future::ok(profile.to_owned()) ),
             None => Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.load "))) ),
@@ -408,7 +279,15 @@ impl Home for MyDummyHome
     fn claim(&self, profile: ProfileId) ->
     Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >{
         println!("MyDummyHome.claim");
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDmmyHome.claim "))) )
+        match self.storage_layer.borrow().get(profile.clone()){
+            Some(own) => {
+                match self.local_prof_store.get(&profile){
+                        Some(privdata) => Box::new( future::ok( OwnProfile::new( own, privdata ) ) ),
+                        None => Box::new( future::ok( OwnProfile::new( own, &Vec::new()) ) )
+                }
+            },
+            None => Box::new( future::err( ErrorToBeSpecified::TODO( String::from( "MyDummyHome.claim" ) ) ) )
+        }
     }
 
     // TODO consider how to enforce overwriting the original ownprofile with the modified one
@@ -426,7 +305,12 @@ impl Home for MyDummyHome
         for mut facet in own_profile.profile.facets.iter_mut(){
             match facet {
                 &mut ProfileFacet::Persona(ref mut persona) => {
-                    persona.homes.append( &mut vec!(dummy_relation_proof() ) );
+
+                    let relation_proof = RelationProof::new(
+                        "home", &profile.id, &Signature(profile.pub_key.0.clone()), &self.home_profile.id, &Signature(self.home_profile.pub_key.0.clone())
+                        );
+                    
+                    persona.homes.append( &mut vec!(relation_proof ) );
                     storing = true;
                 },
                 _ => {
@@ -439,18 +323,19 @@ impl Home for MyDummyHome
         let mut ret : Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> > = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO(String::from("MyDummyHome.register had unknown error "))) ) );
         
         if storing{
-            let ins = self.insert( id.clone(), profile.clone() );
-            println!("inserting: {:?}", ins);
+            let ins = self.insert( id.clone(), own_profile.profile.clone() );
             match ins{
                 Some(updated) => {
                     ret = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO(String::from("MyDummyHome.register already had given profile stored "))) ) );
                 },
                 None => {
                     println!("MyDummyHome.register.success");
+                    self.local_prof_store.insert(id, own_profile.priv_data.clone());
                     ret = Box::new(future::ok(own_profile.clone()));
                 },
             }
         }
+        println!("register.ret.own_profile {:?} ", own_profile);
         ret
         //own_prof.priv_data = Vec::from("potato");
     }
@@ -459,7 +344,7 @@ impl Home for MyDummyHome
     fn login(&self, profile: ProfileId) ->
     Box< Future< Item=Box< HomeSession >, Error=ErrorToBeSpecified > >{
         println!("MyDummyHome.login");
-        let session = Box::new(HomeSessionDummy::new( Rc::clone(&self.prof_repo) )) as Box<HomeSession>;
+        let session = Box::new(HomeSessionDummy::new( profile ,Rc::clone(&self.storage_layer) )) as Box<HomeSession>;
         Box::new( future::ok( session ) )
         //Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.login "))) )
 
@@ -517,15 +402,16 @@ impl HomeConnector for DummyConnector{
 #[derive(Debug)]
 pub struct HomeSessionDummy
 {
+    prof : ProfileId,
     repo : Rc<RefCell<ProfileStore>>
 }
 
 
 impl HomeSessionDummy
 {
-    pub fn new( repo : Rc<RefCell<ProfileStore>> ) -> Self{ 
+    pub fn new( prof : ProfileId, repo : Rc<RefCell<ProfileStore>> ) -> Self{ 
         println!("HomeSessionDummy.new");
-        Self{ repo : repo } 
+        Self{ prof : prof, repo : repo } 
     }
 }
 
