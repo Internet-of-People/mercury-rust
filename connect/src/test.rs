@@ -177,18 +177,14 @@ use futures::{Future,Stream};
         let homemultiaddr = homeaddr.to_multiaddr().unwrap();
         
         println!( "Setting up signers" );
-        let signo = Rc::new( dummy::Signo::new( "Deuszkulcs" ) );
-        let other_signo = Rc::new( dummy::Signo::new( "Othereusz" ) );
+
         let homesigno = Rc::new( dummy::Signo::new( "makusguba" ) );
         let other_homesigno = Rc::new( dummy::Signo::new( "tulfozotttea" ) );
 
         println!("Setting up profiles");
         let homeprof = dummy::make_home_profile( &homeaddr ,homesigno.pub_key() );
         let other_homeprof = dummy::make_home_profile( &homeaddr ,other_homesigno.pub_key() );
-
-        let mut profile = make_own_persona_profile(signo.pub_key() );
-        let mut other_profile = make_own_persona_profile(other_signo.pub_key() );
-
+        
         println!( "ProfileGateway: ProfileSigner, DummyHome(as profile repo), HomeConnector" );
 
         let mut dht = ProfileStore::new();
@@ -197,51 +193,44 @@ use futures::{Future,Stream};
 
         let mut home_storage = Rc::new( RefCell::new(dht) );
         let mut home_storage_other = Rc::clone(&home_storage);
-        let mut store_rc = Rc::clone(&home_storage);
-        let mut store_rc_other = Rc::clone(&home_storage);
-        let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
-        let mut other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage_other ) ) );
 
-        let own_gateway = ProfileGatewayImpl::new(
-            signo,
-            store_rc,
-            Rc::new( dummy::DummyConnector::new_with_home( home ) ),
-        );
+        let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
+        let mut other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
+
+        let other_signo = Rc::new( dummy::Signo::new( "Othereusz" ) );
+        let mut other_profile = make_own_persona_profile(other_signo.pub_key() );
 
         let other_gateway = ProfileGatewayImpl::new(
-            other_signo,
-            store_rc_other,
+            other_signo, 
+            home_storage_other,
             Rc::new( dummy::DummyConnector::new_with_home( other_home ) ),
         );
 
-        println!( "any_home_of(profile) -> Home" );
-        let ownapp = own_gateway.any_home_of(&profile)
-        .and_then(|home|{
-            println!( "register(HomeProfile_Id_WhereWeRegister, OwnProfile) -> OwnProfile_ExtendedWithNewHome" );
-            
-            let deusz = dummy::make_own_persona_profile(&PublicKey( Vec::from( "pubkey" ) ) );
-            Ok(own_gateway.register(
-                ProfileId( Vec::from("Home") ),
-                dummy::create_ownprofile( deusz ),
-                None
-            ))
-        })
-        .and_then(|ownprofile|{
-            other_gateway.any_home_of(&profile)
-        })
-        .and_then(| otherhome |{
-            println!( "register(HomeProfile_Id_WhereWeRegister, OtherProfile) -> OtherProfile_ExtendedWithNewHome" );
+        let persona = dummy::make_own_persona_profile(&PublicKey( Vec::from( "pubkey" ) ) );
+        let other_reg = other_gateway.register(
+            other_homesigno.prof_id().to_owned(),
+            dummy::create_ownprofile( persona ),
+            None
+        );
+        reactor.run(other_reg).unwrap();
+        println!("registered callee profile");
 
-            let persona = dummy::make_own_persona_profile(&PublicKey( Vec::from( "pubkey" ) ) );
-            Ok(other_gateway.register(
-                ProfileId( Vec::from("OtherHome") ),
-                dummy::create_ownprofile( persona ),
+        let signo = Rc::new( dummy::Signo::new( "Deuszkulcs" ) );
+        let mut profile = make_own_persona_profile(signo.pub_key() );
+
+        let own_gateway = ProfileGatewayImpl::new(
+            signo,
+            home_storage,
+            Rc::new( dummy::DummyConnector::new_with_home( home ) ),
+        );
+
+        let reg = own_gateway.register(
+                homesigno.prof_id().to_owned(),
+                dummy::create_ownprofile( profile ),
                 None
-            ))
-        })
-        .and_then(| otherprofile |{
+        ).map_err(|(p, e)|e)
+        .and_then(|_|{
             println!( "login() -> HomeSession" );
-
             own_gateway.login()
         })
         .and_then(| session |{
@@ -298,7 +287,7 @@ use futures::{Future,Stream};
 
         
         println!( "All set up" );
-        reactor.run( ownapp );
+        reactor.run( reg );
         
         println!( "We're done here, let's go packing" );
     }
