@@ -206,13 +206,19 @@ use futures::{Future,Stream};
             Rc::new( dummy::DummyConnector::new_with_home( other_home ) ),
         );
 
-        let persona = dummy::make_own_persona_profile(&PublicKey( Vec::from( "pubkey" ) ) );
         let other_reg = other_gateway.register(
             other_homesigno.prof_id().to_owned(),
-            dummy::create_ownprofile( persona ),
+            dummy::create_ownprofile( other_profile.clone() ),
             None
-        );
-        reactor.run(other_reg).unwrap();
+        )
+        .map_err(|(p,e)|e)
+        .and_then(| response |{
+            println!( "{:?}" , response );
+            println!( "login() -> HomeSession" );
+
+            other_gateway.login()
+        });
+        let other_session = reactor.run(other_reg).unwrap();
         println!("registered callee profile");
 
         let signo = Rc::new( dummy::Signo::new( "Deuszkulcs" ) );
@@ -228,35 +234,45 @@ use futures::{Future,Stream};
                 homesigno.prof_id().to_owned(),
                 dummy::create_ownprofile( profile ),
                 None
-        ).map_err(|(p, e)|e)
+        )
+        .map_err(|(p, e)|e)
         .and_then(|_|{
             println!( "login() -> HomeSession" );
             own_gateway.login()
         })
+        // .and_then(| session |{
+        //     println!( "ping(str) -> String" );
+            
+        //     session.ping( "dummy_ping" )
+        // })
+        
+        // .and_then(| othersession |{
+        //     println!( "ping(str) -> String" );
+            
+        //     othersession.ping( "dummy_pong" )
+        // })
         .and_then(| session |{
-            println!( "ping(str) -> String" );
-            
-            session.ping( "dummy_ping" )
-        })
-        .and_then(| response |{
-            println!( "{:?}" , response );
-            println!( "login() -> HomeSession" );
-
-            other_gateway.login()
-        })
-        .and_then(| othersession |{
-            println!( "ping(str) -> String" );
-            
-            othersession.ping( "dummy_pong" )
-        })
-        .and_then(| otherresponse |{
-            println!( "{:?}" , otherresponse );
+            // println!( "{:?}" , otherresponse );
             println!( "request pair() -> (gives back nothing or error)" );
             
             own_gateway.pair_request( "relation_dummy_type", "url" )
             
         })
-        .and_then(|()|{
+        .and_then(|_|{
+            other_session.events().for_each(|event|{
+                match event{
+                    Ok(ProfileEvent::PairingRequest(half_proof))=>{
+                        Box::new(other_gateway.pair_response(
+                            Relation::new(
+                                &other_profile,
+                                &RelationProof::from_halfproof(half_proof.clone(), other_gateway.signer.sign(&[111,123,143])))
+                        ).map_err(|_|())) as Box<Future<Item=(),Error = ()> >
+                    },
+                    _=>Box::new(future::ok(()))
+                }
+            }).map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing response.fail")))
+        })
+        .and_then(|_|{
 
             println!( "request pair() -> (gives back nothing or error)" );
             
@@ -264,7 +280,7 @@ use futures::{Future,Stream};
                 dummy::dummy_relation("test_relation"),
             )
         })
-        .and_then(|()|{
+        .and_then(|_|{
             println!( "call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
 
             own_gateway.call(
