@@ -153,7 +153,23 @@ impl Signer for Signo{
     }
 }
 
- 
+pub fn dummy_relation(rel_type: &str) -> Relation{
+    Relation::new(
+        &make_own_persona_profile( &PublicKey( Vec::from( "too_hot_today" ) ) ),
+        &dummy_relation_proof(rel_type)
+    )
+}
+
+pub fn dummy_relation_proof(rel_type: &str)->RelationProof{
+    RelationProof::new( 
+        rel_type, 
+        &ProfileId(Vec::from("TestMe")),
+        &Signature(Vec::from("TestMe")),
+        &ProfileId(Vec::from("TestOther")),
+        &Signature(Vec::from("TestOther"))
+        )
+} 
+
 #[derive(Debug)]
 pub struct ProfileStore{
     content : HashMap<ProfileId, Profile>,
