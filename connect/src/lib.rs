@@ -109,10 +109,10 @@ pub trait ProfileGateway
     fn login(&self) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
 
-
     fn pair_request(&self, relation_type: &str, with_profile_url: &str) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
+    // TODO it does not update the cached profile details that might cause problems  
     fn pair_response(&self, rel: Relation) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
