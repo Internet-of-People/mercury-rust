@@ -224,7 +224,7 @@ impl ProfileGatewayImpl
     }
 
     pub fn get_base64_id(&self)->String{
-        base64::encode(&self.signer.pub_key().0)
+        base64::encode(&self.signer.prof_id().0)
     }
 }
 
