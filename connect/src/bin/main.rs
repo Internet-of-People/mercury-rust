@@ -159,7 +159,6 @@ use futures::{future, Future, Stream};
         )
         .map_err(|(p,e)|e)
         .and_then(| response |{
-            println!( "{:?}" , response );
             println!( "login() -> HomeSession" );
 
             other_gateway.login()
@@ -185,20 +184,8 @@ use futures::{future, Future, Stream};
             println!( "login() -> HomeSession" );
             own_gateway.login()
         });
-        // .and_then(| session |{
-        //     println!( "ping(str) -> String" );
-            
-        //     session.ping( "dummy_ping" )
-        // })
-        
-        // .and_then(| othersession |{
-        //     println!( "ping(str) -> String" );
-            
-        //     othersession.ping( "dummy_pong" )
-        // })
-
         let session = reactor.run(sess).unwrap();
-            // println!( "{:?}" , otherresponse );
+
         println!("***Sending pairing request");
         let req = own_gateway.pair_request( "relation_dummy_type", &other_gateway.get_base64_id() )
         .and_then(|_|{
@@ -257,7 +244,6 @@ use futures::{future, Future, Stream};
                 AppMessageFrame( Vec::from( "whatever" ) ),
                 None
             );
-            //println!("other chat : {:?}", call);
             future::ok( call )
 
         })
