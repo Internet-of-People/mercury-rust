@@ -206,7 +206,7 @@ use futures::{future, Future, Stream};
             .map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing response.fail")))
         })
         .and_then(|first|{
-            println!( " ***pairing_response() -> (gives back nothing or error)" );
+            println!( " ***Sending pairing_response() -> (gives back nothing or error)" );
             let event = &first[0];
             match event{
                 &Ok(ProfileEvent::PairingRequest(ref half_proof))=>{
@@ -214,7 +214,7 @@ use futures::{future, Future, Stream};
                     Box::new(other_gateway.pair_response(
                             Relation::new(
                             &other_profile,
-                            &RelationProof::from_halfproof(half_proof.clone(), other_gateway.signer.sign(&[111,123,143])))
+                            &RelationProof::from_halfproof(half_proof.clone(), other_gateway.signer.sign("apples".as_bytes())))
                     ))
                 },
                 _=>panic!("ProfileEvent assert fail")
@@ -253,8 +253,7 @@ use futures::{future, Future, Stream};
             println!("other chat : {:?}", other_chat);
             future::ok( other_chat )
         });
-        println!( "***All set up" );
-        reactor.run( req );
+        let end = reactor.run( req ).unwrap();
         
         println!( "***We're done here, let's go packing" );
     }

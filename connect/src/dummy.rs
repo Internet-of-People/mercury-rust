@@ -153,10 +153,7 @@ impl Signer for Signo{
         &self.pubkey
     }
     fn sign(&self, data: &[u8]) -> Signature{
-        let mut sig = String::new();
-        sig.push_str( std::str::from_utf8(&data).unwrap() );
-        sig.push_str( std::str::from_utf8(&self.privkey).unwrap() );
-        Signature( sig.into_bytes() )
+        Signature( Vec::from(data) )
     }
 }
 
@@ -365,14 +362,26 @@ impl Home for MyDummyHome
 
     // NOTE acceptor must have this server as its home
     // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
-    fn pair_request(&self, half_proof: RelationHalfProof) ->
+    fn pair_request(&mut self, half_proof: RelationHalfProof) ->
     Box< Future<Item=(), Error=ErrorToBeSpecified> >{
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_request "))) )
+        let profile_events = self.events.entry(half_proof.peer_id.clone()).or_insert(Vec::new());
+        let req_event = ProfileEvent::PairingRequest(half_proof);
+        match profile_events.push(req_event){
+            () => Box::new( future::ok( () ) ),
+            _ =>  Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_request "))) )
+        }
+        //self.events.insert(half_proof.peer_id.clone(), profile_events;
+
     }
 
-    fn pair_response(&self, rel: RelationProof) ->
+    fn pair_response(&mut self, rel_proof: RelationProof) ->
     Box< Future<Item=(), Error=ErrorToBeSpecified> >{
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_response "))) )
+        let profile_events = self.events.entry(rel_proof.peer_id.clone()).or_insert(Vec::new());
+        let resp_event = ProfileEvent::PairingResponse(rel_proof);
+        match profile_events.push(resp_event){
+            () => Box::new( future::ok( () ) ),
+            _ =>  Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_response "))) )
+        }
     }
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
