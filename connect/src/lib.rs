@@ -329,7 +329,7 @@ impl ProfileGateway for ProfileGatewayImpl
             {
                 let half_proof = ProfileGatewayImpl::new_half_proof(rel_type_clone.as_str(), &profile.id, signer_clone.clone() );
                 ProfileGatewayImpl::any_home_of2(&profile, profile_repo_clone, home_connector_clone, signer_clone)
-                    .and_then( move |home| home.borrow().pair_request(half_proof) )
+                    .and_then( move |home| home.borrow_mut().pair_request(half_proof) )
             } );
 
         Box::new(pair_fut)
@@ -340,7 +340,7 @@ impl ProfileGateway for ProfileGatewayImpl
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let pair_fut = self.any_home_of(&rel.profile)
-            .and_then( move |home| home.borrow().pair_response(rel.proof) );
+            .and_then( move |home| home.borrow_mut().pair_response(rel.proof) );
         Box::new(pair_fut)
     }
 
