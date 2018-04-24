@@ -192,7 +192,7 @@ impl ProfileStore{
 
 impl ProfileStore{
     pub fn insert(&mut self, id : ProfileId, profile : Profile) -> Option<Profile>{
-        println!("ProfileStore.add {:?}", id.0);
+        //println!("ProfileStore.add {:?}", id.0);
         self.content.insert(id, profile)
     }
 
@@ -211,12 +211,15 @@ impl ProfileRepo for ProfileStore{
 
     fn load(&self, id: &ProfileId) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
-        println!("ProfileStore.load {:?}", id.0);
-        //println!("\nProfileStoreContent:::: {:?}", &self.content);
+        //println!("ProfileStore.load {:?}", id.0);
         let prof = self.content.get(&id);
         match prof {
-            Some(profile) => {println!("ProfileStore.load.success{:?}", prof);Box::new( future::ok(profile.to_owned()) )},
-            None => {println!("ProfileStore.load.fail"); Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.load "))) )},
+            Some(profile) => {
+               // println!("ProfileStore.load.success{:?}", prof);
+                Box::new( future::ok(profile.to_owned()) )},
+            None => {
+                println!("ProfileStore.load.fail"); 
+                Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.load "))) )},
         }
     }
 
@@ -303,7 +306,7 @@ impl Home for MyDummyHome
     Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >{
         //make some relation magic
         //match own_prof.profile.facets[0].homes.append(dummy_relation(self.home_id));
-        println!("MyDummyHome.register {:?}", own_prof);
+        //println!("MyDummyHome.register {:?}", own_prof);
 
         let id = own_prof.profile.id.clone();
         let profile = own_prof.profile.clone();
@@ -342,7 +345,7 @@ impl Home for MyDummyHome
                 },
             }
         }
-        println!("register.ret.own_profile {:?} ", own_profile);
+        //println!("register.ret.own_profile {:?} ", own_profile);
         ret
         //own_prof.priv_data = Vec::from("potato");
     }
