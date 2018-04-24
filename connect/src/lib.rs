@@ -7,6 +7,9 @@ extern crate multiaddr;
 extern crate multihash;
 extern crate tokio_core;
 extern crate tokio_io;
+extern crate base64;
+
+use base64::{encode, decode};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -220,6 +223,9 @@ impl ProfileGatewayImpl
             my_sign: signer.sign( "TODO implement halfproof serialization".as_bytes() ) }
     }
 
+    pub fn get_base64_id(&self)->String{
+        base64::encode(&self.signer.pub_key().0)
+    }
 }
 
 

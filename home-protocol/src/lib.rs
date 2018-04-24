@@ -275,7 +275,7 @@ pub struct AppMessageFrame(pub Vec<u8>);
 pub type AppMsgStream = HomeStream<AppMessageFrame, String>;
 pub type AppMsgSink   = HomeSink<AppMessageFrame, String>;
 
-
+#[derive(Debug)]
 pub struct Call
 {
     pub caller:         ProfileId,
