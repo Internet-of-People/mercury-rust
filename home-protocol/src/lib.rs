@@ -327,7 +327,7 @@ pub trait Home: ProfileRepo
 }
 
 
-
+#[derive(Clone)]
 pub enum ProfileEvent
 {
     Unknown(Vec<u8>), // forward compatibility for protocol extension

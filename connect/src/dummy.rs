@@ -353,7 +353,8 @@ impl Home for MyDummyHome
     fn login(&self, profile: ProfileId) ->
     Box< Future< Item=Box< HomeSession >, Error=ErrorToBeSpecified > >{
         println!("MyDummyHome.login");
-        let session = Box::new(HomeSessionDummy::new( profile ,Rc::clone(&self.storage_layer), Rc::new(RefCell::new(*self)))) as Box<HomeSession>;
+        //let selfcell = Rc::new(RefCell::new(*self));
+        let session = Box::new(HomeSessionDummy::new( profile ,Rc::clone(&self.storage_layer)/*, selfcell */) ) as Box<HomeSession>;
         Box::new( future::ok( session ) )
         //Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.login "))) )
 
@@ -420,15 +421,15 @@ pub struct HomeSessionDummy
 {
     prof : ProfileId,
     repo : Rc< RefCell< ProfileStore > >,
-    home : Rc< RefCell< MyDummyHome > >,
+    //home : Rc< RefCell< MyDummyHome > >,
 }
 
 
 impl HomeSessionDummy
 {
-    pub fn new( prof : ProfileId, repo : Rc<RefCell<ProfileStore>>, home : Rc<RefCell<MyDummyHome>> ) -> Self{ 
+    pub fn new( prof : ProfileId, repo : Rc<RefCell<ProfileStore>>/*, home : Rc<RefCell<MyDummyHome>> */) -> Self{ 
         println!("HomeSessionDummy.new");
-        Self{ prof : prof, repo : repo, home : home } 
+        Self{ prof : prof, repo : repo/*, home : home */} 
     }
 }
 
@@ -457,16 +458,18 @@ impl HomeSession for HomeSessionDummy
     {
         println!("HomeSessionDummy.events");
         let (sender, receiver) = sync::mpsc::channel(1);
-        match self.home.borrow().events.get(&self.prof){
-            Some(evec) => {
-                for e in evec {
-                    sender.send(Ok(e.to_owned()));
-                    }
-                },
-            None => {
-                sender.send(Err(String::from("no events")));
-                },
-        }
+        // match self.home.borrow().events.get(&self.prof){
+        //     Some(evec) => {
+        //         let event_vector = evec.to_owned();
+        //         for e in event_vector {
+        //             let event : mercury_home_protocol::ProfileEvent = e.to_owned();
+        //             sender.send(Ok(event));
+        //             }
+        //         },
+        //     None => {
+        //         sender.send(Err(String::from("no events")));
+        //         },
+        // }
         Box::new(receiver)
     }
 

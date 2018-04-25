@@ -35,37 +35,57 @@ use futures::{Future,Stream};
 
         let mut setup = dummy::TestSetup::setup();
 
+        let mut registered_ownprofile = setup.userownprofile.clone();
+        let relation_proof = RelationProof::new(
+            "home", 
+            &registered_ownprofile.profile.id, 
+            &Signature(registered_ownprofile.profile.pub_key.0.clone()), 
+            &setup.homeprofile.id, 
+            &Signature(setup.homeprofile.pub_key.0.clone())
+        );
+        
+        match registered_ownprofile.profile.facets[0]{
+            ProfileFacet::Persona(ref mut facet)=>{
+                facet.homes.push(relation_proof);
+            },
+            _=>{
+                panic!("test_register failed cause Deusz fucked up");
+            }
+        }
+
         let ownprofile = setup.profilegate.register(
                 setup.homeprofileid,
                 setup.userownprofile,
                 None
         );
 
-        let res = setup.reactor.run(ownprofile);      
+        let res = setup.reactor.run(ownprofile).unwrap();
+   
+        assert_eq!(res, registered_ownprofile);  
     }
 
     #[test]
     fn test_unregister(){
-
         let mut setup = dummy::TestSetup::setup();
 
-        let registered = setup.profilegate.register(
+        let homeless_profile = setup.userownprofile.clone();
+        let homeid = setup.homeprofileid.clone();
+        let userid = setup.userid.clone();
+        let mut registered = setup.profilegate.register(
                 setup.homeprofileid.clone(),
-                setup.userownprofile,
+                setup.userownprofile.clone(),
                 None
         );
-        let res = setup.reactor.run(registered); 
-        //assert if registered
-
-        let unregistered = setup.profilegate.unregister(
-                setup.homeprofileid,
-                setup.userid,
-                None
+        let reg = setup.reactor.run(registered).unwrap();
+        //see test_register() to see if registering works as intended
+        let unreg = setup.profilegate.unregister(
+            homeid,
+            userid,
+            None
         );
-
-        let res = setup.reactor.run(unregistered);     
-
-        //assert if unregistered 
+        let res = setup.reactor.run(unreg).unwrap(); 
+        //TODO needs HomeSession unregister implementation    
+        //assert_eq!(res, homeless_profile);
     }
 
     #[test]
@@ -79,8 +99,21 @@ use futures::{Future,Stream};
     }
 
     #[test]
-    fn test_claim(){
+    fn test_ping(){
+        //TODO ping function only present for testing phase, incorporate into test_login?
+        let mut setup = dummy::TestSetup::setup();
 
+        let response = setup.profilegate.login()
+        .and_then(|home_session|{
+            home_session.ping( "test_ping" )
+        });
+
+        let res = setup.reactor.run(response);      
+    }
+
+    #[test]
+    fn test_claim(){
+        //profile registering is required
         let mut setup = dummy::TestSetup::setup();
 
         let home_session = setup.profilegate.claim(
@@ -88,7 +121,10 @@ use futures::{Future,Stream};
                 setup.userid,
         );
 
-        let res = setup.reactor.run(home_session);      
+        let res = setup.reactor.run(home_session).unwrap();
+        //TODO needs home.claim implementation
+        println!("Claimed : {:?} ||| Stored : {:?}", res, setup.userownprofile);        
+        assert_eq!(res, setup.userownprofile);      
     }
     
     #[test]
@@ -103,7 +139,8 @@ use futures::{Future,Stream};
             otherhome.id,
             &setup.userownprofile,
         );
-
+        //TODO needs homesession.update implementation
+        //session updates profile stored on home(?)
         let res = setup.reactor.run(home_session);      
     }
 
@@ -118,26 +155,13 @@ use futures::{Future,Stream};
             AppMessageFrame( Vec::from( "Megalovania" ) ),
             None
         );
-
+        //TODO needs ProfileGateway.call implementation...
         let res = setup.reactor.run(call_messages);      
     }
 
     #[test]
-    fn test_ping(){
-
-        let mut setup = dummy::TestSetup::setup();
-
-        let response = setup.profilegate.login()
-        .and_then(|home_session|{
-            home_session.ping( "test_ping" )
-        });
-
-        let res = setup.reactor.run(response);      
-    }
-
-    #[test]
     fn test_pair_req(){
-
+        //TODO could be tested by sending pair request and asserting the events half_proof that the peer receives to what is should be
         let signo = Rc::new( dummy::Signo::new( "TestKey" ) );
         let mut setup = dummy::TestSetup::setup();
 
@@ -148,7 +172,7 @@ use futures::{Future,Stream};
 
     #[test]
     fn test_pair_res(){
-
+        //TODO could be tested by sending pair response and asserting the events relation_proof that the peer receives to what is should be
         let mut setup = dummy::TestSetup::setup();
         let zero = setup.profilegate.pair_response(
                 dummy::dummy_relation("test_relation"));
@@ -158,7 +182,7 @@ use futures::{Future,Stream};
 
     #[test]
     fn test_relations(){
-
+        //TODO test by storing relations and asserting the return value of relations to those that were stored
         let mut setup = dummy::TestSetup::setup();
 
         let zero = setup.profilegate.relations( &setup.userid );
