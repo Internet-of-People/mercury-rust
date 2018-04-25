@@ -353,7 +353,7 @@ impl Home for MyDummyHome
     fn login(&self, profile: ProfileId) ->
     Box< Future< Item=Box< HomeSession >, Error=ErrorToBeSpecified > >{
         println!("MyDummyHome.login");
-        let session = Box::new(HomeSessionDummy::new( profile ,Rc::clone(&self.storage_layer) )) as Box<HomeSession>;
+        let session = Box::new(HomeSessionDummy::new( profile ,Rc::clone(&self.storage_layer), Rc::new(RefCell::new(*self)))) as Box<HomeSession>;
         Box::new( future::ok( session ) )
         //Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.login "))) )
 
@@ -416,19 +416,19 @@ impl HomeConnector for DummyConnector{
     }
 }
 
-#[derive(Debug)]
 pub struct HomeSessionDummy
 {
     prof : ProfileId,
-    repo : Rc<RefCell<ProfileStore>>
+    repo : Rc< RefCell< ProfileStore > >,
+    home : Rc< RefCell< Home > >,
 }
 
 
 impl HomeSessionDummy
 {
-    pub fn new( prof : ProfileId, repo : Rc<RefCell<ProfileStore>> ) -> Self{ 
+    pub fn new( prof : ProfileId, repo : Rc<RefCell<ProfileStore>>, home : Rc<RefCell<Home>> ) -> Self{ 
         println!("HomeSessionDummy.new");
-        Self{ prof : prof, repo : repo } 
+        Self{ prof : prof, repo : repo, home : home } 
     }
 }
 
@@ -456,7 +456,8 @@ impl HomeSession for HomeSessionDummy
     fn events(&self) -> Box< HomeStream<ProfileEvent, String> >
     {
         println!("HomeSessionDummy.events");
-        let (sender, receiver) = sync::mpsc::channel(0);
+        let (sender, receiver) = sync::mpsc::channel(1);
+        self.home.borrow().events.for_each(|event|sender.send(event));
         Box::new(receiver)
     }
 
