@@ -420,13 +420,13 @@ pub struct HomeSessionDummy
 {
     prof : ProfileId,
     repo : Rc< RefCell< ProfileStore > >,
-    home : Rc< RefCell< Home > >,
+    home : Rc< RefCell< MyDummyHome > >,
 }
 
 
 impl HomeSessionDummy
 {
-    pub fn new( prof : ProfileId, repo : Rc<RefCell<ProfileStore>>, home : Rc<RefCell<Home>> ) -> Self{ 
+    pub fn new( prof : ProfileId, repo : Rc<RefCell<ProfileStore>>, home : Rc<RefCell<MyDummyHome>> ) -> Self{ 
         println!("HomeSessionDummy.new");
         Self{ prof : prof, repo : repo, home : home } 
     }
@@ -457,7 +457,16 @@ impl HomeSession for HomeSessionDummy
     {
         println!("HomeSessionDummy.events");
         let (sender, receiver) = sync::mpsc::channel(1);
-        self.home.borrow().events.for_each(|event|sender.send(event));
+        match self.home.borrow().events.get(&self.prof){
+            Some(evec) => {
+                for e in evec {
+                    sender.send(Ok(e.to_owned()));
+                    }
+                },
+            None => {
+                sender.send(Err(String::from("no events")));
+                },
+        }
         Box::new(receiver)
     }
 
