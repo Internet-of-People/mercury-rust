@@ -216,7 +216,7 @@ impl AppMessageDispatcherCapnProto
 impl app_message_listener::Server for AppMessageDispatcherCapnProto
 {
     fn receive(&mut self, params: app_message_listener::ReceiveParams,
-               _results: app_message_listener::ReceiveResults,)
+               _results: app_message_listener::ReceiveResults)
         -> Promise<(), ::capnp::Error>
     {
         let message = pry!( pry!( params.get() ).get_message() );
@@ -228,7 +228,7 @@ impl app_message_listener::Server for AppMessageDispatcherCapnProto
 
 
     fn error(&mut self, params: app_message_listener::ErrorParams,
-             _results: app_message_listener::ErrorResults,)
+             _results: app_message_listener::ErrorResults)
         -> Promise<(), ::capnp::Error>
     {
         let error = pry!( pry!( params.get() ).get_error() ).into();

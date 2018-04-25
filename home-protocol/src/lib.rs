@@ -381,8 +381,6 @@ mod tests
     use futures::sync::mpsc;
     use tokio_core::reactor;
 
-    use super::*;
-
 
     struct TestSetup
     {

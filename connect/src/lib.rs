@@ -206,7 +206,7 @@ impl ProfileGatewayImpl
 
         // Pick first successful home connection
         let result = future::select_ok(home_conn_futs)
-            .map( |(home_conn, pending_conn_futs)| home_conn );
+            .map( |(home_conn, _pending_conn_futs)| home_conn );
         Box::new(result)
     }
 

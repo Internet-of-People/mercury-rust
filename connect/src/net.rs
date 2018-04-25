@@ -119,16 +119,12 @@ impl HomeConnector for SimpleTcpHomeConnector
         let home_profile_clone = home_profile.clone();
         let handle_clone = self.handle.clone();
         let capnp_home = future::select_ok(tcp_conns)
-            .map( move |(tcp_stream, pending_futs)|
+            .map( move |(tcp_stream, _pending_futs)|
             {
                 use protocol_capnp::HomeClientCapnProto;
                 let home_ctx = Box::new( HomeContext::new(signer, &home_profile_clone) );
 
                 Rc::new( RefCell::new( HomeClientCapnProto::new_tcp(tcp_stream, home_ctx, handle_clone) ) ) as Rc<RefCell<Home>>
-//                tcp_stream.set_nodelay(true).unwrap();
-//                let (reader, writer) = tcp_stream.split();
-//
-//                Rc::new( HomeClientCapnProto::new(reader, writer, home_ctx, handle_clone) ) as Rc<RefCell<Home>>
             } );
         Box::new(capnp_home)
     }
