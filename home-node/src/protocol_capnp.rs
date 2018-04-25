@@ -1,5 +1,5 @@
 use capnp::capability::Promise;
-use futures::{Future, Stream, sync::mpsc};
+use futures::{Future, Stream};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
@@ -71,7 +71,7 @@ impl profile_repo::Server for HomeDispatcherCapnProto
         let profile_id_capnp = pry!( pry!( params.get() ).get_profile_id() );
         let load_fut = self.home.load( &profile_id_capnp.into() )
             .map( move |profile| results.get().init_profile().fill_from(&profile) )
-            .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to load profile id: {:?}",e) ) ); // TODO proper error handling
 
         Promise::from_future(load_fut)
     }
@@ -84,7 +84,7 @@ impl profile_repo::Server for HomeDispatcherCapnProto
         let profile_url = pry!( pry!( params.get() ).get_profile_url() );
         let res_fut = self.home.resolve(profile_url)
             .map( move |profile| results.get().init_profile().fill_from(&profile) )
-            .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to resolve url: {:?}",e ) ) ); // TODO proper error handling
 
         Promise::from_future(res_fut)
     }
@@ -100,7 +100,7 @@ impl home::Server for HomeDispatcherCapnProto
     {
         let profile_id_capnp = pry!( pry!( params.get() ).get_profile_id() );
         let claim_fut = self.home.claim( profile_id_capnp.into() )
-            .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to claim: {:?}", e) ) ) // TODO proper error handling
             .map( move |own_profile|
                 results.get().init_own_profile().fill_from(&own_profile) );
 
@@ -121,7 +121,7 @@ impl home::Server for HomeDispatcherCapnProto
             .ok();
 
         let reg_fut = self.home.register(own_prof, invite_opt)
-            .map_err( |e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling
+            .map_err( |e| ::capnp::Error::failed( format!("Failed to register: {:?}", e) ) ) // TODO proper error handling
             .map( move |own_profile|
                 results.get().init_own_profile().fill_from(&own_profile) );
 
@@ -143,35 +143,35 @@ impl home::Server for HomeDispatcherCapnProto
                 results.get().set_session(session);
                 ()
             } )
-            .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to login: {:?}", e) ) ); // TODO proper error handling
 
         Promise::from_future(session_fut)
     }
 
 
     fn pair_request(&mut self, params: home::PairRequestParams,
-                    mut  results: home::PairRequestResults,)
+                    mut _results: home::PairRequestResults,)
         -> Promise<(), ::capnp::Error>
     {
         let half_proof_capnp = pry!( pry!( params.get() ).get_half_proof() );
         let half_proof = pry!( RelationHalfProof::try_from(half_proof_capnp) );
 
         let pair_req_fut = self.home.pair_request(half_proof)
-            .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to pair {:?}", e) ) ); // TODO proper error handling
 
         Promise::from_future(pair_req_fut)
     }
 
 
     fn pair_response(&mut self, params: home::PairResponseParams,
-                     mut  results: home::PairResponseResults,)
+                     mut _results: home::PairResponseResults,)
         -> Promise<(), ::capnp::Error>
     {
         let proof_capnp = pry!( pry!( params.get() ).get_relation() );
         let proof = pry!( RelationProof::try_from(proof_capnp) );
 
         let pair_resp_fut = self.home.pair_response(proof)
-            .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to handle pair response: {:?}", e) ) ); // TODO proper error handling
 
         Promise::from_future(pair_resp_fut)
     }
@@ -206,7 +206,7 @@ impl home::Server for HomeDispatcherCapnProto
                     results.get().set_to_callee(to_callee_capnp);
                 } );
             } )
-            .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to call: {:?}", e) ) ); // TODO proper error handling
 
         Promise::from_future(call_fut)
     }
@@ -232,21 +232,21 @@ impl HomeSessionDispatcherCapnProto
 impl home_session::Server for HomeSessionDispatcherCapnProto
 {
     fn update(&mut self, params: home_session::UpdateParams,
-              mut  results: home_session::UpdateResults,)
+              mut _results: home_session::UpdateResults,)
         -> Promise<(), ::capnp::Error>
     {
         let own_profile_capnp = pry!( pry!( params.get() ).get_own_profile() );
         let own_profile = pry!( OwnProfile::try_from(own_profile_capnp) );
 
         let upd_fut = self.session.update(&own_profile)
-            .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to update: {:?}", e) ) ); // TODO proper error handling
 
         Promise::from_future(upd_fut)
     }
 
 
     fn unregister(&mut self, params: home_session::UnregisterParams,
-                   mut  results: home_session::UnregisterResults,)
+                   mut _results: home_session::UnregisterResults,)
         -> Promise<(), ::capnp::Error>
     {
         let new_home_res_capnp = pry!( params.get() ).get_new_home();
@@ -255,7 +255,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
             .ok();
 
         let upd_fut = self.session.unregister(new_home_opt)
-            .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to unregister: {:?}", e) ) ); // TODO proper error handling
 
         Promise::from_future(upd_fut)
     }
@@ -267,47 +267,50 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
     {
         let txt = pry!( pry!( params.get() ).get_txt() );
         let ping_fut = self.session.ping(txt)
-            .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed ping: {:?}", e) ) ) // TODO proper error handling
             .map( move |pong| results.get().set_pong(&pong) );
         Promise::from_future(ping_fut)
     }
 
 
     fn events(&mut self, params: home_session::EventsParams<>,
-              mut  results: home_session::EventsResults<>)
+              mut _results: home_session::EventsResults<>)
         -> Promise<(), ::capnp::Error>
     {
         let callback = pry!( pry!( params.get() ).get_event_listener() );
         let events_fut = self.session.events()
-            .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling;
+            .map_err( | e| ::capnp::Error::failed( format!("Failed events: {:?}", e) ) ) // TODO proper error handling;
             .for_each( move |item|
             {
                 match item
                 {
-                    Ok(event) => {
+                    Ok(event) =>
+                    {
                         let mut request = callback.receive_request();
                         request.get().init_event().fill_from(&event);
                         let fut = request.send().promise
-                            .map( | resp| () );
+                            .map( | _resp| () );
                         // TODO .map_err() what to do here in case of an error?
                         Box::new(fut) as Box< Future<Item=(), Error=::capnp::Error> >
                     },
-                    Err(err) => {
+                    Err(err) =>
+                    {
                         let mut request = callback.error_request();
                         request.get().set_error(&err);
                         let fut = request.send().promise
-                            .map( | resp| () );
+                            .map( | _resp| () );
                         // TODO .map_err() what to do here in case of an error?
                         Box::new(fut)
                     }
                 }
             } );
+
         Promise::from_future(events_fut)
     }
 
 
     fn checkin_app(&mut self, params: home_session::CheckinAppParams<>,
-                   mut results: home_session::CheckinAppResults<>)
+                   results: home_session::CheckinAppResults<>)
         -> Promise<(), ::capnp::Error>
     {
         let params = pry!( params.get() );
@@ -315,13 +318,13 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
         let callback = pry!( params.get_call_listener() );
 
         let events_fut = self.session.checkin_app( &app_id.into() )
-            .map_err( | e| ::capnp::Error::failed( "Failed".to_owned() ) ) // TODO proper error handling;
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to checkin app: {:?}", e) ) ) // TODO proper error handling;
             .for_each( move |call|
             {
                 let request = callback.receive_request();
                 // request.get().set_call(call);
                 request.send().promise
-                    .map( | resp| () )
+                    .map( | _resp| () )
                     // TODO .map_err() what to do here in case of an error?
             } );
         Promise::from_future(events_fut)

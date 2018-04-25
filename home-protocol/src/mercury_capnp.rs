@@ -216,24 +216,24 @@ impl AppMessageDispatcherCapnProto
 impl app_message_listener::Server for AppMessageDispatcherCapnProto
 {
     fn receive(&mut self, params: app_message_listener::ReceiveParams,
-               results: app_message_listener::ReceiveResults,)
+               _results: app_message_listener::ReceiveResults,)
         -> Promise<(), ::capnp::Error>
     {
         let message = pry!( pry!( params.get() ).get_message() );
         let recv_fut = self.sender.clone().send( Ok( message.into() ) )
-            .map(  |sink| () )
+            .map(  |_sink| () )
             .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {:?}",e ) ) );
         Promise::from_future(recv_fut)
     }
 
 
     fn error(&mut self, params: app_message_listener::ErrorParams,
-             results: app_message_listener::ErrorResults,)
+             _results: app_message_listener::ErrorResults,)
         -> Promise<(), ::capnp::Error>
     {
         let error = pry!( pry!( params.get() ).get_error() ).into();
         let recv_fut = self.sender.clone().send( Err(error) )
-            .map(  |sink| () )
+            .map(  |_sink| () )
             .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {:?}",e ) ) );
         Promise::from_future(recv_fut)
     }
@@ -254,18 +254,18 @@ pub fn fwd_appmsg(to_callee: app_message_listener::Client, handle: reactor::Hand
                     let mut request = to_callee.receive_request();
                     request.get().set_message(&msg.0);
                     let fut = request.send().promise
-                        .map(  |resp| () );
+                        .map(  |_resp| () );
                     Box::new(fut) as Box< Future<Item=(), Error=::capnp::Error> >
                 },
                 Err(err) => {
                     let mut request = to_callee.error_request();
                     request.get().set_error(&err);
                     let fut = request.send().promise
-                        .map(  |resp| () );
+                        .map(  |_resp| () );
                     Box::new(fut)
                 }
             };
-            capnp_fut.map_err(  |e| () ) // TODO what to do here with the network capnp error?
+            capnp_fut.map_err(  |_e| () ) // TODO what to do here with the network capnp error?
         } )
     );
 
