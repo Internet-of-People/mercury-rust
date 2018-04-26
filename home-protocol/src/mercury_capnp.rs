@@ -89,8 +89,8 @@ impl<'a> FillFrom<::Profile> for profile::Builder<'a>
 {
     fn fill_from(mut self, src: &::Profile)
     {
-        self.set_id(&src.id.0);
-        self.set_public_key(&src.pub_key.0);
+        self.set_id( (&src.id).into() );
+        self.set_public_key( &src.pub_key.0 ); // TODO would be nicer with pubkey.into() implementing From<PublicKey>
         // TODO set facets
     }
 }
@@ -220,7 +220,10 @@ impl<'a> FillFrom<::Call> for call::Builder<'a>
 {
     fn fill_from(mut self, src: &::Call)
     {
-        // TODO
+        self.set_caller_id( (&src.caller_id).into() );
+        self.set_init_payload( (&src.init_payload).into() );
+        // TODO set up channel to caller
+        // self.set_to_caller( TODO );
     }
 }
 

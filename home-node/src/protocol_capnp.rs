@@ -319,14 +319,33 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
 
         let events_fut = self.session.checkin_app( &app_id.into() )
             .map_err( | e| ::capnp::Error::failed( format!("Failed to checkin app: {:?}", e) ) ) // TODO proper error handling;
-            .for_each( move |call|
+            .for_each( move |item|
             {
-                let request = callback.receive_request();
-                // request.get().set_call(call);
-                request.send().promise
-                    .map( | _resp| () )
-                    // TODO .map_err() what to do here in case of an error?
+                match item
+                {
+                    Ok(call) =>
+                    {
+                        let mut request = callback.receive_request();
+                        request.get().init_call().fill_from(&call);
+                        let fut = request.send().promise
+                            .map( | resp|
+                            {
+                                // TODO extract to_callee and send it back to server
+                                ()
+                            } );
+                        Box::new(fut) as Box< Future<Item=(), Error=::capnp::Error> >
+                    },
+                    Err(err) =>
+                    {
+                        let mut request = callback.error_request();
+                        request.get().set_error(&err);
+                        let fut = request.send().promise
+                            .map( | _resp| () );
+                        Box::new(fut)
+                    },
+                }
             } );
+
         Promise::from_future(events_fut)
     }
 }
