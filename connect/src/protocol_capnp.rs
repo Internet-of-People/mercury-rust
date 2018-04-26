@@ -255,26 +255,26 @@ impl ProfileEventDispatcherCapnProto
 impl mercury_capnp::profile_event_listener::Server for ProfileEventDispatcherCapnProto
 {
     fn receive(&mut self, params: mercury_capnp::profile_event_listener::ReceiveParams,
-               _results: mercury_capnp::profile_event_listener::ReceiveResults,)
+               _results: mercury_capnp::profile_event_listener::ReceiveResults)
         -> Promise<(), ::capnp::Error>
     {
         let event_capnp = pry!( pry!( params.get() ).get_event() );
         let event = pry!( ProfileEvent::try_from(event_capnp) );
         let recv_fut = self.sender.clone().send( Ok(event) )
             .map( |_sink| () )
-            .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}", e) ) );
+            .map_err( |e| ::capnp::Error::failed( format!("Failed to delegate event: {}", e) ) );
         Promise::from_future(recv_fut)
     }
 
 
     fn error(&mut self, params: mercury_capnp::profile_event_listener::ErrorParams,
-              _results: mercury_capnp::profile_event_listener::ErrorResults,)
+              _results: mercury_capnp::profile_event_listener::ErrorResults)
         -> Promise<(), ::capnp::Error>
     {
         let error = pry!( pry!( params.get() ).get_error() ).into();
         let recv_fut = self.sender.clone().send( Err(error) )
             .map( |_sink| () )
-            .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}", e) ) );
+            .map_err( |e| ::capnp::Error::failed( format!("Failed to delegate event error: {}", e) ) );
         Promise::from_future(recv_fut)
     }
 }
@@ -353,10 +353,27 @@ impl HomeSession for HomeSessionClientCapnProto
     }
 
 
-    fn checkin_app(&self, app: &ApplicationId) ->
-        Box< HomeStream<Call, String> >
+    fn checkin_app(&self, app: &ApplicationId) -> Box< HomeStream<Call, String> >
     {
         let (send, recv) = mpsc::channel(1);
+        let listener = CallDispatcherCapnProto::new( send.clone() );
+        // TODO consider how to drop/unregister this object from capnp if the stream is dropped
+        let listener_capnp = mercury_capnp::call_listener::ToClient::new(listener)
+            .from_server::<::capnp_rpc::Server>();
+
+        let mut request = self.session.checkin_app_request();
+        request.get().set_call_listener(listener_capnp);
+
+        self.handle.spawn(
+            request.send().promise
+                .map( |_resp| () )
+                .or_else( move |e|
+                    send.send( Err( format!("Call delegation failed: {}", e) ) )
+                        .map( |_sink| () )
+                        // TODO what to do if failed to send error?
+                        .map_err( |_err| () ) )
+        );
+
         Box::new(recv)
     }
 
@@ -379,6 +396,50 @@ impl HomeSession for HomeSessionClientCapnProto
         Box::new(resp_fut)
     }
 }
+
+
+
+struct CallDispatcherCapnProto
+{
+    sender: Sender< Result<Call, String> >,
+}
+
+impl CallDispatcherCapnProto
+{
+    fn new(sender: Sender< Result<Call, String> >) -> Self
+        { Self{ sender: sender } }
+}
+
+
+impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
+{
+    fn receive(&mut self, params: mercury_capnp::call_listener::ReceiveParams,
+               results: mercury_capnp::call_listener::ReceiveResults)
+        -> Promise<(), ::capnp::Error>
+    {
+        let call_capnp = pry!( pry!( params.get() ).get_call() );
+        let call = pry!( Call::try_from(call_capnp) );
+//        let recv_fut = self.sender.clone().send( Ok(event) )
+//            .map( |_sink| () )
+//            .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}", e) ) );
+//        Promise::from_future(recv_fut)
+        Promise::err( ::capnp::Error::failed( "Unimplemented".to_owned() ) )
+    }
+
+
+    fn error(&mut self, params: mercury_capnp::call_listener::ErrorParams,
+             _results: mercury_capnp::call_listener::ErrorResults)
+             -> Promise<(), ::capnp::Error>
+    {
+        let error = pry!( pry!( params.get() ).get_error() ).into();
+        let recv_fut = self.sender.clone().send( Err(error) )
+            .map( |_sink| () )
+            .map_err( |e| ::capnp::Error::failed( format!("Failed to dispatch call error: {}", e) ) );
+        Promise::from_future(recv_fut)
+    }
+}
+
+
 
 
 #[cfg(test)]

@@ -201,6 +201,31 @@ impl<'a> FillFrom<::ProfileEvent> for profile_event::Builder<'a>
 
 
 
+impl<'a> TryFrom<call::Reader<'a>> for ::Call
+{
+    type Error = capnp::Error;
+
+    fn try_from(src: call::Reader) -> Result<Self, Self::Error>
+    {
+//        let caller = src.get_caller_id()?.into();
+//        let init_payload = src.get_init_payload()?.into();
+//        Ok( ::Call{ caller: caller, init_payload: init_payload } )
+
+        // TODO
+        Err( capnp::Error::failed( "Unimplemented".to_string() ) )
+    }
+}
+
+impl<'a> FillFrom<::Call> for call::Builder<'a>
+{
+    fn fill_from(mut self, src: &::Call)
+    {
+        // TODO
+    }
+}
+
+
+
 // TODO consider using a single generic imlementation for all kinds of Dispatchers
 pub struct AppMessageDispatcherCapnProto
 {
