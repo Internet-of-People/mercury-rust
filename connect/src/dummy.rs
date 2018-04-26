@@ -436,20 +436,19 @@ impl HomeSession for HomeSessionDummy
     }
 
 
-    fn events(&self) -> Box< HomeStream<ProfileEvent, String> >
+    fn events(&self) -> HomeStream<ProfileEvent, String>
     {
         println!("HomeSessionDummy.events");
         let (sender, receiver) = sync::mpsc::channel(0);
-        Box::new(receiver)
+        receiver
     }
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
-    fn checkin_app(&self, app: &ApplicationId) ->
-        Box< HomeStream<Call, String> >
+    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Call, String>
     {
         println!("HomeSessionDummy.checkin_app");
         let (sender, receiver) = sync::mpsc::channel(0);
-        Box::new(receiver)
+        receiver
     }
 
     // TODO remove this after testing

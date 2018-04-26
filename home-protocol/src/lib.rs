@@ -278,7 +278,7 @@ pub type AppMsgSink   = HomeSink<AppMessageFrame, String>;
 
 pub struct Call
 {
-    pub caller:         ProfileId,
+    pub caller_id:      ProfileId,
     pub init_payload:   AppMessageFrame,
     // NOTE A missed call or p2p connection failure will result Option::None
     pub incoming:       Option<AppMsgStream>,
@@ -350,11 +350,10 @@ pub trait HomeSession
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
 
-    fn events(&self) -> Box< HomeStream<ProfileEvent, String> >;
+    fn events(&self) -> HomeStream<ProfileEvent, String>;
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
-    fn checkin_app(&self, app: &ApplicationId) ->
-        Box< HomeStream<Call, String> >;
+    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Call, String>;
 
     // TODO remove this after testing
     fn ping(&self, txt: &str) ->

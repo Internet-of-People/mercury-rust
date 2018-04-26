@@ -205,14 +205,14 @@ impl<'a> TryFrom<call::Reader<'a>> for ::Call
 {
     type Error = capnp::Error;
 
+    // NOTE this cannot fill in streams here without outer context (e.g. reactor::Handle)
     fn try_from(src: call::Reader) -> Result<Self, Self::Error>
     {
-//        let caller = src.get_caller_id()?.into();
-//        let init_payload = src.get_init_payload()?.into();
-//        Ok( ::Call{ caller: caller, init_payload: init_payload } )
+        let caller_id = src.get_caller_id()?.into();
+        let init_payload = src.get_init_payload()?.into();
 
-        // TODO
-        Err( capnp::Error::failed( "Unimplemented".to_string() ) )
+        Ok( ::Call{ caller_id: caller_id, init_payload: init_payload,
+                    incoming: None, outgoing: None, } )
     }
 }
 

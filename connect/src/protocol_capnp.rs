@@ -328,7 +328,7 @@ impl HomeSession for HomeSessionClientCapnProto
     }
 
 
-    fn events(&self) -> Box< HomeStream<ProfileEvent, String> >
+    fn events(&self) -> HomeStream<ProfileEvent, String>
     {
         let (send, recv) = mpsc::channel(1);
         let listener = ProfileEventDispatcherCapnProto::new( send.clone() );
@@ -349,19 +349,20 @@ impl HomeSession for HomeSessionClientCapnProto
                         .map_err( |_err| () ) )
         );
 
-        Box::new(recv)
+        recv
     }
 
 
-    fn checkin_app(&self, app: &ApplicationId) -> Box< HomeStream<Call, String> >
+    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Call, String>
     {
         let (send, recv) = mpsc::channel(1);
-        let listener = CallDispatcherCapnProto::new( send.clone() );
+        let listener = CallDispatcherCapnProto::new( send.clone(), self.handle.clone() );
         // TODO consider how to drop/unregister this object from capnp if the stream is dropped
         let listener_capnp = mercury_capnp::call_listener::ToClient::new(listener)
             .from_server::<::capnp_rpc::Server>();
 
         let mut request = self.session.checkin_app_request();
+        request.get().set_app( app.into() );
         request.get().set_call_listener(listener_capnp);
 
         self.handle.spawn(
@@ -374,7 +375,7 @@ impl HomeSession for HomeSessionClientCapnProto
                         .map_err( |_err| () ) )
         );
 
-        Box::new(recv)
+        recv
     }
 
 
@@ -402,28 +403,45 @@ impl HomeSession for HomeSessionClientCapnProto
 struct CallDispatcherCapnProto
 {
     sender: Sender< Result<Call, String> >,
+    handle: reactor::Handle,
 }
 
 impl CallDispatcherCapnProto
 {
-    fn new(sender: Sender< Result<Call, String> >) -> Self
-        { Self{ sender: sender } }
+    fn new(sender: Sender< Result<Call, String> >, handle: reactor::Handle) -> Self
+        { Self{ sender: sender, handle: handle } }
 }
 
 
 impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
 {
     fn receive(&mut self, params: mercury_capnp::call_listener::ReceiveParams,
-               results: mercury_capnp::call_listener::ReceiveResults)
+               mut results: mercury_capnp::call_listener::ReceiveResults)
         -> Promise<(), ::capnp::Error>
     {
         let call_capnp = pry!( pry!( params.get() ).get_call() );
-        let call = pry!( Call::try_from(call_capnp) );
-//        let recv_fut = self.sender.clone().send( Ok(event) )
-//            .map( |_sink| () )
-//            .map_err( |e| ::capnp::Error::failed( format!("Failed to send event: {}", e) ) );
-//        Promise::from_future(recv_fut)
-        Promise::err( ::capnp::Error::failed( "Unimplemented".to_owned() ) )
+        let mut call = pry!( Call::try_from(call_capnp) );
+        call.outgoing = call_capnp.get_to_caller()
+            .map( |to_caller_capnp| mercury_capnp::fwd_appmsg(to_caller_capnp, self.handle.clone()) )
+            .ok();
+        call.incoming = call_capnp.get_to_caller()
+            .map( |_|
+            {
+                let (send, recv) = mpsc::channel(1);
+                let listener = AppMessageDispatcherCapnProto::new( send.clone() );
+                // TODO consider how to drop/unregister this object from capnp if the stream is dropped
+                let listener_capnp = mercury_capnp::app_message_listener::ToClient::new(listener)
+                    .from_server::<::capnp_rpc::Server>();
+                results.get().set_to_callee(listener_capnp);
+                recv
+            } )
+            .ok();
+
+        // TODO consider error handling: should we send error and close the sink in case of errors above?
+        let send_fut = self.sender.clone().send( Ok(call) )
+            .map( |_sink| () )
+            .map_err( |e| ::capnp::Error::failed( format!("Failed to dispatch call: {:?}", e) ) ); // TODO should we send an error back to the caller?
+        Promise::from_future(send_fut)
     }
 
 
