@@ -355,6 +355,7 @@ impl HomeSession for HomeSessionClientCapnProto
 
     fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Call, String>
     {
+        // Send a call dispatcher proxy to remote home through which we'll accept incoming calls
         let (send, recv) = mpsc::channel(1);
         let listener = CallDispatcherCapnProto::new( send.clone(), self.handle.clone() );
         // TODO consider how to drop/unregister this object from capnp if the stream is dropped
@@ -365,6 +366,8 @@ impl HomeSession for HomeSessionClientCapnProto
         request.get().set_app( app.into() );
         request.get().set_call_listener(listener_capnp);
 
+        // We can either return Future<Stream> or
+        // return the stream directly and spawn sending the request in another fiber
         self.handle.spawn(
             request.send().promise
                 .map( |_resp| () )
@@ -415,18 +418,29 @@ impl CallDispatcherCapnProto
 
 impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
 {
+    // Receive notification on an incoming call request and
+    // send back a message channel if answering the call
     fn receive(&mut self, params: mercury_capnp::call_listener::ReceiveParams,
                mut results: mercury_capnp::call_listener::ReceiveResults)
         -> Promise<(), ::capnp::Error>
     {
+        // NOTE there's no way to add the i/o streams in try_from without extra context,
+        //      we have to set them manually
         let call_capnp = pry!( pry!( params.get() ).get_call() );
         let mut call = pry!( Call::try_from(call_capnp) );
+
+        // If received a to_caller channel, setup an in-memory sink for easier sending
         call.outgoing = call_capnp.get_to_caller()
             .map( |to_caller_capnp| mercury_capnp::fwd_appmsg(to_caller_capnp, self.handle.clone()) )
             .ok();
+
+        // If we received Some(to_caller) channel then set up a to_callee channel
+        // and send it back in the response
         call.incoming = call_capnp.get_to_caller()
             .map( |_|
             {
+                // TODO probably we should be able to somehow use a callback to programatically decide
+                //      about accepting or rejecting a call
                 let (send, recv) = mpsc::channel(1);
                 let listener = AppMessageDispatcherCapnProto::new( send.clone() );
                 // TODO consider how to drop/unregister this object from capnp if the stream is dropped
@@ -447,7 +461,7 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
 
     fn error(&mut self, params: mercury_capnp::call_listener::ErrorParams,
              _results: mercury_capnp::call_listener::ErrorResults)
-             -> Promise<(), ::capnp::Error>
+        -> Promise<(), ::capnp::Error>
     {
         let error = pry!( pry!( params.get() ).get_error() ).into();
         let recv_fut = self.sender.clone().send( Err(error) )

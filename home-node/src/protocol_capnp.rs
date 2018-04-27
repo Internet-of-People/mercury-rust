@@ -186,9 +186,8 @@ impl home::Server for HomeDispatcherCapnProto
         let app_capnp = pry!( opts.get_app() );
         let init_payload_capnp = pry!( opts.get_init_payload() );
 
-        let handle_clone = self.handle.clone();
         let to_caller = opts.get_to_caller()
-            .map( |to_caller_capnp | mercury_capnp::fwd_appmsg(to_caller_capnp, handle_clone) )
+            .map( |to_caller_capnp | mercury_capnp::fwd_appmsg( to_caller_capnp, self.handle.clone() ) )
             .ok();
 
         let relation = pry!( RelationProof::try_from(rel_capnp) );
@@ -313,10 +312,12 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                    results: home_session::CheckinAppResults)
         -> Promise<(), ::capnp::Error>
     {
+        // Receive a proxy from client to which the server will send notifications on incoming calls
         let params = pry!( params.get() );
         let app_id = pry!( params.get_app() );
-        let callback = pry!( params.get_call_listener() );
+        let call_listener = pry!( params.get_call_listener() );
 
+        // Forward incoming calls from business logic into capnp proxy stub of client
         let events_fut = self.session.checkin_app( &app_id.into() )
             .map_err( | e| ::capnp::Error::failed( format!("Failed to checkin app: {:?}", e) ) ) // TODO proper error handling;
             .for_each( move |item|
@@ -325,8 +326,21 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                 {
                     Ok(call) =>
                     {
-                        let mut request = callback.receive_request();
+                        let mut request = call_listener.receive_request();
                         request.get().init_call().fill_from(&call);
+
+                        // In a call sent to the callee, outgoing points towards the caller
+                        if let Some(to_caller) = call.outgoing
+                        {
+                            // Set up a capnp channel to the caller for the callee
+                            let listener = AppMessageDispatcherCapnProto::new(to_caller.clone() );
+                            // TODO consider how to drop/unregister this object from capnp if the stream is dropped
+                            let listener_capnp = mercury_capnp::app_message_listener::ToClient::new(listener)
+                                .from_server::<::capnp_rpc::Server>();
+                            request.get().get_call().expect("Implementation erorr: call was just initialized above, should be there")
+                                .set_to_caller(listener_capnp);
+                        }
+
                         let fut = request.send().promise
                             .map( | resp|
                             {
@@ -337,7 +351,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                     },
                     Err(err) =>
                     {
-                        let mut request = callback.error_request();
+                        let mut request = call_listener.error_request();
                         request.get().set_error(&err);
                         let fut = request.send().promise
                             .map( | _resp| () );

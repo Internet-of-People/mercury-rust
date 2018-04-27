@@ -222,7 +222,7 @@ impl<'a> FillFrom<::Call> for call::Builder<'a>
     {
         self.set_caller_id( (&src.caller_id).into() );
         self.set_init_payload( (&src.init_payload).into() );
-        // TODO set up channel to caller
+        // TODO set up channel to caller: is it possible here without external context?
         // self.set_to_caller( TODO );
     }
 }
