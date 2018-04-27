@@ -363,8 +363,7 @@ impl Home for MyDummyHome
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_response "))) )
     }
 
-    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<AppMsgSink>) ->
+    fn call(&self, app: ApplicationId, call_req: CallRequest) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >{
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.call "))) )
     }
@@ -444,7 +443,7 @@ impl HomeSession for HomeSessionDummy
     }
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
-    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Call, String>
+    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
     {
         println!("HomeSessionDummy.checkin_app");
         let (sender, receiver) = sync::mpsc::channel(0);

@@ -194,7 +194,9 @@ impl home::Server for HomeDispatcherCapnProto
         let app = ApplicationId::from(app_capnp);
         let init_payload = AppMessageFrame::from(init_payload_capnp);
 
-        let call_fut = self.home.call(relation, app, init_payload, to_caller)
+        let call_req = CallRequest{ relation: relation, init_payload: init_payload,
+            to_caller: to_caller};
+        let call_fut = self.home.call(app, call_req)
             .map( |to_callee_opt|
             {
                 to_callee_opt.map( move |to_callee|
@@ -324,13 +326,13 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
             {
                 match item
                 {
-                    Ok(call) =>
+                    Ok(incoming_call) =>
                     {
                         let mut request = call_listener.receive_request();
-                        request.get().init_call().fill_from(&call);
+                        request.get().init_call().fill_from( incoming_call.request() );
 
                         // In a call sent to the callee, outgoing points towards the caller
-                        if let Some(to_caller) = call.outgoing
+                        if let Some(ref to_caller) = incoming_call.request().to_caller
                         {
                             // Set up a capnp channel to the caller for the callee
                             let listener = AppMessageDispatcherCapnProto::new(to_caller.clone() );

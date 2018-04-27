@@ -86,8 +86,7 @@ impl Home for HomeServer
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_response "))) )
     }
 
-    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<AppMsgSink>) ->
+    fn call(&self, app: ApplicationId, call_req: CallRequest) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.call "))) )
@@ -135,7 +134,7 @@ impl HomeSession for HomeSessionServer
     }
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
-    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Call, String>
+    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
     {
         let (sender, receiver) = sync::mpsc::channel(0);
         receiver

@@ -88,16 +88,16 @@ interface Home extends (ProfileRepo)
 
 
 
-struct Call
+struct CallRequest
 {
-    callerId    @0 : ProfileId;
+    relation    @0 : RelationProof;
     initPayload @1 : AppMessageFrame;
     toCaller    @2 : AppMessageListener;
 }
 
 interface CallListener
 {
-    receive @0 (call: Call) -> (toCallee: AppMessageListener);
+    receive @0 (call: CallRequest) -> (toCallee: AppMessageListener);
     error   @1 (error: Text);
 }
 

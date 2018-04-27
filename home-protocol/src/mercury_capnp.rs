@@ -201,27 +201,26 @@ impl<'a> FillFrom<::ProfileEvent> for profile_event::Builder<'a>
 
 
 
-impl<'a> TryFrom<call::Reader<'a>> for ::Call
+impl<'a> TryFrom<call_request::Reader<'a>> for ::CallRequest
 {
     type Error = capnp::Error;
 
     // NOTE this cannot fill in streams here without outer context (e.g. reactor::Handle)
-    fn try_from(src: call::Reader) -> Result<Self, Self::Error>
+    fn try_from(src: call_request::Reader) -> Result<Self, Self::Error>
     {
-        let caller_id = src.get_caller_id()?.into();
+        let relation = ::RelationProof::try_from( src.get_relation()? )?;
         let init_payload = src.get_init_payload()?.into();
 
-        Ok( ::Call{ caller_id: caller_id, init_payload: init_payload,
-                    incoming: None, outgoing: None, } )
+        Ok( ::CallRequest{ relation: relation, init_payload: init_payload, to_caller: None } )
     }
 }
 
-impl<'a> FillFrom<::Call> for call::Builder<'a>
+impl<'a> FillFrom<::CallRequest> for call_request::Builder<'a>
 {
-    fn fill_from(mut self, src: &::Call)
+    fn fill_from(mut self, src: &::CallRequest)
     {
-        self.set_caller_id( (&src.caller_id).into() );
         self.set_init_payload( (&src.init_payload).into() );
+        self.init_relation().fill_from(&src.relation);
         // TODO set up channel to caller: is it possible here without external context?
         // self.set_to_caller( TODO );
     }

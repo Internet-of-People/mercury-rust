@@ -207,16 +207,15 @@ impl Home for HomeClientCapnProto
     }
 
 
-    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<AppMsgSink>) ->
+    fn call(&self, app: ApplicationId, call_req: CallRequest) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.call_request();
-        request.get().init_relation().fill_from(&rel);
+        request.get().init_relation().fill_from(&call_req.relation);
         request.get().set_app( (&app).into() );
-        request.get().set_init_payload( (&init_payload).into() );
+        request.get().set_init_payload( (&call_req.init_payload).into() );
 
-        if let Some(send) = to_caller
+        if let Some(send) = call_req.to_caller
         {
             let to_caller_dispatch = mercury_capnp::AppMessageDispatcherCapnProto::new(send);
             let to_caller_capnp = mercury_capnp::app_message_listener::ToClient::new(to_caller_dispatch)
@@ -353,7 +352,7 @@ impl HomeSession for HomeSessionClientCapnProto
     }
 
 
-    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Call, String>
+    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
     {
         // Send a call dispatcher proxy to remote home through which we'll accept incoming calls
         let (send, recv) = mpsc::channel(1);
@@ -405,13 +404,13 @@ impl HomeSession for HomeSessionClientCapnProto
 
 struct CallDispatcherCapnProto
 {
-    sender: Sender< Result<Call, String> >,
+    sender: Sender< Result<Box<IncomingCall>, String> >,
     handle: reactor::Handle,
 }
 
 impl CallDispatcherCapnProto
 {
-    fn new(sender: Sender< Result<Call, String> >, handle: reactor::Handle) -> Self
+    fn new(sender: Sender< Result<Box<IncomingCall>, String> >, handle: reactor::Handle) -> Self
         { Self{ sender: sender, handle: handle } }
 }
 
@@ -427,20 +426,20 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
         // NOTE there's no way to add the i/o streams in try_from without extra context,
         //      we have to set them manually
         let call_capnp = pry!( pry!( params.get() ).get_call() );
-        let mut call = pry!( Call::try_from(call_capnp) );
+        let mut call = pry!( CallRequest::try_from(call_capnp) );
 
         // If received a to_caller channel, setup an in-memory sink for easier sending
-        call.outgoing = call_capnp.get_to_caller()
+        call.to_caller = call_capnp.get_to_caller()
             .map( |to_caller_capnp| mercury_capnp::fwd_appmsg(to_caller_capnp, self.handle.clone()) )
             .ok();
 
         // If we received Some(to_caller) channel then set up a to_callee channel
         // and send it back in the response
-        call.incoming = call_capnp.get_to_caller()
+        let to_callee = call_capnp.get_to_caller()
             .map( |_|
             {
                 // TODO probably we should be able to somehow use a callback to programatically decide
-                //      about accepting or rejecting a call
+                //      about accepting or rejecting a call, here we just blindly accept everything
                 let (send, recv) = mpsc::channel(1);
                 let listener = AppMessageDispatcherCapnProto::new( send.clone() );
                 // TODO consider how to drop/unregister this object from capnp if the stream is dropped
