@@ -8,11 +8,13 @@ extern crate tokio_stdin_stdout;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate futures;
+extern crate base64;
 
+use mercury_connect::*;
 use mercury_home_protocol::*;
 
 use super::*;
-use ::net::*;
+use mercury_connect::net::*;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -38,6 +40,8 @@ pub fn generate_hash_from_vec( base : Vec<u8>) -> Vec<u8> {
 }
 
 pub struct TestSetup{
+    pub reactor : tokio_core::reactor::Core,
+    pub handle : tokio_core::reactor::Handle,
     pub homeprofile: Profile,
     pub homeprofileid: ProfileId,
     pub homesigner: Rc<Signer>,
@@ -78,7 +82,12 @@ impl TestSetup{
             home_connector: Rc::new( dummy::DummyConnector::new_with_home( home ) ),
         };
 
+        let reactor = tokio_core::reactor::Core::new().unwrap();
+        let handle = reactor.handle();
+
         Self{
+            reactor: reactor,
+            handle: handle,
             homeprofile: homeprof,
             homeprofileid: homeprofileid,
             homesigner: homesigner,
@@ -136,6 +145,10 @@ impl Signo{
             privkey : generate_hash(whatever),
         }
     }
+
+    pub fn get_base64_id(&self)->String{
+        base64::encode(&self.prof_id.0)
+    }
 }
 
 impl Signer for Signo{
@@ -146,10 +159,7 @@ impl Signer for Signo{
         &self.pubkey
     }
     fn sign(&self, data: &[u8]) -> Signature{
-        let mut sig = String::new();
-        sig.push_str( std::str::from_utf8(&data).unwrap() );
-        sig.push_str( std::str::from_utf8(&self.privkey).unwrap() );
-        Signature( sig.into_bytes() )
+        Signature( Vec::from(data) )
     }
 }
 
@@ -185,7 +195,6 @@ impl ProfileStore{
 
 impl ProfileStore{
     pub fn insert(&mut self, id : ProfileId, profile : Profile) -> Option<Profile>{
-        println!("ProfileStore.add {:?}", id.0);
         self.content.insert(id, profile)
     }
 
@@ -204,19 +213,27 @@ impl ProfileRepo for ProfileStore{
 
     fn load(&self, id: &ProfileId) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
-        println!("ProfileStore.load {:?}", id.0);
-        //println!("\nProfileStoreContent:::: {:?}", &self.content);
         let prof = self.content.get(&id);
         match prof {
-            Some(profile) => {println!("ProfileStore.load.success{:?}", prof);Box::new( future::ok(profile.to_owned()) )},
-            None => {println!("ProfileStore.load.fail"); Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.load "))) )},
+            Some(profile) => {
+                Box::new( future::ok(profile.to_owned()) )},
+            None => {
+                println!("ProfileStore.load.fail"); 
+                Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.load "))) )},
         }
     }
 
     fn resolve(&self, url: &str) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
         println!("ProfileStore.resolve");
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.resolve "))) )
+        match base64::decode(url){
+            Ok(id)=> {
+                self.load(&ProfileId(id))
+                },
+            Err(e)=> Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.resolve "))) )
+        }
+        
+        //
     }
 
 }
@@ -258,7 +275,6 @@ impl ProfileRepo for MyDummyHome{
         println!("MyDummyHome.load");
         let pr = self.storage_layer.borrow();
         let prof = pr.get(id.to_owned());
-        //println!("MyDummyHome.storage_layer.content::::{:?}", &self.storage_layer.borrow().content);
         match prof {
             Some(profile) => Box::new( future::ok(profile.to_owned()) ),
             None => Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.load "))) ),
@@ -268,7 +284,12 @@ impl ProfileRepo for MyDummyHome{
     fn resolve(&self, url: &str) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
         println!("MyDummyHome.resolve");
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.resolve "))) )
+        match base64::decode(url){
+            Ok(id)=> {
+                self.load(&ProfileId(id))
+                },
+            Err(e)=> Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.resolve "))) )
+        }
     }
  
 }
@@ -294,10 +315,6 @@ impl Home for MyDummyHome
     //      with the pairing proof, especially the error case
     fn register(&mut self, mut own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
     Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >{
-        //make some relation magic
-        //match own_prof.profile.facets[0].homes.append(dummy_relation(self.home_id));
-        println!("MyDummyHome.register {:?}", own_prof);
-
         let id = own_prof.profile.id.clone();
         let profile = own_prof.profile.clone();
         let mut own_profile = own_prof.clone();
@@ -335,16 +352,15 @@ impl Home for MyDummyHome
                 },
             }
         }
-        println!("register.ret.own_profile {:?} ", own_profile);
         ret
-        //own_prof.priv_data = Vec::from("potato");
     }
 
     // NOTE this closes all previous sessions of the same profile
     fn login(&self, profile: ProfileId) ->
     Box< Future< Item=Box< HomeSession >, Error=ErrorToBeSpecified > >{
         println!("MyDummyHome.login");
-        let session = Box::new(HomeSessionDummy::new( profile ,Rc::clone(&self.storage_layer) )) as Box<HomeSession>;
+        //let selfcell = Rc::new(RefCell::new(*self));
+        let session = Box::new(HomeSessionDummy::new( profile ,Rc::clone(&self.storage_layer)/*, selfcell */) ) as Box<HomeSession>;
         Box::new( future::ok( session ) )
         //Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.login "))) )
 
@@ -353,14 +369,26 @@ impl Home for MyDummyHome
 
     // NOTE acceptor must have this server as its home
     // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
-    fn pair_request(&self, half_proof: RelationHalfProof) ->
+    fn pair_request(&mut self, half_proof: RelationHalfProof) ->
     Box< Future<Item=(), Error=ErrorToBeSpecified> >{
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_request "))) )
+        let profile_events = self.events.entry(half_proof.peer_id.clone()).or_insert(Vec::new());
+        let req_event = ProfileEvent::PairingRequest(half_proof);
+        match profile_events.push(req_event){
+            () => Box::new( future::ok( () ) ),
+            _ =>  Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_request "))) )
+        }
+        //self.events.insert(half_proof.peer_id.clone(), profile_events;
+
     }
 
-    fn pair_response(&self, rel: RelationProof) ->
+    fn pair_response(&mut self, rel_proof: RelationProof) ->
     Box< Future<Item=(), Error=ErrorToBeSpecified> >{
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_response "))) )
+        let profile_events = self.events.entry(rel_proof.peer_id.clone()).or_insert(Vec::new());
+        let resp_event = ProfileEvent::PairingResponse(rel_proof);
+        match profile_events.push(resp_event){
+            () => Box::new( future::ok( () ) ),
+            _ =>  Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_response "))) )
+        }
     }
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
@@ -378,16 +406,12 @@ pub struct DummyConnector{
     home : Rc<RefCell<Home>>
 }
 impl DummyConnector{
-    // pub fn new()->Self{
-    //     Self{home: Rc::new(MyDummyHome::new())}
-    // }
-
     pub fn new_with_home(home : Rc<RefCell<Home>>)->Self{
         println!("DummyConnector.new_with_home");
         Self{home: home}
     }
 }
-impl HomeConnector for DummyConnector{
+impl mercury_connect::HomeConnector for DummyConnector{
     /// Initiate a permanent connection to the home server defined by `home_profile`, or return an
     /// existing, live `Home` immediately.
     /// `home_profile` must have a HomeFacet with at least an address filled in.
@@ -399,19 +423,19 @@ impl HomeConnector for DummyConnector{
     }
 }
 
-#[derive(Debug)]
 pub struct HomeSessionDummy
 {
     prof : ProfileId,
-    repo : Rc<RefCell<ProfileStore>>
+    repo : Rc< RefCell< ProfileStore > >,
+    //home : Rc< RefCell< MyDummyHome > >,
 }
 
 
 impl HomeSessionDummy
 {
-    pub fn new( prof : ProfileId, repo : Rc<RefCell<ProfileStore>> ) -> Self{ 
+    pub fn new( prof : ProfileId, repo : Rc<RefCell<ProfileStore>>/*, home : Rc<RefCell<MyDummyHome>> */) -> Self{ 
         println!("HomeSessionDummy.new");
-        Self{ prof : prof, repo : repo } 
+        Self{ prof : prof, repo : repo/*, home : home */} 
     }
 }
 
@@ -439,7 +463,19 @@ impl HomeSession for HomeSessionDummy
     fn events(&self) -> Box< HomeStream<ProfileEvent, String> >
     {
         println!("HomeSessionDummy.events");
-        let (sender, receiver) = sync::mpsc::channel(0);
+        let (sender, receiver) = sync::mpsc::channel(1);
+        // match self.home.borrow().events.get(&self.prof){
+        //     Some(evec) => {
+        //         let event_vector = evec.to_owned();
+        //         for e in event_vector {
+        //             let event : mercury_home_protocol::ProfileEvent = e.to_owned();
+        //             sender.send(Ok(event));
+        //             }
+        //         },
+        //     None => {
+        //         sender.send(Err(String::from("no events")));
+        //         },
+        // }
         Box::new(receiver)
     }
 
@@ -459,8 +495,4 @@ impl HomeSession for HomeSessionDummy
         println!("Ping received `{}`, sending it back", txt);
         Box::new( future::ok( txt.to_owned() ) )
     }
-}
-
-fn main(){
-    // let dummy = MyDummyHome::new();
 }
