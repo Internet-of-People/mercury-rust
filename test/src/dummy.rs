@@ -10,11 +10,11 @@ extern crate tokio_io;
 extern crate futures;
 extern crate base64;
 
-
+use mercury_connect::*;
 use mercury_home_protocol::*;
 
 use super::*;
-use ::net::*;
+use mercury_connect::net::*;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -411,7 +411,7 @@ impl DummyConnector{
         Self{home: home}
     }
 }
-impl HomeConnector for DummyConnector{
+impl mercury_connect::HomeConnector for DummyConnector{
     /// Initiate a permanent connection to the home server defined by `home_profile`, or return an
     /// existing, live `Home` immediately.
     /// `home_profile` must have a HomeFacet with at least an address filled in.

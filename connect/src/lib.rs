@@ -17,10 +17,8 @@ use futures::future;
 
 use mercury_home_protocol::*;
 
-pub mod dummy;
 pub mod net;
 pub mod protocol_capnp;
-pub mod test;
 
 pub trait HomeConnector
 {

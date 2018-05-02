@@ -1,6 +1,8 @@
 #![allow(unused)]
+
 extern crate mercury_connect;
 extern crate mercury_home_protocol;
+extern crate mercury_test;
 
 extern crate multihash;
 extern crate multiaddr;
@@ -10,8 +12,9 @@ extern crate tokio_core;
 extern crate tokio_io;
 extern crate futures;
 
-use ::net::*;
-use ::dummy::*;
+// use ::net::*;
+use mercury_test::dummy as dummy;
+use mercury_test::dummy::*;
 
 use mercury_connect::*;
 use mercury_home_protocol::*;
