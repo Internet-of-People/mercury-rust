@@ -11,5 +11,5 @@ mercury-home-protocol = { path="../home-protocol" }
 multiaddr = "*"
 multihash = "*"
 tokio-core = "0.1"
-tokio-stdin-stdout = "0.1.1"
 tokio-io = "*"
+

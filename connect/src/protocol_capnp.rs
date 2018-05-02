@@ -181,7 +181,7 @@ impl Home for HomeClientCapnProto
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_request(&self, half_proof: RelationHalfProof) ->
+    fn pair_request(&mut self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.pair_request_request();
@@ -196,7 +196,7 @@ impl Home for HomeClientCapnProto
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_response(&self, relation_proof: RelationProof) ->
+    fn pair_response(&mut self, relation_proof: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.pair_response_request();

@@ -276,6 +276,7 @@ pub type AppMsgStream = HomeStream<AppMessageFrame, String>;
 pub type AppMsgSink   = HomeSink<AppMessageFrame, String>;
 
 
+#[derive(Debug)]
 pub struct CallRequest
 {
     pub relation:       RelationProof,
@@ -306,10 +307,10 @@ pub trait Home: ProfileRepo
 
     // NOTE acceptor must have this server as its home
     // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
-    fn pair_request(&self, half_proof: RelationHalfProof) ->
+    fn pair_request(&mut self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    fn pair_response(&self, rel: RelationProof) ->
+    fn pair_response(&mut self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     // NOTE initiating a real P2P connection (vs a single frame push notification),
@@ -324,7 +325,7 @@ pub trait Home: ProfileRepo
 }
 
 
-
+#[derive(Clone)]
 pub enum ProfileEvent
 {
     Unknown(Vec<u8>), // forward compatibility for protocol extension

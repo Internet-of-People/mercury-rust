@@ -73,14 +73,14 @@ impl Home for HomeServer
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_request(&self, half_proof: RelationHalfProof) ->
+    fn pair_request(&mut self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_request "))) )
     }
 
     // NOTE acceptor must have this server as its home
-    fn pair_response(&self, rel: RelationProof) ->
+    fn pair_response(&mut self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_response "))) )
