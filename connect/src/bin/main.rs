@@ -147,7 +147,7 @@ use futures::{future, Future, Stream};
         let mut other_profile = make_own_persona_profile(other_signo.pub_key() );
 
         let other_gateway = ProfileGatewayImpl::new(
-            other_signo, 
+            other_signo.clone(), 
             home_storage_other,
             Rc::new( dummy::DummyConnector::new_with_home( other_home ) ),
         );
@@ -187,7 +187,7 @@ use futures::{future, Future, Stream};
         let session = reactor.run(sess).unwrap();
 
         println!("***Sending pairing request");
-        let req = own_gateway.pair_request( "relation_dummy_type", &other_gateway.get_base64_id() )
+        let req = own_gateway.pair_request( "relation_dummy_type", &other_signo.get_base64_id() )
         .and_then(|_|{
             // other_session.events().for_each(|event|{
             //     match event{

@@ -7,9 +7,6 @@ extern crate multiaddr;
 extern crate multihash;
 extern crate tokio_core;
 extern crate tokio_io;
-extern crate base64;
-
-use base64::{encode, decode};
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -221,10 +218,6 @@ impl ProfileGatewayImpl
         RelationHalfProof{ relation_type: relation_type.to_owned(),
             my_id: signer.prof_id().to_owned(), peer_id: with_prof.to_owned(),
             my_sign: signer.sign( "TODO implement halfproof serialization".as_bytes() ) }
-    }
-
-    pub fn get_base64_id(&self)->String{
-        base64::encode(&self.signer.prof_id().0)
     }
 }
 

@@ -8,6 +8,8 @@ extern crate tokio_stdin_stdout;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate futures;
+extern crate base64;
+
 
 use mercury_home_protocol::*;
 
@@ -142,6 +144,10 @@ impl Signo{
             pubkey : PublicKey( generate_hash(whatever) ),
             privkey : generate_hash(whatever),
         }
+    }
+
+    pub fn get_base64_id(&self)->String{
+        base64::encode(&self.prof_id.0)
     }
 }
 

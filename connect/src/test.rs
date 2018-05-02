@@ -263,20 +263,8 @@ use futures::{Future,Stream};
             println!( "login() -> HomeSession" );
             own_gateway.login()
         });
-        // .and_then(| session |{
-        //     println!( "ping(str) -> String" );
-            
-        //     session.ping( "dummy_ping" )
-        // })
-        
-        // .and_then(| othersession |{
-        //     println!( "ping(str) -> String" );
-            
-        //     othersession.ping( "dummy_pong" )
-        // })
 
         let session = reactor.run(sess).unwrap();
-            // println!( "{:?}" , otherresponse );
 
         let req = own_gateway.pair_request( "relation_dummy_type", "url" )
         .and_then(|_|{
