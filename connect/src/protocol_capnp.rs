@@ -1,6 +1,9 @@
+use std::time::Duration;
+
 use capnp::capability::Promise;
 use futures::{Future, Sink};
-use futures::sync::mpsc::{self, Sender};
+use futures::sync::mpsc;
+use futures::sync::oneshot;
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 
@@ -241,12 +244,12 @@ impl Home for HomeClientCapnProto
 
 struct ProfileEventDispatcherCapnProto
 {
-    sender: Sender< Result<ProfileEvent, String> >,
+    sender: mpsc::Sender< Result<ProfileEvent, String> >,
 }
 
 impl ProfileEventDispatcherCapnProto
 {
-    fn new(sender: Sender< Result<ProfileEvent, String> >) -> Self
+    fn new(sender: mpsc::Sender< Result<ProfileEvent, String> >) -> Self
         { Self{ sender: sender } }
 }
 
@@ -402,15 +405,17 @@ impl HomeSession for HomeSessionClientCapnProto
 
 
 
+const CALL_TIMEOUT_SECS: u32 = 30;
+
 struct CallDispatcherCapnProto
 {
-    sender: Sender< Result<Box<IncomingCall>, String> >,
+    sender: mpsc::Sender< Result<Box<IncomingCall>, String> >,
     handle: reactor::Handle,
 }
 
 impl CallDispatcherCapnProto
 {
-    fn new(sender: Sender< Result<Box<IncomingCall>, String> >, handle: reactor::Handle) -> Self
+    fn new(sender: mpsc::Sender< Result<Box<IncomingCall>, String> >, handle: reactor::Handle) -> Self
         { Self{ sender: sender, handle: handle } }
 }
 
@@ -433,27 +438,33 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
             .map( |to_caller_capnp| mercury_capnp::fwd_appmsg(to_caller_capnp, self.handle.clone()) )
             .ok();
 
-        // If we received Some(to_caller) channel then set up a to_callee channel
-        // and send it back in the response
-        let to_callee = call_capnp.get_to_caller()
-            .map( |_|
+        let (one_send, one_recv) = oneshot::channel();
+        let answer_fut = one_recv.map( |to_caller_opt: Option<AppMsgSink>|
+        {
+            to_caller_opt.map( |to_caller|
             {
-                // TODO probably we should be able to somehow use a callback to programatically decide
-                //      about accepting or rejecting a call, here we just blindly accept everything
-                let (send, recv) = mpsc::channel(1);
-                let listener = AppMessageDispatcherCapnProto::new( send.clone() );
+                // If the call is accepted then set up a to_callee channel and send it back in the response
+                let listener = AppMessageDispatcherCapnProto::new(to_caller);
                 // TODO consider how to drop/unregister this object from capnp if the stream is dropped
                 let listener_capnp = mercury_capnp::app_message_listener::ToClient::new(listener)
                     .from_server::<::capnp_rpc::Server>();
                 results.get().set_to_callee(listener_capnp);
-                recv
             } )
-            .ok();
+        } );
 
+        // TODO make this timeout user-configurable
+        let timeout_fut = reactor::Timeout::new(
+            Duration::from_secs( CALL_TIMEOUT_SECS.into() ), &self.handle );
+
+        // let answer_or_timeout_fut = answer_fut.select(timeout_fut);
+
+        // Set up an IncomingCall object allowing to decide answering or refusing the call
         // TODO consider error handling: should we send error and close the sink in case of errors above?
-        let send_fut = self.sender.clone().send( Ok(call) )
+        let incoming_call = Box::new( IncomingCallCapnProto::new(call, one_send) );
+        let send_fut = self.sender.clone().send( Ok( incoming_call) )
             .map( |_sink| () )
             .map_err( |e| ::capnp::Error::failed( format!("Failed to dispatch call: {:?}", e) ) ); // TODO should we send an error back to the caller?
+
         Promise::from_future(send_fut)
     }
 
@@ -470,6 +481,33 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
     }
 }
 
+
+
+struct IncomingCallCapnProto
+{
+    request:    CallRequest,
+    sender:     oneshot::Sender< Option<AppMsgSink> >,
+}
+
+impl IncomingCallCapnProto
+{
+    fn new(request: CallRequest, sender: oneshot::Sender< Option<AppMsgSink> >) -> Self
+        { Self{ request: request, sender: sender } }
+}
+
+impl IncomingCall for IncomingCallCapnProto
+{
+    fn request(&self) -> &CallRequest { &self.request }
+
+    fn answer(self, to_callee: Option<AppMsgSink>)
+    {
+        match self.sender.send(to_callee)
+        {
+            Ok( () ) => {},
+            Err(_e) => {}, // TODO what to do with the error? Only log or can we handle it somehow?
+        }
+    }
+}
 
 
 
