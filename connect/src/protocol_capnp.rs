@@ -439,33 +439,43 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
             .ok();
 
         let (one_send, one_recv) = oneshot::channel();
-        let answer_fut = one_recv.map( |to_caller_opt: Option<AppMsgSink>|
+        let answer_fut = one_recv.map( |to_callee_opt: Option<AppMsgSink>|
         {
-            to_caller_opt.map( |to_caller|
+            // If the call is accepted then set up a to_callee channel and send it back in the response
+            to_callee_opt.map( move |to_callee|
             {
-                // If the call is accepted then set up a to_callee channel and send it back in the response
-                let listener = AppMessageDispatcherCapnProto::new(to_caller);
+                let listener = AppMessageDispatcherCapnProto::new(to_callee);
                 // TODO consider how to drop/unregister this object from capnp if the stream is dropped
                 let listener_capnp = mercury_capnp::app_message_listener::ToClient::new(listener)
                     .from_server::<::capnp_rpc::Server>();
                 results.get().set_to_callee(listener_capnp);
-            } )
-        } );
+            } );
+        } )
+        .map_err( |e| ::capnp::Error::failed( format!("Failed to get answer from callee: {:?}", e) ) ); // TODO should we send an error back to the caller?
 
-        // TODO make this timeout user-configurable
-        let timeout_fut = reactor::Timeout::new(
+        // TODO make this timeout period user-configurable
+        let timeout_res = reactor::Timeout::new(
             Duration::from_secs( CALL_TIMEOUT_SECS.into() ), &self.handle );
+        let timeout_fut = pry!(timeout_res)
+            .map_err( |e| ::capnp::Error::failed( format!("Call timed out without answer: {:?}", e) ) ); // TODO should we send an error back to the caller?
 
-        // let answer_or_timeout_fut = answer_fut.select(timeout_fut);
+        // Call will time out if not answered in a given period
+        let answer_or_timeout_fut = answer_fut.select(timeout_fut)
+            .map( |(completed_item, _pending_fut)| completed_item )
+            .map_err( |(completed_err, _pending_err)| completed_err );
 
         // Set up an IncomingCall object allowing to decide answering or refusing the call
         // TODO consider error handling: should we send error and close the sink in case of errors above?
         let incoming_call = Box::new( IncomingCallCapnProto::new(call, one_send) );
-        let send_fut = self.sender.clone().send( Ok( incoming_call) )
+        let call_fut = self.sender.clone().send( Ok( incoming_call) )
             .map( |_sink| () )
-            .map_err( |e| ::capnp::Error::failed( format!("Failed to dispatch call: {:?}", e) ) ); // TODO should we send an error back to the caller?
+            .map_err( |e| ::capnp::Error::failed( format!("Failed to dispatch call: {:?}", e) ) ) // TODO should we send an error back to the caller?
+            // and require the call to be answered or dropped
+            .and_then( |()| answer_or_timeout_fut );
 
-        Promise::from_future(send_fut)
+        // TODO consider if the call (e.g. channels and capnp server objects) is dropped after a timeout
+        //      but lives after properly accepted
+        Promise::from_future(call_fut)
     }
 
 
