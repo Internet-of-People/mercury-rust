@@ -341,7 +341,8 @@ pub enum ProfileEvent
 pub trait IncomingCall
 {
     fn request(&self) -> &CallRequest;
-    fn answer(self, to_callee: Option<AppMsgSink>);
+    // NOTE this assumes boxed trait objects, if Rc of something else is needed, this must be revised
+    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>);
 }
 
 pub trait HomeSession

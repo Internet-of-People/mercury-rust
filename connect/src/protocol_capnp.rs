@@ -140,6 +140,7 @@ impl Home for HomeClientCapnProto
         Box::new(resp_fut)
     }
 
+
     fn register(&mut self, own_profile: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
@@ -509,7 +510,7 @@ impl IncomingCall for IncomingCallCapnProto
 {
     fn request(&self) -> &CallRequest { &self.request }
 
-    fn answer(self, to_callee: Option<AppMsgSink>)
+    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>)
     {
         match self.sender.send(to_callee)
         {

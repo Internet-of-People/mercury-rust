@@ -12,7 +12,7 @@ use mercury_home_protocol::mercury_capnp::*;
 pub struct HomeDispatcherCapnProto
 {
     home:   Box<Home>,
-    handle: reactor::Handle, // TODO is this member needed for streams or can be deleted?
+    handle: reactor::Handle,
     // TODO probably we should have a SessionFactory here instead of instantiating sessions "manually"
 }
 
@@ -133,11 +133,12 @@ impl home::Server for HomeDispatcherCapnProto
              mut results: home::LoginResults)
         -> Promise<(), ::capnp::Error>
     {
+        let handle_clone = self.handle.clone();
         let profile_id = pry!( pry!( params.get() ).get_profile_id() );
         let session_fut = self.home.login( profile_id.into() )
             .map( move |session_impl|
             {
-                let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl);
+                let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl, handle_clone);
                 let session = home_session::ToClient::new(session_dispatcher)
                     .from_server::<::capnp_rpc::Server>();
                 results.get().set_session(session);
@@ -217,13 +218,14 @@ impl home::Server for HomeDispatcherCapnProto
 
 pub struct HomeSessionDispatcherCapnProto
 {
-    session: Box<HomeSession>
+    session:    Box<HomeSession>,
+    handle:     reactor::Handle,
 }
 
 impl HomeSessionDispatcherCapnProto
 {
-    pub fn new(session: Box<HomeSession>) -> Self
-        { Self{ session: session } }
+    pub fn new(session: Box<HomeSession>, handle: reactor::Handle) -> Self
+        { Self{ session: session, handle: handle } }
 }
 
 // NOTE useful for testing connection lifecycles
@@ -320,10 +322,12 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
         let call_listener = pry!( params.get_call_listener() );
 
         // Forward incoming calls from business logic into capnp proxy stub of client
-        let events_fut = self.session.checkin_app( &app_id.into() )
+        let handle_clone = self.handle.clone();
+        let calls_fut = self.session.checkin_app( &app_id.into() )
             .map_err( | e| ::capnp::Error::failed( format!("Failed to checkin app: {:?}", e) ) ) // TODO proper error handling;
             .for_each( move |item|
             {
+                let handle_clone = handle_clone.clone();
                 match item
                 {
                     Ok(incoming_call) =>
@@ -331,7 +335,6 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                         let mut request = call_listener.receive_request();
                         request.get().init_call().fill_from( incoming_call.request() );
 
-                        // In a call sent to the callee, outgoing points towards the caller
                         if let Some(ref to_caller) = incoming_call.request().to_caller
                         {
                             // Set up a capnp channel to the caller for the callee
@@ -344,10 +347,15 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                         }
 
                         let fut = request.send().promise
-                            .map( | resp|
+                            .map( move |resp|
                             {
-                                // TODO extract to_callee and send it back to server
-                                ()
+                                let answer = resp.get()
+                                    .and_then( |res| res.get_to_callee() )
+                                    .map( |to_callee_capnp|
+                                        fwd_appmsg( to_callee_capnp, handle_clone ) )
+                                    .map_err( |e| e ) // TODO should we something about errors here?
+                                    .ok();
+                                incoming_call.answer(answer);
                             } );
                         Box::new(fut) as Box< Future<Item=(), Error=::capnp::Error> >
                     },
@@ -362,6 +370,6 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                 }
             } );
 
-        Promise::from_future(events_fut)
+        Promise::from_future(calls_fut)
     }
 }
