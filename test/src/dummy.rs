@@ -226,12 +226,14 @@ impl ProfileRepo for ProfileStore{
     fn resolve(&self, url: &str) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
         println!("ProfileStore.resolve");
-        match base64::decode(url){
-            Ok(id)=> {
-                self.load(&ProfileId(id))
-                },
-            Err(e)=> Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.resolve "))) )
-        }
+        println!("{:?}",Vec::from(url) );
+        self.load(&ProfileId(Vec::from(url)))
+        // match base64::decode(url){
+        //     Ok(id)=> {
+        //         self.load(&ProfileId(id))
+        //         },
+        //     Err(e)=> Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileStore/ProfileRepo.resolve "))) )
+        // }
         
         //
     }
@@ -247,7 +249,6 @@ pub struct MyDummyHome{
 
 impl MyDummyHome{
     pub fn new(profile : Profile, dht : Rc<RefCell<ProfileStore>>) -> Self {
-        println!("MyDummyHome.new");
         MyDummyHome{
             home_profile : profile,
             local_prof_store : HashMap::new(),
@@ -315,6 +316,7 @@ impl Home for MyDummyHome
     //      with the pairing proof, especially the error case
     fn register(&mut self, mut own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
     Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >{
+        println!("REGISTERING{:?}", own_prof.profile.id.0);
         let id = own_prof.profile.id.clone();
         let profile = own_prof.profile.clone();
         let mut own_profile = own_prof.clone();
@@ -407,7 +409,6 @@ pub struct DummyConnector{
 }
 impl DummyConnector{
     pub fn new_with_home(home : Rc<RefCell<Home>>)->Self{
-        println!("DummyConnector.new_with_home");
         Self{home: home}
     }
 }
@@ -434,7 +435,6 @@ pub struct HomeSessionDummy
 impl HomeSessionDummy
 {
     pub fn new( prof : ProfileId, repo : Rc<RefCell<ProfileStore>>/*, home : Rc<RefCell<MyDummyHome>> */) -> Self{ 
-        println!("HomeSessionDummy.new");
         Self{ prof : prof, repo : repo/*, home : home */} 
     }
 }

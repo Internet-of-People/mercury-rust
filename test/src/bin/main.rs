@@ -163,18 +163,23 @@ use futures::{future, Future, Stream};
         )
         .map_err(|(p, e)|e)        
         .and_then(|session|{
-            own_gateway.pair_request( "relation_dummy_type", &other_signo.get_base64_id() )
+            println!("user_one_requests");
+            let f = other_signo.prof_id().0.clone();
+            let problem = unsafe{String::from_utf8_unchecked(f)};
+            own_gateway.pair_request( "relation_dummy_type", &problem )
         })
         .and_then(|own_profile|{
-            println!( "login() -> HomeSession" );
+            println!( "user_one_login" );
             own_gateway.login()
         })
         .and_then(|session|{
+            println!("user_one_events");
             session.events().take(1).collect()
             .map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing responded but something went wrong")))
         })
         .and_then(|pair_resp|{
             let resp_event = &pair_resp[0];
+            println!("user_one_gets_response");
             match resp_event{
                 &Ok(ProfileEvent::PairingResponse(ref relation_proof))=>{
                     println!("{:?}", relation_proof);
@@ -192,13 +197,13 @@ use futures::{future, Future, Stream};
                 AppMessageFrame( Vec::from( "whatever" ) ),
                 None
             );
+            println!("user_one_line_end");
             future::ok( call )
-
         });
 
         let mut other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
         let mut home_storage_other = Rc::clone(&home_storage);
-        
+
         let mut other_profile = make_own_persona_profile(other_signo.pub_key() );
         let other_gateway = ProfileGatewayImpl::new(
             other_signo.clone(), 
@@ -207,7 +212,6 @@ use futures::{future, Future, Stream};
         );
 
         // let mut othersession : Box<HomeSession>;
-
         let other_reg = other_gateway.register(
             other_homesigno.prof_id().to_owned(),
             dummy::create_ownprofile( other_profile.clone() ),
@@ -215,6 +219,7 @@ use futures::{future, Future, Stream};
         )
         .map_err(|(p,e)|e)
         .and_then(| other_ownprofile |{
+            println!("user_two_login");
             other_gateway.login()
         })
         .and_then(|other_session|{
@@ -230,11 +235,12 @@ use futures::{future, Future, Stream};
             //         _=>Box::new(future::ok(()))
             //     }
             // }).map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing response.fail")))
+            println!("user_two_events"); 
             let events = other_session.events();
             events.take(1).collect()
             .map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing response.fail")))
             .and_then(|first|{
-                println!( " ***Sending pairing_response() -> (gives back nothing or error)" );
+                println!("user_two_gets_request");
                 let event = &first[0];
                 match event{
                     &Ok(ProfileEvent::PairingRequest(ref half_proof))=>{
@@ -249,15 +255,21 @@ use futures::{future, Future, Stream};
                 }
             })
             .and_then(move |_|{
-                println!( "***call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
+                println!("user_two_checks_into_app");
                 let other_chat = other_session.checkin_app( &ApplicationId( String::from( "SampleApp" ) ) );
+                println!("user_two_line_ends");
                 future::ok( other_chat )
             })
-        }); 
+        });  
 
-        let ownend = reactor.run(sess).unwrap();
-        let otherend = reactor.run( other_reg ).unwrap();
+        let joined_f4t = Future::join(other_reg, sess); 
+        let definitive_succes = reactor.run(joined_f4t);
+        // let otherend = reactor.run( other_reg ).unwrap();
+        // let ownend = reactor.run(sess).unwrap();
         // assert_eq!(ownend, ());
         // assert_eq!(otherend, ());
         println!( "***We're done here, let's go packing" );
     }
+
+
+    //either user one cant send request because user two hasent registered yet, or user two cant respond because user one hasent sent a request
