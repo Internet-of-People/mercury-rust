@@ -115,10 +115,12 @@ use futures::{future, Future, Stream};
 //     let crash = reactor.run(stdin_closed).unwrap();
 // }
 
+use futures::sync::mpsc;
+use futures::Sink;
 
     fn main(){
         //print!("{}[2J", 27 as char);
-        println!( "***Setting up config" );
+        println!( "***Setting up reactor and address variable" );
         let mut reactor = tokio_core::reactor::Core::new().unwrap();
         let handle = reactor.handle();
 
@@ -132,7 +134,7 @@ use futures::{future, Future, Stream};
 
         println!("***Setting up profiles");
         let homeprof = dummy::make_home_profile( &homeaddr ,homesigno.pub_key() );
-        let other_homeprof = dummy::make_home_profile( &homeaddr ,other_homesigno.pub_key() );
+        let other_homeprof = dummy::make_home_profile( &homeaddr ,other_homesigno.pub_key());
         
         println!("***ProfileGateway: ProfileSigner, DummyHome(as profile repo), HomeConnector" );
 
@@ -141,41 +143,22 @@ use futures::{future, Future, Stream};
         dht.insert(other_homeprof.id.clone(), other_homeprof.clone());
 
         let mut home_storage = Rc::new( RefCell::new(dht) );
-        let mut home_storage_other = Rc::clone(&home_storage);
-
+        let mut ownhomestore = Rc::clone(&home_storage);
         let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
-        let mut other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
 
         let other_signo = Rc::new( dummy::Signo::new( "Othereusz" ) );
-        let mut other_profile = make_own_persona_profile(other_signo.pub_key() );
 
-        let other_gateway = ProfileGatewayImpl::new(
-            other_signo.clone(), 
-            home_storage_other,
-            Rc::new( dummy::DummyConnector::new_with_home( other_home ) ),
-        );
 
-        let other_reg = other_gateway.register(
-            other_homesigno.prof_id().to_owned(),
-            dummy::create_ownprofile( other_profile.clone() ),
-            None
-        )
-        .map_err(|(p,e)|e)
-        .and_then(| response |{
-            println!( "login() -> HomeSession" );
-
-            other_gateway.login()
-        });
-        let other_session = reactor.run(other_reg).unwrap();
-        println!("***registered callee profile");
         let signo = Rc::new( dummy::Signo::new( "Deuszkulcs" ) );
         let mut profile = make_own_persona_profile(signo.pub_key() );
 
         let own_gateway = ProfileGatewayImpl::new(
             signo,
-            home_storage,
+            ownhomestore,
             Rc::new( dummy::DummyConnector::new_with_home( home ) ),
         );
+        
+        let (reg_sender, reg_reciever) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel(1);
 
         let sess = own_gateway.register(
                 homesigno.prof_id().to_owned(),
@@ -183,53 +166,25 @@ use futures::{future, Future, Stream};
                 None
         )
         .map_err(|(p, e)|e)
-        .and_then(|_|{
-            println!( "login() -> HomeSession" );
+        .join( reg_reciever.take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )                
+        .and_then(|session|{
+            println!("user_one_requests");
+            let f = other_signo.prof_id().0.clone();
+            let problem = unsafe{String::from_utf8_unchecked(f)};
+            own_gateway.pair_request( "relation_dummy_type", &problem )
+        })
+        .and_then(|own_profile|{
+            println!( "user_one_login" );
             own_gateway.login()
-        });
-        let session = reactor.run(sess).unwrap();
-
-        println!("***Sending pairing request");
-        let req = own_gateway.pair_request( "relation_dummy_type", &other_signo.get_base64_id() )
-        .and_then(|_|{
-            // other_session.events().for_each(|event|{
-            //     match event{
-            //         Ok(ProfileEvent::PairingRequest(half_proof))=>{
-            //             Box::new(other_gateway.pair_response(
-            //                 Relation::new(
-            //                     &other_profile,
-            //                     &RelationProof::from_halfproof(half_proof.clone(), other_gateway.signer.sign(&[111,123,143])))
-            //             ).map_err(|_|())) as Box<Future<Item=(),Error = ()> >
-            //         },
-            //         _=>Box::new(future::ok(()))
-            //     }
-            // }).map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing response.fail")))
-
-            other_session.events().take(1).collect()
-            .map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing response.fail")))
         })
-        .and_then(|first|{
-            println!( " ***Sending pairing_response() -> (gives back nothing or error)" );
-            let event = &first[0];
-            match event{
-                &Ok(ProfileEvent::PairingRequest(ref half_proof))=>{
-                    //TODO should look something like gateway.accept(half_proof)
-                    Box::new(other_gateway.pair_response(
-                            Relation::new(
-                            &other_profile,
-                            &RelationProof::from_halfproof(half_proof.clone(), other_gateway.signer.sign("apples".as_bytes())))
-                    ))
-                },
-                _=>panic!("ProfileEvent assert fail")
-            }
-        })
-        .and_then(|_|{
-
+        .and_then(|session|{
+            println!("user_one_events");
             session.events().take(1).collect()
             .map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing responded but something went wrong")))
         })
         .and_then(|pair_resp|{
             let resp_event = &pair_resp[0];
+            println!("user_one_gets_response");
             match resp_event{
                 &Ok(ProfileEvent::PairingResponse(ref relation_proof))=>{
                     println!("{:?}", relation_proof);
@@ -247,17 +202,76 @@ use futures::{future, Future, Stream};
                 AppMessageFrame( Vec::from( "whatever" ) ),
                 None
             );
+            println!("user_one_line_end");
             future::ok( call )
-
-        })
-        .and_then(|_|{
-            println!( "***call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
-            let other_chat = other_session.checkin_app( &ApplicationId( String::from( "SampleApp" ) ) );
-            // TODO IncomingCall does not implement Display or Debug, log it somehow
-            //println!("other chat : {:?}", other_chat);
-            future::ok( other_chat )
         });
-        let end = reactor.run( req ).unwrap();
-        
+
+        let mut other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
+        let mut home_storage_other = Rc::clone(&home_storage);
+
+        let mut other_profile = make_own_persona_profile(other_signo.pub_key() );
+        let other_gateway = ProfileGatewayImpl::new(
+            other_signo.clone(), 
+            home_storage_other,
+            Rc::new( dummy::DummyConnector::new_with_home( other_home ) ),
+        );
+
+        // let mut othersession : Box<HomeSession>;
+        let other_reg = other_gateway.register(
+            other_homesigno.prof_id().to_owned(),
+            dummy::create_ownprofile( other_profile.clone() ),
+            None
+        )
+        .map_err(|(p,e)|e)
+        .and_then(| _ |{
+            reg_sender.send(String::from("Other user registered")).map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive")))
+        })
+        .and_then(| _ |{
+            println!("user_two_login");
+            other_gateway.login()
+        })
+        .and_then(|other_session|{
+            // other_session.events().for_each(|event|{
+            //     match event{
+            //         Ok(ProfileEvent::PairingRequest(half_proof))=>{
+            //             Box::new(other_gateway.pair_response(
+            //                 Relation::new(
+            //                     &other_profile,
+            //                     &RelationProof::from_halfproof(half_proof.clone(), other_gateway.signer.sign(&[111,123,143])))
+            //             ).map_err(|_|())) as Box<Future<Item=(),Error = ()> >
+            //         },
+            //         _=>Box::new(future::ok(()))
+            //     }
+            // }).map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing response.fail")))
+            println!("user_two_events"); 
+            let events = other_session.events();
+            events.take(1).collect()
+            .map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing response.fail")))
+            .and_then(|first|{
+                println!("user_two_gets_request");
+                let event = &first[0];
+                match event{
+                    &Ok(ProfileEvent::PairingRequest(ref half_proof))=>{
+                        //TODO should look something like gateway.accept(half_proof)
+                        Box::new(other_gateway.pair_response(
+                                Relation::new(
+                                &other_profile,
+                                &RelationProof::from_halfproof(half_proof.clone(), other_gateway.signer.sign("apples".as_bytes())))
+                        ))
+                    },
+                    _=>panic!("ProfileEvent assert fail")
+                }
+            })
+            .and_then(move |_|{
+                println!("user_two_checks_into_app");
+                let other_chat = other_session.checkin_app( &ApplicationId( String::from( "SampleApp" ) ) );
+                println!("user_two_line_ends");
+                future::ok( other_chat )
+            })
+        });  
+
+        let joined_f4t = Future::join(sess, other_reg); 
+        let definitive_succes = reactor.run(joined_f4t);
+
         println!( "***We're done here, let's go packing" );
     }
