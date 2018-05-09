@@ -253,7 +253,8 @@ use futures::{future, Future, Stream};
         .and_then(|_|{
             println!( "***call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
             let other_chat = other_session.checkin_app( &ApplicationId( String::from( "SampleApp" ) ) );
-            println!("other chat : {:?}", other_chat);
+            // TODO IncomingCall does not implement Display or Debug, log it somehow
+            //println!("other chat : {:?}", other_chat);
             future::ok( other_chat )
         });
         let end = reactor.run( req ).unwrap();

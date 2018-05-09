@@ -12,7 +12,7 @@ use mercury_home_protocol::mercury_capnp::*;
 pub struct HomeDispatcherCapnProto
 {
     home:   Box<Home>,
-    handle: reactor::Handle, // TODO is this member needed for streams or can be deleted?
+    handle: reactor::Handle,
     // TODO probably we should have a SessionFactory here instead of instantiating sessions "manually"
 }
 
@@ -133,11 +133,12 @@ impl home::Server for HomeDispatcherCapnProto
              mut results: home::LoginResults)
         -> Promise<(), ::capnp::Error>
     {
+        let handle_clone = self.handle.clone();
         let profile_id = pry!( pry!( params.get() ).get_profile_id() );
         let session_fut = self.home.login( profile_id.into() )
             .map( move |session_impl|
             {
-                let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl);
+                let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl, handle_clone);
                 let session = home_session::ToClient::new(session_dispatcher)
                     .from_server::<::capnp_rpc::Server>();
                 results.get().set_session(session);
@@ -186,16 +187,17 @@ impl home::Server for HomeDispatcherCapnProto
         let app_capnp = pry!( opts.get_app() );
         let init_payload_capnp = pry!( opts.get_init_payload() );
 
-        let handle_clone = self.handle.clone();
         let to_caller = opts.get_to_caller()
-            .map( |to_caller_capnp | mercury_capnp::fwd_appmsg(to_caller_capnp, handle_clone) )
+            .map( |to_caller_capnp | mercury_capnp::fwd_appmsg( to_caller_capnp, self.handle.clone() ) )
             .ok();
 
         let relation = pry!( RelationProof::try_from(rel_capnp) );
         let app = ApplicationId::from(app_capnp);
         let init_payload = AppMessageFrame::from(init_payload_capnp);
 
-        let call_fut = self.home.call(relation, app, init_payload, to_caller)
+        let call_req = CallRequest{ relation: relation, init_payload: init_payload,
+            to_caller: to_caller};
+        let call_fut = self.home.call(app, call_req)
             .map( |to_callee_opt|
             {
                 to_callee_opt.map( move |to_callee|
@@ -216,13 +218,14 @@ impl home::Server for HomeDispatcherCapnProto
 
 pub struct HomeSessionDispatcherCapnProto
 {
-    session: Box<HomeSession>
+    session:    Box<HomeSession>,
+    handle:     reactor::Handle,
 }
 
 impl HomeSessionDispatcherCapnProto
 {
-    pub fn new(session: Box<HomeSession>) -> Self
-        { Self{ session: session } }
+    pub fn new(session: Box<HomeSession>, handle: reactor::Handle) -> Self
+        { Self{ session: session, handle: handle } }
 }
 
 // NOTE useful for testing connection lifecycles
@@ -313,20 +316,60 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                    results: home_session::CheckinAppResults)
         -> Promise<(), ::capnp::Error>
     {
+        // Receive a proxy from client to which the server will send notifications on incoming calls
         let params = pry!( params.get() );
         let app_id = pry!( params.get_app() );
-        let callback = pry!( params.get_call_listener() );
+        let call_listener = pry!( params.get_call_listener() );
 
-        let events_fut = self.session.checkin_app( &app_id.into() )
+        // Forward incoming calls from business logic into capnp proxy stub of client
+        let handle_clone = self.handle.clone();
+        let calls_fut = self.session.checkin_app( &app_id.into() )
             .map_err( | e| ::capnp::Error::failed( format!("Failed to checkin app: {:?}", e) ) ) // TODO proper error handling;
-            .for_each( move |call|
+            .for_each( move |item|
             {
-                let request = callback.receive_request();
-                // request.get().set_call(call);
-                request.send().promise
-                    .map( | _resp| () )
-                    // TODO .map_err() what to do here in case of an error?
+                let handle_clone = handle_clone.clone();
+                match item
+                {
+                    Ok(incoming_call) =>
+                    {
+                        let mut request = call_listener.receive_request();
+                        request.get().init_call().fill_from( incoming_call.request() );
+
+                        if let Some(ref to_caller) = incoming_call.request().to_caller
+                        {
+                            // Set up a capnp channel to the caller for the callee
+                            let listener = AppMessageDispatcherCapnProto::new(to_caller.clone() );
+                            // TODO consider how to drop/unregister this object from capnp if the stream is dropped
+                            let listener_capnp = mercury_capnp::app_message_listener::ToClient::new(listener)
+                                .from_server::<::capnp_rpc::Server>();
+                            request.get().get_call().expect("Implementation erorr: call was just initialized above, should be there")
+                                .set_to_caller(listener_capnp);
+                        }
+
+                        let fut = request.send().promise
+                            .map( move |resp|
+                            {
+                                let answer = resp.get()
+                                    .and_then( |res| res.get_to_callee() )
+                                    .map( |to_callee_capnp|
+                                        fwd_appmsg( to_callee_capnp, handle_clone ) )
+                                    .map_err( |e| e ) // TODO should we something about errors here?
+                                    .ok();
+                                incoming_call.answer(answer);
+                            } );
+                        Box::new(fut) as Box< Future<Item=(), Error=::capnp::Error> >
+                    },
+                    Err(err) =>
+                    {
+                        let mut request = call_listener.error_request();
+                        request.get().set_error(&err);
+                        let fut = request.send().promise
+                            .map( | _resp| () );
+                        Box::new(fut)
+                    },
+                }
             } );
-        Promise::from_future(events_fut)
+
+        Promise::from_future(calls_fut)
     }
 }
