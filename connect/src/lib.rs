@@ -204,7 +204,7 @@ impl ProfileGatewayImpl
 
         // Pick first successful home connection
         let result = future::select_ok(home_conn_futs)
-            .map( |(home_conn, pending_conn_futs)| home_conn );
+            .map( |(home_conn, _pending_conn_futs)| home_conn );
         Box::new(result)
     }
 
@@ -342,7 +342,8 @@ impl ProfileGateway for ProfileGatewayImpl
     {
         let call_fut = self.any_home_of(&rel.profile)
             .and_then( move |home|
-                home.borrow().call(rel.proof, app, init_payload, to_caller) ) ;
+                home.borrow().call( app, CallRequest{ relation: rel.proof,
+                    init_payload: init_payload, to_caller: to_caller } ) ) ;
         Box::new(call_fut)
     }
 }

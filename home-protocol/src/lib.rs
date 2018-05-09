@@ -275,16 +275,15 @@ pub struct AppMessageFrame(pub Vec<u8>);
 pub type AppMsgStream = HomeStream<AppMessageFrame, String>;
 pub type AppMsgSink   = HomeSink<AppMessageFrame, String>;
 
+
 #[derive(Debug)]
-pub struct Call
+pub struct CallRequest
 {
-    pub caller:         ProfileId,
+    pub relation:       RelationProof,
     pub init_payload:   AppMessageFrame,
     // NOTE A missed call or p2p connection failure will result Option::None
-    pub incoming:       Option<AppMsgStream>,
-    pub outgoing:       Option<AppMsgSink>,
+    pub to_caller:      Option<AppMsgSink>,
 }
-
 
 
 // Interface to a single home server.
@@ -315,10 +314,9 @@ pub trait Home: ProfileRepo
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     // NOTE initiating a real P2P connection (vs a single frame push notification),
-    //      the caller must pass some message channel to itself.
+    //      the caller must fill in some message channel to itself.
     //      A successful call returns a channel to callee.
-    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<AppMsgSink>) ->
+    fn call(&self, app: ApplicationId, call_req: CallRequest) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >;
 
 // TODO consider how to do this in a later milestone
@@ -340,6 +338,13 @@ pub enum ProfileEvent
 }
 
 
+pub trait IncomingCall
+{
+    fn request(&self) -> &CallRequest;
+    // NOTE this assumes boxed trait objects, if Rc of something else is needed, this must be revised
+    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>);
+}
+
 pub trait HomeSession
 {
     fn update(&self, own_prof: &OwnProfile) ->
@@ -350,11 +355,10 @@ pub trait HomeSession
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
 
-    fn events(&self) -> Box< HomeStream<ProfileEvent, String> >;
+    fn events(&self) -> HomeStream<ProfileEvent, String>;
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
-    fn checkin_app(&self, app: &ApplicationId) ->
-        Box< HomeStream<Call, String> >;
+    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>;
 
     // TODO remove this after testing
     fn ping(&self, txt: &str) ->
@@ -380,8 +384,6 @@ mod tests
     use futures::{Sink, Stream};
     use futures::sync::mpsc;
     use tokio_core::reactor;
-
-    use super::*;
 
 
     struct TestSetup

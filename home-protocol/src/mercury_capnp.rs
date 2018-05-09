@@ -89,8 +89,8 @@ impl<'a> FillFrom<::Profile> for profile::Builder<'a>
 {
     fn fill_from(mut self, src: &::Profile)
     {
-        self.set_id(&src.id.0);
-        self.set_public_key(&src.pub_key.0);
+        self.set_id( (&src.id).into() );
+        self.set_public_key( &src.pub_key.0 ); // TODO would be nicer with pubkey.into() implementing From<PublicKey>
         // TODO set facets
     }
 }
@@ -201,6 +201,33 @@ impl<'a> FillFrom<::ProfileEvent> for profile_event::Builder<'a>
 
 
 
+impl<'a> TryFrom<call_request::Reader<'a>> for ::CallRequest
+{
+    type Error = capnp::Error;
+
+    // NOTE this cannot fill in streams here without outer context (e.g. reactor::Handle)
+    fn try_from(src: call_request::Reader) -> Result<Self, Self::Error>
+    {
+        let relation = ::RelationProof::try_from( src.get_relation()? )?;
+        let init_payload = src.get_init_payload()?.into();
+
+        Ok( ::CallRequest{ relation: relation, init_payload: init_payload, to_caller: None } )
+    }
+}
+
+impl<'a> FillFrom<::CallRequest> for call_request::Builder<'a>
+{
+    fn fill_from(mut self, src: &::CallRequest)
+    {
+        self.set_init_payload( (&src.init_payload).into() );
+        self.init_relation().fill_from(&src.relation);
+        // TODO set up channel to caller: is it possible here without external context?
+        // self.set_to_caller( TODO );
+    }
+}
+
+
+
 // TODO consider using a single generic imlementation for all kinds of Dispatchers
 pub struct AppMessageDispatcherCapnProto
 {
@@ -216,7 +243,7 @@ impl AppMessageDispatcherCapnProto
 impl app_message_listener::Server for AppMessageDispatcherCapnProto
 {
     fn receive(&mut self, params: app_message_listener::ReceiveParams,
-               _results: app_message_listener::ReceiveResults,)
+               _results: app_message_listener::ReceiveResults)
         -> Promise<(), ::capnp::Error>
     {
         let message = pry!( pry!( params.get() ).get_message() );
@@ -228,7 +255,7 @@ impl app_message_listener::Server for AppMessageDispatcherCapnProto
 
 
     fn error(&mut self, params: app_message_listener::ErrorParams,
-             _results: app_message_listener::ErrorResults,)
+             _results: app_message_listener::ErrorResults)
         -> Promise<(), ::capnp::Error>
     {
         let error = pry!( pry!( params.get() ).get_error() ).into();

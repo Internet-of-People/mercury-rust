@@ -393,8 +393,7 @@ impl Home for MyDummyHome
         }
     }
 
-    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<AppMsgSink>) ->
+    fn call(&self, app: ApplicationId, call_req: CallRequest) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >{
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.call "))) )
     }
@@ -460,10 +459,11 @@ impl HomeSession for HomeSessionDummy
     }
 
 
-    fn events(&self) -> Box< HomeStream<ProfileEvent, String> >
+    fn events(&self) -> HomeStream<ProfileEvent, String>
     {
         println!("HomeSessionDummy.events");
         let (sender, receiver) = sync::mpsc::channel(1);
+        receiver
         // match self.home.borrow().events.get(&self.prof){
         //     Some(evec) => {
         //         let event_vector = evec.to_owned();
@@ -476,16 +476,14 @@ impl HomeSession for HomeSessionDummy
         //         sender.send(Err(String::from("no events")));
         //         },
         // }
-        Box::new(receiver)
     }
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
-    fn checkin_app(&self, app: &ApplicationId) ->
-        Box< HomeStream<Call, String> >
+    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
     {
         println!("HomeSessionDummy.checkin_app");
         let (sender, receiver) = sync::mpsc::channel(0);
-        Box::new(receiver)
+        receiver
     }
 
     // TODO remove this after testing
