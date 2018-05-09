@@ -115,6 +115,7 @@ use futures::{future, Future, Stream};
 //     let crash = reactor.run(stdin_closed).unwrap();
 // }
 
+use std::sync::mpsc;
 
     fn main(){
         //print!("{}[2J", 27 as char);
@@ -156,12 +157,15 @@ use futures::{future, Future, Stream};
             Rc::new( dummy::DummyConnector::new_with_home( home ) ),
         );
 
+        let (reg_sender, reg_reciever) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel();
+
         let sess = own_gateway.register(
                 homesigno.prof_id().to_owned(),
                 dummy::create_ownprofile( profile.clone() ),
                 None
         )
-        .map_err(|(p, e)|e)        
+        .map_err(|(p, e)|e)
+        .join( reg_reciever.recv().map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )                
         .and_then(|session|{
             println!("user_one_requests");
             let f = other_signo.prof_id().0.clone();
@@ -204,6 +208,8 @@ use futures::{future, Future, Stream};
         let mut other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
         let mut home_storage_other = Rc::clone(&home_storage);
 
+        println!("fuck");
+
         let mut other_profile = make_own_persona_profile(other_signo.pub_key() );
         let other_gateway = ProfileGatewayImpl::new(
             other_signo.clone(), 
@@ -218,7 +224,10 @@ use futures::{future, Future, Stream};
             None
         )
         .map_err(|(p,e)|e)
-        .and_then(| other_ownprofile |{
+        .and_then(| _ |{
+            reg_sender.send(String::from("Other user registered")).map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive")))
+        })
+        .and_then(| _ |{
             println!("user_two_login");
             other_gateway.login()
         })
@@ -273,3 +282,6 @@ use futures::{future, Future, Stream};
 
 
     //either user one cant send request because user two hasent registered yet, or user two cant respond because user one hasent sent a request
+
+
+    //oneshotchannel and then, whatever
