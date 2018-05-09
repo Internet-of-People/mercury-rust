@@ -115,7 +115,8 @@ use futures::{future, Future, Stream};
 //     let crash = reactor.run(stdin_closed).unwrap();
 // }
 
-use std::sync::mpsc;
+use futures::sync::mpsc;
+use futures::Sink;
 
     fn main(){
         //print!("{}[2J", 27 as char);
@@ -156,8 +157,8 @@ use std::sync::mpsc;
             ownhomestore,
             Rc::new( dummy::DummyConnector::new_with_home( home ) ),
         );
-
-        let (reg_sender, reg_reciever) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel();
+        
+        let (reg_sender, reg_reciever) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel(1);
 
         let sess = own_gateway.register(
                 homesigno.prof_id().to_owned(),
@@ -165,7 +166,7 @@ use std::sync::mpsc;
                 None
         )
         .map_err(|(p, e)|e)
-        .join( reg_reciever.recv().map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )                
+        .join( reg_reciever.take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )                
         .and_then(|session|{
             println!("user_one_requests");
             let f = other_signo.prof_id().0.clone();
@@ -207,8 +208,6 @@ use std::sync::mpsc;
 
         let mut other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
         let mut home_storage_other = Rc::clone(&home_storage);
-
-        println!("fuck");
 
         let mut other_profile = make_own_persona_profile(other_signo.pub_key() );
         let other_gateway = ProfileGatewayImpl::new(
@@ -271,17 +270,8 @@ use std::sync::mpsc;
             })
         });  
 
-        let joined_f4t = Future::join(other_reg, sess); 
+        let joined_f4t = Future::join(sess, other_reg); 
         let definitive_succes = reactor.run(joined_f4t);
-        // let otherend = reactor.run( other_reg ).unwrap();
-        // let ownend = reactor.run(sess).unwrap();
-        // assert_eq!(ownend, ());
-        // assert_eq!(otherend, ());
+
         println!( "***We're done here, let's go packing" );
     }
-
-
-    //either user one cant send request because user two hasent registered yet, or user two cant respond because user one hasent sent a request
-
-
-    //oneshotchannel and then, whatever
