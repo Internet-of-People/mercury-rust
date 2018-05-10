@@ -211,7 +211,7 @@ impl Home for HomeClientCapnProto
     }
 
 
-    fn call(&self, app: ApplicationId, call_req: CallRequest) ->
+    fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.call_request();
@@ -432,7 +432,7 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
         // NOTE there's no way to add the i/o streams in try_from without extra context,
         //      we have to set them manually
         let call_capnp = pry!( pry!( params.get() ).get_call() );
-        let mut call = pry!( CallRequest::try_from(call_capnp) );
+        let mut call = pry!( CallRequestDetails::try_from(call_capnp) );
 
         // If received a to_caller channel, setup an in-memory sink for easier sending
         call.to_caller = call_capnp.get_to_caller()
@@ -496,19 +496,19 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
 
 struct IncomingCallCapnProto
 {
-    request:    CallRequest,
+    request:    CallRequestDetails,
     sender:     oneshot::Sender< Option<AppMsgSink> >,
 }
 
 impl IncomingCallCapnProto
 {
-    fn new(request: CallRequest, sender: oneshot::Sender< Option<AppMsgSink> >) -> Self
+    fn new(request: CallRequestDetails, sender: oneshot::Sender< Option<AppMsgSink> >) -> Self
         { Self{ request: request, sender: sender } }
 }
 
 impl IncomingCall for IncomingCallCapnProto
 {
-    fn request(&self) -> &CallRequest { &self.request }
+    fn request_details(&self) -> &CallRequestDetails { &self.request }
 
     fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>)
     {

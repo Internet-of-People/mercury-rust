@@ -277,7 +277,7 @@ pub type AppMsgSink   = HomeSink<AppMessageFrame, String>;
 
 
 #[derive(Debug)]
-pub struct CallRequest
+pub struct CallRequestDetails
 {
     pub relation:       RelationProof,
     pub init_payload:   AppMessageFrame,
@@ -316,7 +316,7 @@ pub trait Home: ProfileRepo
     // NOTE initiating a real P2P connection (vs a single frame push notification),
     //      the caller must fill in some message channel to itself.
     //      A successful call returns a channel to callee.
-    fn call(&self, app: ApplicationId, call_req: CallRequest) ->
+    fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >;
 
 // TODO consider how to do this in a later milestone
@@ -340,8 +340,11 @@ pub enum ProfileEvent
 
 pub trait IncomingCall
 {
-    fn request(&self) -> &CallRequest;
+    fn request_details(&self) -> &CallRequestDetails;
     // NOTE this assumes boxed trait objects, if Rc of something else is needed, this must be revised
+    // TODO consider offering the possibility to somehow send back a single AppMessageFrame
+    //      as a reply to init_payload without a to_callee sink,
+    //      either included into this function or an additional method
     fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>);
 }
 

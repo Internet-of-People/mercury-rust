@@ -201,7 +201,7 @@ impl<'a> FillFrom<::ProfileEvent> for profile_event::Builder<'a>
 
 
 
-impl<'a> TryFrom<call_request::Reader<'a>> for ::CallRequest
+impl<'a> TryFrom<call_request::Reader<'a>> for ::CallRequestDetails
 {
     type Error = capnp::Error;
 
@@ -211,13 +211,13 @@ impl<'a> TryFrom<call_request::Reader<'a>> for ::CallRequest
         let relation = ::RelationProof::try_from( src.get_relation()? )?;
         let init_payload = src.get_init_payload()?.into();
 
-        Ok( ::CallRequest{ relation: relation, init_payload: init_payload, to_caller: None } )
+        Ok( ::CallRequestDetails { relation: relation, init_payload: init_payload, to_caller: None } )
     }
 }
 
-impl<'a> FillFrom<::CallRequest> for call_request::Builder<'a>
+impl<'a> FillFrom<::CallRequestDetails> for call_request::Builder<'a>
 {
-    fn fill_from(mut self, src: &::CallRequest)
+    fn fill_from(mut self, src: &::CallRequestDetails)
     {
         self.set_init_payload( (&src.init_payload).into() );
         self.init_relation().fill_from(&src.relation);

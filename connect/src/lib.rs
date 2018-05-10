@@ -342,7 +342,7 @@ impl ProfileGateway for ProfileGatewayImpl
     {
         let call_fut = self.any_home_of(&rel.profile)
             .and_then( move |home|
-                home.borrow().call( app, CallRequest{ relation: rel.proof,
+                home.borrow().call(app, CallRequestDetails { relation: rel.proof,
                     init_payload: init_payload, to_caller: to_caller } ) ) ;
         Box::new(call_fut)
     }

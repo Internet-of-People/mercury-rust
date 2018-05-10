@@ -86,7 +86,7 @@ impl Home for HomeServer
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_response "))) )
     }
 
-    fn call(&self, app: ApplicationId, call_req: CallRequest) ->
+    fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.call "))) )
