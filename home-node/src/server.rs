@@ -2,20 +2,21 @@ use futures::{future, sync, Future};
 use futures::sync::mpsc;
 
 use mercury_home_protocol::*;
+use mercury_storage::async::HashSpace;
 
 
 
 pub struct HomeServer
 {
-    // TODO
+    storage: Box< HashSpace<Vec<u8>,String> >,
 }
 
 
 
 impl HomeServer
 {
-    pub fn new() -> Self
-        { Self {} }
+    pub fn new(storage: Box< HashSpace<Vec<u8>,String> >) -> Self
+        { Self { storage: storage } }
 }
 
 

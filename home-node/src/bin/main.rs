@@ -3,6 +3,7 @@ extern crate capnp_rpc;
 extern crate futures;
 extern crate mercury_home_protocol;
 extern crate mercury_home_node;
+extern crate mercury_storage;
 extern crate multiaddr;
 extern crate multihash;
 extern crate tokio_core;
@@ -14,6 +15,7 @@ use tokio_core::reactor;
 use tokio_core::net::TcpListener;
 
 use mercury_home_node::*;
+use mercury_storage::async::imp::Ipfs;
 
 
 
@@ -32,7 +34,8 @@ fn main()
     {
         println!("Accepted client connection, serving requests");
 
-        let home = Box::new( server::HomeServer::new() );
+        let storage = Ipfs::new( "localhost", 5001, &handle1.clone() )?;
+        let home = Box::new( server::HomeServer::new( Box::new(storage) ) );
         protocol_capnp::HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle1.clone() );
         Ok( () )
     } );

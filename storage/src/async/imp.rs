@@ -1,6 +1,7 @@
 #![allow(unused, non_snake_case)]
 
 use std::collections::{HashMap}; //, HashSet};
+use std::error::Error;
 use std::hash::Hash;
 //use std::net::{SocketAddr, Ipv4Addr, SocketAddrV4, ToSocketAddrs};
 use std::rc::Rc;
@@ -288,8 +289,12 @@ pub struct Ipfs
 
 impl Ipfs
 {
-    pub fn new(client: ipfs_api::IpfsClient) -> Self
-        { Self{ client: client} }
+    pub fn new(host: &str, port: u16, handle: &reactor::Handle) -> Result<Self, ::std::io::Error>
+    {
+        let client = ipfs_api::IpfsClient::new(handle, host, port)
+            .map_err( |e| ::std::io::Error::new(::std::io::ErrorKind::NotFound, e) )?;
+        Ok( Self{ client: client } )
+    }
 }
 
 impl HashSpace<Vec<u8>, String> for Ipfs
@@ -319,8 +324,9 @@ impl HashSpace<Vec<u8>, String> for Ipfs
     fn validate(&self, object: &Vec<u8>, hash: &String)
         -> Box< Future<Item=bool, Error=HashSpaceError> >
     {
+        let obj = object.to_owned(); // TODO this is potentially very expensive for huge blobs, can this be done more effectively?
         let val_fut = self.resolve(hash)
-            .map( | bytes| true );
+            .map( move | bytes| bytes == obj );
         Box::new(val_fut)
     }
 }
@@ -650,10 +656,8 @@ mod tests
     {
         let mut reactor = reactor::Core::new()
             .expect("Failed to initialize the reactor event loop");
-        // let client = ipfs_api::IpfsClient::default( &reactor.handle() );
-        let client = ipfs_api::IpfsClient::new( &reactor.handle(), "go-ipfs", 5001 ).unwrap();
-        let mut ipfs = Ipfs::new(client);
 
+        let mut ipfs = Ipfs::new( "localhost", 5001, &reactor.handle() ).unwrap();
         let orig_data = b"Tear down the wall!".to_vec();
         let hash_fut = ipfs.store( orig_data.clone() );
         let hash = reactor.run(hash_fut).unwrap();

@@ -526,7 +526,6 @@ impl IncomingCall for IncomingCallCapnProto
 mod tests
 {
     use super::*;
-    use tokio_core::net::TcpStream;
     use tokio_core::reactor;
 
 
