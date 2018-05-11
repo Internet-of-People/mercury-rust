@@ -48,11 +48,25 @@ pub trait Seed
 /// Usually implemented using a private key internally, but also enables hardware wallets.
 pub trait Signer
 {
-    fn prof_id(&self) -> &ProfileId; // TODO is this really needed here and not in connection PeerContext?
+    // TODO consider if this is needed here or should only be provided by trait PeerContext?
+    fn prof_id(&self) -> &ProfileId;
+
     fn pub_key(&self) -> &PublicKey;
     // NOTE the data to be signed ideally will be the output from Mudlee's multicodec lib
     fn sign(&self, data: &[u8]) -> Signature;
 }
+
+
+pub trait ProfileValidator
+{
+    fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
+        -> Result<bool, ErrorToBeSpecified>;
+
+    fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
+        -> Result<bool, ErrorToBeSpecified>;
+}
+
+
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PersonaFacet
@@ -133,7 +147,7 @@ pub trait PeerContext
 {
     fn my_signer(&self) -> &Signer;
     fn peer_pubkey(&self) -> Option<PublicKey>;
-    fn peer(&self) -> Option<Profile>;
+    fn peer(&self) -> Option<Profile>; // TODO is a ProfileId enough here?
 }
 
 

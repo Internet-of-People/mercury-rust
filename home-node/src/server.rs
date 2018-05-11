@@ -12,6 +12,7 @@ pub struct HomeServer
 {
     distributed_storage:    Box< KeyValueStore<ProfileId, Profile> >,
     local_storage:          Box< KeyValueStore<ProfileId, OwnProfile> >,
+    validator:              Box<ProfileValidator>,
 }
 
 
@@ -19,8 +20,10 @@ pub struct HomeServer
 impl HomeServer
 {
     pub fn new(distributed_storage: Box< KeyValueStore<ProfileId, Profile> >,
-               local_storage:       Box< KeyValueStore<ProfileId, OwnProfile> >) -> Self
-        { Self { distributed_storage: distributed_storage, local_storage: local_storage} }
+               local_storage:       Box< KeyValueStore<ProfileId, OwnProfile> >,
+               validator:           Box<ProfileValidator>) -> Self
+        { Self { distributed_storage: distributed_storage, local_storage: local_storage,
+                 validator: validator } }
 }
 
 

@@ -6,9 +6,11 @@ extern crate mercury_home_protocol;
 extern crate mercury_storage;
 extern crate multiaddr;
 extern crate multihash;
+extern crate signatory;
 extern crate tokio_core;
 extern crate tokio_io;
 
 
 pub mod protocol_capnp;
 pub mod server;
+pub mod crypto;
