@@ -21,6 +21,7 @@ use mercury_home_protocol::*;
 
 use std::cell::RefCell;
 use std::rc::Rc;
+use std::iter::{Iterator};
 use std::io::{BufRead, Read, Write, stdin};
 
 use multiaddr::{Multiaddr, ToMultiaddr};
@@ -158,7 +159,8 @@ use futures::Sink;
             Rc::new( dummy::DummyConnector::new_with_home( home ) ),
         );
         
-        let (reg_sender, reg_reciever) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel(1);
+        let (reg_sender, reg_receiver) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel(1);
+        let (request_sender, request_receiver) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel(1);
 
         let sess = own_gateway.register(
                 homesigno.prof_id().to_owned(),
@@ -166,12 +168,15 @@ use futures::Sink;
                 None
         )
         .map_err(|(p, e)|e)
-        .join( reg_reciever.take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )                
+        .join( reg_receiver.take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )                
         .and_then(|session|{
             println!("user_one_requests");
             let f = other_signo.prof_id().0.clone();
             let problem = unsafe{String::from_utf8_unchecked(f)};
             own_gateway.pair_request( "relation_dummy_type", &problem )
+        })
+        .and_then(| _ |{
+            request_sender.send(String::from("Other user registered")).map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive")))
         })
         .and_then(|own_profile|{
             println!( "user_one_login" );
@@ -194,16 +199,18 @@ use futures::Sink;
             }
         })
         .and_then(|relation_proof|{
+            let (msg_sender, msg_receiver) : (mpsc::Sender<Result<AppMessageFrame, String>>, mpsc::Receiver<Result<AppMessageFrame, String>>) = mpsc::channel(1);
+
             println!( "***call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
             let relation = Relation::new(&profile,&relation_proof);
             let call = own_gateway.call(
                 relation,
                 ApplicationId( String::from( "SampleApp" ) ), 
                 AppMessageFrame( Vec::from( "whatever" ) ),
-                None
+                Some(msg_sender)
             );
             println!("user_one_line_end");
-            future::ok( call )
+            future::ok( msg_receiver )
         });
 
         let mut other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
@@ -226,6 +233,7 @@ use futures::Sink;
         .and_then(| _ |{
             reg_sender.send(String::from("Other user registered")).map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive")))
         })
+        .join( request_receiver.take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )
         .and_then(| _ |{
             println!("user_two_login");
             other_gateway.login()
@@ -264,10 +272,16 @@ use futures::Sink;
             })
             .and_then(move |_|{
                 println!("user_two_checks_into_app");
-                let other_chat = other_session.checkin_app( &ApplicationId( String::from( "SampleApp" ) ) );
-                println!("user_two_line_ends");
-                future::ok( other_chat )
+                other_session.checkin_app( &ApplicationId( String::from( "SampleApp" ) ) ).take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("Test error n+1")))
             })
+        })
+        .and_then(|calls|{
+            for call in calls{
+                let incall = call.unwrap();
+                println!("{:?}", incall.request());
+                incall.answer(None);
+            }
+            futures::future::ok(()) 
         });  
 
         let joined_f4t = Future::join(sess, other_reg); 
