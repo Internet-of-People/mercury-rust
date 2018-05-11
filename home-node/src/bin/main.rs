@@ -15,7 +15,7 @@ use tokio_core::reactor;
 use tokio_core::net::TcpListener;
 
 use mercury_home_node::*;
-use mercury_storage::async::imp::Ipfs;
+use mercury_storage::async::{ModularHashSpace, imp::InMemoryStore};
 
 
 
@@ -34,8 +34,11 @@ fn main()
     {
         println!("Accepted client connection, serving requests");
 
-        let storage = Ipfs::new( "localhost", 5001, &handle1.clone() )?;
-        let home = Box::new( server::HomeServer::new( Box::new(storage) ) );
+        // TODO use persistent storage
+        //let distributed_storage = Box::new( Ipfs::new( "localhost", 5001, &handle1.clone() )? )
+        let local_storage = Box::new( InMemoryStore::new() );
+        let distributed_storage = Box::new( InMemoryStore::new() );
+        let home = Box::new( server::HomeServer::new(distributed_storage, local_storage) );
         protocol_capnp::HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle1.clone() );
         Ok( () )
     } );

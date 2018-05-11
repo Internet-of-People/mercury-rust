@@ -1,22 +1,26 @@
+use std::error::Error;
+
 use futures::{future, sync, Future};
 use futures::sync::mpsc;
 
 use mercury_home_protocol::*;
-use mercury_storage::async::HashSpace;
+use mercury_storage::async::KeyValueStore;
 
 
 
 pub struct HomeServer
 {
-    storage: Box< HashSpace<Vec<u8>,String> >,
+    distributed_storage:    Box< KeyValueStore<ProfileId, Profile> >,
+    local_storage:          Box< KeyValueStore<ProfileId, OwnProfile> >,
 }
 
 
 
 impl HomeServer
 {
-    pub fn new(storage: Box< HashSpace<Vec<u8>,String> >) -> Self
-        { Self { storage: storage } }
+    pub fn new(distributed_storage: Box< KeyValueStore<ProfileId, Profile> >,
+               local_storage:       Box< KeyValueStore<ProfileId, OwnProfile> >) -> Self
+        { Self { distributed_storage: distributed_storage, local_storage: local_storage} }
 }
 
 
@@ -33,12 +37,9 @@ impl ProfileRepo for HomeServer
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
-        // Box::new( future::err(ErrorToBeSpecified::TODO) )
-        let profile = Profile::new(
-            &ProfileId( "Dummy ProfileId for testing load()".as_bytes().to_owned() ),
-            &PublicKey( "Dummy PublicKey for testing load()".as_bytes().to_owned() ),
-            &[] );
-        Box::new( future::ok(profile) )
+        let profile_fut = self.distributed_storage.get( id.to_owned() )
+            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
+        Box::new(profile_fut)
     }
 
     // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution

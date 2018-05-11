@@ -26,9 +26,9 @@ pub trait HashSpace<ObjectType, ReadableHashType>
 pub trait KeyValueStore<KeyType, ValueType>
 {
     // TODO maybe it would be enough to use references instead of consuming params
-    fn store(&mut self, key: KeyType, value: ValueType)
+    fn set(&mut self, key: KeyType, value: ValueType)
         -> Box< Future<Item=(), Error=StorageError> >;
-    fn lookup(&self, key: KeyType)
+    fn get(&self, key: KeyType)
         -> Box< Future<Item=ValueType, Error=StorageError> >;
 }
 
@@ -103,7 +103,7 @@ for ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
             { return Box::new( future::err(e) ); }
         let hash_str = hash_str_result.unwrap();
 
-        let result = self.storage.store( hash_bytes, serialized_obj )
+        let result = self.storage.set(hash_bytes, serialized_obj )
             .map( |_| hash_str )
             .map_err( |e| HashSpaceError::StorageError(e) );
         Box::new(result)
@@ -123,7 +123,7 @@ for ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
         let hash_bytes_clone = hash_bytes.clone();
         let hasher_clone = self.hasher.clone();
         // let serializer_clone = self.serializer.clone();
-        let result = self.storage.lookup(hash_bytes)
+        let result = self.storage.get(hash_bytes)
             .map_err( |e| HashSpaceError::StorageError(e) )
             .and_then( move |serialized_obj|
                 match hasher_clone.validate(&serialized_obj, &hash_bytes_clone) {
