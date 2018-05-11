@@ -32,6 +32,24 @@ use tokio_io::{AsyncRead, AsyncWrite};
 
 use futures::{future, Future, Stream};
 
+
+
+
+pub struct Incall{
+    request : CallRequest,
+}
+
+impl IncomingCall for Incall{
+    fn request(&self) -> &CallRequest{
+        &self.request
+    }
+    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>){
+        
+    }
+}
+
+
+
 // fn main(){
 //     //print!("{}[2J", 27 as char);
 //     println!("Setting up config\n");
@@ -121,23 +139,23 @@ use futures::Sink;
 
     fn main(){
         //print!("{}[2J", 27 as char);
-        println!( "***Setting up reactor and address variable" );
+        //println!( "***Setting up reactor and address variable" );
         let mut reactor = tokio_core::reactor::Core::new().unwrap();
         let handle = reactor.handle();
 
         let homeaddr = "/ip4/127.0.0.1/udp/9876";
         let homemultiaddr = homeaddr.to_multiaddr().unwrap();
         
-        println!( "***Setting up signers" );
+        //println!( "***Setting up signers" );
 
         let homesigno = Rc::new( dummy::Signo::new( "makusguba" ) );
         let other_homesigno = Rc::new( dummy::Signo::new( "tulfozotttea" ) );
 
-        println!("***Setting up profiles");
+        //println!("***Setting up profiles");
         let homeprof = dummy::make_home_profile( &homeaddr ,homesigno.pub_key() );
         let other_homeprof = dummy::make_home_profile( &homeaddr ,other_homesigno.pub_key());
         
-        println!("***ProfileGateway: ProfileSigner, DummyHome(as profile repo), HomeConnector" );
+        //println!("***ProfileGateway: ProfileSigner, DummyHome(as profile repo), HomeConnector" );
 
         let mut dht = ProfileStore::new();
         dht.insert(homeprof.id.clone(), homeprof.clone());
@@ -211,6 +229,13 @@ use futures::Sink;
             );
             println!("user_one_line_end");
             future::ok( msg_receiver )
+        })
+        .and_then(|rec|{
+            rec.take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("message answer error")))
+        })
+        .and_then(|msg|{
+            println!("{:?}", msg);
+            future::ok(())
         });
 
         let mut other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
@@ -272,20 +297,47 @@ use futures::Sink;
             })
             .and_then(move |_|{
                 println!("user_two_checks_into_app");
-                other_session.checkin_app( &ApplicationId( String::from( "SampleApp" ) ) ).take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("Test error n+1")))
+                other_session.checkin_app( &ApplicationId( String::from( "SampleApp" ) ) )
+                    .take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("Test error n+1")))
             })
         })
         .and_then(|calls|{
             for call in calls{
                 let incall = call.unwrap();
-                println!("{:?}", incall.request());
-                incall.answer(None);
+                let ptr = incall.request();
+
+                let sink = ptr.to_caller.to_owned().unwrap();
+                sink.send(Ok(AppMessageFrame(Vec::from("sink.send"))));
+
+                //incall.answer(None);
             }
             futures::future::ok(()) 
         });  
 
         let joined_f4t = Future::join(sess, other_reg); 
         let definitive_succes = reactor.run(joined_f4t);
-
         println!( "***We're done here, let's go packing" );
     }
+
+
+
+
+//Call handling test code
+
+/*       
+        let (sen, rec) : (mpsc::Sender<Result<AppMessageFrame, String>>, mpsc::Receiver<Result<AppMessageFrame, String>>) = mpsc::channel(1);
+
+        let incoming = CallRequest{
+            relation:       dummy_relation_proof("whatever"),
+            init_payload:   AppMessageFrame(Vec::from("internal shit")),
+            to_caller:      Some(sen),
+        };
+        let incall_impl = Incall{request : incoming};
+        let ptr = incall_impl.request();
+        
+        let sink = ptr.to_caller.to_owned().unwrap();
+        reactor.run(sink.send(Ok(AppMessageFrame(Vec::from("sink.send")))));
+        println!("\n {:?}", AppMessageFrame(Vec::from("sink.send")));
+        let receive_fut = rec.take(1).collect();
+        let received_msg = reactor.run(receive_fut);
+        println!("\n {:?}", received_msg);*/
