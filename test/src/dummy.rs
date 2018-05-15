@@ -497,3 +497,16 @@ impl HomeSession for HomeSessionDummy
         Box::new( future::ok( txt.to_owned() ) )
     }
 }
+
+pub struct Incall{
+    request : CallRequest,
+}
+
+impl IncomingCall for Incall{
+    fn request(&self) -> &CallRequest{
+        &self.request
+    }
+    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>){
+        
+    }
+}
