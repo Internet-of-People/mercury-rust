@@ -15,7 +15,7 @@ use tokio_core::reactor;
 use tokio_core::net::TcpListener;
 
 use mercury_home_node::*;
-use mercury_home_node::crypto::{Ed25519Validator, MultiHashProfileValidator};
+use mercury_home_node::crypto::{CompositeValidator, Ed25519Validator, MultiHashProfileValidator};
 use mercury_storage::async::{ModularHashSpace, imp::InMemoryStore};
 
 
@@ -39,10 +39,10 @@ fn main()
         //let distributed_storage = Box::new( Ipfs::new( "localhost", 5001, &handle1.clone() )? )
         let distributed_storage = Box::new( InMemoryStore::new() );
         let local_storage = Box::new( InMemoryStore::new() );
-        let signature_validator = Box::new( Ed25519Validator::new() );
-        let profile_validator = Box::new( MultiHashProfileValidator::new() );
-        let home = Box::new( server::HomeServer::new(distributed_storage, local_storage,
-            signature_validator, profile_validator) );
+        let profile_validator = MultiHashProfileValidator::new();
+        let signature_validator = Ed25519Validator::new();
+        let validator = Box::new( CompositeValidator::new(profile_validator, signature_validator) );
+        let home = Box::new( server::HomeServer::new(distributed_storage, local_storage, validator) );
         protocol_capnp::HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle1.clone() );
         Ok( () )
     } );

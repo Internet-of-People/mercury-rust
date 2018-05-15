@@ -57,14 +57,11 @@ pub trait Signer
 }
 
 
-pub trait SignatureValidator
+pub trait Validator
 {
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
         -> Result<bool, ErrorToBeSpecified>;
-}
 
-pub trait ProfileValidator
-{
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
         -> Result<bool, ErrorToBeSpecified>;
 }

@@ -12,8 +12,7 @@ pub struct HomeServer
 {
     distributed_storage:    Box< KeyValueStore<ProfileId, Profile> >,
     local_storage:          Box< KeyValueStore<ProfileId, OwnProfile> >,
-    signature_validator:    Box<SignatureValidator>,
-    profile_validator:      Box<ProfileValidator>,
+    validator:              Box<Validator>,
 }
 
 
@@ -22,10 +21,9 @@ impl HomeServer
 {
     pub fn new(distributed_storage: Box< KeyValueStore<ProfileId, Profile> >,
                local_storage:       Box< KeyValueStore<ProfileId, OwnProfile> >,
-               signature_validator: Box<SignatureValidator>,
-               profile_validator:   Box<ProfileValidator>) -> Self
+               validator:           Box<Validator>) -> Self
         { Self { distributed_storage: distributed_storage, local_storage: local_storage,
-                 signature_validator: signature_validator, profile_validator: profile_validator } }
+                 validator: validator } }
 }
 
 

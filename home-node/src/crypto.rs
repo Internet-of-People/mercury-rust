@@ -7,6 +7,44 @@ use mercury_home_protocol::*;
 
 
 
+pub trait ProfileValidator
+{
+    fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
+        -> Result<bool, ErrorToBeSpecified>;
+}
+
+pub trait SignatureValidator
+{
+    fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
+        -> Result<bool, ErrorToBeSpecified>;
+}
+
+
+pub struct CompositeValidator<P,S>
+{
+    profile_validator:      P,
+    signature_validator:    S,
+}
+
+impl<P,S> CompositeValidator<P,S>
+{
+    pub fn new(profile_validator: P, signature_validator: S) -> Self
+        { Self{ profile_validator: profile_validator, signature_validator: signature_validator } }
+}
+
+impl<P: ProfileValidator, S: SignatureValidator> Validator for CompositeValidator<P,S>
+{
+    fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
+        -> Result<bool, ErrorToBeSpecified>
+    { self.profile_validator.validate_profile(public_key, profile_id) }
+
+    fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
+        -> Result<bool, ErrorToBeSpecified>
+    { self.signature_validator.validate_signature(public_key, data, signature) }
+}
+
+
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PrivateKey(pub Vec<u8>);
 
