@@ -462,7 +462,10 @@ impl HomeSession for HomeSessionDummy
     fn events(&self) -> HomeStream<ProfileEvent, String>
     {
         println!("HomeSessionDummy.events");
-        let (sender, receiver) = sync::mpsc::channel(1);
+        let (sender, receiver) = futures::sync::mpsc::channel(1);
+        // &self.stream.push(sender);
+        // &self.stream[0].send( Ok( ProfileEvent::Unknown( Vec::from("DummyEvents")) ) );
+
         receiver
         // match self.home.borrow().events.get(&self.prof){
         //     Some(evec) => {
