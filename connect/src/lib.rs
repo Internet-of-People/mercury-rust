@@ -70,8 +70,8 @@ impl HomeContext
 impl PeerContext for HomeContext
 {
     fn my_signer(&self) -> &Signer { &*self.signer }
-    fn peer_pubkey(&self) -> Option<PublicKey> { Some( self.home_profile.pub_key.clone() ) }
-    fn peer(&self) -> Option<Profile> { Some( self.home_profile.clone() ) }
+    fn peer_pubkey(&self) -> Option<&PublicKey> { Some(&self.home_profile.pub_key) }
+    fn peer_id(&self) -> Option<&ProfileId> { Some(&self.home_profile.id) }
 }
 
 

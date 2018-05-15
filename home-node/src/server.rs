@@ -1,3 +1,4 @@
+use std::rc::Rc;
 use std::error::Error;
 
 use futures::{future, sync, Future};
@@ -8,22 +9,47 @@ use mercury_storage::async::KeyValueStore;
 
 
 
+pub struct ClientContext
+{
+    signer:             Rc<Signer>,
+    client_pub_key:     PublicKey,
+    client_profile_id:  ProfileId,
+    //client_profile: Profile,
+}
+
+impl ClientContext
+{
+    pub fn new(signer: Rc<Signer>, client_pub_key: PublicKey, client_profile_id: ProfileId) -> Self // client_profile: Profile) -> Self
+        { Self{ signer: signer, client_pub_key: client_pub_key, client_profile_id: client_profile_id } } //  client_profile: client_profile } }
+}
+
+impl PeerContext for ClientContext
+{
+    fn my_signer(&self) -> &Signer { &*self.signer }
+    fn peer_pubkey(&self) -> Option<&PublicKey> { Some(&self.client_pub_key) }
+    fn peer_id(&self) -> Option<&ProfileId> { Some(&self.client_profile_id) }
+}
+
+
+
 pub struct HomeServer
 {
+    context:                Box<PeerContext>,
+    validator:              Rc<Validator>,
     distributed_storage:    Box< KeyValueStore<ProfileId, Profile> >,
     local_storage:          Box< KeyValueStore<ProfileId, OwnProfile> >,
-    validator:              Box<Validator>,
 }
 
 
 
 impl HomeServer
 {
-    pub fn new(distributed_storage: Box< KeyValueStore<ProfileId, Profile> >,
-               local_storage:       Box< KeyValueStore<ProfileId, OwnProfile> >,
-               validator:           Box<Validator>) -> Self
-        { Self { distributed_storage: distributed_storage, local_storage: local_storage,
-                 validator: validator } }
+    pub fn new(context:             Box<PeerContext>,
+               validator:           Rc<Validator>,
+               distributed_storage: Box< KeyValueStore<ProfileId, Profile> >,
+               local_storage:       Box< KeyValueStore<ProfileId, OwnProfile> > ) -> Self
+        { Self { context: context, validator: validator,
+                 distributed_storage: distributed_storage, local_storage: local_storage, } }
 }
 
 

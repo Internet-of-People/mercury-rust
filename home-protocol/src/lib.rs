@@ -146,8 +146,8 @@ impl Profile
 pub trait PeerContext
 {
     fn my_signer(&self) -> &Signer;
-    fn peer_pubkey(&self) -> Option<PublicKey>;
-    fn peer(&self) -> Option<Profile>; // TODO is a ProfileId enough here?
+    fn peer_pubkey(&self) -> Option<&PublicKey>;
+    fn peer_id(&self) -> Option<&ProfileId>;
 }
 
 
