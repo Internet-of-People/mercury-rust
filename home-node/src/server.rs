@@ -26,8 +26,14 @@ impl ClientContext
 impl PeerContext for ClientContext
 {
     fn my_signer(&self) -> &Signer { &*self.signer }
-    fn peer_pubkey(&self) -> Option<&PublicKey> { Some(&self.client_pub_key) }
-    fn peer_id(&self) -> Option<&ProfileId> { Some(&self.client_profile_id) }
+    fn peer_pubkey(&self) -> &PublicKey { &self.client_pub_key }
+    fn peer_id(&self) -> &ProfileId { &self.client_profile_id }
+
+//    fn validate(&self, validator: Rc<Validator>) -> Result<(),ErrorToBeSpecified>
+//    {
+//        validator.validate_profile(&client_pub_key, &client_profile_id)
+//            .and_then( |valid| if valid { () } else { ErrorToBeSpecified::TODO( "Invalid profile info".to_owned() ) } );
+//    }
 }
 
 
@@ -36,8 +42,8 @@ pub struct HomeServer
 {
     context:                Box<PeerContext>,
     validator:              Rc<Validator>,
-    distributed_storage:    Box< KeyValueStore<ProfileId, Profile> >,
-    local_storage:          Box< KeyValueStore<ProfileId, OwnProfile> >,
+    distributed_storage:    Rc< KeyValueStore<ProfileId, Profile> >,
+    local_storage:          Rc< KeyValueStore<ProfileId, OwnProfile> >,
 }
 
 
@@ -46,8 +52,8 @@ impl HomeServer
 {
     pub fn new(context:             Box<PeerContext>,
                validator:           Rc<Validator>,
-               distributed_storage: Box< KeyValueStore<ProfileId, Profile> >,
-               local_storage:       Box< KeyValueStore<ProfileId, OwnProfile> > ) -> Self
+               distributed_storage: Rc< KeyValueStore<ProfileId, Profile> >,
+               local_storage:       Rc< KeyValueStore<ProfileId, OwnProfile> > ) -> Self
         { Self { context: context, validator: validator,
                  distributed_storage: distributed_storage, local_storage: local_storage, } }
 }
@@ -75,6 +81,7 @@ impl ProfileRepo for HomeServer
     fn resolve(&self, url: &str) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
+        // TODO parse URL and fetch profile accordingly
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeServer/ProfileRepo.resolve"))) )
     }
 }
@@ -86,7 +93,16 @@ impl Home for HomeServer
     fn claim(&self, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeServer.claim "))) )
+        // TODO consider if this is needed here or can we safely suppose that it's enforced at context creation already
+        if let Err(e) = self.context.validate(&*self.validator)
+            { return Box::new( future::err(e) ) }
+
+        if profile != *self.context.peer_id()
+            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Access denied: you authenticated with a different profile".to_owned() ) ) ) }
+
+        let claim_fut = self.local_storage.get(profile)
+            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
+        Box::new(claim_fut)
     }
 
     fn register(&mut self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->

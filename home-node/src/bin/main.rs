@@ -58,8 +58,8 @@ fn main()
 
         // TODO use persistent storages both for local and distributed
         //let distributed_storage = Box::new( Ipfs::new( "localhost", 5001, &handle1.clone() )? )
-        let distributed_storage = Box::new( InMemoryStore::new() );
-        let local_storage = Box::new( InMemoryStore::new() );
+        let distributed_storage = Rc::new( InMemoryStore::new() );
+        let local_storage = Rc::new( InMemoryStore::new() );
 
         let home = Box::new( HomeServer::new(context, validator.clone(), distributed_storage, local_storage) );
         protocol_capnp::HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle_clone.clone() );

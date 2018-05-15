@@ -146,8 +146,16 @@ impl Profile
 pub trait PeerContext
 {
     fn my_signer(&self) -> &Signer;
-    fn peer_pubkey(&self) -> Option<&PublicKey>;
-    fn peer_id(&self) -> Option<&ProfileId>;
+    fn peer_pubkey(&self) -> &PublicKey;
+    fn peer_id(&self) -> &ProfileId;
+
+    fn validate(&self, validator: &Validator) -> Result<(),ErrorToBeSpecified>
+    {
+        validator.validate_profile( self.peer_pubkey(), self.peer_id() )
+            .and_then( |valid|
+                if valid { Ok( () ) }
+                else { Err( ErrorToBeSpecified::TODO( "Peer context is invalid".to_owned() ) ) } )
+    }
 }
 
 
