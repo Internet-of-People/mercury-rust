@@ -57,14 +57,15 @@ pub trait Signer
 }
 
 
-// TODO profile and signature validation does not seem to be related, this trait might need to be split into two.
-//      Profile id validation is related to (multi)hash while signature validation is crypto (multi)signatures.
+pub trait SignatureValidator
+{
+    fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
+        -> Result<bool, ErrorToBeSpecified>;
+}
+
 pub trait ProfileValidator
 {
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
-        -> Result<bool, ErrorToBeSpecified>;
-
-    fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
         -> Result<bool, ErrorToBeSpecified>;
 }
 

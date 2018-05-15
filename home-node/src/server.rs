@@ -12,7 +12,8 @@ pub struct HomeServer
 {
     distributed_storage:    Box< KeyValueStore<ProfileId, Profile> >,
     local_storage:          Box< KeyValueStore<ProfileId, OwnProfile> >,
-    validator:              Box<ProfileValidator>,
+    signature_validator:    Box<SignatureValidator>,
+    profile_validator:      Box<ProfileValidator>,
 }
 
 
@@ -21,9 +22,10 @@ impl HomeServer
 {
     pub fn new(distributed_storage: Box< KeyValueStore<ProfileId, Profile> >,
                local_storage:       Box< KeyValueStore<ProfileId, OwnProfile> >,
-               validator:           Box<ProfileValidator>) -> Self
+               signature_validator: Box<SignatureValidator>,
+               profile_validator:   Box<ProfileValidator>) -> Self
         { Self { distributed_storage: distributed_storage, local_storage: local_storage,
-                 validator: validator } }
+                 signature_validator: signature_validator, profile_validator: profile_validator } }
 }
 
 
@@ -83,6 +85,7 @@ impl Home for HomeServer
     {
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_request "))) )
     }
+
 
     // NOTE acceptor must have this server as its home
     fn pair_response(&mut self, rel: RelationProof) ->

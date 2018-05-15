@@ -36,11 +36,11 @@ use futures::{future, Future, Stream};
 
 
 pub struct Incall{
-    request : CallRequest,
+    request : CallRequestDetails,
 }
 
 impl IncomingCall for Incall{
-    fn request(&self) -> &CallRequest{
+    fn request_details(&self) -> &CallRequestDetails{
         &self.request
     }
     fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>){
@@ -304,7 +304,7 @@ use futures::Sink;
         .and_then(|calls|{
             for call in calls{
                 let incall = call.unwrap();
-                let ptr = incall.request();
+                let ptr = incall.request_details();
 
                 let sink = ptr.to_caller.to_owned().unwrap();
                 sink.send(Ok(AppMessageFrame(Vec::from("sink.send"))));

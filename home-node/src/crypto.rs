@@ -55,19 +55,8 @@ impl Ed25519Validator
     pub fn new() -> Self { Self{} }
 }
 
-impl ProfileValidator for Ed25519Validator
+impl SignatureValidator for Ed25519Validator
 {
-    fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
-        -> Result<bool, ErrorToBeSpecified>
-    {
-        let id_hashalgo = multihash::decode( profile_id.0.as_slice() )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
-            ?.alg;
-        let key_hash = multihash::encode( id_hashalgo, public_key.0.as_slice() )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
-        Ok( key_hash == profile_id.0 )
-    }
-
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
         -> Result<bool, ErrorToBeSpecified>
     {
@@ -83,6 +72,27 @@ impl ProfileValidator for Ed25519Validator
     }
 }
 
+
+pub struct MultiHashProfileValidator {}
+
+impl MultiHashProfileValidator
+{
+    pub fn new() -> Self { Self{} }
+}
+
+impl ProfileValidator for MultiHashProfileValidator
+{
+    fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
+        -> Result<bool, ErrorToBeSpecified>
+    {
+        let id_hashalgo = multihash::decode(profile_id.0.as_slice())
+            .map_err(|e| ErrorToBeSpecified::TODO(e.description().to_owned()))
+            ?.alg;
+        let key_hash = multihash::encode(id_hashalgo, public_key.0.as_slice())
+            .map_err(|e| ErrorToBeSpecified::TODO(e.description().to_owned()))?;
+        Ok(key_hash == profile_id.0)
+    }
+}
 
 
 #[cfg(test)]
