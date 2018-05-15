@@ -20,10 +20,8 @@ mod test{
     use std::net::ToSocketAddrs;
     use std::rc::Rc;
     use std::cell::RefCell;
-    use std::io::{BufRead, Read, Write, stdin};
 
-    use multihash::{encode, Hash};
-    use multiaddr::{ToMultiaddr, Multiaddr};
+    use multiaddr::{ToMultiaddr};
 
     use futures::future;
     use futures::{Future, Stream, Sink};
@@ -31,7 +29,6 @@ mod test{
 
     use tokio_core::net::{TcpListener, TcpStream};
     use tokio_core::reactor;
-    use tokio_io::{AsyncRead, AsyncWrite};
 
     use mercury_home_protocol::*;
     use mercury_connect::*;
@@ -56,7 +53,7 @@ mod test{
 
         let mut dht = ProfileStore::new();
         dht.insert(homeprof.id.clone(), homeprof.clone());
-        let mut home_storage = Rc::new( RefCell::new(dht) );
+        let home_storage = Rc::new( RefCell::new(dht) );
 
         let handle1 = reactor.handle();
         let server_socket = TcpListener::bind( &addr, &reactor.handle() ).expect("Failed to bind socket");
@@ -64,15 +61,15 @@ mod test{
         {
             println!("Accepted client connection, serving requests");
             //let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
-            let mut store_clone = Rc::clone(&home_storage);
+            let store_clone = Rc::clone(&home_storage);
             let home = Box::new( MyDummyHome::new( homeprof.clone() , store_clone ) );
             HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle1.clone() );
             Ok( () )
-        } );
+        } ).map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")));
 
         let handle2 = reactor.handle();
         let client_fut = TcpStream::connect( &addr, &reactor.handle() )
-            .map_err( |e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")))
+            .map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")))
             .and_then( |tcp_stream|
             {
                 let signer = Rc::new( Signo::new("privatekey") );
@@ -90,6 +87,8 @@ mod test{
     //    let futs = server_fut.select(client_fut);
     //    let both_fut = select_ok( futs.iter() ); // **i as &Future<Item=(),Error=()> ) );
     //    let result = reactor.run(both_fut);
+        let result = reactor.run(Future::join(server_fut,client_fut));
+        assert!(result.is_ok());
     }
 
     #[test]
@@ -130,22 +129,26 @@ mod test{
     fn test_unregister(){
         let mut setup = dummy::TestSetup::setup();
 
-        let homeless_profile = setup.userownprofile.clone();
+        //homeless_profile might be unneeded because unregistering does not give back a profile rid of home X    
+        let _homeless_profile = setup.userownprofile.clone();
         let homeid = setup.homeprofileid.clone();
         let userid = setup.userid.clone();
-        let mut registered = setup.profilegate.register(
+        let registered = setup.profilegate.register(
                 setup.homeprofileid.clone(),
                 setup.userownprofile.clone(),
                 None
         );
         let reg = setup.reactor.run(registered).unwrap();
+        println!("{:?}", reg);
+        //assert!(reg.is_ok());
         //see test_register() to see if registering works as intended
         let unreg = setup.profilegate.unregister(
             homeid,
             userid,
             None
         );
-        let res = setup.reactor.run(unreg).unwrap(); 
+        let res = setup.reactor.run(unreg);
+        assert!(res.is_err()); 
         //TODO needs HomeSession unregister implementation    
         //assert_eq!(res, homeless_profile);
     }
@@ -157,7 +160,8 @@ mod test{
 
         let home_session = setup.profilegate.login();
 
-        let res = setup.reactor.run(home_session);      
+        let res = setup.reactor.run(home_session); 
+        assert!(res.is_ok());     
     }
 
     #[test]
@@ -170,7 +174,8 @@ mod test{
             home_session.ping( "test_ping" )
         });
 
-        let res = setup.reactor.run(response);      
+        let res = setup.reactor.run(response);
+        assert!(res.is_ok());      
     }
 
     #[test]
@@ -203,7 +208,8 @@ mod test{
         );
         //TODO needs homesession.update implementation
         //session updates profile stored on home(?)
-        let res = setup.reactor.run(home_session);      
+        let res = setup.reactor.run(home_session);
+        assert!(res.is_ok());      
     }
 
     #[test]
@@ -218,18 +224,20 @@ mod test{
             None
         );
         //TODO needs home.call implementation...
-        let res = setup.reactor.run(call_messages);      
+        let res = setup.reactor.run(call_messages); 
+        assert!(res.is_ok());     
     }
 
     #[test]
     fn test_pair_req(){
         //TODO could be tested by sending pair request and asserting the events half_proof that the peer receives to what is should be
-        let signo = Rc::new( dummy::Signo::new( "TestKey" ) );
+        //let signo = Rc::new( dummy::Signo::new( "TestKey" ) );
         let mut setup = dummy::TestSetup::setup();
 
         let zero = setup.profilegate.pair_request( "test_relation", "test_url" );
 
         let res = setup.reactor.run(zero);   
+        assert!(res.is_ok());
     }
 
     #[test]
@@ -239,7 +247,8 @@ mod test{
         let zero = setup.profilegate.pair_response(
                 dummy::dummy_relation("test_relation"));
 
-        let res = setup.reactor.run(zero);      
+        let res = setup.reactor.run(zero);
+        assert!(res.is_ok());      
     }
 
     #[test]
@@ -251,7 +260,7 @@ mod test{
 
         //let relations = None;
         let res = setup.reactor.run(zero);
-        //assert_eq!(res, relations);
+        assert!(res.is_err());
     }
 
     #[test]
@@ -259,10 +268,10 @@ mod test{
         //print!("{}[2J", 27 as char);
         //println!( "***Setting up reactor and address variable" );
         let mut reactor = tokio_core::reactor::Core::new().unwrap();
-        let handle = reactor.handle();
+        //let handle = reactor.handle();
 
         let homeaddr = "/ip4/127.0.0.1/udp/9876";
-        let homemultiaddr = homeaddr.to_multiaddr().unwrap();
+        //let homemultiaddr = homeaddr.to_multiaddr().unwrap();
         
         //println!( "***Setting up signers" );
 
@@ -279,15 +288,15 @@ mod test{
         dht.insert(homeprof.id.clone(), homeprof.clone());
         dht.insert(other_homeprof.id.clone(), other_homeprof.clone());
 
-        let mut home_storage = Rc::new( RefCell::new(dht) );
-        let mut ownhomestore = Rc::clone(&home_storage);
-        let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
+        let home_storage = Rc::new( RefCell::new(dht) );
+        let ownhomestore = Rc::clone(&home_storage);
+        let home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
 
         let other_signo = Rc::new( dummy::Signo::new( "Othereusz" ) );
 
 
         let signo = Rc::new( dummy::Signo::new( "Deuszkulcs" ) );
-        let mut profile = make_own_persona_profile(signo.pub_key() );
+        let profile = make_own_persona_profile(signo.pub_key() );
 
         let own_gateway = ProfileGatewayImpl::new(
             signo,
@@ -303,18 +312,18 @@ mod test{
                 dummy::create_ownprofile( profile.clone() ),
                 None
         )
-        .map_err(|(p, e)|e)
-        .join( reg_receiver.take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )                
-        .and_then(|session|{
+        .map_err(|(_p, e)|e)
+        .join( reg_receiver.take(1).collect().map_err(|_e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )                
+        .and_then(|_reg_string|{
             println!("user_one_requests");
             let f = other_signo.prof_id().0.clone();
             let problem = unsafe{String::from_utf8_unchecked(f)};
             own_gateway.pair_request( "relation_dummy_type", &problem )
         })
         .and_then(| _ |{
-            request_sender.send(String::from("Other user registered")).map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive")))
+            request_sender.send(String::from("Other user registered")).map_err(|_e|ErrorToBeSpecified::TODO(String::from("cannot join on receive")))
         })
-        .and_then(|own_profile|{
+        .and_then(|_own_profile|{
             println!( "user_one_login" );
             own_gateway.login()
         })
@@ -339,7 +348,7 @@ mod test{
 
             println!( "***call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
             let relation = Relation::new(&profile,&relation_proof);
-            let call = own_gateway.call(
+            own_gateway.call(
                 relation,
                 ApplicationId( String::from( "SampleApp" ) ), 
                 AppMessageFrame( Vec::from( "whatever" ) ),
@@ -349,17 +358,17 @@ mod test{
             future::ok( msg_receiver )
         })
         .and_then(|rec|{
-            rec.take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("message answer error")))
+            rec.take(1).collect().map_err(|_e|ErrorToBeSpecified::TODO(String::from("message answer error")))
         })
         .and_then(|msg|{
             println!("{:?}", msg);
             future::ok(())
         });
 
-        let mut other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
-        let mut home_storage_other = Rc::clone(&home_storage);
+        let other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
+        let home_storage_other = Rc::clone(&home_storage);
 
-        let mut other_profile = make_own_persona_profile(other_signo.pub_key() );
+        let other_profile = make_own_persona_profile(other_signo.pub_key() );
         let other_gateway = ProfileGatewayImpl::new(
             other_signo.clone(), 
             home_storage_other,
@@ -372,11 +381,11 @@ mod test{
             dummy::create_ownprofile( other_profile.clone() ),
             None
         )
-        .map_err(|(p,e)|e)
+        .map_err(|(_p,e)|e)
         .and_then(| _ |{
-            reg_sender.send(String::from("Other user registered")).map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive")))
+            reg_sender.send(String::from("Other user registered")).map_err(|_e|ErrorToBeSpecified::TODO(String::from("cannot join on receive")))
         })
-        .join( request_receiver.take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )
+        .join( request_receiver.take(1).collect().map_err(|_e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )
         .and_then(| _ |{
             println!("user_two_login");
             other_gateway.login()
@@ -416,7 +425,7 @@ mod test{
             .and_then(move |_|{
                 println!("user_two_checks_into_app");
                 other_session.checkin_app( &ApplicationId( String::from( "SampleApp" ) ) )
-                    .take(1).collect().map_err(|e|ErrorToBeSpecified::TODO(String::from("Test error n+1")))
+                    .take(1).collect().map_err(|_e|ErrorToBeSpecified::TODO(String::from("Test error n+1")))
             })
         })
         .and_then(|calls|{
@@ -425,15 +434,15 @@ mod test{
                 let ptr = incall.request();
 
                 let sink = ptr.to_caller.to_owned().unwrap();
-                sink.send(Ok(AppMessageFrame(Vec::from("sink.send"))));
-
+                let sent =sink.send(Ok(AppMessageFrame(Vec::from("sink.send"))));
+                println!("{:?}", sent);
                 //incall.answer(None);
             }
             futures::future::ok(()) 
         });  
 
         let joined_f4t = Future::join(sess, other_reg); 
-        let definitive_succes = reactor.run(joined_f4t);
+        let _definitive_success = reactor.run(joined_f4t);
         println!( "***We're done here, let's go packing" );
     }
 }
