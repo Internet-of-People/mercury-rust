@@ -133,6 +133,7 @@ pub trait PeerContext
 {
     fn my_signer(&self) -> &Signer;
     fn peer_pubkey(&self) -> Option<PublicKey>;
+    /// peer and peer_pubkey must belong to the same profile in the implementors
     fn peer(&self) -> Option<Profile>;
 }
 
@@ -253,9 +254,14 @@ impl RelationProof
 pub struct HomeInvitation
 {
     pub home_id:    ProfileId,
+
+    /// A unique string that identifies the invitation
     pub voucher:    String,
+
+    /// The signature of the home
     pub signature:  Signature,
     // TODO is a nonce needed?
+    // TODO is an expiration time needed?
 }
 
 impl HomeInvitation
