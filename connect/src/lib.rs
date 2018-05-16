@@ -43,14 +43,14 @@ pub trait ProfileConnector
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Relation
 {
-    pub profile:    Profile,
+    pub peer:       Profile,
     pub proof:      RelationProof,
 }
 
 impl Relation
 {
-    pub fn new(profile: &Profile, proof: &RelationProof) -> Self
-        { Self { profile: profile.clone(), proof: proof.clone() } }
+    pub fn new(peer: &Profile, proof: &RelationProof) -> Self
+        { Self { peer: peer.clone(), proof: proof.clone() } }
 }
 
 
@@ -330,7 +330,7 @@ impl ProfileGateway for ProfileGatewayImpl
     fn pair_response(&self, rel: Relation) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        let pair_fut = self.any_home_of(&rel.profile)
+        let pair_fut = self.any_home_of(&rel.peer)
             .and_then( move |home| home.borrow_mut().pair_response(rel.proof) );
         Box::new(pair_fut)
     }
@@ -340,7 +340,7 @@ impl ProfileGateway for ProfileGatewayImpl
             to_caller: Option<AppMsgSink>) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
-        let call_fut = self.any_home_of(&rel.profile)
+        let call_fut = self.any_home_of(&rel.peer)
             .and_then( move |home|
                 home.borrow().call( app, CallRequest{ relation: rel.proof,
                     init_payload: init_payload, to_caller: to_caller } ) ) ;
