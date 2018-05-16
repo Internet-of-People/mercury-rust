@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::error::Error;
 
@@ -42,8 +43,8 @@ pub struct HomeServer
 {
     context:                Box<PeerContext>,
     validator:              Rc<Validator>,
-    distributed_storage:    Rc< KeyValueStore<ProfileId, Profile> >,
-    local_storage:          Rc< KeyValueStore<ProfileId, OwnProfile> >,
+    distributed_storage:    Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
+    local_storage:          Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
 }
 
 
@@ -52,8 +53,8 @@ impl HomeServer
 {
     pub fn new(context:             Box<PeerContext>,
                validator:           Rc<Validator>,
-               distributed_storage: Rc< KeyValueStore<ProfileId, Profile> >,
-               local_storage:       Rc< KeyValueStore<ProfileId, OwnProfile> > ) -> Self
+               distributed_storage: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
+               local_storage:       Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >> ) -> Self
         { Self { context: context, validator: validator,
                  distributed_storage: distributed_storage, local_storage: local_storage, } }
 }
@@ -72,7 +73,7 @@ impl ProfileRepo for HomeServer
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
-        let profile_fut = self.distributed_storage.get( id.to_owned() )
+        let profile_fut = self.distributed_storage.borrow().get( id.to_owned() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         Box::new(profile_fut)
     }
@@ -98,9 +99,9 @@ impl Home for HomeServer
             { return Box::new( future::err(e) ) }
 
         if profile != *self.context.peer_id()
-            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Access denied: you authenticated with a different profile".to_owned() ) ) ) }
+            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Claim() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
-        let claim_fut = self.local_storage.get(profile)
+        let claim_fut = self.local_storage.borrow().get(profile)
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         Box::new(claim_fut)
     }
@@ -108,7 +109,36 @@ impl Home for HomeServer
     fn register(&mut self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
-        Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO(String::from("HomeSession.register "))) ) )
+        // TODO consider if this is needed here or can we safely suppose that it's enforced at context creation already
+        if let Err(e) = self.context.validate(&*self.validator)
+            { return Box::new( future::err( (own_prof,e) ) ) }
+
+        if own_prof.profile.id != *self.context.peer_id()
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different profile".to_owned() )) ) ) }
+
+        // TODO should we add our home details here into the persona facet's home vector of this profile?
+        let pub_prof = own_prof.profile.clone();
+        let own_prof1 = own_prof.clone();
+        let own_prof2 = own_prof.clone();
+        let local_store = self.local_storage.clone();
+        let shared_store = self.distributed_storage.clone();
+        let reg_fut = self.local_storage.borrow().get( own_prof.profile.id.clone() )
+            .then( |get_res|
+            {
+                match get_res {
+                    Ok(_stored_prof) => Err( ErrorToBeSpecified::TODO( "Register() rejected: this profile is already hosted".to_owned() ) ),
+                    // TODO only errors like NotFound should be accepted here, other errors should be delegated
+                    Err(e) => Ok( () ),
+                }
+            } )
+            .and_then( move |_| shared_store.borrow_mut().set( pub_prof.id.clone(), pub_prof )
+                .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) ) )
+            .and_then( move |_| local_store.borrow_mut().set( own_prof1.profile.id.clone(), own_prof1 )
+                .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) ) )
+            .map( |_| own_prof2 )
+            .map_err( move |e| (own_prof,e) );
+
+        Box::new(reg_fut)
     }
 
 

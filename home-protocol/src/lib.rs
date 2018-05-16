@@ -275,9 +275,14 @@ impl RelationProof
 pub struct HomeInvitation
 {
     pub home_id:    ProfileId,
+
+    /// A unique string that identifies the invitation
     pub voucher:    String,
+
+    /// The signature of the home
     pub signature:  Signature,
     // TODO is a nonce needed?
+    // TODO is an expiration time needed?
 }
 
 impl HomeInvitation
