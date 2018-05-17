@@ -7,6 +7,7 @@ use futures::sync::mpsc;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
+use mercury_storage::error::StorageError;
 
 
 
@@ -45,6 +46,8 @@ pub struct HomeServer
     validator:              Rc<Validator>,
     distributed_storage:    Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
     local_storage:          Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
+//    distributed_storage:    Rc< KeyValueStore<ProfileId, Profile> >,
+//    local_storage:          Rc< KeyValueStore<ProfileId, OwnProfile> >,
 }
 
 
@@ -55,6 +58,8 @@ impl HomeServer
                validator:           Rc<Validator>,
                distributed_storage: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
                local_storage:       Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >> ) -> Self
+//               distributed_storage: Rc< KeyValueStore<ProfileId, Profile> >,
+//               local_storage:       Rc< KeyValueStore<ProfileId, OwnProfile> > ) -> Self
         { Self { context: context, validator: validator,
                  distributed_storage: distributed_storage, local_storage: local_storage, } }
 }
@@ -121,22 +126,30 @@ impl Home for HomeServer
         let own_prof1 = own_prof.clone();
         let own_prof2 = own_prof.clone();
         let local_store = self.local_storage.clone();
-        let shared_store = self.distributed_storage.clone();
+        let distributed_store = self.distributed_storage.clone();
         let reg_fut = self.local_storage.borrow().get( own_prof.profile.id.clone() )
             .then( |get_res|
             {
                 match get_res {
-                    Ok(_stored_prof) => Err( ErrorToBeSpecified::TODO( "Register() rejected: this profile is already hosted".to_owned() ) ),
+                    Ok(_stored_prof) => Err(StorageError::InvalidKey),
+                    // Ok(_stored_prof) => Err( ErrorToBeSpecified::TODO( "Register() rejected: this profile is already hosted".to_owned() ) ),
                     // TODO only errors like NotFound should be accepted here, other errors should be delegated
                     Err(e) => Ok( () ),
                 }
             } )
-            .and_then( move |_| shared_store.borrow_mut().set( pub_prof.id.clone(), pub_prof )
-                .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) ) )
-            .and_then( move |_| local_store.borrow_mut().set( own_prof1.profile.id.clone(), own_prof1 )
-                .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) ) )
+            .and_then( move |_|
+            {
+                let mut pub_store = distributed_store.borrow_mut();
+                pub_store.set( pub_prof.id.clone(), pub_prof )
+            } )
+            .and_then( move |_|
+            {
+                let mut priv_store = local_store.borrow_mut();
+                priv_store.set( own_prof1.profile.id.clone(), own_prof1 )
+            } )
+                // .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) ) )
             .map( |_| own_prof2 )
-            .map_err( move |e| (own_prof,e) );
+            .map_err( move |e| ( own_prof, ErrorToBeSpecified::TODO( e.description().to_owned() ) ) );
 
         Box::new(reg_fut)
     }
