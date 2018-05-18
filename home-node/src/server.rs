@@ -109,7 +109,7 @@ impl Home for HomeServer
 
 
     // TODO consider how to issue and process invites
-    fn register(&mut self, own_prof: OwnProfile, _invite: Option<HomeInvitation>) ->
+    fn register(&mut self, own_prof: OwnProfile, half_proof: RelationHalfProof, _invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         if own_prof.profile.id != *self.context.peer_id()

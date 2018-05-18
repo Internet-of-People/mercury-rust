@@ -314,7 +314,7 @@ impl Home for MyDummyHome
 
     // TODO consider how to enforce overwriting the original ownprofile with the modified one
     //      with the pairing proof, especially the error case
-    fn register(&mut self, mut own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
+    fn register(&mut self, mut own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
     Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >{
         println!("REGISTERING{:?}", own_prof.profile.id.0);
         let id = own_prof.profile.id.clone();
@@ -324,10 +324,8 @@ impl Home for MyDummyHome
         for mut facet in own_profile.profile.facets.iter_mut(){
             match facet {
                 &mut ProfileFacet::Persona(ref mut persona) => {
-
-                    let relation_proof = RelationProof::new(
-                        "home", &profile.id, &Signature(profile.pub_key.0.clone()), &self.home_profile.id, &Signature(self.home_profile.pub_key.0.clone())
-                        );
+                    let half_proof_clone = half_proof.clone();
+                    let relation_proof = RelationProof::from_halfproof(half_proof_clone, Signature(self.home_profile.pub_key.0.clone()));
                     
                     persona.homes.append( &mut vec!(relation_proof ) );
                     storing = true;
