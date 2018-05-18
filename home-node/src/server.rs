@@ -111,7 +111,9 @@ impl Home for HomeServer
         Box::new(claim_fut)
     }
 
-    fn register(&mut self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
+
+    // TODO consider how to issue and process invites
+    fn register(&mut self, own_prof: OwnProfile, _invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         // TODO consider if this is needed here or can we safely suppose that it's enforced at context creation already
@@ -121,35 +123,32 @@ impl Home for HomeServer
         if own_prof.profile.id != *self.context.peer_id()
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different profile".to_owned() )) ) ) }
 
+        let own_prof_original = own_prof.clone();
+        let error_mapper = |e: StorageError| ( own_prof_original, ErrorToBeSpecified::TODO( e.description().to_owned() ) );
+        let error_mapper_clone = error_mapper.clone();
+
         // TODO should we add our home details here into the persona facet's home vector of this profile?
-        let pub_prof = own_prof.profile.clone();
-        let own_prof1 = own_prof.clone();
-        let own_prof2 = own_prof.clone();
+        let pub_prof_modified = own_prof.profile.clone();
+        let own_prof_modified = own_prof.clone();
         let local_store = self.local_storage.clone();
         let distributed_store = self.distributed_storage.clone();
         let reg_fut = self.local_storage.borrow().get( own_prof.profile.id.clone() )
             .then( |get_res|
             {
                 match get_res {
-                    Ok(_stored_prof) => Err(StorageError::InvalidKey),
-                    // Ok(_stored_prof) => Err( ErrorToBeSpecified::TODO( "Register() rejected: this profile is already hosted".to_owned() ) ),
-                    // TODO only errors like NotFound should be accepted here, other errors should be delegated
+                    Ok(_stored_prof) => Err( ( own_prof, ErrorToBeSpecified::TODO( "Register() rejected: this profile is already hosted".to_owned() ) ) ),
+                    // TODO only errors like NotFound should be accepted here but other (e.g. I/O) errors should be delegated
                     Err(e) => Ok( () ),
                 }
             } )
-            .and_then( move |_|
-            {
-                let mut pub_store = distributed_store.borrow_mut();
-                pub_store.set( pub_prof.id.clone(), pub_prof )
-            } )
-            .and_then( move |_|
-            {
-                let mut priv_store = local_store.borrow_mut();
-                priv_store.set( own_prof1.profile.id.clone(), own_prof1 )
-            } )
-                // .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) ) )
-            .map( |_| own_prof2 )
-            .map_err( move |e| ( own_prof, ErrorToBeSpecified::TODO( e.description().to_owned() ) ) );
+            // Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
+            .and_then( move |_| { // Store public profile parts in distributed storage (e.g. DHT)
+                return distributed_store.borrow_mut().set( pub_prof_modified.id.clone(), pub_prof_modified )
+                    .map_err(error_mapper ); } )
+            .and_then( move |_| { // Store private profile info in local storage only (e.g. SQL)
+                return local_store.borrow_mut().set( own_prof_modified.profile.id.clone(), own_prof_modified.clone() )
+                    .map( |_| own_prof_modified )
+                    .map_err(error_mapper_clone); } );
 
         Box::new(reg_fut)
     }

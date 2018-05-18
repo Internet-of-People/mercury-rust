@@ -21,7 +21,7 @@ use mercury_home_protocol::*;
 use mercury_home_node::crypto::*;
 use mercury_home_node::server::*;
 use mercury_home_node::protocol_capnp;
-use mercury_storage::async::{ModularHashSpace, imp::InMemoryStore};
+use mercury_storage::async::imp::InMemoryStore;
 
 
 
@@ -47,7 +47,6 @@ fn main()
     println!("Waiting for clients");
     let handle_clone = handle.clone();
     let signer_clone = signer.clone();
-    let validator_clone = validator.clone();
     let done = socket.incoming().for_each(move |(socket, _addr)|
     {
         println!("Accepted client connection, serving requests");
