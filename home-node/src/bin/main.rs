@@ -54,7 +54,7 @@ fn main()
         // TODO fill this in properly for each connection based on TLS authentication info
         let client_pub_key = PublicKey( b"TestPublicKey: TODO implement filling this in properly with TLS authentication info".to_vec() );
         let client_profile_id = ProfileId( b"TestClientId: TODO implement filling this in properly with TLS authentication info".to_vec() );
-        let context = Box::new( ClientContext::new( signer_clone.clone(), client_pub_key, client_profile_id ) );
+        let context = Rc::new( ClientContext::new( signer_clone.clone(), client_pub_key, client_profile_id ) );
 
         // TODO use persistent storages both for local and distributed
         //let distributed_storage = Box::new( Ipfs::new( "localhost", 5001, &handle1.clone() )? )
@@ -63,8 +63,9 @@ fn main()
 //        let distributed_storage = Rc::new( InMemoryStore::new() );
 //        let local_storage = Rc::new( InMemoryStore::new() );
 
-        let home = Box::new( HomeServer::new(context, validator.clone(), distributed_storage, local_storage) );
-        protocol_capnp::HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle_clone.clone() );
+        let home = HomeServer::new(context, validator.clone(), distributed_storage, local_storage)
+            .map_err( |e| std::io::Error::from(std::io::ErrorKind::PermissionDenied) )?;
+        protocol_capnp::HomeDispatcherCapnProto::dispatch_tcp( Box::new(home), socket, handle_clone.clone() );
         Ok( () )
     } );
 

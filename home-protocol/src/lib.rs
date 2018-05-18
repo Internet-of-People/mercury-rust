@@ -377,7 +377,7 @@ pub trait IncomingCall
 
 pub trait HomeSession
 {
-    fn update(&self, own_prof: &OwnProfile) ->
+    fn update(&self, own_prof: OwnProfile) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home

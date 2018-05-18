@@ -301,7 +301,7 @@ impl HomeSession for HomeSessionClientCapnProto
     // TODO consider if we should notify an open session about an updated profile
     // TODO consider if an OwnProfile return value is needed or how to force updating
     //      the currently active profile in all PeerContext/Session/etc instances
-    fn update(&self, own_prof: &OwnProfile) ->
+    fn update(&self, own_prof: OwnProfile) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let mut request = self.session.update_request();

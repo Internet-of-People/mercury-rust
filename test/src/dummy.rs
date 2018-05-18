@@ -441,7 +441,7 @@ impl HomeSessionDummy
 
 impl HomeSession for HomeSessionDummy
 {
-    fn update(&self, own_prof: &OwnProfile) ->
+    fn update(&self, own_prof: OwnProfile) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         println!("HomeSessionDummy.update");

@@ -276,7 +276,7 @@ impl ProfileGateway for ProfileGatewayImpl
         let own_profile_id_clone = own_prof.profile.id.clone();
         let upd_fut = self.connect_home(&home_id)
             .and_then( move |home| home.borrow().login(own_profile_id_clone) )
-            .and_then( move |session| session.update(&own_profile_clone) );
+            .and_then( move |session| session.update(own_profile_clone) );
         Box::new(upd_fut)
     }
 

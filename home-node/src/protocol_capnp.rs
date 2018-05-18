@@ -241,7 +241,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
         let own_profile_capnp = pry!( pry!( params.get() ).get_own_profile() );
         let own_profile = pry!( OwnProfile::try_from(own_profile_capnp) );
 
-        let upd_fut = self.session.update(&own_profile)
+        let upd_fut = self.session.update(own_profile)
             .map_err( | e| ::capnp::Error::failed( format!("Failed to update: {:?}", e) ) ); // TODO proper error handling
 
         Promise::from_future(upd_fut)

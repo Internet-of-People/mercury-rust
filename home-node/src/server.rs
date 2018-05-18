@@ -42,26 +42,26 @@ impl PeerContext for ClientContext
 
 pub struct HomeServer
 {
-    context:                Box<PeerContext>,
-    validator:              Rc<Validator>,
-    distributed_storage:    Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
-    local_storage:          Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-//    distributed_storage:    Rc< KeyValueStore<ProfileId, Profile> >,
-//    local_storage:          Rc< KeyValueStore<ProfileId, OwnProfile> >,
+    context:            Rc<PeerContext>,
+    validator:          Rc<Validator>,
+    public_profile_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
+    hosted_profile_db:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
 }
 
 
 
 impl HomeServer
 {
-    pub fn new(context:             Box<PeerContext>,
-               validator:           Rc<Validator>,
-               distributed_storage: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
-               local_storage:       Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >> ) -> Self
-//               distributed_storage: Rc< KeyValueStore<ProfileId, Profile> >,
-//               local_storage:       Rc< KeyValueStore<ProfileId, OwnProfile> > ) -> Self
-        { Self { context: context, validator: validator,
-                 distributed_storage: distributed_storage, local_storage: local_storage, } }
+    pub fn new(context: Rc<PeerContext>, validator: Rc<Validator>,
+               public_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
+               private_db: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>)
+        -> Result<Self, ErrorToBeSpecified>
+    {
+        context.validate(&*validator)?;
+
+        Ok ( Self{ context: context, validator: validator,
+                   public_profile_dht: public_dht, hosted_profile_db: private_db } )
+    }
 }
 
 
@@ -78,7 +78,7 @@ impl ProfileRepo for HomeServer
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
-        let profile_fut = self.distributed_storage.borrow().get( id.to_owned() )
+        let profile_fut = self.public_profile_dht.borrow().get( id.to_owned() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         Box::new(profile_fut)
     }
@@ -99,14 +99,10 @@ impl Home for HomeServer
     fn claim(&self, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
     {
-        // TODO consider if this is needed here or can we safely suppose that it's enforced at context creation already
-        if let Err(e) = self.context.validate(&*self.validator)
-            { return Box::new( future::err(e) ) }
-
         if profile != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Claim() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
-        let claim_fut = self.local_storage.borrow().get(profile)
+        let claim_fut = self.hosted_profile_db.borrow().get(profile)
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         Box::new(claim_fut)
     }
@@ -116,12 +112,10 @@ impl Home for HomeServer
     fn register(&mut self, own_prof: OwnProfile, _invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
-        // TODO consider if this is needed here or can we safely suppose that it's enforced at context creation already
-        if let Err(e) = self.context.validate(&*self.validator)
-            { return Box::new( future::err( (own_prof,e) ) ) }
-
         if own_prof.profile.id != *self.context.peer_id()
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different profile".to_owned() )) ) ) }
+        if own_prof.profile.pub_key != *self.context.peer_pubkey()
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different public key".to_owned() )) ) ) }
 
         let own_prof_original = own_prof.clone();
         let error_mapper = |e: StorageError| ( own_prof_original, ErrorToBeSpecified::TODO( e.description().to_owned() ) );
@@ -130,9 +124,9 @@ impl Home for HomeServer
         // TODO should we add our home details here into the persona facet's home vector of this profile?
         let pub_prof_modified = own_prof.profile.clone();
         let own_prof_modified = own_prof.clone();
-        let local_store = self.local_storage.clone();
-        let distributed_store = self.distributed_storage.clone();
-        let reg_fut = self.local_storage.borrow().get( own_prof.profile.id.clone() )
+        let local_store = self.hosted_profile_db.clone();
+        let distributed_store = self.public_profile_dht.clone();
+        let reg_fut = self.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )
             .then( |get_res|
             {
                 match get_res {
@@ -141,14 +135,14 @@ impl Home for HomeServer
                     Err(e) => Ok( () ),
                 }
             } )
-            // Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
+            // NOTE Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
             .and_then( move |_| { // Store public profile parts in distributed storage (e.g. DHT)
                 return distributed_store.borrow_mut().set( pub_prof_modified.id.clone(), pub_prof_modified )
-                    .map_err(error_mapper ); } )
+                    .map_err(error_mapper_clone ); } )
             .and_then( move |_| { // Store private profile info in local storage only (e.g. SQL)
                 return local_store.borrow_mut().set( own_prof_modified.profile.id.clone(), own_prof_modified.clone() )
                     .map( |_| own_prof_modified )
-                    .map_err(error_mapper_clone); } );
+                    .map_err(error_mapper); } );
 
         Box::new(reg_fut)
     }
@@ -157,7 +151,21 @@ impl Home for HomeServer
     fn login(&self, profile: ProfileId) ->
         Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        Box::new( future::ok( Box::new( HomeSessionServer{} ) as Box<HomeSession> ) )
+        if profile != *self.context.peer_id()
+            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Login() access denied: you authenticated with a different profile".to_owned() ) ) ) }
+
+        let val_fut = self.hosted_profile_db.borrow().get(profile)
+            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+            .map( {
+                let ctx_clone = self.context.clone();
+                let val_clone = self.validator.clone();
+                let pub_dht_clone = self.public_profile_dht.clone();
+                let priv_db_clone = self.hosted_profile_db.clone();
+                move |_own_profile| Box::new( HomeSessionServer::new(ctx_clone, val_clone,
+                    pub_dht_clone, priv_db_clone) ) as Box<HomeSession>
+            } );
+
+        Box::new(val_fut)
     }
 
 
@@ -187,24 +195,55 @@ impl Home for HomeServer
 
 pub struct HomeSessionServer
 {
-    // TODO
-    // how to access context to get client profileId?
+    // TODO consider if we should use Weak<Ptrs> here instead of Rc<Ptrs>
+    context:            Rc<PeerContext>,
+    validator:          Rc<Validator>,
+    public_profile_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
+    hosted_profile_db:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
+//    client_profile: OwnProfile,
+//    home: Weak<HomeServer>,
 }
 
 
 impl HomeSessionServer
 {
-    pub fn new() -> Self
-        { Self{} }
+    // TODO consider if validating the context is needed here, e.g. as an assert()
+    pub fn new(context: Rc<PeerContext>, validator: Rc<Validator>,
+               distributed_db:  Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
+               private_db:      Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>) -> Self
+        { Self{ context: context, validator: validator,
+                public_profile_dht: distributed_db, hosted_profile_db: private_db } }
 }
 
 
 impl HomeSession for HomeSessionServer
 {
-    fn update(&self, own_prof: &OwnProfile) ->
+    fn update(&self, own_prof: OwnProfile) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.update "))) )
+        if own_prof.profile.id != *self.context.peer_id()
+            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Update() access denied: you authenticated with a different profile".to_owned() ) ) ) }
+        if own_prof.profile.pub_key != *self.context.peer_pubkey()
+            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Update() access denied: you authenticated with a different public key".to_owned() )) ) }
+
+        let upd_fut = self.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )
+            // NOTE Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
+            .and_then( {
+                let distributed_store = self.public_profile_dht.clone();
+                let pub_prof = own_prof.profile.clone();
+                move |_own_prof_orig| { // Update public profile parts in distributed storage (e.g. DHT)
+                    return distributed_store.borrow_mut().set( pub_prof.id.clone(), pub_prof );
+                }
+            } )
+            .and_then( {
+                let local_store = self.hosted_profile_db.clone();
+                move |_| { // Update private profile info in local storage only (e.g. SQL)
+                    return local_store.borrow_mut().set( own_prof.profile.id.clone(), own_prof );
+                }
+            } )
+            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
+
+        Box::new(upd_fut)
     }
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home
