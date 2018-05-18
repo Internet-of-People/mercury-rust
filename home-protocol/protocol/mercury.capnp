@@ -76,7 +76,7 @@ interface AppMessageListener
 interface Home extends (ProfileRepo)
 {
     claim @0 (profileId: ProfileId) -> (ownProfile: OwnProfile);
-    register @1 (ownProfile: OwnProfile, invite: HomeInvitation) -> (ownProfile: OwnProfile);
+    register @1 (ownProfile: OwnProfile, halfProof: RelationHalfProof, invite: HomeInvitation) -> (ownProfile: OwnProfile);
     login @2 (profileId : ProfileId) -> (session : HomeSession);
 
     pairRequest @3 (halfProof: RelationHalfProof);  # NOTE called on acceptor's home
