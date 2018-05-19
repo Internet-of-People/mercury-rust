@@ -22,8 +22,7 @@ pub mod mercury_capnp;
 pub enum ErrorToBeSpecified { TODO(String) }
 
 
-
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, PartialOrd, Eq, Clone, Debug, Hash)]
 pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -228,42 +227,64 @@ impl RelationHalfProof
 pub struct RelationProof
 {
     pub relation_type:  String,        // TODO inline halfproof fields with macro, if possible at all
-    pub my_id:          ProfileId,
-    pub my_sign:        Signature,
-    pub peer_id:        ProfileId,
-    pub peer_sign:      Signature,
+    pub a_id:           ProfileId,
+    pub a_sign:         Signature,
+    pub b_id:           ProfileId,
+    pub b_sign:         Signature,
     // TODO is a nonce needed?
+
 }
 
 impl RelationProof
 {
-    // TODO add params and properly initialize
-    pub fn new(
-        rel_type :      &str,
-        my_id:          &ProfileId,
-        my_sign:        &Signature,
-        peer_id:        &ProfileId,
-        peer_sign:      &Signature) -> Self
-    {
-        Self
-        {
+    pub fn new(rel_type: &str, a_id: &ProfileId, a_sign: &Signature, b_id: &ProfileId, b_sign: &Signature) -> Self {
+        assert!(a_id < b_id); // TODO make the same match as in from_halfproof
+        Self {
             relation_type: rel_type.to_owned(),
-            my_id: my_id.to_owned(),
-            my_sign: my_sign.to_owned(),
-            peer_id: peer_id.to_owned(),
-            peer_sign: peer_sign.to_owned(),
+            a_id: a_id.to_owned(),
+            a_sign: a_sign.to_owned(),
+            b_id: b_id.to_owned(),
+            b_sign: b_sign.to_owned(),
         }
     }
 
     pub fn from_halfproof(half_proof: RelationHalfProof, peer_sign: Signature) -> Self
     {
-        Self
-        {
-            relation_type: half_proof.relation_type.clone(),
-            my_id: half_proof.my_id.clone(),
-            my_sign: half_proof.my_sign.clone(),
-            peer_id: half_proof.peer_id.clone(),
-            peer_sign: peer_sign.clone(),
+        match half_proof.my_id < half_proof.peer_id {
+            true => Self {
+                relation_type: half_proof.relation_type.clone(),
+                a_id: half_proof.my_id.clone(),
+                a_sign: half_proof.my_sign.clone(),
+                b_id: half_proof.peer_id.clone(),
+                b_sign: peer_sign.clone(),
+            },
+            false => Self {
+                relation_type: half_proof.relation_type.clone(),
+                a_id: half_proof.peer_id.clone(),
+                a_sign: peer_sign.clone(),
+                b_id: half_proof.my_id.clone(),
+                b_sign: half_proof.my_sign.clone(),
+            }
+        }
+    }
+
+    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, String> {
+        if self.a_id == *my_id {
+            Ok(&self.b_id)
+        } else if self.b_id == *my_id {
+            Ok(&self.a_id)
+        } else {
+            Err(format!("{:?} is not present in relation {:?}", my_id, self))
+        }
+    }
+
+    pub fn peer_sign(&self, my_id: &ProfileId) -> Result<&Signature, String> {
+        if self.a_id == *my_id {
+            Ok(&self.b_sign)
+        } else if self.b_id == *my_id {
+            Ok(&self.a_sign)
+        } else {
+            Err(format!("{:?} is not present in relation {:?}", my_id, self))
         }
     }
 }

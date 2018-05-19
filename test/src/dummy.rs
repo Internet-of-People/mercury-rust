@@ -383,7 +383,7 @@ impl Home for MyDummyHome
 
     fn pair_response(&mut self, rel_proof: RelationProof) ->
     Box< Future<Item=(), Error=ErrorToBeSpecified> >{
-        let profile_events = self.events.entry(rel_proof.peer_id.clone()).or_insert(Vec::new());
+        let profile_events = self.events.entry(rel_proof.peer_id(&self.home_profile.id).unwrap().clone()).or_insert(Vec::new());
         let resp_event = ProfileEvent::PairingResponse(rel_proof);
         match profile_events.push(resp_event){
             () => Box::new( future::ok( () ) ),
