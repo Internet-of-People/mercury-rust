@@ -1,13 +1,18 @@
+extern crate bincode;
 extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
 extern crate futures;
 extern crate multiaddr;
 extern crate multihash;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate tokio_core;
 
 use std::rc::Rc;
 
+use bincode::serialize;
 use futures::{Future, sync::mpsc};
 use multiaddr::Multiaddr;
 
@@ -22,7 +27,7 @@ pub mod mercury_capnp;
 pub enum ErrorToBeSpecified { TODO(String) }
 
 
-#[derive(PartialEq, PartialOrd, Eq, Clone, Debug, Hash)]
+#[derive(Serialize, PartialEq, PartialOrd, Eq, Clone, Debug, Hash)]
 pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -202,7 +207,13 @@ impl OwnProfile
         { Self{ profile: profile.clone(), priv_data: private_data.to_owned() } }
 }
 
-
+#[derive(Serialize)]
+pub struct RelationSignablePart {
+    // the binary blob to be signed is rust-specific: Strings are serialized to a u64 (size) and the encoded string itself.
+    pub relation_type: String,
+    pub signer_id: ProfileId,
+    pub peer_id: ProfileId,
+}
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct RelationHalfProof
@@ -220,6 +231,17 @@ impl RelationHalfProof
     pub fn new() -> Self
         { Self{ relation_type: String::new(), my_id: ProfileId(Vec::new()),
                 my_sign: Signature(Vec::new()), peer_id: ProfileId(Vec::new()) } }
+
+    pub fn from_signable_part(signable_part: &RelationSignablePart, signer: Rc<Signer>) -> Self {
+        let signature = signer.sign(&serialize(&signable_part).unwrap());
+
+        RelationHalfProof {
+            relation_type: signable_part.relation_type.clone(),
+            my_id: signable_part.signer_id.clone(),
+            peer_id: signable_part.peer_id.clone(),
+            my_sign: signature,
+        }
+    }
 }
 
 

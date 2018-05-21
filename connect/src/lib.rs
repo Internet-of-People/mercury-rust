@@ -209,13 +209,16 @@ impl ProfileGatewayImpl
     }
 
 
-    fn new_half_proof(relation_type: &str, with_prof: &ProfileId, signer: Rc<Signer>) ->
+    fn new_half_proof(relation_type: &str, peer_id: &ProfileId, signer: Rc<Signer>) ->
         RelationHalfProof
     {
-        // TODO implement binary serialization for signing
-        RelationHalfProof{ relation_type: relation_type.to_owned(),
-            my_id: signer.prof_id().to_owned(), peer_id: with_prof.to_owned(),
-            my_sign: signer.sign( "TODO implement halfproof serialization".as_bytes() ) }
+        let signable_part = RelationSignablePart {
+            relation_type: relation_type.to_owned(),
+            signer_id: signer.prof_id().to_owned(),
+            peer_id: peer_id.to_owned(),
+        };
+
+        RelationHalfProof::from_signable_part(&signable_part, signer)
     }
 }
 
