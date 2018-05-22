@@ -263,9 +263,11 @@ impl ProfileGateway for ProfileGatewayImpl
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         let own_prof_clone = own_prof.clone();
+        let signer_clone = self.signer.clone();
+        let half_proof = Self::new_half_proof("home", &home_id, signer_clone);
         let reg_fut = self.connect_home(&home_id)
             .map_err( move |e| (own_prof_clone, e) )
-            .and_then( move | home : Rc<RefCell<Home>>| home.borrow_mut().register(own_prof, invite) );
+            .and_then( move | home : Rc<RefCell<Home>>| home.borrow_mut().register(own_prof, half_proof, invite) );
         Box::new(reg_fut)
     }
 

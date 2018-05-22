@@ -141,11 +141,12 @@ impl Home for HomeClientCapnProto
     }
 
 
-    fn register(&mut self, own_profile: OwnProfile, invite: Option<HomeInvitation>) ->
+    fn register(&mut self, own_profile: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         let mut request = self.home.register_request();
         request.get().init_own_profile().fill_from(&own_profile);
+        request.get().init_half_proof().fill_from(&half_proof);
         if let Some(inv) = invite
             { request.get().init_invite().fill_from(&inv); }
 

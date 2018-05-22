@@ -115,12 +115,15 @@ impl home::Server for HomeDispatcherCapnProto
         let own_prof_capnp = pry!( pry!( params.get() ).get_own_profile() );
         let own_prof = pry!( OwnProfile::try_from(own_prof_capnp) );
 
+        let half_proof_capnp = pry!( pry!(params.get()).get_half_proof() );
+        let half_proof = pry!( RelationHalfProof::try_from(half_proof_capnp) );
+
         let inv_capnp_res = pry!( params.get() ).get_invite();
         let invite_opt = inv_capnp_res
             .and_then( |inv_capnp| HomeInvitation::try_from(inv_capnp) )
             .ok();
 
-        let reg_fut = self.home.register(own_prof, invite_opt)
+        let reg_fut = self.home.register(own_prof, half_proof, invite_opt)
             .map_err( |e| ::capnp::Error::failed( format!("Failed to register: {:?}", e) ) ) // TODO proper error handling
             .map( move |own_profile|
                 results.get().init_own_profile().fill_from(&own_profile) );

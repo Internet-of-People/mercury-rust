@@ -58,7 +58,7 @@ impl Home for HomeServer
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeServer.claim "))) )
     }
 
-    fn register(&mut self, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
+    fn register(&mut self, own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO(String::from("HomeSession.register "))) ) )
