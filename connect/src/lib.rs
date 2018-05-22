@@ -110,7 +110,7 @@ pub trait ProfileGateway
     fn pair_request(&self, relation_type: &str, with_profile_url: &str) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    // TODO it does not update the cached profile details that might cause problems  
+    // TODO it does not update the cached profile details that might cause problems
     fn pair_response(&self, rel: Relation) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
@@ -135,7 +135,7 @@ pub struct ProfileGatewayImpl
 
 impl ProfileGatewayImpl
 {
-    pub fn new(    
+    pub fn new(
         signer:         Rc<Signer>,
         profile_repo:   Rc<RefCell<ProfileRepo>>,
         home_connector: Rc<HomeConnector>,
@@ -175,7 +175,8 @@ impl ProfileGatewayImpl
                     connector: Rc<HomeConnector>, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >
     {
-        let home_conn_futs = profile.facets.iter()
+        let profile_id = signer.prof_id().clone();
+        let home_ids = profile.facets.iter()
             .flat_map( |facet|
             {
                 match facet
@@ -184,17 +185,29 @@ impl ProfileGatewayImpl
                     &ProfileFacet::Persona(ref persona) => persona.homes.clone(),
                     _ => Vec::new(),
                 }
-            } )
-            .map( move |home_relation_proof|
+            })
+            .map(move |relation_proof| {
+                relation_proof.peer_id(&profile_id).map(|peer_id_ref| {
+                    peer_id_ref.to_owned()
+                })
+            });
+
+        let home_conn_futs = home_ids
+            .map( move |peer_id_res|
             {
                 let connector_clone = connector.clone();
                 let signer_clone = signer.clone();
-                prof_repo.borrow().load(&home_relation_proof.peer_id(signer.prof_id()).unwrap())  // TODO add proper error handling
-                    .and_then( move |home_profile|
-                    {
-                        // Load profiles from home ids
-                        connector_clone.connect(&home_profile, signer_clone)
-                    } )
+                match peer_id_res {
+                    Ok(peer_id) => {
+                        Box::new(prof_repo.borrow().load(&peer_id)
+                            .and_then( move |home_profile|
+                            {
+                                // Load profiles from home ids
+                                connector_clone.connect(&home_profile, signer_clone)
+                            })) as Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >
+                        },
+                    Err(e) => Box::new(future::err(ErrorToBeSpecified::TODO(e))),
+                }
             } )
             .collect::<Vec<_>>();
 
@@ -218,7 +231,7 @@ impl ProfileGatewayImpl
             peer_id: peer_id.to_owned(),
         };
 
-        RelationHalfProof::from_signable_part(&signable_part, signer)
+        RelationHalfProof::from_signable_part(signable_part, signer)
     }
 }
 

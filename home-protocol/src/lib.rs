@@ -232,13 +232,13 @@ impl RelationHalfProof
         { Self{ relation_type: String::new(), my_id: ProfileId(Vec::new()),
                 my_sign: Signature(Vec::new()), peer_id: ProfileId(Vec::new()) } }
 
-    pub fn from_signable_part(signable_part: &RelationSignablePart, signer: Rc<Signer>) -> Self {
+    pub fn from_signable_part(signable_part: RelationSignablePart, signer: Rc<Signer>) -> Self {
         let signature = signer.sign(&serialize(&signable_part).unwrap());
 
         RelationHalfProof {
-            relation_type: signable_part.relation_type.clone(),
-            my_id: signable_part.signer_id.clone(),
-            peer_id: signable_part.peer_id.clone(),
+            relation_type: signable_part.relation_type,
+            my_id: signable_part.signer_id,
+            peer_id: signable_part.peer_id,
             my_sign: signature,
         }
     }
