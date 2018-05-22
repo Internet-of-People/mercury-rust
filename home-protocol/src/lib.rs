@@ -219,9 +219,9 @@ pub struct RelationSignablePart {
 pub struct RelationHalfProof
 {
     pub relation_type:  String,
-    pub my_id:          ProfileId,
-    pub my_sign:        Signature,
+    pub signer_id:      ProfileId,
     pub peer_id:        ProfileId,
+    pub signature:      Signature,
     // TODO is a nonce needed?
 }
 
@@ -229,17 +229,17 @@ impl RelationHalfProof
 {
     // TODO add params and properly initialize
     pub fn new() -> Self
-        { Self{ relation_type: String::new(), my_id: ProfileId(Vec::new()),
-                my_sign: Signature(Vec::new()), peer_id: ProfileId(Vec::new()) } }
+        { Self{ relation_type: String::new(), signer_id: ProfileId(Vec::new()),
+                signature: Signature(Vec::new()), peer_id: ProfileId(Vec::new()) } }
 
     pub fn from_signable_part(signable_part: RelationSignablePart, signer: Rc<Signer>) -> Self {
         let signature = signer.sign(&serialize(&signable_part).unwrap());
 
         RelationHalfProof {
             relation_type: signable_part.relation_type,
-            my_id: signable_part.signer_id,
+            signer_id: signable_part.signer_id,
             peer_id: signable_part.peer_id,
-            my_sign: signature,
+            signature: signature,
         }
     }
 }
@@ -250,42 +250,52 @@ pub struct RelationProof
 {
     pub relation_type:  String,        // TODO inline halfproof fields with macro, if possible at all
     pub a_id:           ProfileId,
-    pub a_sign:         Signature,
+    pub a_signature:    Signature,
     pub b_id:           ProfileId,
-    pub b_sign:         Signature,
+    pub b_signature:    Signature,
     // TODO is a nonce needed?
 
 }
 
 impl RelationProof
 {
-    pub fn new(rel_type: &str, a_id: &ProfileId, a_sign: &Signature, b_id: &ProfileId, b_sign: &Signature) -> Self {
-        assert!(a_id < b_id); // TODO make the same match as in from_halfproof
-        Self {
-            relation_type: rel_type.to_owned(),
-            a_id: a_id.to_owned(),
-            a_sign: a_sign.to_owned(),
-            b_id: b_id.to_owned(),
-            b_sign: b_sign.to_owned(),
+    pub fn new(rel_type: &str, a_id: &ProfileId, a_signature: &Signature, b_id: &ProfileId, b_signature: &Signature) -> Self {
+        if a_id < b_id {
+            Self {
+                relation_type: rel_type.to_owned(),
+                a_id: a_id.to_owned(),
+                a_signature: a_signature.to_owned(),
+                b_id: b_id.to_owned(),
+                b_signature: b_signature.to_owned(),
+            }
+        } else {
+            Self {
+                relation_type: rel_type.to_owned(),
+                a_id: b_id.to_owned(),
+                a_signature: b_signature.to_owned(),
+                b_id: a_id.to_owned(),
+                b_signature: a_signature.to_owned(),
+            }
         }
     }
 
     pub fn from_halfproof(half_proof: RelationHalfProof, peer_sign: Signature) -> Self
     {
-        match half_proof.my_id < half_proof.peer_id {
-            true => Self {
+        if half_proof.signer_id < half_proof.peer_id {
+            Self {
                 relation_type: half_proof.relation_type.clone(),
-                a_id: half_proof.my_id.clone(),
-                a_sign: half_proof.my_sign.clone(),
+                a_id: half_proof.signer_id.clone(),
+                a_signature: half_proof.signature.clone(),
                 b_id: half_proof.peer_id.clone(),
-                b_sign: peer_sign.clone(),
-            },
-            false => Self {
+                b_signature: peer_sign.clone(),
+            }
+        } else {
+            Self {
                 relation_type: half_proof.relation_type.clone(),
                 a_id: half_proof.peer_id.clone(),
-                a_sign: peer_sign.clone(),
-                b_id: half_proof.my_id.clone(),
-                b_sign: half_proof.my_sign.clone(),
+                a_signature: peer_sign.clone(),
+                b_id: half_proof.signer_id.clone(),
+                b_signature: half_proof.signature.clone(),
             }
         }
     }
@@ -300,18 +310,16 @@ impl RelationProof
         }
     }
 
-    pub fn peer_sign(&self, my_id: &ProfileId) -> Result<&Signature, String> {
+    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, String> {
         if self.a_id == *my_id {
-            Ok(&self.b_sign)
+            Ok(&self.b_signature)
         } else if self.b_id == *my_id {
-            Ok(&self.a_sign)
+            Ok(&self.a_signature)
         } else {
             Err(format!("{:?} is not present in relation {:?}", my_id, self))
         }
     }
 }
-
-
 
 /// This invitation allows a persona to register on the specified home.
 #[derive(PartialEq, Eq, Clone, Debug)]

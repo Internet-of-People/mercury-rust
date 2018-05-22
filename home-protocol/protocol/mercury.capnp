@@ -31,25 +31,22 @@ interface ProfileRepo
     resolve @2 (profileUrl: Text) -> (profile: Profile);
 }
 
-
-
 struct RelationHalfProof
 {
-    data            @0 : Data;
-    # relationType    @0 : Text,
-    # myId            @1 : ProfileId,
-    # mySign          @2 : Signature,
-    # peerId          @3 : ProfileId,
+    relationType    @0 : Text;
+    signerId        @1 : ProfileId;
+    peerId          @2 : ProfileId;
+    signature       @3 : Signature;
 }
-
 
 struct RelationProof
 {
-    data        @0 : Data;
-    # halfProof   @0 : RelationHalfProof,
-    # peerSign    @1 : Signature,
+    relationType    @0 : Text;
+    aId             @1 : ProfileId;
+    aSignature      @2 : Signature;
+    bId             @3 : ProfileId;
+    bSignature      @4 : Signature;
 }
-
 
 struct HomeInvitation
 {

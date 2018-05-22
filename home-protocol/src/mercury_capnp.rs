@@ -145,8 +145,12 @@ impl<'a> TryFrom<relation_half_proof::Reader<'a>> for ::RelationHalfProof
 
     fn try_from(src: relation_half_proof::Reader) -> Result<Self, Self::Error>
     {
-        // TODO
-        Ok( ::RelationHalfProof::new() )
+        Ok(::RelationHalfProof {
+            relation_type: String::from(src.get_relation_type()?),
+            signer_id: ::ProfileId(src.get_signer_id()?.to_owned()),
+            peer_id: ::ProfileId(src.get_peer_id()?.to_owned()),
+            signature: ::Signature(src.get_signature()?.to_owned()),
+        })
     }
 }
 
@@ -165,8 +169,13 @@ impl<'a> TryFrom<relation_proof::Reader<'a>> for ::RelationProof
 
     fn try_from(src: relation_proof::Reader) -> Result<Self, Self::Error>
     {
-        // TODO
-        Err( capnp::Error::failed(String::from("unimplemented try_from")) )
+        Ok(::RelationProof {
+            relation_type: String::from(src.get_relation_type()?),
+            a_id: ::ProfileId(src.get_a_id()?.to_owned()),
+            a_signature: ::Signature(src.get_a_signature()?.to_owned()),
+            b_id: ::ProfileId(src.get_b_id()?.to_owned()),
+            b_signature: ::Signature(src.get_b_signature()?.to_owned()),
+        })
     }
 }
 
