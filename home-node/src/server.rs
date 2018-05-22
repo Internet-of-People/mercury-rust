@@ -107,7 +107,6 @@ impl Home for HomeServer
         Box::new(claim_fut)
     }
 
-
     // TODO consider how to issue and process invites
     fn register(&mut self, own_prof: OwnProfile, half_proof: RelationHalfProof, _invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
