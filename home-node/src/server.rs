@@ -2,7 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::error::Error;
 
-use futures::{future, sync, Future};
+use futures::{future, sync, Future, Sink};
 use futures::sync::mpsc;
 
 use mercury_home_protocol::*;
@@ -71,7 +71,7 @@ impl ProfileRepo for HomeServer
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         HomeStream<Profile, String>
     {
-        let (send, receive) = mpsc::channel(0);
+        let (send, receive) = mpsc::channel(1);
         receive
     }
 
@@ -107,6 +107,8 @@ impl Home for HomeServer
         Box::new(claim_fut)
     }
 
+    // TODO do we really need `&mut self` here? Either all operations should allow mutating the Home or
+    //      all these writes should be hidden behind a RefCell
     // TODO consider how to issue and process invites
     fn register(&mut self, own_prof: OwnProfile, half_proof: RelationHalfProof, _invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
@@ -120,7 +122,7 @@ impl Home for HomeServer
         let error_mapper = |e: StorageError| ( own_prof_original, ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         let error_mapper_clone = error_mapper.clone();
 
-        // TODO should we add our home details here into the persona facet's home vector of this profile?
+        // TODO we should add our home details with signed RelationProof here into the persona facet's home vector in this profile
         let pub_prof_modified = own_prof.profile.clone();
         let own_prof_modified = own_prof.clone();
         let local_store = self.hosted_profile_db.clone();
@@ -172,6 +174,8 @@ impl Home for HomeServer
     fn pair_request(&mut self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
+        // TODO check if targeted profile id is hosted on this machine
+        //      and delegate the proof to its buffer (if offline) or sink (if logged in)
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_request "))) )
     }
 
@@ -180,12 +184,16 @@ impl Home for HomeServer
     fn pair_response(&mut self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
+        // TODO check if targeted profile id is hosted on this machine
+        //      and delegate the proof to its buffer (if offline) or sink (if logged in)
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_response "))) )
     }
 
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
+        // TODO check if targeted profile id is hosted on this machine
+        //      and delegate the call to its buffer (if offline) or sink (if logged in)
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.call "))) )
     }
 }
@@ -194,11 +202,15 @@ impl Home for HomeServer
 
 pub struct HomeSessionServer
 {
-    // TODO consider if we should use Weak<Ptrs> here instead of Rc<Ptrs>
+    // TODO we probably should merge these fields into a single struct like HomePlugins or so
+    //      and refer to that both from Home and HomeSession instead of using a lot of separate Rc fields
+    // TODO consider using Weak<Ptrs> instead of Rc<Ptrs> if a closed Home connection cannot
+    //      drop all related session automatically
     context:            Rc<PeerContext>,
     validator:          Rc<Validator>,
     public_profile_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
     hosted_profile_db:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
+    events:             Option< HomeSink<ProfileEvent, String> >,
 //    client_profile: OwnProfile,
 //    home: Weak<HomeServer>,
 }
@@ -210,7 +222,7 @@ impl HomeSessionServer
     pub fn new(context: Rc<PeerContext>, validator: Rc<Validator>,
                distributed_db:  Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
                private_db:      Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>) -> Self
-        { Self{ context: context, validator: validator,
+        { Self{ context: context, validator: validator, events: None,
                 public_profile_dht: distributed_db, hosted_profile_db: private_db } }
 }
 
@@ -255,16 +267,22 @@ impl HomeSession for HomeSessionServer
     }
 
 
-    fn events(&self) -> HomeStream<ProfileEvent, String>
+    fn events(&mut self) -> HomeStream<ProfileEvent, String>
     {
-        let (sender, receiver) = sync::mpsc::channel(0);
+        // NOTE consuming the events stream multiple times is likely a client implementation error
+        if let Some(ref mut old_sender) = self.events {
+            old_sender.send( Err( "Repeated call of HomeSession::events() detected, this channel will is dropped, using the new one".to_owned() ) );
+        }
+
+        let (sender, receiver) = sync::mpsc::channel(1);
+        self.events = Some(sender);
         receiver
     }
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
     {
-        let (sender, receiver) = sync::mpsc::channel(0);
+        let (sender, receiver) = sync::mpsc::channel(1);
         receiver
     }
 

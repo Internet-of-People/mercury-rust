@@ -428,7 +428,7 @@ pub trait HomeSession
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
 
-    fn events(&self) -> HomeStream<ProfileEvent, String>;
+    fn events(&mut self) -> HomeStream<ProfileEvent, String>;
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>;

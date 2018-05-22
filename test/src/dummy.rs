@@ -457,7 +457,7 @@ impl HomeSession for HomeSessionDummy
     }
 
 
-    fn events(&self) -> HomeStream<ProfileEvent, String>
+    fn events(&mut self) -> HomeStream<ProfileEvent, String>
     {
         println!("HomeSessionDummy.events");
         let (sender, receiver) = futures::sync::mpsc::channel(1);

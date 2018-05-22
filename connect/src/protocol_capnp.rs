@@ -332,7 +332,7 @@ impl HomeSession for HomeSessionClientCapnProto
     }
 
 
-    fn events(&self) -> HomeStream<ProfileEvent, String>
+    fn events(&mut self) -> HomeStream<ProfileEvent, String>
     {
         let (send, recv) = mpsc::channel(1);
         let listener = ProfileEventDispatcherCapnProto::new( send.clone() );
