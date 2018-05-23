@@ -80,8 +80,30 @@ impl<'a> TryFrom<profile::Reader<'a>> for ::Profile
     {
         let profile_id = ::ProfileId( src.get_id()?.to_owned() );
         let public_key = ::PublicKey( src.get_public_key()?.to_owned() );
-        let facets = &[]; // TODO
-        Ok( ::Profile::new(&profile_id, &public_key, facets) )
+
+        let facet_res = match src.get_facet().which() {
+            Ok(profile::facet::Which::Persona(r)) => {
+                if let Some(proof_reader) = r.get_homes()?.iter().next() {  // only 0 or 1 home is supported in the current impl
+                    let home_relation = ::RelationProof::try_from(proof_reader)?;
+                    Ok(::ProfileFacet::Persona(::PersonaFacet{homes: vec![home_relation], data: vec![]}))
+                } else {
+                    Ok(::ProfileFacet::Persona(::PersonaFacet{homes: vec![], data: vec![]}))
+                }
+            },
+            // TODO finish this implementation to be able to send HomeProfiles, too
+            // Ok(profile::facet::Which::Home(r)) => {
+            //     let addrs = r.get_addresses()?.iter().map(|addr| ::Multiaddr::from(addr?));
+            //     Ok(::ProfileFacet::Home(::HomeFacet{addrs, data: vec![]}))
+            // },
+            _ => {
+                Err("Unimplemented")
+            }
+        };
+
+        match facet_res {
+            Ok(facet) => Ok(::Profile::new(&profile_id, &public_key, &[facet]) ),
+            Err(e) => Err(::capnp::Error::failed(e.to_owned())),
+        }
     }
 }
 
@@ -91,7 +113,21 @@ impl<'a> FillFrom<::Profile> for profile::Builder<'a>
     {
         self.set_id( (&src.id).into() );
         self.set_public_key( &src.pub_key.0 ); // TODO would be nicer with pubkey.into() implementing From<PublicKey>
-        // TODO set facets
+        match src.facets.iter().next() {
+            Some(::ProfileFacet::Persona(facet)) => {
+                let persona_builder = self.init_facet().init_persona();
+                let mut homes = persona_builder.init_homes(facet.homes.len() as u32);
+                for (i, home) in facet.homes.iter().enumerate() {
+                    homes.reborrow().get(i as u32).fill_from(&home);
+                }
+            }
+            Some(_) => {
+                panic!("Unimplemented");  // TODO implement home and application facets
+            }
+            None => {
+                panic!("Should be unreachable code"); // TODO refactor Profile to have a single mandatory facet
+            }
+        }
     }
 }
 
@@ -158,7 +194,10 @@ impl<'a> FillFrom<::RelationHalfProof> for relation_half_proof::Builder<'a>
 {
     fn fill_from(mut self, src: &::RelationHalfProof)
     {
-        // TODO
+        self.set_relation_type(&src.relation_type);
+        self.set_signer_id(&src.signer_id.0);
+        self.set_peer_id(&src.peer_id.0);
+        self.set_signature(&src.signature.0);
     }
 }
 
@@ -183,7 +222,11 @@ impl<'a> FillFrom<::RelationProof> for relation_proof::Builder<'a>
 {
     fn fill_from(mut self, src: &::RelationProof)
     {
-        // TODO
+        self.set_relation_type(&src.relation_type);
+        self.set_a_id(&src.a_id.0);
+        self.set_a_signature(&src.a_signature.0);
+        self.set_b_id(&src.b_id.0);
+        self.set_b_signature(&src.b_signature.0);
     }
 }
 

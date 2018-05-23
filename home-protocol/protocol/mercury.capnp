@@ -20,6 +20,22 @@ struct Profile
     # NOTE these are mandatory in the API, but will be serialized into the data instead
     id        @0 : ProfileId;
     publicKey @1 : PublicKey;
+
+    # Currently only a single facet is supported in a profile
+    facet        : union {
+        persona :group {
+            homes @2 : List(RelationProof);
+            # data: TODO
+        }
+        home :group {
+            addresses @3 : List(Text);  # MultiAddress
+            # data: TODO
+        }
+        application :group {
+            id @4 : Text;
+            # data: TODO
+        }
+    }
 }
 
 
