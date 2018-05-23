@@ -279,25 +279,9 @@ impl RelationProof
         }
     }
 
-    pub fn from_halfproof(half_proof: RelationHalfProof, peer_sign: Signature) -> Self
+    pub fn from_halfproof(half_proof: RelationHalfProof, peer_signature: Signature) -> Self
     {
-        if half_proof.signer_id < half_proof.peer_id {
-            Self {
-                relation_type: half_proof.relation_type.clone(),
-                a_id: half_proof.signer_id.clone(),
-                a_signature: half_proof.signature.clone(),
-                b_id: half_proof.peer_id.clone(),
-                b_signature: peer_sign.clone(),
-            }
-        } else {
-            Self {
-                relation_type: half_proof.relation_type.clone(),
-                a_id: half_proof.peer_id.clone(),
-                a_signature: peer_sign.clone(),
-                b_id: half_proof.signer_id.clone(),
-                b_signature: half_proof.signature.clone(),
-            }
-        }
+        Self::new(half_proof.relation_type.as_ref(), &half_proof.signer_id, &half_proof.signature, &half_proof.peer_id, &peer_signature)
     }
 
     pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, String> {
