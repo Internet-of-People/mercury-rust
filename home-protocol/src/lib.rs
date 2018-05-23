@@ -119,7 +119,10 @@ pub enum ProfileFacet
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Profile
 {
+    /// The Profile ID is a hash of the public key, similar to cryptocurrency addresses.
     pub id:         ProfileId,
+
+    /// Public key used for validating the identity of the profile.
     pub pub_key:    PublicKey,
     pub facets:     Vec<ProfileFacet>, // TODO consider redesigning facet Rust types/storage
     // TODO consider having a signature of the profile data here
@@ -197,7 +200,11 @@ pub trait ProfileRepo
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct OwnProfile
 {
+    /// The public part of the profile. In the current implementation it must contain a single PersonaFacet.
     pub profile:    Profile,
+
+    /// Hierarchical, json-like data structure, encoded using multicodec library,
+    /// encrypted with the persona's keys, and stored on the home server
     pub priv_data:  Vec<u8>, // TODO maybe multicodec output?
 }
 
