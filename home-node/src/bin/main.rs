@@ -33,9 +33,16 @@ fn main()
     let signer = Rc::new( Ed25519Signer::new(&secret_key, &public_key)
         .expect("Failed to initialize server identity"));
 
+    // TODO use persistent storages both for local and distributed
+    //let distributed_storage = Box::new( Ipfs::new( "localhost", 5001, &handle1.clone() )? )
+    let distributed_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
+    let local_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
+
     let profile_validator = MultiHashProfileValidator::new();
     let signature_validator = Ed25519Validator::new();
     let validator = Rc::new( CompositeValidator::new(profile_validator, signature_validator) );
+
+    let server = Rc::new( HomeServer::new(validator, distributed_storage, local_storage) );
 
     let mut core = reactor::Core::new().unwrap();
     let handle = core.handle();
@@ -45,8 +52,6 @@ fn main()
     let socket = TcpListener::bind(&addr, &handle).expect("Failed to bind socket");
 
     println!("Waiting for clients");
-    let handle_clone = handle.clone();
-    let signer_clone = signer.clone();
     let done = socket.incoming().for_each(move |(socket, _addr)|
     {
         println!("Accepted client connection, serving requests");
@@ -54,18 +59,11 @@ fn main()
         // TODO fill this in properly for each connection based on TLS authentication info
         let client_pub_key = PublicKey( b"TestPublicKey: TODO implement filling this in properly with TLS authentication info".to_vec() );
         let client_profile_id = ProfileId( b"TestClientId: TODO implement filling this in properly with TLS authentication info".to_vec() );
-        let context = Rc::new( ClientContext::new( signer_clone.clone(), client_pub_key, client_profile_id ) );
+        let context = Rc::new( ClientContext::new( signer.clone(), client_pub_key, client_profile_id ) );
 
-        // TODO use persistent storages both for local and distributed
-        //let distributed_storage = Box::new( Ipfs::new( "localhost", 5001, &handle1.clone() )? )
-        let distributed_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
-        let local_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
-//        let distributed_storage = Rc::new( InMemoryStore::new() );
-//        let local_storage = Rc::new( InMemoryStore::new() );
-
-        let home = HomeServer::new(context, validator.clone(), distributed_storage, local_storage)
+        let home = HomeConnectionServer::new( context, server.clone() )
             .map_err( |e| std::io::Error::from(std::io::ErrorKind::PermissionDenied) )?;
-        protocol_capnp::HomeDispatcherCapnProto::dispatch_tcp( Box::new(home), socket, handle_clone.clone() );
+        protocol_capnp::HomeDispatcherCapnProto::dispatch_tcp( Box::new(home), socket, handle.clone() );
         Ok( () )
     } );
 

@@ -11,6 +11,23 @@ use mercury_storage::error::StorageError;
 
 
 
+pub struct HomeServer
+{
+    validator:          Rc<Validator>,
+    public_profile_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
+    hosted_profile_db:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
+}
+
+impl HomeServer
+{
+    pub fn new(validator: Rc<Validator>,
+               public_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
+               private_db: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>) -> Self
+    { Self{ validator: validator, public_profile_dht: public_dht, hosted_profile_db: private_db } }
+}
+
+
+
 pub struct ClientContext
 {
     signer:             Rc<Signer>,
@@ -40,33 +57,27 @@ impl PeerContext for ClientContext
 
 
 
-pub struct HomeServer
+pub struct HomeConnectionServer
 {
-    context:            Rc<PeerContext>,
-    validator:          Rc<Validator>,
-    public_profile_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
-    hosted_profile_db:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
+    server:     Rc<HomeServer>, // TODO consider if we should have a RefCell<> for mutability here
+    context:    Rc<PeerContext>,
 }
 
 
 
-impl HomeServer
+impl HomeConnectionServer
 {
-    pub fn new(context: Rc<PeerContext>, validator: Rc<Validator>,
-               public_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
-               private_db: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>)
-        -> Result<Self, ErrorToBeSpecified>
+    pub fn new(context: Rc<PeerContext>, server: Rc<HomeServer>) -> Result<Self, ErrorToBeSpecified>
     {
-        context.validate(&*validator)?;
+        context.validate(&*server.validator)?;
 
-        Ok ( Self{ context: context, validator: validator,
-                   public_profile_dht: public_dht, hosted_profile_db: private_db } )
+        Ok ( Self{ context: context, server: server } )
     }
 }
 
 
 
-impl ProfileRepo for HomeServer
+impl ProfileRepo for HomeConnectionServer
 {
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         HomeStream<Profile, String>
@@ -78,7 +89,7 @@ impl ProfileRepo for HomeServer
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
-        let profile_fut = self.public_profile_dht.borrow().get( id.to_owned() )
+        let profile_fut = self.server.public_profile_dht.borrow().get( id.to_owned() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         Box::new(profile_fut)
     }
@@ -94,7 +105,7 @@ impl ProfileRepo for HomeServer
 
 
 
-impl Home for HomeServer
+impl Home for HomeConnectionServer
 {
     fn claim(&self, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
@@ -102,7 +113,7 @@ impl Home for HomeServer
         if profile != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Claim() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
-        let claim_fut = self.hosted_profile_db.borrow().get(profile)
+        let claim_fut = self.server.hosted_profile_db.borrow().get(profile)
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         Box::new(claim_fut)
     }
@@ -125,9 +136,9 @@ impl Home for HomeServer
         // TODO we should add our home details with signed RelationProof here into the persona facet's home vector in this profile
         let pub_prof_modified = own_prof.profile.clone();
         let own_prof_modified = own_prof.clone();
-        let local_store = self.hosted_profile_db.clone();
-        let distributed_store = self.public_profile_dht.clone();
-        let reg_fut = self.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )
+        let local_store = self.server.hosted_profile_db.clone();
+        let distributed_store = self.server.public_profile_dht.clone();
+        let reg_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )
             .then( |get_res|
             {
                 match get_res {
@@ -155,15 +166,12 @@ impl Home for HomeServer
         if profile != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Login() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
-        let val_fut = self.hosted_profile_db.borrow().get(profile)
+        let val_fut = self.server.hosted_profile_db.borrow().get(profile)
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             .map( {
-                let ctx_clone = self.context.clone();
-                let val_clone = self.validator.clone();
-                let pub_dht_clone = self.public_profile_dht.clone();
-                let priv_db_clone = self.hosted_profile_db.clone();
-                move |_own_profile| Box::new( HomeSessionServer::new(ctx_clone, val_clone,
-                    pub_dht_clone, priv_db_clone) ) as Box<HomeSession>
+                let context_clone = self.context.clone();
+                let server_clone = self.server.clone();
+                move |_own_profile| Box::new( HomeSessionServer::new(context_clone, server_clone) ) as Box<HomeSession>
             } );
 
         Box::new(val_fut)
@@ -206,11 +214,9 @@ pub struct HomeSessionServer
     //      and refer to that both from Home and HomeSession instead of using a lot of separate Rc fields
     // TODO consider using Weak<Ptrs> instead of Rc<Ptrs> if a closed Home connection cannot
     //      drop all related session automatically
-    context:            Rc<PeerContext>,
-    validator:          Rc<Validator>,
-    public_profile_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
-    hosted_profile_db:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-    events:             Option< HomeSink<ProfileEvent, String> >,
+    context:    Rc<PeerContext>,
+    server:     Rc<HomeServer>,
+    events:     Option< HomeSink<ProfileEvent, String> >,
 //    client_profile: OwnProfile,
 //    home: Weak<HomeServer>,
 }
@@ -219,11 +225,8 @@ pub struct HomeSessionServer
 impl HomeSessionServer
 {
     // TODO consider if validating the context is needed here, e.g. as an assert()
-    pub fn new(context: Rc<PeerContext>, validator: Rc<Validator>,
-               distributed_db:  Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
-               private_db:      Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>) -> Self
-        { Self{ context: context, validator: validator, events: None,
-                public_profile_dht: distributed_db, hosted_profile_db: private_db } }
+    pub fn new(context: Rc<PeerContext>, server: Rc<HomeServer>) -> Self
+        { Self{ context: context, server: server, events: None } }
 }
 
 
@@ -237,17 +240,17 @@ impl HomeSession for HomeSessionServer
         if own_prof.profile.pub_key != *self.context.peer_pubkey()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Update() access denied: you authenticated with a different public key".to_owned() )) ) }
 
-        let upd_fut = self.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )
+        let upd_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )
             // NOTE Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
             .and_then( {
-                let distributed_store = self.public_profile_dht.clone();
+                let distributed_store = self.server.public_profile_dht.clone();
                 let pub_prof = own_prof.profile.clone();
                 move |_own_prof_orig| { // Update public profile parts in distributed storage (e.g. DHT)
                     return distributed_store.borrow_mut().set( pub_prof.id.clone(), pub_prof );
                 }
             } )
             .and_then( {
-                let local_store = self.hosted_profile_db.clone();
+                let local_store = self.server.hosted_profile_db.clone();
                 move |_| { // Update private profile info in local storage only (e.g. SQL)
                     return local_store.borrow_mut().set( own_prof.profile.id.clone(), own_prof );
                 }
