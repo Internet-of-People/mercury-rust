@@ -4,6 +4,7 @@ use std::error::Error;
 
 use futures::{future, sync, Future, Sink};
 use futures::sync::mpsc;
+use futures::stream;
 use tokio_core::reactor;
 
 use mercury_home_protocol::*;
@@ -204,13 +205,20 @@ impl Home for HomeConnectionServer
 
 
 
+enum ServerSink<T,E>
+{
+    // TODO message buffer should be persistent on the long run
+    Buffer(Vec<Result<T,E>>),   // Temporary buffer, sink is not initialized
+    Sender(HomeSink<T,E>)       // Initialized sink end of channel, user is listening on the other half
+}
+
 pub struct HomeSessionServer
 {
     // TODO consider using Weak<Ptrs> instead of Rc<Ptrs> if a closed Home connection cannot
     //      drop all related session automatically
     context:    Rc<PeerContext>,
     server:     Rc<HomeServer>,
-    events:     RefCell<Option< HomeSink<ProfileEvent, String> >>,
+    events:     RefCell< ServerSink<ProfileEvent, String> >,
 //    client_profile: OwnProfile,
 //    home: Weak<HomeServer>,
 }
@@ -220,7 +228,8 @@ impl HomeSessionServer
 {
     // TODO consider if validating the context is needed here, e.g. as an assert()
     pub fn new(context: Rc<PeerContext>, server: Rc<HomeServer>) -> Self
-        { Self{ context: context, server: server, events: RefCell::new(None) } }
+        { Self{ context: context, server: server,
+                events: RefCell::new(ServerSink::Buffer( Vec::new() ) ) } }
 }
 
 
@@ -263,28 +272,41 @@ impl HomeSession for HomeSessionServer
     }
 
 
-    fn events(&self) -> HomeStream<ProfileEvent, String>
-    {
-        // NOTE consuming the events stream multiple times is likely a client implementation error
-        if let Some(ref old_sender) = *self.events.borrow_mut()
-        {
-            self.server.handle.spawn(
-                old_sender.clone().send( Err( "Repeated call of HomeSession::events() detected, this channel will is dropped, using the new one".to_owned() ) )
-                    .map( |_sender| () )
-                    .map_err( |_e| () )
-            );
-        }
-
-        // Overwrite sink even if it wasn't empty so the corresponding stream is closed
-        let (sender, receiver) = sync::mpsc::channel(1);
-        *self.events.borrow_mut() = Some(sender);
-        receiver
-    }
-
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
     {
         let (sender, receiver) = sync::mpsc::channel(1);
+        receiver
+    }
+
+    fn events(&self) -> HomeStream<ProfileEvent, String>
+    {
+        let (sender, receiver) = sync::mpsc::channel(1);
+        let sender_clone = sender.clone();
+        let old_sink = self.events.replace( ServerSink::Sender(sender) );
+
+        match old_sink
+        {
+            ServerSink::Sender(old_sender) =>
+            {
+                // NOTE consuming the events stream multiple times is likely a client implementation error
+                self.server.handle.spawn(
+                    old_sender.send( Err( "Repeated call of HomeSession::events() detected, this channel will is dropped, using the new one".to_owned() ) )
+                        .map( |_sender| () )
+                        .map_err( |_e| () )
+                )
+            },
+            ServerSink::Buffer(msg_vec) =>
+            {
+                // Send all collected messages from buffer as we now finally have a channel to the user
+                self.server.handle.spawn(
+                    sender_clone.send_all( stream::iter_ok(msg_vec) )
+                        .map( |_sender| () )
+                        .map_err( |_e| () )
+                )
+            }
+        }
+
         receiver
     }
 
