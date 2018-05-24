@@ -265,15 +265,15 @@ impl HomeSession for HomeSessionServer
 
     fn events(&self) -> HomeStream<ProfileEvent, String>
     {
-// TODO solve lifetimes if sending an error is really needed here
-//        // NOTE consuming the events stream multiple times is likely a client implementation error
-//        if let Some(ref mut old_sender) = *self.events.borrow_mut() {
-//            self.server.handle.spawn(
-//                old_sender.send( Err( "Repeated call of HomeSession::events() detected, this channel will is dropped, using the new one".to_owned() ) )
-//                    .map( |_| () )
-//                    .map_err( |_| () )
-//            );
-//        }
+        // NOTE consuming the events stream multiple times is likely a client implementation error
+        if let Some(ref old_sender) = *self.events.borrow_mut()
+        {
+            self.server.handle.spawn(
+                old_sender.clone().send( Err( "Repeated call of HomeSession::events() detected, this channel will is dropped, using the new one".to_owned() ) )
+                    .map( |_sender| () )
+                    .map_err( |_e| () )
+            );
+        }
 
         // Overwrite sink even if it wasn't empty so the corresponding stream is closed
         let (sender, receiver) = sync::mpsc::channel(1);
