@@ -350,3 +350,34 @@ pub fn fwd_appmsg(to_callee: app_message_listener::Client, handle: reactor::Hand
 
     send
 }
+
+#[cfg(test)]
+mod tests
+{
+    use ::*;
+    use mercury_capnp::FillFrom;
+    use mercury_capnp::TryFrom;
+    use capnp::serialize;
+
+    #[test]
+    fn relation_half_proof_encoding() {
+        let relation_half_proof = ::RelationHalfProof {
+            relation_type: String::from("friend"),
+            signer_id: ::ProfileId(Vec::from("me")),
+            peer_id: ProfileId(Vec::from("you")),
+            signature: Signature(Vec::from("i signed")),
+        };
+        let mut message = capnp::message::Builder::new_default();
+        {
+            let builder = message.init_root::<mercury_capnp::relation_half_proof::Builder>();
+            builder.fill_from(&relation_half_proof);
+        }
+        let mut buffer = vec![];
+        serialize::write_message(&mut buffer, &message).unwrap();
+        // -- 8< --
+        let message_reader = serialize::read_message(&mut &buffer[..], ::capnp::message::ReaderOptions::new()).unwrap();
+        let obj_reader = message_reader.get_root::<mercury_capnp::relation_half_proof::Reader>().unwrap();
+        let recoded = RelationHalfProof::try_from(obj_reader).unwrap();
+        assert_eq!(recoded, relation_half_proof);
+    }
+}
