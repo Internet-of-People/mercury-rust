@@ -79,7 +79,7 @@ mod test{
                 let client = HomeClientCapnProto::new_tcp( tcp_stream, home_ctx, handle2 );
                 client.login(my_profile) // TODO maybe we should require only a reference in login()
             } )
-            .map( |mut session|
+            .map( |session|
             {
                 session.events() //.for_each( |event| () )
             } );
@@ -327,7 +327,7 @@ mod test{
             println!( "user_one_login" );
             own_gateway.login()
         })
-        .and_then(|mut session|{
+        .and_then(|session|{
             println!("user_one_events");
             session.events().take(1).collect()
             .map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing responded but something went wrong")))
@@ -390,7 +390,7 @@ mod test{
             println!("user_two_login");
             other_gateway.login()
         })
-        .and_then(|mut other_session|{
+        .and_then(|other_session|{
             // other_session.events().for_each(|event|{
             //     match event{
             //         Ok(ProfileEvent::PairingRequest(half_proof))=>{

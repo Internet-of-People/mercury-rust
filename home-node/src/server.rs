@@ -140,7 +140,7 @@ impl Home for HomeConnectionServer
                 match get_res {
                     Ok(_stored_prof) => Err( ( own_prof, ErrorToBeSpecified::TODO( "Register() rejected: this profile is already hosted".to_owned() ) ) ),
                     // TODO only errors like NotFound should be accepted here but other (e.g. I/O) errors should be delegated
-                    Err(e) => Ok( () ),
+                    Err(_e) => Ok( () ),
                 }
             } )
             // NOTE Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
