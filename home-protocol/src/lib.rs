@@ -277,7 +277,7 @@ impl RelationProof
             }
         } else {
             Self {
-                relation_type: rel_type.to_owned(),
+                relation_type: rel_type.to_owned(),  // TODO decide which relation_type belongs here (`a_is_home_of_b` or `b_is_home_of_a`)
                 a_id: b_id.to_owned(),
                 a_signature: b_signature.to_owned(),
                 b_id: a_id.to_owned(),
@@ -368,6 +368,23 @@ pub trait Home: ProfileRepo
     //      with the pairing proof, especially the error case
     fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
+
+    // TODO decide: login() takes a ProfileId parameter because the hashing algorithm, which
+    //              we use to create a profile id from a public key is not fixed. We use multihash,
+    //              which means we pick one algorithm for now, and when we consider it insecure, we
+    //              use another one. Let's say it takes 5 years to break our current hashing algorithm.
+    //              This means for the first 5 years we don't have to guess, and in the next 5 years
+    //              we could start guessing with the new algorithm, and fall-back to the deprecated
+    //              algorithm. This does not involve much performance neither complexity to the server code.
+    //
+    //              However, the `profile` parameter increases learning curve for the API by a small amount.
+    //              Newcomers might raise (stupid, but without prior knowledge, reasonable) questions like these:
+    //               * Why do I need to specify my ProfileId if it was already specified during authentication?
+    //               * Why do I need to specify my ProfileId if it can be calculated from my public key I just used?
+    //               * If this is a login, and we provide the credential, where is the password?
+    //
+    //              Since we would like to provide the most simple api possible, my suggestion is to rename
+    //              this function to `start_session(&self)` and remove the ProfileId parameter.
 
     // NOTE this closes all previous sessions of the same profile
     fn login(&self, profile: ProfileId) ->

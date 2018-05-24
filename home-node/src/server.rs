@@ -277,7 +277,6 @@ impl HomeSession for HomeSessionServer
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.unregister "))) )
     }
 
-
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
     {
@@ -285,7 +284,9 @@ impl HomeSession for HomeSessionServer
         receiver
     }
 
-
+    // TODO investigate if race condition is possible, e.g. an event was sent out to the old_sender,
+    //      and a repeated events() call is received. In this case, can we be sure that the event
+    //      has been processed via the old_sender?
     fn events(&self) -> HomeStream<ProfileEvent, String>
     {
         let (sender, receiver) = sync::mpsc::channel(1);
@@ -295,7 +296,7 @@ impl HomeSession for HomeSessionServer
             {
                 // NOTE consuming the events stream multiple times is likely a client implementation error
                 self.server.handle.spawn(
-                    old_sender.send( Err( "Repeated call of HomeSession::events() detected, this channel will is dropped, using the new one".to_owned() ) )
+                    old_sender.send( Err( "Repeated call of HomeSession::events() detected, this channel is dropped, using the new one".to_owned() ) )
                         .map( |_sender| () )
                         .map_err( |_e| () )
                 )
