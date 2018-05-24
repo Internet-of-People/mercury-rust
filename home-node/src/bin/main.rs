@@ -42,10 +42,10 @@ fn main()
     let signature_validator = Ed25519Validator::new();
     let validator = Rc::new( CompositeValidator::new(profile_validator, signature_validator) );
 
-    let server = Rc::new( HomeServer::new(validator, distributed_storage, local_storage) );
-
     let mut core = reactor::Core::new().unwrap();
     let handle = core.handle();
+
+    let server = Rc::new( HomeServer::new(&handle, validator, distributed_storage, local_storage) );
 
     use std::net::ToSocketAddrs;
     let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");

@@ -141,7 +141,7 @@ impl Home for HomeClientCapnProto
     }
 
 
-    fn register(&mut self, own_profile: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
+    fn register(&self, own_profile: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         let mut request = self.home.register_request();
@@ -183,7 +183,7 @@ impl Home for HomeClientCapnProto
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_request(&mut self, half_proof: RelationHalfProof) ->
+    fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.pair_request_request();
@@ -198,7 +198,7 @@ impl Home for HomeClientCapnProto
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_response(&mut self, relation_proof: RelationProof) ->
+    fn pair_response(&self, relation_proof: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.pair_response_request();
@@ -332,7 +332,7 @@ impl HomeSession for HomeSessionClientCapnProto
     }
 
 
-    fn events(&mut self) -> HomeStream<ProfileEvent, String>
+    fn events(&self) -> HomeStream<ProfileEvent, String>
     {
         let (send, recv) = mpsc::channel(1);
         let listener = ProfileEventDispatcherCapnProto::new( send.clone() );

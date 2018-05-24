@@ -4,6 +4,7 @@ use std::error::Error;
 
 use futures::{future, sync, Future, Sink};
 use futures::sync::mpsc;
+use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
@@ -13,6 +14,7 @@ use mercury_storage::error::StorageError;
 
 pub struct HomeServer
 {
+    handle:             reactor::Handle,
     validator:          Rc<Validator>,
     public_profile_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
     hosted_profile_db:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
@@ -20,10 +22,12 @@ pub struct HomeServer
 
 impl HomeServer
 {
-    pub fn new(validator: Rc<Validator>,
+    pub fn new(handle: &reactor::Handle,
+               validator: Rc<Validator>,
                public_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
                private_db: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>) -> Self
-    { Self{ validator: validator, public_profile_dht: public_dht, hosted_profile_db: private_db } }
+    { Self{ handle: handle.clone(), validator: validator,
+            public_profile_dht: public_dht, hosted_profile_db: private_db } }
 }
 
 
@@ -47,12 +51,6 @@ impl PeerContext for ClientContext
     fn my_signer(&self) -> &Signer { &*self.signer }
     fn peer_pubkey(&self) -> &PublicKey { &self.client_pub_key }
     fn peer_id(&self) -> &ProfileId { &self.client_profile_id }
-
-//    fn validate(&self, validator: Rc<Validator>) -> Result<(),ErrorToBeSpecified>
-//    {
-//        validator.validate_profile(&client_pub_key, &client_profile_id)
-//            .and_then( |valid| if valid { () } else { ErrorToBeSpecified::TODO( "Invalid profile info".to_owned() ) } );
-//    }
 }
 
 
@@ -71,7 +69,7 @@ impl HomeConnectionServer
     {
         context.validate(&*server.validator)?;
 
-        Ok ( Self{ context: context, server: server } )
+        Ok( Self{ context: context, server: server } )
     }
 }
 
@@ -118,10 +116,8 @@ impl Home for HomeConnectionServer
         Box::new(claim_fut)
     }
 
-    // TODO do we really need `&mut self` here? Either all operations should allow mutating the Home or
-    //      all these writes should be hidden behind a RefCell
     // TODO consider how to issue and process invites
-    fn register(&mut self, own_prof: OwnProfile, half_proof: RelationHalfProof, _invite: Option<HomeInvitation>) ->
+    fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, _invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         if own_prof.profile.id != *self.context.peer_id()
@@ -179,7 +175,7 @@ impl Home for HomeConnectionServer
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_request(&mut self, half_proof: RelationHalfProof) ->
+    fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         // TODO check if targeted profile id is hosted on this machine
@@ -189,7 +185,7 @@ impl Home for HomeConnectionServer
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_response(&mut self, rel: RelationProof) ->
+    fn pair_response(&self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         // TODO check if targeted profile id is hosted on this machine
@@ -210,13 +206,11 @@ impl Home for HomeConnectionServer
 
 pub struct HomeSessionServer
 {
-    // TODO we probably should merge these fields into a single struct like HomePlugins or so
-    //      and refer to that both from Home and HomeSession instead of using a lot of separate Rc fields
     // TODO consider using Weak<Ptrs> instead of Rc<Ptrs> if a closed Home connection cannot
     //      drop all related session automatically
     context:    Rc<PeerContext>,
     server:     Rc<HomeServer>,
-    events:     Option< HomeSink<ProfileEvent, String> >,
+    events:     RefCell<Option< HomeSink<ProfileEvent, String> >>,
 //    client_profile: OwnProfile,
 //    home: Weak<HomeServer>,
 }
@@ -226,7 +220,7 @@ impl HomeSessionServer
 {
     // TODO consider if validating the context is needed here, e.g. as an assert()
     pub fn new(context: Rc<PeerContext>, server: Rc<HomeServer>) -> Self
-        { Self{ context: context, server: server, events: None } }
+        { Self{ context: context, server: server, events: RefCell::new(None) } }
 }
 
 
@@ -260,7 +254,6 @@ impl HomeSession for HomeSessionServer
         Box::new(upd_fut)
     }
 
-    // NOTE newhome is a profile that contains at least one HomeFacet different than this home
     // TODO is the ID of the new home enough here or do we need the whole profile?
     fn unregister(&self, newhome: Option<Profile>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
@@ -270,15 +263,21 @@ impl HomeSession for HomeSessionServer
     }
 
 
-    fn events(&mut self) -> HomeStream<ProfileEvent, String>
+    fn events(&self) -> HomeStream<ProfileEvent, String>
     {
-        // NOTE consuming the events stream multiple times is likely a client implementation error
-        if let Some(ref mut old_sender) = self.events {
-            old_sender.send( Err( "Repeated call of HomeSession::events() detected, this channel will is dropped, using the new one".to_owned() ) );
-        }
+// TODO solve lifetimes if sending an error is really needed here
+//        // NOTE consuming the events stream multiple times is likely a client implementation error
+//        if let Some(ref mut old_sender) = *self.events.borrow_mut() {
+//            self.server.handle.spawn(
+//                old_sender.send( Err( "Repeated call of HomeSession::events() detected, this channel will is dropped, using the new one".to_owned() ) )
+//                    .map( |_| () )
+//                    .map_err( |_| () )
+//            );
+//        }
 
+        // Overwrite sink even if it wasn't empty so the corresponding stream is closed
         let (sender, receiver) = sync::mpsc::channel(1);
-        self.events = Some(sender);
+        *self.events.borrow_mut() = Some(sender);
         receiver
     }
 

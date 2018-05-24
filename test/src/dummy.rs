@@ -242,22 +242,22 @@ impl ProfileRepo for ProfileStore{
 
 pub struct MyDummyHome{
     pub home_profile   : Profile, 
-    pub local_prof_store : HashMap<ProfileId, Vec<u8>>,
+    pub local_prof_store : RefCell<HashMap<ProfileId, Vec<u8>>>,
     pub storage_layer : Rc<RefCell<ProfileStore>>,
-    pub events : HashMap<ProfileId, Vec<ProfileEvent>>,
+    pub events : RefCell<HashMap<ProfileId, Vec<ProfileEvent>>>,
 }
 
 impl MyDummyHome{
     pub fn new(profile : Profile, dht : Rc<RefCell<ProfileStore>>) -> Self {
         MyDummyHome{
             home_profile : profile,
-            local_prof_store : HashMap::new(),
+            local_prof_store : RefCell::new( HashMap::new() ),
             storage_layer : dht,
-            events : HashMap::new()
+            events : RefCell::new( HashMap::new() )
         }
     }
     
-    pub fn insert(&mut self, id : ProfileId, profile : Profile)->Option<Profile>{
+    pub fn insert(&self, id : ProfileId, profile : Profile)->Option<Profile>{
         println!("MyDummyHome.insert");
         self.storage_layer.borrow_mut().insert(id, profile)
     }
@@ -303,7 +303,7 @@ impl Home for MyDummyHome
         println!("MyDummyHome.claim");
         match self.storage_layer.borrow().get(profile.clone()){
             Some(own) => {
-                match self.local_prof_store.get(&profile){
+                match self.local_prof_store.borrow().get(&profile){
                         Some(privdata) => Box::new( future::ok( OwnProfile::new( own, privdata ) ) ),
                         None => Box::new( future::ok( OwnProfile::new( own, &Vec::new()) ) )
                 }
@@ -314,7 +314,7 @@ impl Home for MyDummyHome
 
     // TODO consider how to enforce overwriting the original ownprofile with the modified one
     //      with the pairing proof, especially the error case
-    fn register(&mut self, mut own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
+    fn register(&self, mut own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
     Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >{
         println!("REGISTERING{:?}", own_prof.profile.id.0);
         let id = own_prof.profile.id.clone();
@@ -347,7 +347,7 @@ impl Home for MyDummyHome
                 },
                 None => {
                     println!("MyDummyHome.register.success");
-                    self.local_prof_store.insert(id, own_profile.priv_data.clone());
+                    self.local_prof_store.borrow_mut().insert(id, own_profile.priv_data.clone());
                     ret = Box::new(future::ok(own_profile.clone()));
                 },
             }
@@ -369,11 +369,11 @@ impl Home for MyDummyHome
 
     // NOTE acceptor must have this server as its home
     // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
-    fn pair_request(&mut self, half_proof: RelationHalfProof) ->
+    fn pair_request(&self, half_proof: RelationHalfProof) ->
     Box< Future<Item=(), Error=ErrorToBeSpecified> >{
-        let profile_events = self.events.entry(half_proof.peer_id.clone()).or_insert(Vec::new());
+        let peer_id = half_proof.peer_id.clone();
         let req_event = ProfileEvent::PairingRequest(half_proof);
-        match profile_events.push(req_event){
+        match self.events.borrow_mut().entry(peer_id).or_insert(Vec::new()).push(req_event){
             () => Box::new( future::ok( () ) ),
             _ =>  Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_request "))) )
         }
@@ -381,11 +381,11 @@ impl Home for MyDummyHome
 
     }
 
-    fn pair_response(&mut self, rel_proof: RelationProof) ->
+    fn pair_response(&self, rel_proof: RelationProof) ->
     Box< Future<Item=(), Error=ErrorToBeSpecified> >{
-        let profile_events = self.events.entry(rel_proof.peer_id(&self.home_profile.id).unwrap().clone()).or_insert(Vec::new());
+        let peer_id = rel_proof.peer_id(&self.home_profile.id).unwrap().clone();
         let resp_event = ProfileEvent::PairingResponse(rel_proof);
-        match profile_events.push(resp_event){
+        match self.events.borrow_mut().entry(peer_id).or_insert(Vec::new()).push(resp_event){
             () => Box::new( future::ok( () ) ),
             _ =>  Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.pair_response "))) )
         }
@@ -457,7 +457,7 @@ impl HomeSession for HomeSessionDummy
     }
 
 
-    fn events(&mut self) -> HomeStream<ProfileEvent, String>
+    fn events(&self) -> HomeStream<ProfileEvent, String>
     {
         println!("HomeSessionDummy.events");
         let (sender, receiver) = futures::sync::mpsc::channel(1);

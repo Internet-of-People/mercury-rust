@@ -367,7 +367,7 @@ pub trait Home: ProfileRepo
 
     // TODO consider how to enforce overwriting the original ownprofile with the modified one
     //      with the pairing proof, especially the error case
-    fn register(&mut self, own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
+    fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
 
     // NOTE this closes all previous sessions of the same profile
@@ -377,10 +377,10 @@ pub trait Home: ProfileRepo
 
     // NOTE acceptor must have this server as its home
     // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
-    fn pair_request(&mut self, half_proof: RelationHalfProof) ->
+    fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    fn pair_response(&mut self, rel: RelationProof) ->
+    fn pair_response(&self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     // NOTE initiating a real P2P connection (vs a single frame push notification),
@@ -428,7 +428,7 @@ pub trait HomeSession
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
 
-    fn events(&mut self) -> HomeStream<ProfileEvent, String>;
+    fn events(&self) -> HomeStream<ProfileEvent, String>;
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>;
