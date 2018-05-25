@@ -6,9 +6,9 @@ extern crate mercury_home_protocol;
 extern crate mercury_home_node;
 extern crate tokio_core;
 extern crate tokio_io;
+extern crate tokio_stdin_stdout;
 extern crate multiaddr;
 extern crate multihash;
-extern crate tokio_stdin_stdout;
 
 pub mod dummy;
 
