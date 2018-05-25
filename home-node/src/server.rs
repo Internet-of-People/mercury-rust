@@ -119,6 +119,7 @@ impl Home for HomeConnectionServer
         Box::new(claim_fut)
     }
 
+
     // TODO consider how to issue and process invites
     fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, _invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
@@ -159,22 +160,23 @@ impl Home for HomeConnectionServer
     }
 
 
-    fn login(&self, profile: ProfileId) ->
+    fn login(&self, profile_id: ProfileId) ->
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        if profile != *self.context.peer_id()
+        if profile_id != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Login() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
-        let val_fut = self.server.hosted_profile_db.borrow().get(profile)
+        let val_fut = self.server.hosted_profile_db.borrow().get( profile_id.clone() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             .map( {
                 let context_clone = self.context.clone();
                 let server_clone = self.server.clone();
-                move |_own_profile| Rc::new( HomeSessionServer::new(context_clone, server_clone) ) as Rc<HomeSession>
-//            } )
-//            .inspect( {
-//                let sessions_clone = self.sessions.clone();
-//                move |session|
+                let sessions_clone = self.server.sessions.clone();
+                move |_own_profile| {
+                    let session = Rc::new( HomeSessionServer::new(context_clone, server_clone) );
+                    sessions_clone.borrow_mut().entry(profile_id).or_insert( Rc::downgrade(&session) );
+                    session as Rc<HomeSession>
+                }
             } );
 
         Box::new(val_fut)
@@ -185,6 +187,14 @@ impl Home for HomeConnectionServer
     fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
+        if half_proof.my_id != *self.context.peer_id()
+            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different profile".to_owned() ) ) ) }
+
+        // TODO validate halfproof signature
+//        let data = b""; // TODO halfproof must be serialized here
+//        self.server.validator.validate_signature( self.context.peer_pubkey(), data, half_proof.my_sign );
+//            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different public key".to_owned() )) ) ) }
+
         // TODO check if targeted profile id is hosted on this machine
         //      and delegate the proof to its buffer (if offline) or sink (if logged in)
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_request "))) )
