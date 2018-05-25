@@ -70,8 +70,8 @@ impl HomeContext
 impl PeerContext for HomeContext
 {
     fn my_signer(&self) -> &Signer { &*self.signer }
-    fn peer_pubkey(&self) -> Option<PublicKey> { Some( self.home_profile.pub_key.clone() ) }
-    fn peer(&self) -> Option<Profile> { Some( self.home_profile.clone() ) }
+    fn peer_pubkey(&self) -> &PublicKey { &self.home_profile.pub_key }
+    fn peer_id(&self) -> &ProfileId { &self.home_profile.id }
 }
 
 
@@ -105,7 +105,7 @@ pub trait ProfileGateway
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     fn login(&self) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >;
 
     fn pair_request(&self, relation_type: &str, with_profile_url: &str) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
@@ -189,7 +189,7 @@ impl ProfileGatewayImpl
             {
                 let connector_clone = connector.clone();
                 let signer_clone = signer.clone();
-                prof_repo.borrow().load(&home_relation_proof.peer_id)
+                prof_repo.borrow().load(&home_relation_proof.peer_id(signer.prof_id()).unwrap())  // TODO add proper error handling
                     .and_then( move |home_profile|
                     {
                         // Load profiles from home ids
@@ -209,13 +209,16 @@ impl ProfileGatewayImpl
     }
 
 
-    fn new_half_proof(relation_type: &str, with_prof: &ProfileId, signer: Rc<Signer>) ->
+    fn new_half_proof(relation_type: &str, peer_id: &ProfileId, signer: Rc<Signer>) ->
         RelationHalfProof
     {
-        // TODO implement binary serialization for signing
-        RelationHalfProof{ relation_type: relation_type.to_owned(),
-            my_id: signer.prof_id().to_owned(), peer_id: with_prof.to_owned(),
-            my_sign: signer.sign( "TODO implement halfproof serialization".as_bytes() ) }
+        let signable_part = RelationSignablePart {
+            relation_type: relation_type.to_owned(),
+            signer_id: signer.prof_id().to_owned(),
+            peer_id: peer_id.to_owned(),
+        };
+
+        RelationHalfProof::from_signable_part(&signable_part, signer)
     }
 }
 
@@ -278,7 +281,7 @@ impl ProfileGateway for ProfileGatewayImpl
         let own_profile_id_clone = own_prof.profile.id.clone();
         let upd_fut = self.connect_home(&home_id)
             .and_then( move |home| home.borrow().login(own_profile_id_clone) )
-            .and_then( move |session| session.update(&own_profile_clone) );
+            .and_then( move |session| session.update(own_profile_clone) );
         Box::new(upd_fut)
     }
 
@@ -293,7 +296,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
     // TODO this should try connecting to ALL of our homes
     fn login(&self) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
         let profile_repo_clone = self.profile_repo.clone();
         let home_conn_clone = self.home_connector.clone();
@@ -344,7 +347,7 @@ impl ProfileGateway for ProfileGatewayImpl
     {
         let call_fut = self.any_home_of(&rel.peer)
             .and_then( move |home|
-                home.borrow().call( app, CallRequest{ relation: rel.proof,
+                home.borrow().call(app, CallRequestDetails { relation: rel.proof,
                     init_payload: init_payload, to_caller: to_caller } ) ) ;
         Box::new(call_fut)
     }

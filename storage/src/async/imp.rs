@@ -1,6 +1,7 @@
 #![allow(unused, non_snake_case)]
 
 use std::collections::{HashMap}; //, HashSet};
+use std::error::Error;
 use std::hash::Hash;
 //use std::net::{SocketAddr, Ipv4Addr, SocketAddrV4, ToSocketAddrs};
 use std::rc::Rc;
@@ -288,8 +289,12 @@ pub struct Ipfs
 
 impl Ipfs
 {
-    pub fn new(client: ipfs_api::IpfsClient) -> Self
-        { Self{ client: client} }
+    pub fn new(host: &str, port: u16, handle: &reactor::Handle) -> Result<Self, ::std::io::Error>
+    {
+        let client = ipfs_api::IpfsClient::new(handle, host, port)
+            .map_err( |e| ::std::io::Error::new(::std::io::ErrorKind::NotFound, e) )?;
+        Ok( Self{ client: client } )
+    }
 }
 
 impl HashSpace<Vec<u8>, String> for Ipfs
@@ -319,11 +324,30 @@ impl HashSpace<Vec<u8>, String> for Ipfs
     fn validate(&self, object: &Vec<u8>, hash: &String)
         -> Box< Future<Item=bool, Error=HashSpaceError> >
     {
+        let obj = object.to_owned(); // TODO this is potentially very expensive for huge blobs, can this be done more effectively?
         let val_fut = self.resolve(hash)
-            .map( | bytes| true );
+            .map( move | bytes| bytes == obj );
         Box::new(val_fut)
     }
 }
+
+
+//impl KeyValueStore<String, String> for Ipfs
+//{
+//    fn set(&mut self, key: String, value: String)
+//        -> Box< Future<Item=(), Error=StorageError> >
+//    {
+//        self.client.dht_put(&key, &value).collect()
+//            //.and_then( |_| self.client.dht_provide(&key) )
+//    }
+//
+//    fn get(&self, key: String)
+//        -> Box< Future<Item=String, Error=StorageError> >
+//    {
+//        unimplemented!();
+//        //future::err(StorageError::InvalidKey) // TODO
+//    }
+//}
 
 
 
@@ -420,14 +444,14 @@ for InMemoryStore<KeyType, ValueType>
     where KeyType: Eq + Hash,
           ValueType: Clone + 'static
 {
-    fn store(&mut self, key: KeyType, object: ValueType)
+    fn set(&mut self, key: KeyType, object: ValueType)
         -> Box< Future<Item=(), Error=StorageError> >
     {
         self.map.insert(key, object );
         Box::new( future::ok(() ) )
     }
 
-    fn lookup(&self, key: KeyType)
+    fn get(&self, key: KeyType)
         -> Box< Future<Item=ValueType, Error=StorageError> >
     {
         let result = match self.map.get(&key) {
@@ -476,7 +500,7 @@ impl PostgresStore
 
 impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
 {
-    fn store(&mut self, key: Vec<u8>, value: Vec<u8>)
+    fn set(&mut self, key: Vec<u8>, value: Vec<u8>)
         -> Box< Future<Item=(), Error=StorageError> >
     {
         let key_str = multibase::encode(multibase::Base64, &key);
@@ -491,7 +515,7 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
         Box::new(result)
     }
 
-    fn lookup(&self, key: Vec<u8>)
+    fn get(&self, key: Vec<u8>)
         -> Box< Future<Item=Vec<u8>, Error=StorageError> >
     {
         let key_str = multibase::encode(multibase::Base64, &key);
@@ -547,9 +571,9 @@ mod tests
         let object = Person{ name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
         let hash = "key".to_string();
         let mut storage: InMemoryStore<String,Person> = InMemoryStore::new();
-        let store_res = storage.store( hash.clone(), object.clone() ).wait();
+        let store_res = storage.set( hash.clone(), object.clone() ).wait();
         assert!( store_res.is_ok() );
-        let lookup_res = storage.lookup(hash).wait();
+        let lookup_res = storage.get(hash).wait();
         assert!( lookup_res.is_ok() );
         assert_eq!( lookup_res.unwrap(), object );
     }
@@ -568,11 +592,11 @@ mod tests
 
         let key = b"key".to_vec();
         let value = b"value".to_vec();
-        let store_future = storage.store( key.clone(), value.clone() );
+        let store_future = storage.set( key.clone(), value.clone() );
         let store_res = reactor.run(store_future);
         assert!( store_res.is_ok(), "store failed with {:?}", store_res );
 
-        let lookup_future = storage.lookup(key);
+        let lookup_future = storage.get(key);
         let lookup_res = reactor.run(lookup_future);
         assert!( lookup_res.is_ok(), "lookup failed with {:?}", lookup_res );
         assert_eq!( lookup_res.unwrap(), value );
@@ -650,10 +674,8 @@ mod tests
     {
         let mut reactor = reactor::Core::new()
             .expect("Failed to initialize the reactor event loop");
-        // let client = ipfs_api::IpfsClient::default( &reactor.handle() );
-        let client = ipfs_api::IpfsClient::new( &reactor.handle(), "go-ipfs", 5001 ).unwrap();
-        let mut ipfs = Ipfs::new(client);
 
+        let mut ipfs = Ipfs::new( "localhost", 5001, &reactor.handle() ).unwrap();
         let orig_data = b"Tear down the wall!".to_vec();
         let hash_fut = ipfs.store( orig_data.clone() );
         let hash = reactor.run(hash_fut).unwrap();

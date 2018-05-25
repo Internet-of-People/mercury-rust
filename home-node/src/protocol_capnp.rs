@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use capnp::capability::Promise;
 use futures::{Future, Stream};
 use tokio_core::net::TcpStream;
@@ -198,7 +200,7 @@ impl home::Server for HomeDispatcherCapnProto
         let app = ApplicationId::from(app_capnp);
         let init_payload = AppMessageFrame::from(init_payload_capnp);
 
-        let call_req = CallRequest{ relation: relation, init_payload: init_payload,
+        let call_req = CallRequestDetails { relation: relation, init_payload: init_payload,
             to_caller: to_caller};
         let call_fut = self.home.call(app, call_req)
             .map( |to_callee_opt|
@@ -221,13 +223,13 @@ impl home::Server for HomeDispatcherCapnProto
 
 pub struct HomeSessionDispatcherCapnProto
 {
-    session:    Box<HomeSession>,
+    session:    Rc<HomeSession>,
     handle:     reactor::Handle,
 }
 
 impl HomeSessionDispatcherCapnProto
 {
-    pub fn new(session: Box<HomeSession>, handle: reactor::Handle) -> Self
+    pub fn new(session: Rc<HomeSession>, handle: reactor::Handle) -> Self
         { Self{ session: session, handle: handle } }
 }
 
@@ -244,7 +246,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
         let own_profile_capnp = pry!( pry!( params.get() ).get_own_profile() );
         let own_profile = pry!( OwnProfile::try_from(own_profile_capnp) );
 
-        let upd_fut = self.session.update(&own_profile)
+        let upd_fut = self.session.update(own_profile)
             .map_err( | e| ::capnp::Error::failed( format!("Failed to update: {:?}", e) ) ); // TODO proper error handling
 
         Promise::from_future(upd_fut)
@@ -336,9 +338,9 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                     Ok(incoming_call) =>
                     {
                         let mut request = call_listener.receive_request();
-                        request.get().init_call().fill_from( incoming_call.request() );
+                        request.get().init_call().fill_from( incoming_call.request_details() );
 
-                        if let Some(ref to_caller) = incoming_call.request().to_caller
+                        if let Some(ref to_caller) = incoming_call.request_details().to_caller
                         {
                             // Set up a capnp channel to the caller for the callee
                             let listener = AppMessageDispatcherCapnProto::new(to_caller.clone() );

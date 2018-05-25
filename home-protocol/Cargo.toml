@@ -7,9 +7,12 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 capnpc = "0.8"
 
 [dependencies]
+bincode = "*"
 capnp = "0.8"
 capnp-rpc = "0.8"
 futures = "0.1"
 multiaddr = "*"
 multihash = "*"
+serde = "*"
+serde_derive = "*"
 tokio-core = "0.1"

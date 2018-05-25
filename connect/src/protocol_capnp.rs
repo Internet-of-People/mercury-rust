@@ -141,7 +141,7 @@ impl Home for HomeClientCapnProto
     }
 
 
-    fn register(&mut self, own_profile: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
+    fn register(&self, own_profile: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         let mut request = self.home.register_request();
@@ -162,7 +162,7 @@ impl Home for HomeClientCapnProto
 
 
     fn login(&self, profile_id: ProfileId) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.login_request();
         request.get().set_profile_id( (&profile_id).into() );
@@ -173,8 +173,8 @@ impl Home for HomeClientCapnProto
             {
                 resp.get()
                     .and_then( |res| res.get_session() )
-                    .map( |session_client| Box::new(
-                        HomeSessionClientCapnProto::new(session_client, handle_clone) ) as Box<HomeSession> )
+                    .map( |session_client| Rc::new(
+                        HomeSessionClientCapnProto::new(session_client, handle_clone) ) as Rc<HomeSession> )
             } )
             .map_err( |e| ErrorToBeSpecified::TODO( format!("Failed to login: {:?}", e) ) );
 
@@ -183,7 +183,7 @@ impl Home for HomeClientCapnProto
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_request(&mut self, half_proof: RelationHalfProof) ->
+    fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.pair_request_request();
@@ -198,7 +198,7 @@ impl Home for HomeClientCapnProto
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_response(&mut self, relation_proof: RelationProof) ->
+    fn pair_response(&self, relation_proof: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.pair_response_request();
@@ -212,7 +212,7 @@ impl Home for HomeClientCapnProto
     }
 
 
-    fn call(&self, app: ApplicationId, call_req: CallRequest) ->
+    fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.call_request();
@@ -302,7 +302,7 @@ impl HomeSession for HomeSessionClientCapnProto
     // TODO consider if we should notify an open session about an updated profile
     // TODO consider if an OwnProfile return value is needed or how to force updating
     //      the currently active profile in all PeerContext/Session/etc instances
-    fn update(&self, own_prof: &OwnProfile) ->
+    fn update(&self, own_prof: OwnProfile) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let mut request = self.session.update_request();
@@ -433,7 +433,7 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
         // NOTE there's no way to add the i/o streams in try_from without extra context,
         //      we have to set them manually
         let call_capnp = pry!( pry!( params.get() ).get_call() );
-        let mut call = pry!( CallRequest::try_from(call_capnp) );
+        let mut call = pry!( CallRequestDetails::try_from(call_capnp) );
 
         // If received a to_caller channel, setup an in-memory sink for easier sending
         call.to_caller = call_capnp.get_to_caller()
@@ -497,19 +497,19 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
 
 struct IncomingCallCapnProto
 {
-    request:    CallRequest,
+    request:    CallRequestDetails,
     sender:     oneshot::Sender< Option<AppMsgSink> >,
 }
 
 impl IncomingCallCapnProto
 {
-    fn new(request: CallRequest, sender: oneshot::Sender< Option<AppMsgSink> >) -> Self
+    fn new(request: CallRequestDetails, sender: oneshot::Sender< Option<AppMsgSink> >) -> Self
         { Self{ request: request, sender: sender } }
 }
 
 impl IncomingCall for IncomingCallCapnProto
 {
-    fn request(&self) -> &CallRequest { &self.request }
+    fn request_details(&self) -> &CallRequestDetails { &self.request }
 
     fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>)
     {
@@ -527,7 +527,6 @@ impl IncomingCall for IncomingCallCapnProto
 mod tests
 {
     use super::*;
-    use tokio_core::net::TcpStream;
     use tokio_core::reactor;
 
 

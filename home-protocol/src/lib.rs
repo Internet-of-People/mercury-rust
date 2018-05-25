@@ -1,13 +1,18 @@
+extern crate bincode;
 extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
 extern crate futures;
 extern crate multiaddr;
 extern crate multihash;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate tokio_core;
 
 use std::rc::Rc;
 
+use bincode::serialize;
 use futures::{Future, sync::mpsc};
 use multiaddr::Multiaddr;
 
@@ -22,8 +27,7 @@ pub mod mercury_capnp;
 pub enum ErrorToBeSpecified { TODO(String) }
 
 
-
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(Serialize, PartialEq, PartialOrd, Eq, Clone, Debug, Hash)]
 pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -48,11 +52,25 @@ pub trait Seed
 /// Usually implemented using a private key internally, but also enables hardware wallets.
 pub trait Signer
 {
-    fn prof_id(&self) -> &ProfileId; // TODO is this really needed here and not in connection PeerContext?
+    // TODO consider if this is needed here or should only be provided by trait PeerContext?
+    fn prof_id(&self) -> &ProfileId;
+
     fn pub_key(&self) -> &PublicKey;
     // NOTE the data to be signed ideally will be the output from Mudlee's multicodec lib
     fn sign(&self, data: &[u8]) -> Signature;
 }
+
+
+pub trait Validator
+{
+    fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
+        -> Result<bool, ErrorToBeSpecified>;
+
+    fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
+        -> Result<bool, ErrorToBeSpecified>;
+}
+
+
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PersonaFacet
@@ -132,9 +150,16 @@ impl Profile
 pub trait PeerContext
 {
     fn my_signer(&self) -> &Signer;
-    fn peer_pubkey(&self) -> Option<PublicKey>;
-    /// peer and peer_pubkey must belong to the same profile in the implementors
-    fn peer(&self) -> Option<Profile>;
+    fn peer_pubkey(&self) -> &PublicKey;
+    fn peer_id(&self) -> &ProfileId;
+
+    fn validate(&self, validator: &Validator) -> Result<(),ErrorToBeSpecified>
+    {
+        validator.validate_profile( self.peer_pubkey(), self.peer_id() )
+            .and_then( |valid|
+                if valid { Ok( () ) }
+                else { Err( ErrorToBeSpecified::TODO( "Peer context is invalid".to_owned() ) ) } )
+    }
 }
 
 
@@ -182,7 +207,13 @@ impl OwnProfile
         { Self{ profile: profile.clone(), priv_data: private_data.to_owned() } }
 }
 
-
+#[derive(Serialize)]
+pub struct RelationSignablePart {
+    // the binary blob to be signed is rust-specific: Strings are serialized to a u64 (size) and the encoded string itself.
+    pub relation_type: String,
+    pub signer_id: ProfileId,
+    pub peer_id: ProfileId,
+}
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct RelationHalfProof
@@ -200,6 +231,17 @@ impl RelationHalfProof
     pub fn new() -> Self
         { Self{ relation_type: String::new(), my_id: ProfileId(Vec::new()),
                 my_sign: Signature(Vec::new()), peer_id: ProfileId(Vec::new()) } }
+
+    pub fn from_signable_part(signable_part: &RelationSignablePart, signer: Rc<Signer>) -> Self {
+        let signature = signer.sign(&serialize(&signable_part).unwrap());
+
+        RelationHalfProof {
+            relation_type: signable_part.relation_type.clone(),
+            my_id: signable_part.signer_id.clone(),
+            peer_id: signable_part.peer_id.clone(),
+            my_sign: signature,
+        }
+    }
 }
 
 
@@ -207,42 +249,64 @@ impl RelationHalfProof
 pub struct RelationProof
 {
     pub relation_type:  String,        // TODO inline halfproof fields with macro, if possible at all
-    pub my_id:          ProfileId,
-    pub my_sign:        Signature,
-    pub peer_id:        ProfileId,
-    pub peer_sign:      Signature,
+    pub a_id:           ProfileId,
+    pub a_sign:         Signature,
+    pub b_id:           ProfileId,
+    pub b_sign:         Signature,
     // TODO is a nonce needed?
+
 }
 
 impl RelationProof
 {
-    // TODO add params and properly initialize
-    pub fn new(
-        rel_type :      &str,
-        my_id:          &ProfileId,
-        my_sign:        &Signature,
-        peer_id:        &ProfileId,
-        peer_sign:      &Signature) -> Self
-    {
-        Self
-        {
+    pub fn new(rel_type: &str, a_id: &ProfileId, a_sign: &Signature, b_id: &ProfileId, b_sign: &Signature) -> Self {
+        assert!(a_id < b_id); // TODO make the same match as in from_halfproof
+        Self {
             relation_type: rel_type.to_owned(),
-            my_id: my_id.to_owned(),
-            my_sign: my_sign.to_owned(),
-            peer_id: peer_id.to_owned(),
-            peer_sign: peer_sign.to_owned(),
+            a_id: a_id.to_owned(),
+            a_sign: a_sign.to_owned(),
+            b_id: b_id.to_owned(),
+            b_sign: b_sign.to_owned(),
         }
     }
 
     pub fn from_halfproof(half_proof: RelationHalfProof, peer_sign: Signature) -> Self
     {
-        Self
-        {
-            relation_type: half_proof.relation_type.clone(),
-            my_id: half_proof.my_id.clone(),
-            my_sign: half_proof.my_sign.clone(),
-            peer_id: half_proof.peer_id.clone(),
-            peer_sign: peer_sign.clone(),
+        match half_proof.my_id < half_proof.peer_id {
+            true => Self {
+                relation_type: half_proof.relation_type.clone(),
+                a_id: half_proof.my_id.clone(),
+                a_sign: half_proof.my_sign.clone(),
+                b_id: half_proof.peer_id.clone(),
+                b_sign: peer_sign.clone(),
+            },
+            false => Self {
+                relation_type: half_proof.relation_type.clone(),
+                a_id: half_proof.peer_id.clone(),
+                a_sign: peer_sign.clone(),
+                b_id: half_proof.my_id.clone(),
+                b_sign: half_proof.my_sign.clone(),
+            }
+        }
+    }
+
+    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, String> {
+        if self.a_id == *my_id {
+            Ok(&self.b_id)
+        } else if self.b_id == *my_id {
+            Ok(&self.a_id)
+        } else {
+            Err(format!("{:?} is not present in relation {:?}", my_id, self))
+        }
+    }
+
+    pub fn peer_sign(&self, my_id: &ProfileId) -> Result<&Signature, String> {
+        if self.a_id == *my_id {
+            Ok(&self.b_sign)
+        } else if self.b_id == *my_id {
+            Ok(&self.a_sign)
+        } else {
+            Err(format!("{:?} is not present in relation {:?}", my_id, self))
         }
     }
 }
@@ -283,7 +347,7 @@ pub type AppMsgSink   = HomeSink<AppMessageFrame, String>;
 
 
 #[derive(Debug)]
-pub struct CallRequest
+pub struct CallRequestDetails
 {
     pub relation:       RelationProof,
     pub init_payload:   AppMessageFrame,
@@ -303,26 +367,26 @@ pub trait Home: ProfileRepo
 
     // TODO consider how to enforce overwriting the original ownprofile with the modified one
     //      with the pairing proof, especially the error case
-    fn register(&mut self, own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
+    fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
 
     // NOTE this closes all previous sessions of the same profile
     fn login(&self, profile: ProfileId) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >;
 
 
     // NOTE acceptor must have this server as its home
     // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
-    fn pair_request(&mut self, half_proof: RelationHalfProof) ->
+    fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    fn pair_response(&mut self, rel: RelationProof) ->
+    fn pair_response(&self, rel: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     // NOTE initiating a real P2P connection (vs a single frame push notification),
     //      the caller must fill in some message channel to itself.
     //      A successful call returns a channel to callee.
-    fn call(&self, app: ApplicationId, call_req: CallRequest) ->
+    fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >;
 
 // TODO consider how to do this in a later milestone
@@ -346,14 +410,17 @@ pub enum ProfileEvent
 
 pub trait IncomingCall
 {
-    fn request(&self) -> &CallRequest;
+    fn request_details(&self) -> &CallRequestDetails;
     // NOTE this assumes boxed trait objects, if Rc of something else is needed, this must be revised
+    // TODO consider offering the possibility to somehow send back a single AppMessageFrame
+    //      as a reply to init_payload without a to_callee sink,
+    //      either included into this function or an additional method
     fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>);
 }
 
 pub trait HomeSession
 {
-    fn update(&self, own_prof: &OwnProfile) ->
+    fn update(&self, own_prof: OwnProfile) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home

@@ -8,8 +8,10 @@ capnp = "0.8"
 capnp-rpc = "0.8"
 futures = "0.1"
 mercury-home-protocol = { path="../home-protocol" }
+mercury-storage = { path="../storage" }
 multiaddr = "*"
 multihash = "*"
+signatory = { version="0.5", features=["std"] }
 tokio-core = "0.1"
 
 tokio-io = "*"

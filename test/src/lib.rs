@@ -57,7 +57,7 @@ mod test{
 
         let handle1 = reactor.handle();
         let server_socket = TcpListener::bind( &addr, &reactor.handle() ).expect("Failed to bind socket");
-        let server_fut = server_socket.incoming().for_each( move |(socket, addr)|
+        let server_fut = server_socket.incoming().for_each( move |(socket, _addr)|
         {
             println!("Accepted client connection, serving requests");
             //let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
@@ -431,7 +431,7 @@ mod test{
         .and_then(|calls|{
             for call in calls{
                 let incall = call.unwrap();
-                let ptr = incall.request();
+                let ptr = incall.request_details();
 
                 let sink = ptr.to_caller.to_owned().unwrap();
                 let sent =sink.send(Ok(AppMessageFrame(Vec::from("sink.send"))));
