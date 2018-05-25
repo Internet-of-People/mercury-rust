@@ -1,5 +1,5 @@
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc, rc::Weak};
+use std::collections::HashMap;
 use std::error::Error;
 
 use futures::{future, sync, Future, Sink};
@@ -19,6 +19,7 @@ pub struct HomeServer
     validator:          Rc<Validator>,
     public_profile_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
     hosted_profile_db:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
+    sessions:           Rc<RefCell< HashMap<ProfileId, Weak<HomeSessionServer>> >>,
 }
 
 impl HomeServer
@@ -28,7 +29,8 @@ impl HomeServer
                public_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
                private_db: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>) -> Self
     { Self{ handle: handle.clone(), validator: validator,
-            public_profile_dht: public_dht, hosted_profile_db: private_db } }
+            public_profile_dht: public_dht, hosted_profile_db: private_db,
+            sessions: Rc::new( RefCell::new( HashMap::new() ) ) } }
 }
 
 
@@ -158,7 +160,7 @@ impl Home for HomeConnectionServer
 
 
     fn login(&self, profile: ProfileId) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
         if profile != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Login() access denied: you authenticated with a different profile".to_owned() ) ) ) }
@@ -168,7 +170,11 @@ impl Home for HomeConnectionServer
             .map( {
                 let context_clone = self.context.clone();
                 let server_clone = self.server.clone();
-                move |_own_profile| Box::new( HomeSessionServer::new(context_clone, server_clone) ) as Box<HomeSession>
+                move |_own_profile| Rc::new( HomeSessionServer::new(context_clone, server_clone) ) as Rc<HomeSession>
+//            } )
+//            .inspect( {
+//                let sessions_clone = self.sessions.clone();
+//                move |session|
             } );
 
         Box::new(val_fut)
@@ -235,8 +241,7 @@ impl HomeSessionServer
 
 impl HomeSession for HomeSessionServer
 {
-    fn update(&self, own_prof: OwnProfile) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    fn update(&self, own_prof: OwnProfile) -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         if own_prof.profile.id != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Update() access denied: you authenticated with a different profile".to_owned() ) ) ) }
@@ -263,6 +268,7 @@ impl HomeSession for HomeSessionServer
         Box::new(upd_fut)
     }
 
+
     // TODO is the ID of the new home enough here or do we need the whole profile?
     fn unregister(&self, newhome: Option<Profile>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
@@ -279,13 +285,11 @@ impl HomeSession for HomeSessionServer
         receiver
     }
 
+
     fn events(&self) -> HomeStream<ProfileEvent, String>
     {
         let (sender, receiver) = sync::mpsc::channel(1);
-        let sender_clone = sender.clone();
-        let old_sink = self.events.replace( ServerSink::Sender(sender) );
-
-        match old_sink
+        match self.events.replace( ServerSink::Sender( sender.clone() ) )
         {
             ServerSink::Sender(old_sender) =>
             {
@@ -300,7 +304,7 @@ impl HomeSession for HomeSessionServer
             {
                 // Send all collected messages from buffer as we now finally have a channel to the user
                 self.server.handle.spawn(
-                    sender_clone.send_all( stream::iter_ok(msg_vec) )
+                    sender.send_all( stream::iter_ok(msg_vec) )
                         .map( |_sender| () )
                         .map_err( |_e| () )
                 )
@@ -309,6 +313,7 @@ impl HomeSession for HomeSessionServer
 
         receiver
     }
+
 
     // TODO remove this after testing
     fn ping(&self, txt: &str) ->

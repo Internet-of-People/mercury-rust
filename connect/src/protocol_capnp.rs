@@ -162,7 +162,7 @@ impl Home for HomeClientCapnProto
 
 
     fn login(&self, profile_id: ProfileId) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.login_request();
         request.get().set_profile_id( (&profile_id).into() );
@@ -173,8 +173,8 @@ impl Home for HomeClientCapnProto
             {
                 resp.get()
                     .and_then( |res| res.get_session() )
-                    .map( |session_client| Box::new(
-                        HomeSessionClientCapnProto::new(session_client, handle_clone) ) as Box<HomeSession> )
+                    .map( |session_client| Rc::new(
+                        HomeSessionClientCapnProto::new(session_client, handle_clone) ) as Rc<HomeSession> )
             } )
             .map_err( |e| ErrorToBeSpecified::TODO( format!("Failed to login: {:?}", e) ) );
 

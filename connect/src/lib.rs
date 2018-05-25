@@ -105,7 +105,7 @@ pub trait ProfileGateway
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     fn login(&self) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >;
 
     fn pair_request(&self, relation_type: &str, with_profile_url: &str) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
@@ -296,7 +296,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
     // TODO this should try connecting to ALL of our homes
     fn login(&self) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
         let profile_repo_clone = self.profile_repo.clone();
         let home_conn_clone = self.home_connector.clone();

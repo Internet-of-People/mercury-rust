@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use capnp::capability::Promise;
 use futures::{Future, Stream};
 use tokio_core::net::TcpStream;
@@ -221,13 +223,13 @@ impl home::Server for HomeDispatcherCapnProto
 
 pub struct HomeSessionDispatcherCapnProto
 {
-    session:    Box<HomeSession>,
+    session:    Rc<HomeSession>,
     handle:     reactor::Handle,
 }
 
 impl HomeSessionDispatcherCapnProto
 {
-    pub fn new(session: Box<HomeSession>, handle: reactor::Handle) -> Self
+    pub fn new(session: Rc<HomeSession>, handle: reactor::Handle) -> Self
         { Self{ session: session, handle: handle } }
 }
 

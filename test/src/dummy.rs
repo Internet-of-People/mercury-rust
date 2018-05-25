@@ -357,10 +357,10 @@ impl Home for MyDummyHome
 
     // NOTE this closes all previous sessions of the same profile
     fn login(&self, profile: ProfileId) ->
-    Box< Future< Item=Box< HomeSession >, Error=ErrorToBeSpecified > >{
+    Box< Future< Item=Rc< HomeSession >, Error=ErrorToBeSpecified > >{
         println!("MyDummyHome.login");
         //let selfcell = Rc::new(RefCell::new(*self));
-        let session = Box::new(HomeSessionDummy::new( profile ,Rc::clone(&self.storage_layer)/*, selfcell */) ) as Box<HomeSession>;
+        let session = Rc::new(HomeSessionDummy::new( profile ,Rc::clone(&self.storage_layer)/*, selfcell */) ) as Rc<HomeSession>;
         Box::new( future::ok( session ) )
         //Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.login "))) )
 

@@ -372,7 +372,7 @@ pub trait Home: ProfileRepo
 
     // NOTE this closes all previous sessions of the same profile
     fn login(&self, profile: ProfileId) ->
-        Box< Future<Item=Box<HomeSession>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >;
 
 
     // NOTE acceptor must have this server as its home
