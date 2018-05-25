@@ -1,4 +1,5 @@
 [package]
+# TODO decide on naming. It seems this crate will be the home for the protocol and common utils. Suggestion: mercury-common.
 name = "mercury-home-protocol"
 version = "0.1.0"
 authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
@@ -15,4 +16,5 @@ multiaddr = "*"
 multihash = "*"
 serde = "*"
 serde_derive = "*"
+signatory = { version="0.5", features=["std"] }
 tokio-core = "0.1"

@@ -3,9 +3,7 @@ use std::error::Error;
 use multihash;
 use signatory::{ed25519::FromSeed, providers::dalek};
 
-use mercury_home_protocol::*;
-
-
+use ::*;
 
 pub trait ProfileValidator
 {
@@ -44,9 +42,6 @@ impl<P: ProfileValidator, S: SignatureValidator> Validator for CompositeValidato
 }
 
 
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct PrivateKey(pub Vec<u8>);
 
 
 

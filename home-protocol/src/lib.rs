@@ -9,6 +9,7 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate tokio_core;
+extern crate signatory;
 
 use std::rc::Rc;
 
@@ -19,7 +20,7 @@ use multiaddr::Multiaddr;
 
 
 pub mod mercury_capnp;
-
+pub mod crypto;
 
 
 // TODO
@@ -32,6 +33,9 @@ pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PublicKey(pub Vec<u8>);
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct PrivateKey(pub Vec<u8>);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Signature(pub Vec<u8>);

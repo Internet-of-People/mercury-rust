@@ -14,13 +14,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use futures::Stream;
-use tokio_core::reactor;
-use tokio_core::net::TcpListener;
+use tokio_core::{reactor, net::TcpListener};
 
-use mercury_home_protocol::*;
-use mercury_home_node::crypto::*;
-use mercury_home_node::server::*;
-use mercury_home_node::protocol_capnp;
+use mercury_home_protocol::{crypto::*, *};
+use mercury_home_node::{server::*, protocol_capnp};
 use mercury_storage::async::imp::InMemoryStore;
 
 
