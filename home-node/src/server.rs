@@ -191,13 +191,31 @@ impl Home for HomeConnectionServer
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
         // TODO validate halfproof signature
+        let _i_forgot_halfproof_validation = true;
 //        let data = b""; // TODO halfproof must be serialized here
 //        self.server.validator.validate_signature( self.context.peer_pubkey(), data, half_proof.my_sign );
 //            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different public key".to_owned() )) ) ) }
 
-        // TODO check if targeted profile id is hosted on this machine
-        //      and delegate the proof to its buffer (if offline) or sink (if logged in)
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_request "))) )
+        let to_profile = half_proof.peer_id.clone();
+        let sessions_clone = self.server.sessions.clone();
+        // Check if this profile is hosted on this server
+        let pair_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone() )
+            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+            .and_then( move |_profile_data|
+            {
+                // If hosted here, check if it's online with a session available
+                let event = ProfileEvent::PairingRequest(half_proof);
+                let session_rc_opt = sessions_clone.borrow().get(&to_profile)
+                    .and_then( |weak| weak.upgrade() );
+                match session_rc_opt
+                {
+                    Some(ref session) => { session.push_event(event) },
+                    // TODO save event into persistent storage and delegate it when profile is online again
+                    None => { Box::new( future::ok( () ) ) },
+                }
+            } );
+
+        Box::new(pair_fut)
     }
 
 
@@ -246,6 +264,25 @@ impl HomeSessionServer
     pub fn new(context: Rc<PeerContext>, server: Rc<HomeServer>) -> Self
         { Self{ context: context, server: server,
                 events: RefCell::new(ServerSink::Buffer( Vec::new() ) ) } }
+
+
+    fn push_event(&self, event: ProfileEvent) -> Box< Future<Item=(),Error=ErrorToBeSpecified> >
+    {
+        match *self.events.borrow_mut()
+        {
+            ServerSink::Buffer(ref mut bufvec) =>
+            {
+                bufvec.push( Ok(event) ); // TODO consider size constraints
+                Box::new( future::ok( () ) )
+            },
+            ServerSink::Sender(ref mut sender) => Box::new
+            (
+                sender.clone().send( Ok(event) )
+                    .map( |_sender| () )
+                    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+            ),
+        }
+    }
 }
 
 
@@ -313,6 +350,7 @@ impl HomeSession for HomeSessionServer
             ServerSink::Buffer(msg_vec) =>
             {
                 // Send all collected messages from buffer as we now finally have a channel to the user
+                // TODO use persistent storage for events when profile is offline and delegate them here
                 self.server.handle.spawn(
                     sender.send_all( stream::iter_ok(msg_vec) )
                         .map( |_sender| () )
