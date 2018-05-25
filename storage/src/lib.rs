@@ -21,4 +21,4 @@ pub mod format;
 pub mod meta;
 pub mod sync;
 pub mod async;
-
+pub mod filesys;
