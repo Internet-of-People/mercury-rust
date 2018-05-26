@@ -30,9 +30,9 @@ mod test{
     use tokio_core::net::{TcpListener, TcpStream};
     use tokio_core::reactor;
 
-    use mercury_home_protocol::*;
+    use mercury_home_protocol::{*, crypto::*};
     use mercury_connect::*;
-    use ::dummy::{ MyDummyHome, Signo, make_home_profile, ProfileStore, };
+    use ::dummy::{ MyDummyHome, make_home_profile, ProfileStore, };
     use mercury_connect::protocol_capnp::HomeClientCapnProto;
     use mercury_home_node::protocol_capnp::HomeDispatcherCapnProto;
 
@@ -48,8 +48,7 @@ mod test{
         let addr = homeaddr.clone().to_socket_addrs().unwrap().next().expect("Failed to parse address");
 
         let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
-        let homesigno = Rc::new(Signo::new("makusguba"));
-        let homeprof = Profile::new_home(homesigno.prof_id().to_owned(), homesigno.pub_key().to_owned(), homemultiaddr.clone());
+        let (homeprof, _homesigno) = crypto::generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
         let mut dht = ProfileStore::new();
         dht.insert(homeprof.id.clone(), homeprof.clone());
@@ -72,10 +71,11 @@ mod test{
             .map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")))
             .and_then( |tcp_stream|
             {
-                let signer = Rc::new( Signo::new("privatekey") );
+                let (private_key, public_key) = crypto::generate_keypair();
+                let signer = Rc::new(Ed25519Signer::new(&private_key, &public_key).unwrap());
                 let my_profile = signer.prof_id().clone();
                 let home_profile = make_home_profile("localhost:9876", signer.pub_key());
-                let home_ctx = Box::new( HomeContext::new(signer, &home_profile) );
+                let home_ctx = Box::new(HomeContext::new(signer, &home_profile));
                 let client = HomeClientCapnProto::new_tcp( tcp_stream, home_ctx, handle2 );
                 client.login(my_profile) // TODO maybe we should require only a reference in login()
             } )
@@ -198,8 +198,9 @@ mod test{
     fn test_update(){
 
         let mut setup = dummy::TestSetup::setup();
-        let other_home_signer = Signo::new("otherhome");
-        let otherhome = make_home_profile("/ip4/127.0.0.1/udp/9876", other_home_signer.pub_key());
+
+        let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
+        let (otherhome, _other_home_signer) = crypto::generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
         setup.home.borrow_mut().insert(otherhome.id.clone(), otherhome.clone());
         let home_session = setup.profilegate.update(
@@ -270,19 +271,11 @@ mod test{
         let mut reactor = tokio_core::reactor::Core::new().unwrap();
         //let handle = reactor.handle();
 
-        let homeaddr = "/ip4/127.0.0.1/udp/9876";
-        //let homemultiaddr = homeaddr.to_multiaddr().unwrap();
-        
-        //println!( "***Setting up signers" );
+        let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
+        let (homeprof, homesigno) = crypto::generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
-        let homesigno = Rc::new( dummy::Signo::new( "makusguba" ) );
-        let other_homesigno = Rc::new( dummy::Signo::new( "tulfozotttea" ) );
-
-        //println!("***Setting up profiles");
-        let homeprof = dummy::make_home_profile( &homeaddr ,homesigno.pub_key() );
-        let other_homeprof = dummy::make_home_profile( &homeaddr ,other_homesigno.pub_key());
-        
-        //println!("***ProfileGateway: ProfileSigner, DummyHome(as profile repo), HomeConnector" );
+        let homemultiaddr = "/ip4/127.0.0.1/udp/9877".to_multiaddr().unwrap();
+        let (other_homeprof, other_homesigno) = crypto::generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
         let mut dht = ProfileStore::new();
         dht.insert(homeprof.id.clone(), homeprof.clone());
@@ -292,11 +285,11 @@ mod test{
         let ownhomestore = Rc::clone(&home_storage);
         let home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
 
-        let other_signo = Rc::new( dummy::Signo::new( "Othereusz" ) );
+        let (profile, signo) = crypto::generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
+        let signo = Rc::new(signo);
 
-
-        let signo = Rc::new( dummy::Signo::new( "Deuszkulcs" ) );
-        let profile = make_own_persona_profile(signo.pub_key() );
+        let (_other_profile, other_signo) = crypto::generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
+        let other_signo = Rc::new(other_signo);
 
         let own_gateway = ProfileGatewayImpl::new(
             signo,
