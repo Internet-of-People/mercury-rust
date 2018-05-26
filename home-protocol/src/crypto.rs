@@ -1,6 +1,8 @@
 use std::error::Error;
 
 use multihash;
+use rand::OsRng;
+use sha2::{Sha512};
 use signatory::{ed25519::FromSeed, providers::dalek};
 
 use ::*;
@@ -40,8 +42,6 @@ impl<P: ProfileValidator, S: SignatureValidator> Validator for CompositeValidato
         -> Result<bool, ErrorToBeSpecified>
     { self.signature_validator.validate_signature(public_key, data, signature) }
 }
-
-
 
 
 
@@ -125,6 +125,49 @@ impl ProfileValidator for MultiHashProfileValidator
             .map_err(|e| ErrorToBeSpecified::TODO(e.description().to_owned()))?;
         Ok(key_hash == profile_id.0)
     }
+}
+
+impl<'a> From<ed25519_dalek::SecretKey> for PrivateKey {
+    fn from(secret_key: ed25519_dalek::SecretKey) -> Self {
+        PrivateKey(secret_key.to_bytes().to_vec())
+    }
+}
+
+impl<'a> From<ed25519_dalek::PublicKey> for PublicKey {
+    fn from(public_key: ed25519_dalek::PublicKey) -> Self {
+        PublicKey(public_key.to_bytes().to_vec())
+    }
+}
+
+impl<'a> From<&'a PublicKey> for ProfileId {
+    fn from(public_key: &'a PublicKey) -> Self {
+        let hash = multihash::encode( multihash::Hash::Keccak256, public_key.0.as_slice() );
+        match hash {
+            Ok(hash) => ProfileId(hash),
+            Err(e) => panic!("TODO: This should never happen. Error: {}", e),
+        }
+    }
+}
+
+pub fn generate_keypair() -> (PrivateKey, PublicKey) {
+    let mut csprng: OsRng = OsRng::new().unwrap();
+    let secret_key = ed25519_dalek::SecretKey::generate(&mut csprng);
+    let public_key = ed25519_dalek::PublicKey::from_secret::<Sha512>(&secret_key);
+    (PrivateKey::from(secret_key), PublicKey::from(public_key))
+}
+
+pub fn generate_profile(facet: ::ProfileFacet) -> (Profile, Ed25519Signer) {
+    let (private_key, public_key) = generate_keypair();
+
+    let signer = Ed25519Signer::new(&private_key, &public_key).expect("TODO: this should not be able to fail");
+
+    let profile = Profile {
+        id: ProfileId::from(&public_key),
+        pub_key: public_key,
+        facets: vec![facet],
+    };
+
+    (profile, signer)
 }
 
 
