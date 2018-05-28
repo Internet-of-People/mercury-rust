@@ -247,7 +247,7 @@ impl RelationHalfProof
                 signature: Signature(Vec::new()), peer_id: ProfileId(Vec::new()) } }
 
     pub fn from_signable_part(signable_part: RelationSignablePart, signer: Rc<Signer>) -> Self {
-        let signature = signer.sign(&serialize(&signable_part).unwrap());
+        let signature = signer.sign(&serialize(&signable_part).unwrap());  // TODO remove unwrap(), investigate how it can fail
 
         RelationHalfProof {
             relation_type: signable_part.relation_type,
@@ -255,6 +255,17 @@ impl RelationHalfProof
             peer_id: signable_part.peer_id,
             signature: signature,
         }
+    }
+
+    pub fn validate(&self, validator: Rc<Validator>, public_key: &PublicKey) -> Result<(), ErrorToBeSpecified> {
+        let signable_part = RelationSignablePart {
+            relation_type: self.relation_type.clone(),
+            signer_id: self.signer_id.clone(),
+            peer_id: self.peer_id.clone(),
+        };
+
+        validator.validate_signature(public_key, &serialize(&signable_part).unwrap(), &self.signature)?;
+        Ok(())
     }
 }
 

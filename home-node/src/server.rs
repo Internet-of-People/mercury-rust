@@ -2,6 +2,7 @@ use std::{cell::RefCell, rc::Rc, rc::Weak};
 use std::collections::HashMap;
 use std::error::Error;
 
+use bincode::serialize;
 use futures::{future, sync, Future, Sink};
 use futures::sync::mpsc;
 use futures::stream;
@@ -124,17 +125,38 @@ impl Home for HomeConnectionServer
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         if own_prof.profile.id != *self.context.peer_id()
-            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different profile".to_owned() )) ) ) }
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different profile id".to_owned() )) ) ) }
+
         if own_prof.profile.pub_key != *self.context.peer_pubkey()
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different public key".to_owned() )) ) ) }
+
+        if half_proof.validate(self.server.validator.clone(), self.context.peer_pubkey()).is_err()
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register(): access denied: invalid signature in half_proof".to_owned())))); }
+
+        if half_proof.signer_id != *self.context.peer_id()
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the authenticated profile id does not match the signer id in the half_proof".to_owned() )) ) )}
+
+        if half_proof.peer_id != *self.context.my_signer().prof_id()
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the requested home id does not match this home".to_owned() )) ) )}
+
+        if half_proof.relation_type != "home"
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the requested relation type should be 'home'".to_owned() )) ) )}
 
         let own_prof_original = own_prof.clone();
         let error_mapper = |e: StorageError| ( own_prof_original, ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         let error_mapper_clone = error_mapper.clone();
 
-        // TODO we should add our home details with signed RelationProof here into the persona facet's home vector in this profile
-        let pub_prof_modified = own_prof.profile.clone();
-        let own_prof_modified = own_prof.clone();
+
+        let home_proof = RelationProof::sign_halfproof(half_proof, self.context.my_signer());
+
+        let mut own_prof_modified = own_prof.clone();
+        if let ProfileFacet::Persona(ref mut profile_facet) = own_prof_modified.profile.facets[0] {
+            profile_facet.homes.push(home_proof)
+        } else {
+            return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: Only personas are allowed to register".to_owned() )) ) )
+        }
+
+        let pub_prof_modified = own_prof_modified.profile.clone();
         let local_store = self.server.hosted_profile_db.clone();
         let distributed_store = self.server.public_profile_dht.clone();
         let reg_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )
