@@ -71,8 +71,34 @@ impl HomeConnectionServer
     pub fn new(context: Rc<PeerContext>, server: Rc<HomeServer>) -> Result<Self, ErrorToBeSpecified>
     {
         context.validate(&*server.validator)?;
-
         Ok( Self{ context: context, server: server } )
+    }
+
+
+    fn push_event(&self, to_profile: ProfileId, event: ProfileEvent)
+        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        let sessions_clone = self.server.sessions.clone();
+
+        // Check if this profile is hosted on this server
+        let pair_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone() )
+            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+            .and_then( move |_profile_data|
+            {
+                // If hosted here, check if profile is in reach with an online session
+                let session_rc_opt = sessions_clone.borrow().get(&to_profile)
+                    // TODO remove session if weak pointer failed to upgrade (session is released with refcount 0)
+                    .and_then( |weak| weak.upgrade() );
+
+                match session_rc_opt
+                {
+                    Some(ref session) => { session.push_event(event) },
+                    // TODO save event into persistent storage and delegate it when profile is online again
+                    None => { Box::new( future::ok( () ) ) },
+                }
+            } );
+
+        Box::new(pair_fut)
     }
 }
 
@@ -191,31 +217,13 @@ impl Home for HomeConnectionServer
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
         // TODO validate halfproof signature
-        let _i_forgot_halfproof_validation = true;
+        let i_forgot_halfproof_validation = true;
 //        let data = b""; // TODO halfproof must be serialized here
 //        self.server.validator.validate_signature( self.context.peer_pubkey(), data, half_proof.my_sign );
 //            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different public key".to_owned() )) ) ) }
 
         let to_profile = half_proof.peer_id.clone();
-        let sessions_clone = self.server.sessions.clone();
-        // Check if this profile is hosted on this server
-        let pair_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone() )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
-            .and_then( move |_profile_data|
-            {
-                // If hosted here, check if it's online with a session available
-                let event = ProfileEvent::PairingRequest(half_proof);
-                let session_rc_opt = sessions_clone.borrow().get(&to_profile)
-                    .and_then( |weak| weak.upgrade() );
-                match session_rc_opt
-                {
-                    Some(ref session) => { session.push_event(event) },
-                    // TODO save event into persistent storage and delegate it when profile is online again
-                    None => { Box::new( future::ok( () ) ) },
-                }
-            } );
-
-        Box::new(pair_fut)
+        self.push_event( to_profile, ProfileEvent::PairingRequest(half_proof) )
     }
 
 

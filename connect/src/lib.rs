@@ -189,6 +189,7 @@ impl ProfileGatewayImpl
             {
                 let connector_clone = connector.clone();
                 let signer_clone = signer.clone();
+                let lez_forgot_to_fix_this_unwrap = true;
                 prof_repo.borrow().load(&home_relation_proof.peer_id(signer.prof_id()).unwrap())  // TODO add proper error handling
                     .and_then( move |home_profile|
                     {
