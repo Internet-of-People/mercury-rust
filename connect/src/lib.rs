@@ -206,7 +206,7 @@ impl ProfileGatewayImpl
                                 connector_clone.connect(&home_profile, signer_clone)
                             })) as Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >
                         },
-                    Err(e) => Box::new(future::err(ErrorToBeSpecified::TODO(e))),
+                    Err(e) => Box::new(future::err(e)),
                 }
             } )
             .collect::<Vec<_>>();

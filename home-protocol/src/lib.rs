@@ -75,6 +75,43 @@ pub trait Validator
 
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
         -> Result<bool, ErrorToBeSpecified>;
+
+    fn validate_relation_proof(&self, relation_proof: &RelationProof, profile1: &Profile, profile2: &Profile) -> Result<(), ErrorToBeSpecified> {
+
+        let signable_a = RelationSignablePart {
+            relation_type: relation_proof.relation_type.clone(),
+            signer_id: relation_proof.a_id.clone(),
+            peer_id: relation_proof.b_id.clone(),
+        };
+        let signable_a_serialized = serialize(&signable_a).unwrap();
+        // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
+        //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
+        //      But anyway this serialization will be swapped with something that in the first place cannot fail at all.
+        let signable_b = RelationSignablePart {
+            relation_type: relation_proof.relation_type.clone(),
+            signer_id: relation_proof.b_id.clone(),
+            peer_id: relation_proof.a_id.clone(),
+        };
+        let signable_b_serialized = serialize(&signable_b).unwrap();
+        // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
+        //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
+        //      But anyway this serialization will be swapped with something that in the first place cannot fail at all.
+
+        // TODO check if profile2.id is in relation_proof first, and if not, return an error indicating that instead of
+        //      a signature error.
+        if *relation_proof.peer_id(&profile1.id)? == relation_proof.b_id {
+            // profile1 is 'a'
+            self.validate_signature(&profile1.pub_key, &signable_a_serialized, &relation_proof.a_signature)?;
+            self.validate_signature(&profile2.pub_key, &signable_b_serialized, &relation_proof.b_signature)?;
+        } else {
+            // profile1 is 'b'
+            self.validate_signature(&profile1.pub_key, &signable_b_serialized, &relation_proof.b_signature)?;
+            self.validate_signature(&profile2.pub_key, &signable_a_serialized, &relation_proof.a_signature)?;
+        }
+
+        Ok(())
+    }
+
 }
 
 
@@ -309,23 +346,35 @@ impl RelationProof
         Self::new(half_proof.relation_type.as_ref(), &half_proof.signer_id, &half_proof.signature, &half_proof.peer_id, &peer_signature)
     }
 
-    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, String> {
+    pub fn sign_halfproof(half_proof: RelationHalfProof, signer: &Signer) -> Self
+    {
+        let signable_part = RelationSignablePart {
+            relation_type: half_proof.relation_type.clone(),
+            signer_id: half_proof.peer_id.clone(),
+            peer_id: half_proof.signer_id.clone(),
+        };
+        let signable_data = serialize(&signable_part).unwrap();  // TODO change to an implementation that cannot fail
+        let home_signature = signer.sign(&signable_data);
+        Self::from_halfproof(half_proof, home_signature)
+    }
+
+    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, ErrorToBeSpecified> {
         if self.a_id == *my_id {
             Ok(&self.b_id)
         } else if self.b_id == *my_id {
             Ok(&self.a_id)
         } else {
-            Err(format!("{:?} is not present in relation {:?}", my_id, self))
+            Err(ErrorToBeSpecified::TODO(format!("{:?} is not present in relation {:?}", my_id, self)))
         }
     }
 
-    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, String> {
+    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, ErrorToBeSpecified> {
         if self.a_id == *my_id {
             Ok(&self.b_signature)
         } else if self.b_id == *my_id {
             Ok(&self.a_signature)
         } else {
-            Err(format!("{:?} is not present in relation {:?}", my_id, self))
+            Err(ErrorToBeSpecified::TODO(format!("{:?} is not present in relation {:?}", my_id, self)))
         }
     }
 }
