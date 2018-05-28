@@ -335,7 +335,7 @@ impl HomeInvitation
 }
 
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash)]
 pub struct ApplicationId(pub String);
 
 #[derive(PartialEq, Eq, Clone, Debug)]

@@ -2,7 +2,7 @@ use std::{cell::RefCell, rc::Rc, rc::Weak};
 use std::collections::HashMap;
 use std::error::Error;
 
-use futures::{future, sync, Future, Sink};
+use futures::{future, sync, Future, IntoFuture, Sink};
 use futures::sync::mpsc;
 use futures::stream;
 use tokio_core::reactor;
@@ -75,30 +75,75 @@ impl HomeConnectionServer
     }
 
 
-    fn push_event(&self, to_profile: ProfileId, event: ProfileEvent)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    fn get_live_session(&self, to_profile: ProfileId)
+        -> Box< Future<Item=Option<Rc<HomeSessionServer>>, Error=ErrorToBeSpecified> >
     {
         let sessions_clone = self.server.sessions.clone();
 
         // Check if this profile is hosted on this server
-        let pair_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone() )
+        let session_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             .and_then( move |_profile_data|
             {
+                // Seperate variable needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
+                let sessions = sessions_clone.borrow();
                 // If hosted here, check if profile is in reach with an online session
-                let session_rc_opt = sessions_clone.borrow().get(&to_profile)
-                    // TODO remove session if weak pointer failed to upgrade (session is released with refcount 0)
+                let session_rc = sessions.get(&to_profile)
+                    // TODO remove session from server if weak pointer failed to upgrade (session is released with refcount 0)
                     .and_then( |weak| weak.upgrade() );
+                future::ok(session_rc)
+            } );
 
+        Box::new(session_fut)
+    }
+
+
+    fn push_event(&self, to_profile: ProfileId, event: ProfileEvent)
+        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        let push_fut = self.get_live_session(to_profile)
+            .and_then( |session_rc_opt|
+            {
                 match session_rc_opt
                 {
-                    Some(ref session) => { session.push_event(event) },
+                    // TODO if push to session fails, consider just dropping the session
+                    //      (is anything manual needed using weak pointers?) and requiring a reconnect
+                    Some(ref session) => session.push_event(event),
                     // TODO save event into persistent storage and delegate it when profile is online again
                     None => { Box::new( future::ok( () ) ) },
                 }
             } );
 
-        Box::new(pair_fut)
+        Box::new(push_fut)
+    }
+
+
+    fn push_call(&self, to_profile: ProfileId, to_app: ApplicationId, call: Box<IncomingCall>)
+        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        let push_fut = self.get_live_session(to_profile)
+            .and_then( |session_rc_opt|
+            {
+                match session_rc_opt
+                {
+                    Some(ref session) =>
+                    {
+                        // TODO if push to session fails, consider just dropping the session
+                        //      (is anything manual needed using weak pointers?) and requiring a reconnect
+                        let push_fut = session.push_call(to_app, call)
+                            .map( |to_callee|
+                            {
+                                let i_forgot_to_implement_delegating_channel = true;
+                                ()
+                            } );
+                        Box::new(push_fut) as Box< Future<Item=(), Error=ErrorToBeSpecified> >
+                    },
+                    // TODO save event into persistent storage and delegate it when profile is online again
+                    None => { Box::new( future::ok( () ) ) },
+                }
+            } );
+
+        Box::new(push_fut)
     }
 }
 
@@ -247,9 +292,41 @@ impl Home for HomeConnectionServer
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
-        // TODO check if targeted profile id is hosted on this machine
-        //      and delegate the call to its buffer (if offline) or sink (if logged in)
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.call "))) )
+        // TODO validate sender profile id and both signatures
+        let i_forgot_relation_validation = true;
+
+        let to_profile = match call_req.relation.peer_id( self.context.peer_id() )
+        {
+            Ok(profile_id) => profile_id.to_owned(),
+            Err(e) => return Box::new( future::err( ErrorToBeSpecified::TODO(e) ) )
+        };
+
+        let call = Box::new( Call::new(call_req) );
+        let answer_fut = self.push_call(to_profile, app, call)
+            .map( |_| { let i_forgot_to_return_the_answered_result_here = true; None } );
+        Box::new(answer_fut)
+    }
+}
+
+
+
+struct Call
+{
+    details: CallRequestDetails,
+    // TODO a oneshot channel is needed here to send back the answer if received
+}
+
+impl Call
+{
+    pub fn new(details: CallRequestDetails) -> Self { Self{details: details} }
+}
+
+impl IncomingCall for Call
+{
+    fn request_details(&self) -> &CallRequestDetails { &self.details }
+    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>)
+    {
+        let i_forgot_to_properly_implement_call_answering = true;
     }
 }
 
@@ -269,8 +346,7 @@ pub struct HomeSessionServer
     context:    Rc<PeerContext>,
     server:     Rc<HomeServer>,
     events:     RefCell< ServerSink<ProfileEvent, String> >,
-//    client_profile: OwnProfile,
-//    home: Weak<HomeServer>,
+    apps:       RefCell< HashMap< ApplicationId, ServerSink<Box<IncomingCall>, String> > > // {appId->sender<call>}
 }
 
 
@@ -278,8 +354,11 @@ impl HomeSessionServer
 {
     // TODO consider if validating the context is needed here, e.g. as an assert()
     pub fn new(context: Rc<PeerContext>, server: Rc<HomeServer>) -> Self
-        { Self{ context: context, server: server,
-                events: RefCell::new(ServerSink::Buffer( Vec::new() ) ) } }
+    {
+        Self{ context: context, server: server,
+              events:  RefCell::new(ServerSink::Buffer( Vec::new() ) ),
+              apps:    RefCell::new( HashMap::new() ) }
+    }
 
 
     fn push_event(&self, event: ProfileEvent) -> Box< Future<Item=(),Error=ErrorToBeSpecified> >
@@ -295,6 +374,28 @@ impl HomeSessionServer
             (
                 sender.clone().send( Ok(event) )
                     .map( |_sender| () )
+                    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+            ),
+        }
+    }
+
+
+    fn push_call(&self, app: ApplicationId, call: Box<IncomingCall>)
+        -> Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
+    {
+        let mut apps = self.apps.borrow_mut();
+        let mut sink = apps.entry(app).or_insert( ServerSink::Buffer( Vec::new() ) );
+        match *sink
+        {
+            ServerSink::Buffer(ref mut bufvec) =>
+            {
+                bufvec.push( Ok(call) ); // TODO consider size constraints
+                Box::new( future::ok(None) )
+            },
+            ServerSink::Sender(ref mut sender) => Box::new
+            (
+                sender.clone().send( Ok(call) )
+                    .map( |_sender| { let i_forgot_to_send_back_call_answer_channel_here = true; None } )
                     .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             ),
         }
@@ -352,8 +453,11 @@ impl HomeSession for HomeSessionServer
     fn events(&self) -> HomeStream<ProfileEvent, String>
     {
         let (sender, receiver) = sync::mpsc::channel(1);
+
+        // Set up events with the new channel and check the old event sink
         match self.events.replace( ServerSink::Sender( sender.clone() ) )
         {
+            // We already had another channel properly set up
             ServerSink::Sender(old_sender) =>
             {
                 // NOTE consuming the events stream multiple times is likely a client implementation error
@@ -363,6 +467,7 @@ impl HomeSession for HomeSessionServer
                         .map_err( |_e| () )
                 )
             },
+            // The client was not listening to events so far, the channel is brand new
             ServerSink::Buffer(msg_vec) =>
             {
                 // Send all collected messages from buffer as we now finally have a channel to the user
