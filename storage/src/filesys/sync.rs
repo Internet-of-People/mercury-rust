@@ -140,6 +140,8 @@ impl KeyValueStore<String, String> for Medusa{
 
 #[test]
 fn medusa_key_value() {
+    use tokio_core::reactor;
+    
     let mut reactor = reactor::Core::new().unwrap();
     println!("\n\n\n");
     let mut storage : Medusa = Medusa::init(String::from("./ipfs/banan/")).unwrap();
