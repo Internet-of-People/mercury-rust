@@ -228,12 +228,20 @@ impl Home for HomeConnectionServer
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_response(&self, rel: RelationProof) ->
+    fn pair_response(&self, relation: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        // TODO check if targeted profile id is hosted on this machine
-        //      and delegate the proof to its buffer (if offline) or sink (if logged in)
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_response "))) )
+        // TODO validate sender profile id and both signatures
+        let i_forgot_relation_validation = true;
+//        if proof.wtf? != *self.context.peer_id()
+//            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_response() access denied: you authenticated with a different profile".to_owned() ) ) ) }
+
+        let to_profile = match relation.peer_id( self.context.peer_id() )
+        {
+            Ok(profile_id) => profile_id.to_owned(),
+            Err(e) => return Box::new( future::err( ErrorToBeSpecified::TODO(e) ) )
+        };
+        self.push_event( to_profile, ProfileEvent::PairingResponse(relation) )
     }
 
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
