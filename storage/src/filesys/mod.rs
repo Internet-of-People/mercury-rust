@@ -2,6 +2,7 @@ use ::async::*;
 use ::error::*;
 
 use futures::*;
+use futures::sync::oneshot;
 use std::path::Path;
 use std::fs::create_dir_all;
 use std::collections::HashMap;
@@ -10,7 +11,7 @@ use tokio_fs::*;
 use tokio_fs::file::*;
 use tokio_threadpool;
 use tokio_core;
-
+use tokio_core::reactor;
 
 pub struct FutureFile{
     path : String,
@@ -61,29 +62,44 @@ impl FutureFile{
 
     pub fn write_to_file(&self, file_path : String, content : String) 
     -> Box< Future< Item = (), Error = StorageError > >{
-        let mut subpath = String::from(self.path.clone());
-        subpath.push_str(&file_path);
-        let ret = File::create(subpath).and_then(move |mut file|{
-            file.write_all(content.as_bytes())
-            .map_err(|e|{ StorageError::Other( Box::new(e) ) });
-            Ok(())
-        })
-        .map_err(|e|{ StorageError::Other( Box::new(e) ) });
-        Box::new(ret)
+        let (tx, rx) = oneshot::channel();
+        self.pool.spawn({        
+            let mut subpath = String::from(self.path.clone());
+            subpath.push_str(&file_path);
+            File::create(subpath)
+                .map_err(|_|())
+                .and_then(move |mut file|{
+                    file.write_all(content.as_bytes())
+                        .map_err(|_|())
+                })
+        });
+        Box::new(
+            rx.map_err(|e|StorageError::Other(Box::new(e) ) )
+        )
     }
 
-    pub fn read_from_file(&self, path : String) 
+    pub fn read_from_file(&self, file_path : String) 
     -> Box< Future< Item = String, Error = StorageError> > {
-        let mut subpath = String::from(self.path.clone());
-        subpath.push_str(&path);
-        let ret = File::open(subpath).and_then(|mut file|{
-                let mut reader = String::new();
-                file.read_to_string(&mut reader)
-                .map_err(|e|{ StorageError::Other( Box::new(e) ) });
-                future::ok(reader)
-        })
-        .map_err(|e|{ StorageError::Other( Box::new(e) ) });
-        Box::new(ret)
+        let (tx, rx) = oneshot::channel();
+        self.pool.spawn({        
+            let mut subpath = String::from(self.path.clone());
+            subpath.push_str(&file_path);
+            File::open(subpath)
+                .map_err(|_|())
+                .and_then(|mut file|{
+                    let mut reader = String::new();
+                    file.read_to_string(&mut reader)
+                        .map_err(|_|())
+                        .and_then(|_|{
+                            tx.send(reader)
+                                .map_err(|_|())
+                        })
+                })
+                // .map_err(|e|{ StorageError::Other( Box::new(e) ) })
+        });
+        Box::new(
+            rx.map_err(|e|StorageError::Other(Box::new(e) ) )
+        )
     }
 
     pub fn get_path(&self, file_path: String)
@@ -137,17 +153,18 @@ impl KeyValueStore<String, String> for FutureFile{
 #[test]
 fn future_file_key_value() {
     let pool = tokio_threadpool::ThreadPool::new();
-    // let mut reactor = reactor::Core::new().unwrap();
+    let mut reactor = reactor::Core::new().unwrap();
     println!("\n\n\n");
     let mut storage : FutureFile = FutureFile::init(String::from("./ipfs/banan/")).unwrap();
     let json = String::from("<Json:json>");
     let set = storage.set(String::from("alma.json"), json.clone());
-    let set_res = pool.sender().spawn( set );
-    // reactor.run(storage.set(String::from("alma.json"), json.clone())).unwrap();
+    reactor.run(set);
+    // let set_res = pool.sender().spawn( set );
+    reactor.run(storage.set(String::from("alma.json"), json.clone()));
     let read = storage.get(String::from("alma.json"));
-    let read_res = pool.sender().spawn( read );
-    // let res = reactor.run(read).unwrap();
-    assert_eq!(read, json);
+    // let read_res = pool.sender().spawn( read );
+    let res = reactor.run(read).unwrap();
+    assert_eq!(res, json);
 }
 
 // #[test]
