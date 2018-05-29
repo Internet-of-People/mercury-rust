@@ -24,27 +24,22 @@ impl Medusa{
         }
     }
 
-    pub fn create_subdir(&self, path : String) -> Result<(), StorageError>{
-        let mut subpath = String::from(self.path.clone());
-        subpath.push_str(&path);
-        match create_dir_all(Path::new(&subpath)){
+    pub fn create_subdir(&self, directory_path : String) -> Result<(), StorageError>{
+        match create_dir_all(Path::new(&self.get_path(directory_path))){
             Ok(_)=>Ok(()),
             Err(e)=>Err(StorageError::Other(Box::new(e)))
         }
     }
 
-    pub fn new_file(&self, path : String) -> Result<(), StorageError>{
-        let mut subpath = String::from(self.path.clone());
-        subpath.push_str(&path);
-        match File::create(Path::new(&subpath)){
+    pub fn new_file(&self, file_path : String) -> Result<(), StorageError>{
+        match File::create(Path::new(&self.get_path(file_path))){
             Ok(_)=>Ok(()),
             Err(e)=>Err(StorageError::Other(Box::new(e)))
         }
     }
     
-    pub fn new_file_with_name(&self, file_path : String, file_name : String) -> Result<(), StorageError>{
-        let mut subpath = String::from(self.path.clone());
-        subpath.push_str(&file_path);
+    pub fn new_file_with_name(&self, directory_path : String, file_name : String) -> Result<(), StorageError>{
+        let mut subpath = self.get_path(directory_path);
         subpath.push_str(&file_name);
         match File::create(Path::new(&subpath)){
             Ok(_)=>Ok(()),
@@ -54,9 +49,7 @@ impl Medusa{
 
 
     pub fn write_to_file(&self, file_path : String, content : String) -> Result<(), StorageError>{
-        let mut subpath = String::from(self.path.clone());
-        subpath.push_str(&file_path);
-        match File::create(Path::new(&subpath)){
+        match File::create(Path::new(&self.get_path(file_path))){
             Ok(mut file)=>{
                 match file.write_all(content.as_bytes()){
                     Ok(_) => {
@@ -70,10 +63,11 @@ impl Medusa{
         }
     }
 
-    pub fn read_from_file(&self, path : String) -> Result<String, StorageError> {
-        let mut subpath = String::from(self.path.clone());
-        subpath.push_str(&path);
-        match File::open(Path::new(&subpath)){
+    pub fn read_from_file(&self, file_path : String) -> Result<String, StorageError> {
+        if !Path::new(&self.get_path(file_path.clone())).exists(){
+            return Err(StorageError::InvalidKey);
+        }
+        match File::open(Path::new(&self.get_path(file_path))){
             Ok(mut file)=>{
                 let mut reader = String::new();
                 match file.read_to_string(&mut reader){
@@ -92,32 +86,9 @@ impl Medusa{
     }
 }
 
-// impl HashSpace<String, Vec<u8>> for Medusa {
-//     fn store(&mut self, object: String)
-//         -> Box< Future<Item=Vec<u8>, Error=HashSpaceError> >{
-
-//     }
-//     fn resolve(&self, hash: &Vec<u8>)
-//         -> Box< Future<Item=String, Error=HashSpaceError> >{
-
-//     }
-//     fn validate(&self, object: &String, hash: &Vec<u8>)
-//         -> Box< Future<Item=bool, Error=HashSpaceError> >{
-
-//     }
-// }
-
 impl KeyValueStore<String, String> for Medusa{
     fn set(&mut self, key: String, value: String)
-        -> Box< Future<Item=(), Error=StorageError> >{
-        // let mut path = String::new();
-        // path.push_str(&key);
-        // let file_path = Path::new(&path);
-        // if !file_path.exists(){
-        //     if self.new_file(path.clone()).is_err(){
-        //         return Box::new(future::err(StorageError::OutOfDiskSpace));
-        //     }
-        // }
+    -> Box< Future<Item=(), Error=StorageError> >{
         match self.write_to_file(key, value){
             Ok(_)=>Box::new(future::ok(())),
             Err(e)=>Box::new(future::err(e))
@@ -126,11 +97,6 @@ impl KeyValueStore<String, String> for Medusa{
 
     fn get(&self, key: String)
         -> Box< Future<Item=String, Error=StorageError> >{
-        let path = self.get_path(key.clone());
-        let file_path = Path::new(&path);
-        if !file_path.exists(){
-            return Box::new(future::err(StorageError::InvalidKey));
-        }
         match self.read_from_file(key){
             Ok(content)=>Box::new(future::ok(content)),
             Err(e)=>Box::new(future::err(e))
