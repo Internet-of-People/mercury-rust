@@ -1,16 +1,19 @@
 use std::{cell::RefCell, rc::Rc, rc::Weak};
 use std::collections::HashMap;
 use std::error::Error;
+use std::time::Duration;
 
-use futures::{future, sync, Future, IntoFuture, Sink};
-use futures::sync::mpsc;
+use futures::{future, sync, Future, Sink};
+use futures::sync::{mpsc, oneshot};
 use futures::stream;
-use tokio_core::reactor;
+use tokio_core::reactor::{self, Timeout};
 
 use mercury_home_protocol::*;
-use mercury_storage::async::KeyValueStore;
-use mercury_storage::error::StorageError;
+use mercury_storage::{async::KeyValueStore, error::StorageError};
 
+
+
+const CALL_ANSWER_TIMEOUT :Duration = Duration::from_secs(60);
 
 
 pub struct HomeServer
@@ -130,12 +133,7 @@ impl HomeConnectionServer
                     {
                         // TODO if push to session fails, consider just dropping the session
                         //      (is anything manual needed using weak pointers?) and requiring a reconnect
-                        let push_fut = session.push_call(to_app, call)
-                            .map( |to_callee|
-                            {
-                                let i_forgot_to_implement_delegating_channel = true;
-                                ()
-                            } );
+                        let push_fut = session.push_call(to_app, call);
                         Box::new(push_fut) as Box< Future<Item=(), Error=ErrorToBeSpecified> >
                     },
                     // TODO save event into persistent storage and delegate it when profile is online again
@@ -262,7 +260,7 @@ impl Home for HomeConnectionServer
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
         // TODO validate halfproof signature
-        let i_forgot_halfproof_validation = true;
+        let lez_should_implement_halfproof_validation_here = true;
 //        let data = b""; // TODO halfproof must be serialized here
 //        self.server.validator.validate_signature( self.context.peer_pubkey(), data, half_proof.my_sign );
 //            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different public key".to_owned() )) ) ) }
@@ -277,7 +275,7 @@ impl Home for HomeConnectionServer
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         // TODO validate sender profile id and both signatures
-        let i_forgot_relation_validation = true;
+        let lez_should_implement_relation_validation_here = true;
 //        if proof.wtf? != *self.context.peer_id()
 //            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_response() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
@@ -293,7 +291,7 @@ impl Home for HomeConnectionServer
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
         // TODO validate sender profile id and both signatures
-        let i_forgot_relation_validation = true;
+        let lez_should_implement_relation_validation_here = true;
 
         let to_profile = match call_req.relation.peer_id( self.context.peer_id() )
         {
@@ -301,9 +299,22 @@ impl Home for HomeConnectionServer
             Err(e) => return Box::new( future::err( ErrorToBeSpecified::TODO(e) ) )
         };
 
-        let call = Box::new( Call::new(call_req) );
+        let (send, recv) = oneshot::channel();
+        let call = Box::new( Call::new(call_req, send) );
+        let handle = self.server.handle.clone();
         let answer_fut = self.push_call(to_profile, app, call)
-            .map( |_| { let i_forgot_to_return_the_answered_result_here = true; None } );
+            .and_then( move |_void|
+            {
+                let answer_fut = recv
+                    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
+                let timeout_fut = Timeout::new(CALL_ANSWER_TIMEOUT, &handle)
+                    .map( |_void| None )
+                    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
+                // Wait for answer with specified timeout
+                answer_fut.select(timeout_fut)
+                    .map( |(done,_pending)| done )
+                    .map_err( |(e,_pending)| e )
+            } );
         Box::new(answer_fut)
     }
 }
@@ -313,12 +324,13 @@ impl Home for HomeConnectionServer
 struct Call
 {
     details: CallRequestDetails,
-    // TODO a oneshot channel is needed here to send back the answer if received
+    sender:  oneshot::Sender< Option<AppMsgSink> >,
 }
 
 impl Call
 {
-    pub fn new(details: CallRequestDetails) -> Self { Self{details: details} }
+    pub fn new(details: CallRequestDetails, sender: oneshot::Sender< Option<AppMsgSink> >) -> Self
+        { Self{ details: details, sender: sender } }
 }
 
 impl IncomingCall for Call
@@ -326,7 +338,8 @@ impl IncomingCall for Call
     fn request_details(&self) -> &CallRequestDetails { &self.details }
     fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>)
     {
-        let i_forgot_to_properly_implement_call_answering = true;
+        if let Err(e) = self.sender.send(to_callee)
+            { } // TODO we should at least log the error here
     }
 }
 
@@ -381,7 +394,7 @@ impl HomeSessionServer
 
 
     fn push_call(&self, app: ApplicationId, call: Box<IncomingCall>)
-        -> Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let mut apps = self.apps.borrow_mut();
         let mut sink = apps.entry(app).or_insert( ServerSink::Buffer( Vec::new() ) );
@@ -390,12 +403,12 @@ impl HomeSessionServer
             ServerSink::Buffer(ref mut bufvec) =>
             {
                 bufvec.push( Ok(call) ); // TODO consider size constraints
-                Box::new( future::ok(None) )
+                Box::new( future::ok( () ) )
             },
             ServerSink::Sender(ref mut sender) => Box::new
             (
                 sender.clone().send( Ok(call) )
-                    .map( |_sender| { let i_forgot_to_send_back_call_answer_channel_here = true; None } )
+                    .map( |_sender| () )
                     .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             ),
         }
