@@ -110,7 +110,6 @@ impl KeyValueStore<String, String> for FutureFile{
         self.write_to_file(key, value)   
     }
 
-    //TODO existance check should be relocated?
     fn get(&self, key: String)
     -> Box< Future<Item=String, Error=StorageError> >{
         self.read_from_file(key)
