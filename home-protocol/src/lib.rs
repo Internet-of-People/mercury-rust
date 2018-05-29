@@ -178,7 +178,7 @@ impl Profile
         { Self{ id: id.to_owned(), pub_key: pub_key.to_owned(), facets: facets.to_owned() } }
 
     pub fn new_home(id: ProfileId, pub_key: PublicKey, address: Multiaddr) -> Self {
-        
+
         let facet = HomeFacet {
             addrs: vec![address],
             data: vec![],
@@ -227,7 +227,7 @@ pub trait ProfileRepo
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
 
     /// Same as load(), but also contains hints for resolution, therefore it's more efficient than load(id)
-    /// 
+    ///
     /// The `url` may contain
     /// * ProfileID (mandatory)
     /// * some profile metadata (for user experience enhancement) (big fat warning should be thrown if it does not match the latest info)

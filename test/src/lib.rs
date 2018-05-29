@@ -96,7 +96,7 @@ mod test{
         let (profile, signer) = crypto::generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
         let ownprofile = OwnProfile{profile: profile.clone(), priv_data: vec![]};
         let signer = Rc::new(signer);
-        
+
         // make home
         let (home_profile, home_signer) = crypto::generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
 
@@ -143,7 +143,7 @@ mod test{
     fn test_unregister(){
         let mut setup = dummy::TestSetup::setup();
 
-        //homeless_profile might be unneeded because unregistering does not give back a profile rid of home X    
+        //homeless_profile might be unneeded because unregistering does not give back a profile rid of home X
         let _homeless_profile = setup.userownprofile.clone();
         let homeid = setup.homeprofileid.clone();
         let userid = setup.userid.clone();
@@ -162,8 +162,8 @@ mod test{
             None
         );
         let res = setup.reactor.run(unreg);
-        assert!(res.is_err()); 
-        //TODO needs HomeSession unregister implementation    
+        assert!(res.is_err());
+        //TODO needs HomeSession unregister implementation
         //assert_eq!(res, homeless_profile);
     }
 
@@ -175,8 +175,8 @@ mod test{
 
         let home_session = setup.profilegate.login();
 
-        let res = setup.reactor.run(home_session); 
-        assert!(res.is_ok());     
+        let res = setup.reactor.run(home_session);
+        assert!(res.is_ok());
     }
 
     #[test]
@@ -191,7 +191,7 @@ mod test{
         });
 
         let res = setup.reactor.run(response);
-        assert!(res.is_ok());      
+        assert!(res.is_ok());
     }
 
     #[test]
@@ -207,10 +207,10 @@ mod test{
 
         let res = setup.reactor.run(home_session).unwrap();
         //TODO needs home.claim implementation
-        println!("Claimed : {:?} ||| Stored : {:?}", res, setup.userownprofile);        
-        assert_eq!(res, setup.userownprofile);      
+        println!("Claimed : {:?} ||| Stored : {:?}", res, setup.userownprofile);
+        assert_eq!(res, setup.userownprofile);
     }
-    
+
     #[test]
     #[ignore]
     fn test_update(){
@@ -228,7 +228,7 @@ mod test{
         //TODO needs homesession.update implementation
         //session updates profile stored on home(?)
         let res = setup.reactor.run(home_session);
-        assert!(res.is_ok());      
+        assert!(res.is_ok());
     }
 
     #[test]
@@ -239,13 +239,13 @@ mod test{
 
         let call_messages = setup.profilegate.call(
             dummy::dummy_relation("test_relation"),
-            ApplicationId( String::from( "Undertale" ) ), 
+            ApplicationId( String::from( "Undertale" ) ),
             AppMessageFrame( Vec::from( "Megalovania" ) ),
             None
         );
         //TODO needs home.call implementation...
-        let res = setup.reactor.run(call_messages); 
-        assert!(res.is_ok());     
+        let res = setup.reactor.run(call_messages);
+        assert!(res.is_ok());
     }
 
     #[test]
@@ -257,7 +257,7 @@ mod test{
 
         let zero = setup.profilegate.pair_request( "test_relation", "test_url" );
 
-        let res = setup.reactor.run(zero);   
+        let res = setup.reactor.run(zero);
         assert!(res.is_ok());
     }
 
@@ -270,7 +270,7 @@ mod test{
                 dummy::dummy_relation("test_relation"));
 
         let res = setup.reactor.run(zero);
-        assert!(res.is_ok());      
+        assert!(res.is_ok());
     }
 
     #[test]
@@ -317,7 +317,7 @@ mod test{
             ownhomestore,
             Rc::new( dummy::DummyConnector::new_with_home( home ) ),
         );
-        
+
         let (reg_sender, reg_receiver) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel(1);
         let (request_sender, request_receiver) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel(1);
 
@@ -327,7 +327,7 @@ mod test{
                 None
         )
         .map_err(|(_p, e)|e)
-        .join( reg_receiver.take(1).collect().map_err(|_e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )                
+        .join( reg_receiver.take(1).collect().map_err(|_e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )
         .and_then(|_reg_string|{
             println!("user_one_requests");
             let f = other_signo.prof_id().0.clone();
@@ -364,7 +364,7 @@ mod test{
             let relation = Relation::new(&profile,&relation_proof);
             own_gateway.call(
                 relation,
-                ApplicationId( String::from( "SampleApp" ) ), 
+                ApplicationId( String::from( "SampleApp" ) ),
                 AppMessageFrame( Vec::from( "whatever" ) ),
                 Some(msg_sender)
             );
@@ -384,7 +384,7 @@ mod test{
 
         let other_profile = make_own_persona_profile(other_signo.pub_key() );
         let other_gateway = ProfileGatewayImpl::new(
-            other_signo.clone(), 
+            other_signo.clone(),
             home_storage_other,
             Rc::new( dummy::DummyConnector::new_with_home( other_home ) ),
         );
@@ -417,7 +417,7 @@ mod test{
             //         _=>Box::new(future::ok(()))
             //     }
             // }).map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing response.fail")))
-            println!("user_two_events"); 
+            println!("user_two_events");
             let events = other_session.events();
             events.take(1).collect()
             .map_err(|_|ErrorToBeSpecified::TODO(String::from("pairing response.fail")))
@@ -452,10 +452,10 @@ mod test{
                 println!("{:?}", sent);
                 //incall.answer(None);
             }
-            futures::future::ok(()) 
-        });  
+            futures::future::ok(())
+        });
 
-        let joined_f4t = Future::join(sess, other_reg); 
+        let joined_f4t = Future::join(sess, other_reg);
         let _definitive_success = reactor.run(joined_f4t);
         println!( "***We're done here, let's go packing" );
     }
