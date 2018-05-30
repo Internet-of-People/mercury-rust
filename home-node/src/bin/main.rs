@@ -35,9 +35,7 @@ fn main()
     let distributed_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
     let local_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
 
-    let profile_validator = MultiHashProfileValidator::new();
-    let signature_validator = Ed25519Validator::new();
-    let validator = Rc::new( CompositeValidator::new(profile_validator, signature_validator) );
+    let validator = Rc::new( CompositeValidator::default() );
 
     let mut core = reactor::Core::new().unwrap();
     let handle = core.handle();

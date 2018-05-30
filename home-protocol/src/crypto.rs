@@ -13,37 +13,52 @@ pub trait ProfileValidator
         -> Result<bool, ErrorToBeSpecified>;
 }
 
+impl Default for Box<ProfileValidator> {
+    fn default() -> Self {
+        Box::new(MultiHashProfileValidator::default())
+    }
+}
+
 pub trait SignatureValidator
 {
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
         -> Result<bool, ErrorToBeSpecified>;
 }
 
-
-pub struct CompositeValidator<P,S>
-{
-    profile_validator:      P,
-    signature_validator:    S,
+impl Default for Box<SignatureValidator> {
+    fn default() -> Self {
+        Box::new(Ed25519Validator::default())
+    }
 }
 
-impl<P,S> CompositeValidator<P,S>
+#[derive(Default)]
+pub struct CompositeValidator
 {
-    pub fn new(profile_validator: P, signature_validator: S) -> Self
-        { Self{ profile_validator: profile_validator, signature_validator: signature_validator } }
+    profile_validator:      Box<ProfileValidator>,
+    signature_validator:    Box<SignatureValidator>,
 }
 
-impl<P: ProfileValidator, S: SignatureValidator> Validator for CompositeValidator<P,S>
+impl CompositeValidator
+{
+    pub fn compose(profile_validator: Box<ProfileValidator>, signature_validator: Box<SignatureValidator>) -> Self
+        { Self{ profile_validator, signature_validator } }
+}
+
+impl ProfileValidator for CompositeValidator
 {
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
         -> Result<bool, ErrorToBeSpecified>
     { self.profile_validator.validate_profile(public_key, profile_id) }
+}
 
+impl SignatureValidator for CompositeValidator
+{
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
         -> Result<bool, ErrorToBeSpecified>
     { self.signature_validator.validate_signature(public_key, data, signature) }
 }
 
-
+impl Validator for CompositeValidator {}
 
 pub struct Ed25519Signer
 {
@@ -83,9 +98,9 @@ impl Signer for Ed25519Signer
 
 pub struct Ed25519Validator {}
 
-impl Ed25519Validator
+impl Default for Ed25519Validator
 {
-    pub fn new() -> Self { Self{} }
+    fn default() -> Self { Self {} }
 }
 
 impl SignatureValidator for Ed25519Validator
@@ -105,12 +120,11 @@ impl SignatureValidator for Ed25519Validator
     }
 }
 
-
 pub struct MultiHashProfileValidator {}
 
-impl MultiHashProfileValidator
+impl Default for MultiHashProfileValidator
 {
-    pub fn new() -> Self { Self{} }
+    fn default() -> Self { Self{} }
 }
 
 impl ProfileValidator for MultiHashProfileValidator

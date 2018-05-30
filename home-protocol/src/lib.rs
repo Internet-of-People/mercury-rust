@@ -19,7 +19,7 @@ use std::rc::Rc;
 use bincode::serialize;
 use futures::{Future, sync::mpsc};
 use multiaddr::Multiaddr;
-
+use crypto::{ProfileValidator, SignatureValidator};
 
 
 pub mod mercury_capnp;
@@ -68,14 +68,8 @@ pub trait Signer
 }
 
 
-pub trait Validator
+pub trait Validator: ProfileValidator + SignatureValidator
 {
-    fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
-        -> Result<bool, ErrorToBeSpecified>;
-
-    fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
-        -> Result<bool, ErrorToBeSpecified>;
-
     fn validate_relation_proof(&self, relation_proof: &RelationProof, profile1: &Profile, profile2: &Profile) -> Result<(), ErrorToBeSpecified> {
 
         let signable_a = RelationSignablePart {
@@ -111,7 +105,6 @@ pub trait Validator
 
         Ok(())
     }
-
 }
 
 

@@ -34,9 +34,7 @@ impl HomeServer
             sessions: Rc::new( RefCell::new( HashMap::new() ) ) } }
 
     pub fn create(handle: &reactor::Handle) -> Self {
-        let ed25519_validator = Ed25519Validator::new();
-        let multihash_validator = MultiHashProfileValidator::new();
-        let composite_validator = CompositeValidator::new(multihash_validator, ed25519_validator);
+        let composite_validator = CompositeValidator::default();
 
         let dht_store: InMemoryStore<ProfileId, Profile> = InMemoryStore::new();
         let local_store: InMemoryStore<ProfileId, OwnProfile> = InMemoryStore::new();

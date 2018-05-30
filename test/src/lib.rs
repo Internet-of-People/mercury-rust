@@ -129,9 +129,7 @@ mod test{
         if let ProfileFacet::Persona(ref facet) = ownprofile_returned.profile.facets[0] {
             let home_proof = &facet.homes[0];
 
-            let ed25519_validator = Ed25519Validator::new();
-            let multihash_validator = MultiHashProfileValidator::new();
-            let validator = CompositeValidator::new(multihash_validator, ed25519_validator);
+            let validator = CompositeValidator::default();
 
             assert_eq!(validator.validate_relation_proof(&home_proof, &home_profile, &profile), Ok(()));
         } else {
