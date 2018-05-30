@@ -32,6 +32,11 @@ pub trait FillFrom<T>
     fn fill_from(self, source: &T);
 }
 
+impl<'a> From<&'a ::PublicKey> for &'a [u8] {
+    fn from(public_key: &'a ::PublicKey) -> Self {
+        public_key.0.as_ref()
+    }
+}
 
 impl<'a> From<&'a [u8]> for ::ProfileId
 {
@@ -112,7 +117,7 @@ impl<'a> FillFrom<::Profile> for profile::Builder<'a>
     fn fill_from(mut self, src: &::Profile)
     {
         self.set_id( (&src.id).into() );
-        self.set_public_key( &src.pub_key.0 ); // TODO would be nicer with pubkey.into() implementing From<PublicKey>
+        self.set_public_key( (&src.pub_key).into() );
         match src.facets.iter().next() {
             Some(::ProfileFacet::Persona(facet)) => {
                 let persona_builder = self.init_facet().init_persona();
