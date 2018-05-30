@@ -1,7 +1,7 @@
 use std::error::Error;
 
 use multihash;
-use rand::OsRng;
+use rand::{OsRng, Rng};
 use sha2::{Sha512};
 use signatory::{ed25519::FromSeed, providers::dalek};
 
