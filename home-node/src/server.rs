@@ -13,7 +13,10 @@ use mercury_storage::{async::KeyValueStore, error::StorageError};
 
 
 
-const CALL_ANSWER_TIMEOUT :Duration = Duration::from_secs(60);
+const CHANNEL_CAPACITY :usize = 1;
+
+// TODO this should come from user configuration with a reasonable default value close to this
+const CFG_CALL_ANSWER_TIMEOUT:Duration = Duration::from_secs(30);
 
 
 pub struct HomeServer
@@ -152,7 +155,7 @@ impl ProfileRepo for HomeConnectionServer
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         HomeStream<Profile, String>
     {
-        let (send, receive) = mpsc::channel(1);
+        let (send, receive) = mpsc::channel(CHANNEL_CAPACITY);
         receive
     }
 
@@ -307,7 +310,7 @@ impl Home for HomeConnectionServer
             {
                 let answer_fut = recv
                     .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
-                let timeout_fut = Timeout::new(CALL_ANSWER_TIMEOUT, &handle)
+                let timeout_fut = Timeout::new(CFG_CALL_ANSWER_TIMEOUT, &handle)
                     .map( |_void| None )
                     .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
                 // Wait for answer with specified timeout
@@ -397,7 +400,7 @@ impl HomeSessionServer
         -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let mut apps = self.apps.borrow_mut();
-        let mut sink = apps.entry(app).or_insert( ServerSink::Buffer( Vec::new() ) );
+        let sink = apps.entry(app).or_insert( ServerSink::Buffer( Vec::new() ) );
         match *sink
         {
             ServerSink::Buffer(ref mut bufvec) =>
@@ -409,6 +412,7 @@ impl HomeSessionServer
             (
                 sender.clone().send( Ok(call) )
                     .map( |_sender| () )
+                    // TODO if call dispatch fails we probably should remove the checked in app from the session
                     .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             ),
         }
@@ -450,7 +454,18 @@ impl HomeSession for HomeSessionServer
     fn unregister(&self, newhome: Option<Profile>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        // TODO close/drop session connection after successful unregister()
+        let profile_id = self.context.peer_id();
+
+        // TODO is it the caller's responsibility to remove this home from the persona facet's homelist
+        //      or should we do it here and save the results into the distributed public db?
+        // TODO how to delete profile from self.server.hosted_profiles_db? We'll probably need a remove operation
+
+        // Drop session reference from server
+        self.server.sessions.borrow_mut().remove(&profile_id);
+
+        // TODO force close/drop session connection after successful unregister().
+        //      Ideally self would be consumed here, but that'd require binding to self: Box<Self> or Rc<Self> to compile within a trait.
+
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.unregister "))) )
     }
 
@@ -458,14 +473,40 @@ impl HomeSession for HomeSessionServer
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
     {
-        let (sender, receiver) = sync::mpsc::channel(1);
+        let (sender, receiver) = sync::mpsc::channel(CHANNEL_CAPACITY);
+
+        match self.apps.borrow_mut().insert( app.to_owned(), ServerSink::Sender( sender.clone() ) )
+        {
+            Some( ServerSink::Sender(old_sender) ) =>
+            {
+                // NOTE consuming the calls stream multiple times is likely a client implementation error
+                self.server.handle.spawn(
+                    old_sender.send( Err( "Repeated call of HomeSession::checkin_app() detected, this channel is dropped, using the new one".to_owned() ) )
+                        .map( |_sender| () )
+                        .map_err( |_e| () )
+                )
+            },
+            Some( ServerSink::Buffer(call_vec) ) =>
+            {
+                // Send all collected calls from buffer as we now finally have a channel to the app
+                // TODO use persistent storage for calls when profile is offline and delegate them here
+                self.server.handle.spawn(
+                    sender.send_all( stream::iter_ok(call_vec) )
+                        .map( |_sender| () )
+                        .map_err( |_e| () )
+                )
+            },
+            None => {},
+        }
+
+        // TODO how to detect dropped stream and remove the sink from the session?
         receiver
     }
 
 
     fn events(&self) -> HomeStream<ProfileEvent, String>
     {
-        let (sender, receiver) = sync::mpsc::channel(1);
+        let (sender, receiver) = sync::mpsc::channel(CHANNEL_CAPACITY);
 
         // Set up events with the new channel and check the old event sink
         match self.events.replace( ServerSink::Sender( sender.clone() ) )
@@ -475,7 +516,7 @@ impl HomeSession for HomeSessionServer
             {
                 // NOTE consuming the events stream multiple times is likely a client implementation error
                 self.server.handle.spawn(
-                    old_sender.send( Err( "Repeated call of HomeSession::events() detected, this channel will is dropped, using the new one".to_owned() ) )
+                    old_sender.send( Err( "Repeated call of HomeSession::events() detected, this channel is dropped, using the new one".to_owned() ) )
                         .map( |_sender| () )
                         .map_err( |_e| () )
                 )

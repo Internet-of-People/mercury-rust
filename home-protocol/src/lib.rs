@@ -424,6 +424,7 @@ pub trait HomeSession
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home
+    // TODO should we return a modified OwnProfile here with this home removed from the homes of persona facet in profile?
     fn unregister(&self, newhome: Option<Profile>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
