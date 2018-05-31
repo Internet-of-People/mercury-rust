@@ -14,13 +14,10 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use futures::Stream;
-use tokio_core::reactor;
-use tokio_core::net::TcpListener;
+use tokio_core::{reactor, net::TcpListener};
 
-use mercury_home_protocol::*;
-use mercury_home_node::crypto::*;
-use mercury_home_node::server::*;
-use mercury_home_node::protocol_capnp;
+use mercury_home_protocol::{crypto::*, *};
+use mercury_home_node::{server::*, protocol_capnp};
 use mercury_storage::async::imp::InMemoryStore;
 
 
@@ -38,9 +35,7 @@ fn main()
     let distributed_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
     let local_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
 
-    let profile_validator = MultiHashProfileValidator::new();
-    let signature_validator = Ed25519Validator::new();
-    let validator = Rc::new( CompositeValidator::new(profile_validator, signature_validator) );
+    let validator = Rc::new( CompositeValidator::default() );
 
     let mut core = reactor::Core::new().unwrap();
     let handle = core.handle();

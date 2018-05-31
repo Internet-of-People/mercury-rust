@@ -32,6 +32,11 @@ pub trait FillFrom<T>
     fn fill_from(self, source: &T);
 }
 
+impl<'a> From<&'a ::PublicKey> for &'a [u8] {
+    fn from(public_key: &'a ::PublicKey) -> Self {
+        public_key.0.as_ref()
+    }
+}
 
 impl<'a> From<&'a [u8]> for ::ProfileId
 {
@@ -80,8 +85,30 @@ impl<'a> TryFrom<profile::Reader<'a>> for ::Profile
     {
         let profile_id = ::ProfileId( src.get_id()?.to_owned() );
         let public_key = ::PublicKey( src.get_public_key()?.to_owned() );
-        let facets = &[]; // TODO
-        Ok( ::Profile::new(&profile_id, &public_key, facets) )
+
+        let facet_res = match src.get_facet().which() {
+            Ok(profile::facet::Which::Persona(r)) => {
+                if let Some(proof_reader) = r.get_homes()?.iter().next() {  // only 0 or 1 home is supported in the current impl
+                    let home_relation = ::RelationProof::try_from(proof_reader)?;
+                    Ok(::ProfileFacet::Persona(::PersonaFacet{homes: vec![home_relation], data: vec![]}))
+                } else {
+                    Ok(::ProfileFacet::Persona(::PersonaFacet{homes: vec![], data: vec![]}))
+                }
+            },
+            // TODO finish this implementation to be able to send HomeProfiles, too
+            // Ok(profile::facet::Which::Home(r)) => {
+            //     let addrs = r.get_addresses()?.iter().map(|addr| ::Multiaddr::from(addr?));
+            //     Ok(::ProfileFacet::Home(::HomeFacet{addrs, data: vec![]}))
+            // },
+            _ => {
+                Err("Unimplemented")
+            }
+        };
+
+        match facet_res {
+            Ok(facet) => Ok(::Profile::new(&profile_id, &public_key, &[facet]) ),
+            Err(e) => Err(::capnp::Error::failed(e.to_owned())),
+        }
     }
 }
 
@@ -90,8 +117,22 @@ impl<'a> FillFrom<::Profile> for profile::Builder<'a>
     fn fill_from(mut self, src: &::Profile)
     {
         self.set_id( (&src.id).into() );
-        self.set_public_key( &src.pub_key.0 ); // TODO would be nicer with pubkey.into() implementing From<PublicKey>
-        // TODO set facets
+        self.set_public_key( (&src.pub_key).into() );
+        match src.facets.iter().next() {
+            Some(::ProfileFacet::Persona(facet)) => {
+                let persona_builder = self.init_facet().init_persona();
+                let mut homes = persona_builder.init_homes(facet.homes.len() as u32);
+                for (i, home) in facet.homes.iter().enumerate() {
+                    homes.reborrow().get(i as u32).fill_from(&home);
+                }
+            }
+            Some(_) => {
+                panic!("Unimplemented");  // TODO implement home and application facets
+            }
+            None => {
+                panic!("Should be unreachable code"); // TODO refactor Profile to have a single mandatory facet
+            }
+        }
     }
 }
 
@@ -145,8 +186,12 @@ impl<'a> TryFrom<relation_half_proof::Reader<'a>> for ::RelationHalfProof
 
     fn try_from(src: relation_half_proof::Reader) -> Result<Self, Self::Error>
     {
-        // TODO
-        Ok( ::RelationHalfProof::new() )
+        Ok(::RelationHalfProof {
+            relation_type: String::from(src.get_relation_type()?),
+            signer_id: ::ProfileId(src.get_signer_id()?.to_owned()),
+            peer_id: ::ProfileId(src.get_peer_id()?.to_owned()),
+            signature: ::Signature(src.get_signature()?.to_owned()),
+        })
     }
 }
 
@@ -154,7 +199,10 @@ impl<'a> FillFrom<::RelationHalfProof> for relation_half_proof::Builder<'a>
 {
     fn fill_from(mut self, src: &::RelationHalfProof)
     {
-        // TODO
+        self.set_relation_type(&src.relation_type);
+        self.set_signer_id(&src.signer_id.0);
+        self.set_peer_id(&src.peer_id.0);
+        self.set_signature(&src.signature.0);
     }
 }
 
@@ -165,8 +213,13 @@ impl<'a> TryFrom<relation_proof::Reader<'a>> for ::RelationProof
 
     fn try_from(src: relation_proof::Reader) -> Result<Self, Self::Error>
     {
-        // TODO
-        Err( capnp::Error::failed(String::from("unimplemented try_from")) )
+        Ok(::RelationProof {
+            relation_type: String::from(src.get_relation_type()?),
+            a_id: ::ProfileId(src.get_a_id()?.to_owned()),
+            a_signature: ::Signature(src.get_a_signature()?.to_owned()),
+            b_id: ::ProfileId(src.get_b_id()?.to_owned()),
+            b_signature: ::Signature(src.get_b_signature()?.to_owned()),
+        })
     }
 }
 
@@ -174,7 +227,11 @@ impl<'a> FillFrom<::RelationProof> for relation_proof::Builder<'a>
 {
     fn fill_from(mut self, src: &::RelationProof)
     {
-        // TODO
+        self.set_relation_type(&src.relation_type);
+        self.set_a_id(&src.a_id.0);
+        self.set_a_signature(&src.a_signature.0);
+        self.set_b_id(&src.b_id.0);
+        self.set_b_signature(&src.b_signature.0);
     }
 }
 
@@ -297,4 +354,35 @@ pub fn fwd_appmsg(to_callee: app_message_listener::Client, handle: reactor::Hand
     );
 
     send
+}
+
+#[cfg(test)]
+mod tests
+{
+    use ::*;
+    use mercury_capnp::FillFrom;
+    use mercury_capnp::TryFrom;
+    use capnp::serialize;
+
+    #[test]
+    fn relation_half_proof_encoding() {
+        let relation_half_proof = ::RelationHalfProof {
+            relation_type: String::from("friend"),
+            signer_id: ::ProfileId(Vec::from("me")),
+            peer_id: ProfileId(Vec::from("you")),
+            signature: Signature(Vec::from("i signed")),
+        };
+        let mut message = capnp::message::Builder::new_default();
+        {
+            let builder = message.init_root::<mercury_capnp::relation_half_proof::Builder>();
+            builder.fill_from(&relation_half_proof);
+        }
+        let mut buffer = vec![];
+        serialize::write_message(&mut buffer, &message).unwrap();
+        // -- 8< --
+        let message_reader = serialize::read_message(&mut &buffer[..], ::capnp::message::ReaderOptions::new()).unwrap();
+        let obj_reader = message_reader.get_root::<mercury_capnp::relation_half_proof::Reader>().unwrap();
+        let recoded = RelationHalfProof::try_from(obj_reader).unwrap();
+        assert_eq!(recoded, relation_half_proof);
+    }
 }

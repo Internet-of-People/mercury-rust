@@ -3,13 +3,12 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
 
-use futures::{future, sync, Future, Sink};
+use futures::{future, stream, sync, Future, Sink};
 use futures::sync::{mpsc, oneshot};
-use futures::stream;
 use tokio_core::reactor::{self, Timeout};
 
-use mercury_home_protocol::*;
-use mercury_storage::{async::KeyValueStore, error::StorageError};
+use mercury_home_protocol::{crypto::*, *};
+use mercury_storage::{async::KeyValueStore, async::imp::InMemoryStore, error::StorageError};
 
 
 
@@ -37,6 +36,21 @@ impl HomeServer
     { Self{ handle: handle.clone(), validator: validator,
             public_profile_dht: public_dht, hosted_profile_db: private_db,
             sessions: Rc::new( RefCell::new( HashMap::new() ) ) } }
+
+    pub fn create(handle: &reactor::Handle) -> Self {
+        let composite_validator = CompositeValidator::default();
+
+        let dht_store: InMemoryStore<ProfileId, Profile> = InMemoryStore::new();
+        let local_store: InMemoryStore<ProfileId, OwnProfile> = InMemoryStore::new();
+
+        Self {
+            handle: handle.clone(),
+            validator: Rc::new(composite_validator),
+            public_profile_dht: Rc::new(RefCell::new(dht_store)),
+            hosted_profile_db: Rc::new(RefCell::new(local_store)),
+            sessions: Rc::new(RefCell::new(HashMap::new()))
+        }
+    }
 }
 
 
@@ -52,7 +66,7 @@ pub struct ClientContext
 impl ClientContext
 {
     pub fn new(signer: Rc<Signer>, client_pub_key: PublicKey, client_profile_id: ProfileId) -> Self // client_profile: Profile) -> Self
-        { Self{ signer: signer, client_pub_key: client_pub_key, client_profile_id: client_profile_id } } //  client_profile: client_profile } }
+        { Self{ signer: signer, client_pub_key: client_pub_key.clone(), client_profile_id: client_profile_id.clone() } } //  client_profile: client_profile } }
 }
 
 impl PeerContext for ClientContext
@@ -197,17 +211,38 @@ impl Home for HomeConnectionServer
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
         if own_prof.profile.id != *self.context.peer_id()
-            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different profile".to_owned() )) ) ) }
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different profile id".to_owned() )) ) ) }
+
         if own_prof.profile.pub_key != *self.context.peer_pubkey()
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different public key".to_owned() )) ) ) }
+
+        if half_proof.validate(self.server.validator.clone(), self.context.peer_pubkey()).is_err()
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register(): access denied: invalid signature in half_proof".to_owned())))); }
+
+        if half_proof.signer_id != *self.context.peer_id()
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the authenticated profile id does not match the signer id in the half_proof".to_owned() )) ) )}
+
+        if half_proof.peer_id != *self.context.my_signer().prof_id()
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the requested home id does not match this home".to_owned() )) ) )}
+
+        if half_proof.relation_type != "home"
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the requested relation type should be 'home'".to_owned() )) ) )}
 
         let own_prof_original = own_prof.clone();
         let error_mapper = |e: StorageError| ( own_prof_original, ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         let error_mapper_clone = error_mapper.clone();
 
-        // TODO we should add our home details with signed RelationProof here into the persona facet's home vector in this profile
-        let pub_prof_modified = own_prof.profile.clone();
-        let own_prof_modified = own_prof.clone();
+
+        let home_proof = RelationProof::sign_halfproof(half_proof, self.context.my_signer());
+
+        let mut own_prof_modified = own_prof.clone();
+        if let ProfileFacet::Persona(ref mut profile_facet) = own_prof_modified.profile.facets[0] {
+            profile_facet.homes.push(home_proof)
+        } else {
+            return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: Only personas are allowed to register".to_owned() )) ) )
+        }
+
+        let pub_prof_modified = own_prof_modified.profile.clone();
         let local_store = self.server.hosted_profile_db.clone();
         let distributed_store = self.server.public_profile_dht.clone();
         let reg_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )
@@ -259,7 +294,7 @@ impl Home for HomeConnectionServer
     fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        if half_proof.my_id != *self.context.peer_id()
+        if half_proof.signer_id != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
         // TODO validate halfproof signature
@@ -285,7 +320,7 @@ impl Home for HomeConnectionServer
         let to_profile = match relation.peer_id( self.context.peer_id() )
         {
             Ok(profile_id) => profile_id.to_owned(),
-            Err(e) => return Box::new( future::err( ErrorToBeSpecified::TODO(e) ) )
+            Err(e) => return Box::new( future::err(e) )
         };
         self.push_event( to_profile, ProfileEvent::PairingResponse(relation) )
     }
@@ -299,7 +334,7 @@ impl Home for HomeConnectionServer
         let to_profile = match call_req.relation.peer_id( self.context.peer_id() )
         {
             Ok(profile_id) => profile_id.to_owned(),
-            Err(e) => return Box::new( future::err( ErrorToBeSpecified::TODO(e) ) )
+            Err(e) => return Box::new( future::err(e) )
         };
 
         let (send, recv) = oneshot::channel();
@@ -469,7 +504,6 @@ impl HomeSession for HomeSessionServer
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.unregister "))) )
     }
 
-
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
     {
@@ -503,7 +537,9 @@ impl HomeSession for HomeSessionServer
         receiver
     }
 
-
+    // TODO investigate if race condition is possible, e.g. an event was sent out to the old_sender,
+    //      and a repeated events() call is received. In this case, can we be sure that the event
+    //      has been processed via the old_sender?
     fn events(&self) -> HomeStream<ProfileEvent, String>
     {
         let (sender, receiver) = sync::mpsc::channel(CHANNEL_CAPACITY);

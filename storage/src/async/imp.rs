@@ -580,6 +580,7 @@ mod tests
 
 
     #[test]
+    #[ignore]  // TODO add reason for this ignore (do we plan to restore it? if yes, when?)
     fn test_postgres_storage()
     {
         let mut reactor = reactor::Core::new()
@@ -670,6 +671,7 @@ mod tests
     }
 
     #[test]
+    #[ignore]  // TODO add reason for this ignore (do we plan to restore it? if yes, when?)
     fn test_ipfs_hashspace()
     {
         let mut reactor = reactor::Core::new()
