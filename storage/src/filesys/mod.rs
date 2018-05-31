@@ -3,8 +3,10 @@ use ::error::*;
 
 use futures::*;
 use futures::sync::oneshot;
+use std::sync::Arc;
 use std::path::Path;
 use std::fs::create_dir_all;
+use tokio_io::io::*;
 use tokio::io::{AsyncRead, AsyncWrite};
 use tokio::prelude::{Read, Write};
 use tokio_fs::*;
@@ -13,17 +15,17 @@ use tokio_threadpool;
 
 pub mod sync;
 
-pub struct FutureFile{
+pub struct AsyncFileHandler{
     path : String,
     pool : tokio_threadpool::ThreadPool,
 }
 
-impl FutureFile{
+impl AsyncFileHandler{
     pub fn init(main_directory : String) 
     -> Result<Self, StorageError>{
         match create_dir_all(Path::new(&main_directory)){
             Ok(_)=>Ok(
-                FutureFile{
+                AsyncFileHandler{
                     path: main_directory, 
                     pool : tokio_threadpool::ThreadPool::new(),
                 }
@@ -53,58 +55,80 @@ impl FutureFile{
     }
 
     pub fn write_to_file(&self, file_path : String, content : String) 
-    -> Box< Future< Item = (), Error = StorageError > >{
-        let (tx, rx) = oneshot::channel();
-        self.pool.spawn({        
-            self.new_file(file_path)
-                .map_err(|_|())
-                .and_then(move |mut file|{
-                    //TODO x.write_all gives back Result, is it blocking?
-                    file.write_all(content.as_bytes())
-                        .map_err(|_|())
-                        .and_then(|written|tx.send(written))
-                            .map_err(|_|())
+    -> Box< Future< Item = (), Error = Arc<StorageError> > >{
+        let (tx, rx) = oneshot::channel::<Arc<Result<(), StorageError>>>();
+        self.pool.spawn(    
+            // let mut file_fut = 
+            File::create(self.get_path(file_path))
+                .or_else(|e| {
+                    tx.send(Arc::new(Err(StorageError::StringError(String::from("File couldn't be created")))) );
+                    Ok(())
                 })
-        });
+                // .and_then(move |file|{
+                //     write_all(file, content.as_bytes())
+                //         // .map(|written| {
+                //         //     tx.send(Arc::new(Ok(())))
+                //         //     // future::ok(())
+                //         // } )
+                //         // .map_err(|e| {
+                //         //     tx.send(Arc::new(Err(StorageError::StringError(String::from("File couldn't be created")))))
+                //         //     // future::err(())
+                //         // } )
+                // })       
+                // .map(|_|())
+        );
         Box::new(
-            rx.map_err(|e|StorageError::Other(Box::new(e) ) )
+            rx.map(|_|()).map_err(|e|Arc::new(StorageError::Other(Box::new(e))  ) )
         )
     }
 
     pub fn read_from_file(&self, file_path : String) 
     -> Box< Future< Item = String, Error = StorageError> > {
-        let (tx, rx) = oneshot::channel();
+        let (tx, rx) = oneshot::channel::<Result<String,StorageError>>();
         if !Path::new(&self.get_path(file_path.clone())).exists(){
             return Box::new(future::err(StorageError::InvalidKey));
         }
+        let mut buffer = Vec::new();
         self.pool.spawn({        
             File::open(self.get_path(file_path))
-                .map_err(|_|())
+                .or_else(|e|{
+                    tx.send(Err(StorageError::StringError(String::from("File couldn't be created"))) );
+                    future::err(())
+                })
                 .and_then(|mut file|{
-                    let mut buffer = String::new();
-                    //TODO x.read_to_string gives back Result, is it blocking?
-                    file.read_to_string(&mut buffer)
-                        .map_err(|_|())
-                        .and_then(|_|{
-                            tx.send(buffer)
-                                .map_err(|_|())
+                    read_to_end(file , buffer)
+                        .or_else(|e|{
+                            tx.send(Err(StorageError::StringError(String::from("File couldn't be created"))));
+                            future::err(())
+                        } )
+                        .and_then(move |_|{
+                            match String::from_utf8(buffer){
+                                Ok(content)=>{
+                                    tx.send(Ok(content));
+                                    future::ok(())
+                                }
+                                Err(e)=>{
+                                    tx.send(Err(StorageError::StringError(String::from("File couldn't be created"))));
+                                    future::err(())
+                                }
+                            }
                         })
                 })
         });
         Box::new(
-            rx.map_err(|e|StorageError::Other(Box::new(e) ) )
+            rx.map_err(|e|Err(StorageError::InvalidKey) )
         )
     }
 
     pub fn get_path(&self, file_path: String)
     -> String {
-        let mut path = String::from(self.path.clone());
+        let mut path = self.path.clone();
         path.push_str(&file_path);
         path
     }
 }
 
-impl KeyValueStore<String, String> for FutureFile{
+impl KeyValueStore<String, String> for AsyncFileHandler{
     fn set(&mut self, key: String, value: String)
     -> Box< Future<Item=(), Error=StorageError> >{
         self.write_to_file(key, value)   
@@ -113,6 +137,7 @@ impl KeyValueStore<String, String> for FutureFile{
     fn get(&self, key: String)
     -> Box< Future<Item=String, Error=StorageError> >{
         self.read_from_file(key)
+        // Box::new(self.read_from_file(key).map_err(|e|StorageError::InvalidKey))
     }
 }
 
@@ -124,12 +149,13 @@ fn future_file_key_value() {
 
     let mut reactor = reactor::Core::new().unwrap();
     println!("\n\n\n");
-    let mut storage : FutureFile = FutureFile::init(String::from("./ipfs/banan/")).unwrap();
+    let mut storage : AsyncFileHandler = AsyncFileHandler::init(String::from("./ipfs/banan/")).unwrap();
+    let file_path = String::from("alma.json");
     let json = String::from("<Json:json>");
-    let set = storage.set(String::from("alma.json"), json.clone());
+    let set = storage.set(file_path, json.clone());
     reactor.run(set);
-    // reactor.run(storage.set(String::from("alma.json"), String::from("<<profile:almagyar>>")));
-    let read = storage.get(String::from("alma.json"));
+    // reactor.run(storage.set(file_path, String::from("<<profile:almagyar>>")));
+    let read = storage.get(file_path);
     let res = reactor.run(read).unwrap();
     assert_eq!(res, json);
 }
