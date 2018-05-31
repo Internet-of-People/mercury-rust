@@ -9,17 +9,17 @@ use futures::*;
 
 /* SYNCRONOUS FILESYSTEM HANDLER */
 
-pub struct Medusa{
+pub struct SyncFileHandler{
     path : String,
     file_map : HashMap<String, String>
 }
 
-impl Medusa{
+impl SyncFileHandler{
     pub fn init(name : String) -> Result<Self, StorageError>{
         let mut path = String::new();
         path.push_str(&name);
         match create_dir_all(Path::new(&path)){
-            Ok(_)=>Ok(Medusa{path: name, file_map : HashMap::new()}),
+            Ok(_)=>Ok(SyncFileHandler{path: name, file_map : HashMap::new()}),
             Err(e)=>Err(StorageError::Other(Box::new(e)))
         }
     }
@@ -86,7 +86,7 @@ impl Medusa{
     }
 }
 
-impl KeyValueStore<String, String> for Medusa{
+impl KeyValueStore<String, String> for SyncFileHandler{
     fn set(&mut self, key: String, value: String)
     -> Box< Future<Item=(), Error=StorageError> >{
         match self.write_to_file(key, value){
@@ -110,7 +110,7 @@ fn medusa_key_value() {
     
     let mut reactor = reactor::Core::new().unwrap();
     println!("\n\n\n");
-    let mut storage : Medusa = Medusa::init(String::from("./ipfs/banan/")).unwrap();
+    let mut storage : SyncFileHandler = SyncFileHandler::init(String::from("./ipfs/banan/")).unwrap();
     let json = String::from("<Json:json>");
     reactor.run(storage.set(String::from("alma.json"), json.clone())).unwrap();
     let read = storage.get(String::from("alma.json"));
