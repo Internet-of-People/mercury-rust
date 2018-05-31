@@ -1,17 +1,21 @@
 use std::{cell::RefCell, rc::Rc, rc::Weak};
 use std::collections::HashMap;
 use std::error::Error;
+use std::time::Duration;
 
-use bincode::serialize;
-use futures::{future, sync, Future, Sink};
-use futures::sync::mpsc;
-use futures::stream;
-use tokio_core::reactor;
+use futures::{future, stream, sync, Future, Sink};
+use futures::sync::{mpsc, oneshot};
+use tokio_core::reactor::{self, Timeout};
 
 use mercury_home_protocol::{crypto::*, *};
-use mercury_storage::async::{KeyValueStore, imp::InMemoryStore};
-use mercury_storage::error::StorageError;
+use mercury_storage::{async::KeyValueStore, async::imp::InMemoryStore, error::StorageError};
 
+
+
+const CHANNEL_CAPACITY :usize = 1;
+
+// TODO this should come from user configuration with a reasonable default value close to this
+const CFG_CALL_ANSWER_TIMEOUT:Duration = Duration::from_secs(30);
 
 
 pub struct HomeServer
@@ -87,8 +91,74 @@ impl HomeConnectionServer
     pub fn new(context: Rc<PeerContext>, server: Rc<HomeServer>) -> Result<Self, ErrorToBeSpecified>
     {
         context.validate(&*server.validator)?;
-
         Ok( Self{ context: context, server: server } )
+    }
+
+
+    fn get_live_session(&self, to_profile: ProfileId)
+        -> Box< Future<Item=Option<Rc<HomeSessionServer>>, Error=ErrorToBeSpecified> >
+    {
+        let sessions_clone = self.server.sessions.clone();
+
+        // Check if this profile is hosted on this server
+        let session_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone() )
+            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+            .and_then( move |_profile_data|
+            {
+                // Seperate variable needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
+                let sessions = sessions_clone.borrow();
+                // If hosted here, check if profile is in reach with an online session
+                let session_rc = sessions.get(&to_profile)
+                    // TODO remove session from server if weak pointer failed to upgrade (session is released with refcount 0)
+                    .and_then( |weak| weak.upgrade() );
+                future::ok(session_rc)
+            } );
+
+        Box::new(session_fut)
+    }
+
+
+    fn push_event(&self, to_profile: ProfileId, event: ProfileEvent)
+        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        let push_fut = self.get_live_session(to_profile)
+            .and_then( |session_rc_opt|
+            {
+                match session_rc_opt
+                {
+                    // TODO if push to session fails, consider just dropping the session
+                    //      (is anything manual needed using weak pointers?) and requiring a reconnect
+                    Some(ref session) => session.push_event(event),
+                    // TODO save event into persistent storage and delegate it when profile is online again
+                    None => { Box::new( future::ok( () ) ) },
+                }
+            } );
+
+        Box::new(push_fut)
+    }
+
+
+    fn push_call(&self, to_profile: ProfileId, to_app: ApplicationId, call: Box<IncomingCall>)
+        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        let push_fut = self.get_live_session(to_profile)
+            .and_then( |session_rc_opt|
+            {
+                match session_rc_opt
+                {
+                    Some(ref session) =>
+                    {
+                        // TODO if push to session fails, consider just dropping the session
+                        //      (is anything manual needed using weak pointers?) and requiring a reconnect
+                        let push_fut = session.push_call(to_app, call);
+                        Box::new(push_fut) as Box< Future<Item=(), Error=ErrorToBeSpecified> >
+                    },
+                    // TODO save event into persistent storage and delegate it when profile is online again
+                    None => { Box::new( future::ok( () ) ) },
+                }
+            } );
+
+        Box::new(push_fut)
     }
 }
 
@@ -99,7 +169,7 @@ impl ProfileRepo for HomeConnectionServer
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         HomeStream<Profile, String>
     {
-        let (send, receive) = mpsc::channel(1);
+        let (send, receive) = mpsc::channel(CHANNEL_CAPACITY);
         receive
     }
 
@@ -134,6 +204,7 @@ impl Home for HomeConnectionServer
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         Box::new(claim_fut)
     }
+
 
     // TODO consider how to issue and process invites
     fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, _invite: Option<HomeInvitation>) ->
@@ -196,22 +267,23 @@ impl Home for HomeConnectionServer
     }
 
 
-    fn login(&self, profile: ProfileId) ->
+    fn login(&self, profile_id: ProfileId) ->
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        if profile != *self.context.peer_id()
+        if profile_id != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Login() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
-        let val_fut = self.server.hosted_profile_db.borrow().get(profile)
+        let val_fut = self.server.hosted_profile_db.borrow().get( profile_id.clone() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             .map( {
                 let context_clone = self.context.clone();
                 let server_clone = self.server.clone();
-                move |_own_profile| Rc::new( HomeSessionServer::new(context_clone, server_clone) ) as Rc<HomeSession>
-//            } )
-//            .inspect( {
-//                let sessions_clone = self.sessions.clone();
-//                move |session|
+                let sessions_clone = self.server.sessions.clone();
+                move |_own_profile| {
+                    let session = Rc::new( HomeSessionServer::new(context_clone, server_clone) );
+                    sessions_clone.borrow_mut().entry(profile_id).or_insert( Rc::downgrade(&session) );
+                    session as Rc<HomeSession>
+                }
             } );
 
         Box::new(val_fut)
@@ -222,27 +294,90 @@ impl Home for HomeConnectionServer
     fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        // TODO check if targeted profile id is hosted on this machine
-        //      and delegate the proof to its buffer (if offline) or sink (if logged in)
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_request "))) )
+        if half_proof.signer_id != *self.context.peer_id()
+            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different profile".to_owned() ) ) ) }
+
+        // TODO validate halfproof signature
+        let lez_should_implement_halfproof_validation_here = true;
+//        let data = b""; // TODO halfproof must be serialized here
+//        self.server.validator.validate_signature( self.context.peer_pubkey(), data, half_proof.my_sign );
+//            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different public key".to_owned() )) ) ) }
+
+        let to_profile = half_proof.peer_id.clone();
+        self.push_event( to_profile, ProfileEvent::PairingRequest(half_proof) )
     }
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_response(&self, rel: RelationProof) ->
+    fn pair_response(&self, relation: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        // TODO check if targeted profile id is hosted on this machine
-        //      and delegate the proof to its buffer (if offline) or sink (if logged in)
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.pair_response "))) )
+        // TODO validate sender profile id and both signatures
+        let lez_should_implement_relation_validation_here = true;
+//        if proof.wtf? != *self.context.peer_id()
+//            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_response() access denied: you authenticated with a different profile".to_owned() ) ) ) }
+
+        let to_profile = match relation.peer_id( self.context.peer_id() )
+        {
+            Ok(profile_id) => profile_id.to_owned(),
+            Err(e) => return Box::new( future::err(e) )
+        };
+        self.push_event( to_profile, ProfileEvent::PairingResponse(relation) )
     }
 
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
-        // TODO check if targeted profile id is hosted on this machine
-        //      and delegate the call to its buffer (if offline) or sink (if logged in)
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.call "))) )
+        // TODO validate sender profile id and both signatures
+        let lez_should_implement_relation_validation_here = true;
+
+        let to_profile = match call_req.relation.peer_id( self.context.peer_id() )
+        {
+            Ok(profile_id) => profile_id.to_owned(),
+            Err(e) => return Box::new( future::err(e) )
+        };
+
+        let (send, recv) = oneshot::channel();
+        let call = Box::new( Call::new(call_req, send) );
+        let handle = self.server.handle.clone();
+        let answer_fut = self.push_call(to_profile, app, call)
+            .and_then( move |_void|
+            {
+                let answer_fut = recv
+                    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
+                let timeout_fut = Timeout::new(CFG_CALL_ANSWER_TIMEOUT, &handle)
+                    .map( |_void| None )
+                    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
+                // Wait for answer with specified timeout
+                answer_fut.select(timeout_fut)
+                    .map( |(done,_pending)| done )
+                    .map_err( |(e,_pending)| e )
+            } );
+        Box::new(answer_fut)
+    }
+}
+
+
+
+struct Call
+{
+    details: CallRequestDetails,
+    sender:  oneshot::Sender< Option<AppMsgSink> >,
+}
+
+impl Call
+{
+    pub fn new(details: CallRequestDetails, sender: oneshot::Sender< Option<AppMsgSink> >) -> Self
+        { Self{ details: details, sender: sender } }
+}
+
+impl IncomingCall for Call
+{
+    fn request_details(&self) -> &CallRequestDetails { &self.details }
+    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>)
+    {
+        if let Err(e) = self.sender.send(to_callee)
+            { } // TODO we should at least log the error here
     }
 }
 
@@ -262,8 +397,7 @@ pub struct HomeSessionServer
     context:    Rc<PeerContext>,
     server:     Rc<HomeServer>,
     events:     RefCell< ServerSink<ProfileEvent, String> >,
-//    client_profile: OwnProfile,
-//    home: Weak<HomeServer>,
+    apps:       RefCell< HashMap< ApplicationId, ServerSink<Box<IncomingCall>, String> > > // {appId->sender<call>}
 }
 
 
@@ -271,8 +405,53 @@ impl HomeSessionServer
 {
     // TODO consider if validating the context is needed here, e.g. as an assert()
     pub fn new(context: Rc<PeerContext>, server: Rc<HomeServer>) -> Self
-        { Self{ context: context, server: server,
-                events: RefCell::new(ServerSink::Buffer( Vec::new() ) ) } }
+    {
+        Self{ context: context, server: server,
+              events:  RefCell::new(ServerSink::Buffer( Vec::new() ) ),
+              apps:    RefCell::new( HashMap::new() ) }
+    }
+
+
+    fn push_event(&self, event: ProfileEvent) -> Box< Future<Item=(),Error=ErrorToBeSpecified> >
+    {
+        match *self.events.borrow_mut()
+        {
+            ServerSink::Buffer(ref mut bufvec) =>
+            {
+                bufvec.push( Ok(event) ); // TODO consider size constraints
+                Box::new( future::ok( () ) )
+            },
+            ServerSink::Sender(ref mut sender) => Box::new
+            (
+                sender.clone().send( Ok(event) )
+                    .map( |_sender| () )
+                    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+            ),
+        }
+    }
+
+
+    fn push_call(&self, app: ApplicationId, call: Box<IncomingCall>)
+        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    {
+        let mut apps = self.apps.borrow_mut();
+        let sink = apps.entry(app).or_insert( ServerSink::Buffer( Vec::new() ) );
+        match *sink
+        {
+            ServerSink::Buffer(ref mut bufvec) =>
+            {
+                bufvec.push( Ok(call) ); // TODO consider size constraints
+                Box::new( future::ok( () ) )
+            },
+            ServerSink::Sender(ref mut sender) => Box::new
+            (
+                sender.clone().send( Ok(call) )
+                    .map( |_sender| () )
+                    // TODO if call dispatch fails we probably should remove the checked in app from the session
+                    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+            ),
+        }
+    }
 }
 
 
@@ -310,14 +489,51 @@ impl HomeSession for HomeSessionServer
     fn unregister(&self, newhome: Option<Profile>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        // TODO close/drop session connection after successful unregister()
+        let profile_id = self.context.peer_id();
+
+        // TODO is it the caller's responsibility to remove this home from the persona facet's homelist
+        //      or should we do it here and save the results into the distributed public db?
+        // TODO how to delete profile from self.server.hosted_profiles_db? We'll probably need a remove operation
+
+        // Drop session reference from server
+        self.server.sessions.borrow_mut().remove(&profile_id);
+
+        // TODO force close/drop session connection after successful unregister().
+        //      Ideally self would be consumed here, but that'd require binding to self: Box<Self> or Rc<Self> to compile within a trait.
+
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.unregister "))) )
     }
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
     {
-        let (sender, receiver) = sync::mpsc::channel(1);
+        let (sender, receiver) = sync::mpsc::channel(CHANNEL_CAPACITY);
+
+        match self.apps.borrow_mut().insert( app.to_owned(), ServerSink::Sender( sender.clone() ) )
+        {
+            Some( ServerSink::Sender(old_sender) ) =>
+            {
+                // NOTE consuming the calls stream multiple times is likely a client implementation error
+                self.server.handle.spawn(
+                    old_sender.send( Err( "Repeated call of HomeSession::checkin_app() detected, this channel is dropped, using the new one".to_owned() ) )
+                        .map( |_sender| () )
+                        .map_err( |_e| () )
+                )
+            },
+            Some( ServerSink::Buffer(call_vec) ) =>
+            {
+                // Send all collected calls from buffer as we now finally have a channel to the app
+                // TODO use persistent storage for calls when profile is offline and delegate them here
+                self.server.handle.spawn(
+                    sender.send_all( stream::iter_ok(call_vec) )
+                        .map( |_sender| () )
+                        .map_err( |_e| () )
+                )
+            },
+            None => {},
+        }
+
+        // TODO how to detect dropped stream and remove the sink from the session?
         receiver
     }
 
@@ -326,9 +542,12 @@ impl HomeSession for HomeSessionServer
     //      has been processed via the old_sender?
     fn events(&self) -> HomeStream<ProfileEvent, String>
     {
-        let (sender, receiver) = sync::mpsc::channel(1);
+        let (sender, receiver) = sync::mpsc::channel(CHANNEL_CAPACITY);
+
+        // Set up events with the new channel and check the old event sink
         match self.events.replace( ServerSink::Sender( sender.clone() ) )
         {
+            // We already had another channel properly set up
             ServerSink::Sender(old_sender) =>
             {
                 // NOTE consuming the events stream multiple times is likely a client implementation error
@@ -338,9 +557,11 @@ impl HomeSession for HomeSessionServer
                         .map_err( |_e| () )
                 )
             },
+            // The client was not listening to events so far, the channel is brand new
             ServerSink::Buffer(msg_vec) =>
             {
                 // Send all collected messages from buffer as we now finally have a channel to the user
+                // TODO use persistent storage for events when profile is offline and delegate them here
                 self.server.handle.spawn(
                     sender.send_all( stream::iter_ok(msg_vec) )
                         .map( |_sender| () )
