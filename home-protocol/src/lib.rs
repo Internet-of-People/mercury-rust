@@ -6,13 +6,11 @@ extern crate ed25519_dalek;
 extern crate futures;
 extern crate multiaddr;
 extern crate multihash;
-extern crate rand;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
-extern crate sha2;
-extern crate tokio_core;
 extern crate signatory;
+extern crate tokio_core;
 
 use std::rc::Rc;
 

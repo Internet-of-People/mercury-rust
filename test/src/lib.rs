@@ -1,16 +1,65 @@
 extern crate capnp;
 extern crate capnp_rpc;
+extern crate ed25519_dalek;
 extern crate futures;
 extern crate mercury_connect;
 extern crate mercury_home_protocol;
 extern crate mercury_home_node;
+extern crate mercury_storage;
 extern crate tokio_core;
 extern crate tokio_io;
 extern crate multiaddr;
 extern crate multihash;
+extern crate rand;
+extern crate sha2;
 extern crate tokio_stdin_stdout;
 
+use std::{cell::RefCell, rc::Rc};
+
+use rand::OsRng;
+use sha2::Sha512;
+use tokio_core::reactor;
+
+use mercury_home_protocol::{*, crypto::*};
+use mercury_home_node::server::HomeServer;
+use mercury_storage::async::imp::InMemoryStore;
+
 pub mod dummy;
+
+
+
+pub fn generate_keypair() -> (PrivateKey, PublicKey) {
+    let mut csprng: OsRng = OsRng::new().unwrap();
+    let secret_key = ed25519_dalek::SecretKey::generate(&mut csprng);
+    let public_key = ed25519_dalek::PublicKey::from_secret::<Sha512>(&secret_key);
+    (PrivateKey::from(secret_key), PublicKey::from(public_key))
+}
+
+pub fn generate_profile(facet: ProfileFacet) -> (Profile, Ed25519Signer) {
+    let (private_key, public_key) = generate_keypair();
+
+    let signer = Ed25519Signer::new(&private_key, &public_key).expect("TODO: this should not be able to fail");
+
+    let profile = Profile {
+        id: ProfileId::from(&public_key),
+        pub_key: public_key,
+        facets: vec![facet],
+    };
+
+    (profile, signer)
+}
+
+
+
+pub fn default_home(handle: &reactor::Handle) -> HomeServer {
+    HomeServer::new( handle,
+        Rc::new( CompositeValidator::default() ),
+        Rc::new( RefCell::new( InMemoryStore::new() ) ),
+        Rc::new( RefCell::new( InMemoryStore::new() ) ),
+    )
+}
+
+
 
 #[cfg(test)]
 mod test{
@@ -44,7 +93,7 @@ mod test{
         let addr = homeaddr.clone().to_socket_addrs().unwrap().next().expect("Failed to parse address");
 
         let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
-        let (homeprof, _homesigno) = crypto::generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+        let (homeprof, _homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
         let mut dht = ProfileStore::new();
         dht.insert(homeprof.id.clone(), homeprof.clone());
@@ -67,7 +116,7 @@ mod test{
             .map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")))
             .and_then( |tcp_stream|
             {
-                let (private_key, public_key) = crypto::generate_keypair();
+                let (private_key, public_key) = generate_keypair();
                 let signer = Rc::new(Ed25519Signer::new(&private_key, &public_key).unwrap());
                 let my_profile = signer.prof_id().clone();
                 let home_profile = make_home_profile("localhost:9876", signer.pub_key());
@@ -93,14 +142,14 @@ mod test{
         let setup = dummy::TestSetup::setup();
 
         // make persona
-        let (profile, signer) = crypto::generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
+        let (profile, signer) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
         let ownprofile = OwnProfile{profile: profile.clone(), priv_data: vec![]};
         let signer = Rc::new(signer);
 
         // make home
-        let (home_profile, home_signer) = crypto::generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
+        let (home_profile, home_signer) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
 
-        let home_server = HomeServer::create(&setup.handle);
+        let home_server = default_home(&setup.handle);
         let client_context = ClientContext::new(
             Rc::new(home_signer),
             profile.pub_key.clone(),
@@ -216,7 +265,7 @@ mod test{
         let mut setup = dummy::TestSetup::setup();
 
         let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
-        let (otherhome, _other_home_signer) = crypto::generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+        let (otherhome, _other_home_signer) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
         setup.home.borrow_mut().insert(otherhome.id.clone(), otherhome.clone());
         let home_session = setup.profilegate.update(
@@ -291,10 +340,10 @@ mod test{
         //let handle = reactor.handle();
 
         let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
-        let (homeprof, homesigno) = crypto::generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+        let (homeprof, homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
         let homemultiaddr = "/ip4/127.0.0.1/udp/9877".to_multiaddr().unwrap();
-        let (other_homeprof, other_homesigno) = crypto::generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+        let (other_homeprof, other_homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
         let mut dht = ProfileStore::new();
         dht.insert(homeprof.id.clone(), homeprof.clone());
@@ -304,10 +353,10 @@ mod test{
         let ownhomestore = Rc::clone(&home_storage);
         let home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
 
-        let (profile, signo) = crypto::generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
+        let (profile, signo) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
         let signo = Rc::new(signo);
 
-        let (_other_profile, other_signo) = crypto::generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
+        let (_other_profile, other_signo) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
         let other_signo = Rc::new(other_signo);
 
         let own_gateway = ProfileGatewayImpl::new(

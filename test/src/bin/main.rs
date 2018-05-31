@@ -13,11 +13,11 @@ extern crate tokio_io;
 extern crate futures;
 
 // use ::net::*;
-use mercury_test::dummy as dummy;
-use mercury_test::dummy::*;
+use mercury_test::dummy::{self, *};
 
 use mercury_connect::*;
 use mercury_home_protocol::*;
+use mercury_test::*;
 
 use std::cell::RefCell;
 use std::rc::Rc;
@@ -32,6 +32,8 @@ use tokio_io::{AsyncRead, AsyncWrite};
 
 use futures::{future, Future, Stream};
 
+
+
 fn main(){
     //print!("{}[2J", 27 as char);
     println!("Setting up config\n");
@@ -40,8 +42,8 @@ fn main(){
     let homeaddr = "/ip4/127.0.0.1/udp/9876";
     let homemultiaddr = homeaddr.to_multiaddr().unwrap();
     
-    let (profile, signo) = crypto::generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
-    let (homeprof, homesigno) = crypto::generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+    let (profile, signo) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
+    let (homeprof, homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
     
     println!("Setting up connection\n");
 

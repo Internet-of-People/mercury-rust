@@ -1,8 +1,6 @@
 use std::error::Error;
 
 use multihash;
-use rand::OsRng;
-use sha2::Sha512;
 use signatory::{ed25519::FromSeed, providers::dalek};
 
 use ::*;
@@ -163,26 +161,6 @@ impl<'a> From<&'a PublicKey> for ProfileId {
     }
 }
 
-pub fn generate_keypair() -> (PrivateKey, PublicKey) {
-    let mut csprng: OsRng = OsRng::new().unwrap();
-    let secret_key = ed25519_dalek::SecretKey::generate(&mut csprng);
-    let public_key = ed25519_dalek::PublicKey::from_secret::<Sha512>(&secret_key);
-    (PrivateKey::from(secret_key), PublicKey::from(public_key))
-}
-
-pub fn generate_profile(facet: ::ProfileFacet) -> (Profile, Ed25519Signer) {
-    let (private_key, public_key) = generate_keypair();
-
-    let signer = Ed25519Signer::new(&private_key, &public_key).expect("TODO: this should not be able to fail");
-
-    let profile = Profile {
-        id: ProfileId::from(&public_key),
-        pub_key: public_key,
-        facets: vec![facet],
-    };
-
-    (profile, signer)
-}
 
 
 #[cfg(test)]

@@ -6,12 +6,16 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 [dependencies]
 capnp = "0.8"
 capnp-rpc = "0.8"
+ed25519-dalek = "*"
 futures = "0.1"
 mercury-home-protocol = { path="../home-protocol" }
 mercury-connect = { path="../connect" }
 mercury-home-node = { path="../home-node" }
+mercury-storage= { path="../storage" }
 multiaddr = "*"
 multihash = "*"
+rand = "0.4.2"
+sha2 = "*"
 tokio-core = "0.1"
 
 tokio-io = "*"

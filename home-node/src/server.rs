@@ -7,8 +7,8 @@ use futures::{future, stream, sync, Future, Sink};
 use futures::sync::{mpsc, oneshot};
 use tokio_core::reactor::{self, Timeout};
 
-use mercury_home_protocol::{crypto::*, *};
-use mercury_storage::{async::KeyValueStore, async::imp::InMemoryStore, error::StorageError};
+use mercury_home_protocol::*;
+use mercury_storage::{async::KeyValueStore, error::StorageError};
 
 
 
@@ -36,21 +36,6 @@ impl HomeServer
     { Self{ handle: handle.clone(), validator: validator,
             public_profile_dht: public_dht, hosted_profile_db: private_db,
             sessions: Rc::new( RefCell::new( HashMap::new() ) ) } }
-
-    pub fn create(handle: &reactor::Handle) -> Self {
-        let composite_validator = CompositeValidator::default();
-
-        let dht_store: InMemoryStore<ProfileId, Profile> = InMemoryStore::new();
-        let local_store: InMemoryStore<ProfileId, OwnProfile> = InMemoryStore::new();
-
-        Self {
-            handle: handle.clone(),
-            validator: Rc::new(composite_validator),
-            public_profile_dht: Rc::new(RefCell::new(dht_store)),
-            hosted_profile_db: Rc::new(RefCell::new(local_store)),
-            sessions: Rc::new(RefCell::new(HashMap::new()))
-        }
-    }
 }
 
 

@@ -60,11 +60,11 @@ impl TestSetup{
 
         let homeaddr = String::from("/ip4/127.0.0.1/udp/9876");
         let homemultiaddr = homeaddr.to_multiaddr().unwrap();
-        let (homeprof, homesigner) = crypto::generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+        let (homeprof, homesigner) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
         let homeprofileid =  homeprof.id.clone();
 
-        let (user, usersigner) = crypto::generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
+        let (user, usersigner) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
         let userid = user.id.clone();
         let userownprofile = create_ownprofile(user.clone());
 
