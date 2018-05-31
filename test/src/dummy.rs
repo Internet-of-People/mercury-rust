@@ -57,25 +57,25 @@ pub struct TestSetup{
 
 impl TestSetup{
     pub fn setup()-> Self {
-        let homesigner = Rc::new(Signo::new("homesigner"));
+
         let homeaddr = String::from("/ip4/127.0.0.1/udp/9876");
         let homemultiaddr = homeaddr.to_multiaddr().unwrap();
-        let homeprofileid =  ProfileId(generate_hash("home"));
-        let homeprof = Profile::new_home(ProfileId(generate_hash("home")), homesigner.pub_key().clone(), homemultiaddr.clone());
+        let (homeprof, homesigner) = crypto::generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
-        let usersigner = Rc::new(Signo::new("Deusz"));
-        let userid = ProfileId( generate_hash_from_vec( usersigner.pub_key().0.clone() ) );
-        let user = make_own_persona_profile(&usersigner.pub_key().clone());
+        let homeprofileid =  homeprof.id.clone();
+
+        let (user, usersigner) = crypto::generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
+        let userid = user.id.clone();
         let userownprofile = create_ownprofile(user.clone());
 
         let mut dht = ProfileStore::new();
         dht.insert(homeprofileid.clone(), homeprof.clone());
         let mut home_storage = Rc::new( RefCell::new(dht) );
         let mut store_rc = Rc::clone(&home_storage);
-        let homeprof = Profile::new_home(homeprofileid.clone(), homesigner.pub_key().clone(), homemultiaddr.clone());
         let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
         let homerc = Rc::clone(&home);
 
+        let usersigner = Rc::new(usersigner);
         let profilegateway = ProfileGatewayImpl{
             signer:         usersigner.clone(),
             profile_repo:   store_rc,
@@ -90,7 +90,7 @@ impl TestSetup{
             handle: handle,
             homeprofile: homeprof,
             homeprofileid: homeprofileid,
-            homesigner: homesigner,
+            homesigner: Rc::new(homesigner),
             homeaddr: homeaddr,
             homemultiaddr: homemultiaddr,
             home: homerc,
@@ -129,38 +129,6 @@ pub fn make_home_profile(addr : &str, pubkey : &PublicKey)->Profile{
         &pubkey,
         &[ProfileFacet::Home( HomeFacet{ addrs : homevec , data : empty } ) ] 
     )
-}
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Signo{
-    prof_id : ProfileId,
-    pubkey : PublicKey,
-    privkey : Vec<u8>,
-}
-
-impl Signo{
-    pub fn new( whatever : &str)->Self{
-        Signo{
-            prof_id : ProfileId( generate_hash_from_vec( generate_hash(whatever) ) ),
-            pubkey : PublicKey( generate_hash(whatever) ),
-            privkey : generate_hash(whatever),
-        }
-    }
-
-    pub fn get_base64_id(&self)->String{
-        base64::encode(&self.prof_id.0)
-    }
-}
-
-impl Signer for Signo{
-    fn prof_id(&self) -> &ProfileId{
-        &self.prof_id
-    }
-    fn pub_key(&self) -> &PublicKey{
-        &self.pubkey
-    }
-    fn sign(&self, data: &[u8]) -> Signature{
-        Signature( Vec::from(data) )
-    }
 }
 
 pub fn dummy_relation(rel_type: &str) -> Relation{

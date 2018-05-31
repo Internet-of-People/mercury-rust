@@ -40,14 +40,8 @@ fn main(){
     let homeaddr = "/ip4/127.0.0.1/udp/9876";
     let homemultiaddr = homeaddr.to_multiaddr().unwrap();
     
-    println!("Setting up signers\n");
-    let signo = Rc::new(dummy::Signo::new("Deusz"));
-    let homesigno = Rc::new(dummy::Signo::new("Home"));
-    
-    println!("Setting up home\n");
-
-    let homeprof = Profile::new_home(homesigno.prof_id().to_owned(), homesigno.pub_key().to_owned(), homemultiaddr.clone());
-    let profile = make_own_persona_profile(signo.pub_key());
+    let (profile, signo) = crypto::generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
+    let (homeprof, homesigno) = crypto::generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
     
     println!("Setting up connection\n");
 
@@ -57,6 +51,7 @@ fn main(){
     let mut store_rc = Rc::clone(&home_storage);
     let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
 
+    let signo = Rc::new(signo);
     let profilegateway = ProfileGatewayImpl{
         signer:         signo,
         profile_repo:   store_rc,

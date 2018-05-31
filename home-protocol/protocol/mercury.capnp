@@ -20,6 +20,22 @@ struct Profile
     # NOTE these are mandatory in the API, but will be serialized into the data instead
     id        @0 : ProfileId;
     publicKey @1 : PublicKey;
+
+    # Currently only a single facet is supported in a profile
+    facet        : union {
+        persona :group {
+            homes @2 : List(RelationProof);
+            # data: TODO
+        }
+        home :group {
+            addresses @3 : List(Text);  # MultiAddress
+            # data: TODO
+        }
+        application :group {
+            id @4 : Text;
+            # data: TODO
+        }
+    }
 }
 
 
@@ -31,25 +47,22 @@ interface ProfileRepo
     resolve @2 (profileUrl: Text) -> (profile: Profile);
 }
 
-
-
 struct RelationHalfProof
 {
-    data            @0 : Data;
-    # relationType    @0 : Text,
-    # myId            @1 : ProfileId,
-    # mySign          @2 : Signature,
-    # peerId          @3 : ProfileId,
+    relationType    @0 : Text;
+    signerId        @1 : ProfileId;
+    peerId          @2 : ProfileId;
+    signature       @3 : Signature;
 }
-
 
 struct RelationProof
 {
-    data        @0 : Data;
-    # halfProof   @0 : RelationHalfProof,
-    # peerSign    @1 : Signature,
+    relationType    @0 : Text;
+    aId             @1 : ProfileId;
+    aSignature      @2 : Signature;
+    bId             @3 : ProfileId;
+    bSignature      @4 : Signature;
 }
-
 
 struct HomeInvitation
 {

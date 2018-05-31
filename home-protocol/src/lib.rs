@@ -2,24 +2,28 @@ extern crate bincode;
 extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
+extern crate ed25519_dalek;
 extern crate futures;
 extern crate multiaddr;
 extern crate multihash;
+extern crate rand;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+extern crate sha2;
 extern crate tokio_core;
+extern crate signatory;
 
 use std::rc::Rc;
 
 use bincode::serialize;
 use futures::{Future, sync::mpsc};
 use multiaddr::Multiaddr;
-
+use crypto::{ProfileValidator, SignatureValidator};
 
 
 pub mod mercury_capnp;
-
+pub mod crypto;
 
 
 // TODO
@@ -32,6 +36,9 @@ pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct PublicKey(pub Vec<u8>);
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct PrivateKey(pub Vec<u8>);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Signature(pub Vec<u8>);
@@ -61,13 +68,43 @@ pub trait Signer
 }
 
 
-pub trait Validator
+pub trait Validator: ProfileValidator + SignatureValidator
 {
-    fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
-        -> Result<bool, ErrorToBeSpecified>;
+    fn validate_relation_proof(&self, relation_proof: &RelationProof, profile1: &Profile, profile2: &Profile) -> Result<(), ErrorToBeSpecified> {
 
-    fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
-        -> Result<bool, ErrorToBeSpecified>;
+        let signable_a = RelationSignablePart {
+            relation_type: relation_proof.relation_type.clone(),
+            signer_id: relation_proof.a_id.clone(),
+            peer_id: relation_proof.b_id.clone(),
+        };
+        let signable_a_serialized = serialize(&signable_a).unwrap();
+        // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
+        //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
+        //      But anyway this serialization will be swapped with something that in the first place cannot fail at all.
+        let signable_b = RelationSignablePart {
+            relation_type: relation_proof.relation_type.clone(),
+            signer_id: relation_proof.b_id.clone(),
+            peer_id: relation_proof.a_id.clone(),
+        };
+        let signable_b_serialized = serialize(&signable_b).unwrap();
+        // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
+        //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
+        //      But anyway this serialization will be swapped with something that in the first place cannot fail at all.
+
+        // TODO check if profile2.id is in relation_proof first, and if not, return an error indicating that instead of
+        //      a signature error.
+        if *relation_proof.peer_id(&profile1.id)? == relation_proof.b_id {
+            // profile1 is 'a'
+            self.validate_signature(&profile1.pub_key, &signable_a_serialized, &relation_proof.a_signature)?;
+            self.validate_signature(&profile2.pub_key, &signable_b_serialized, &relation_proof.b_signature)?;
+        } else {
+            // profile1 is 'b'
+            self.validate_signature(&profile1.pub_key, &signable_b_serialized, &relation_proof.b_signature)?;
+            self.validate_signature(&profile2.pub_key, &signable_a_serialized, &relation_proof.a_signature)?;
+        }
+
+        Ok(())
+    }
 }
 
 
@@ -119,7 +156,10 @@ pub enum ProfileFacet
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Profile
 {
+    /// The Profile ID is a hash of the public key, similar to cryptocurrency addresses.
     pub id:         ProfileId,
+
+    /// Public key used for validating the identity of the profile.
     pub pub_key:    PublicKey,
     pub facets:     Vec<ProfileFacet>, // TODO consider redesigning facet Rust types/storage
     // TODO consider having a signature of the profile data here
@@ -131,7 +171,7 @@ impl Profile
         { Self{ id: id.to_owned(), pub_key: pub_key.to_owned(), facets: facets.to_owned() } }
 
     pub fn new_home(id: ProfileId, pub_key: PublicKey, address: Multiaddr) -> Self {
-        
+
         let facet = HomeFacet {
             addrs: vec![address],
             data: vec![],
@@ -180,7 +220,7 @@ pub trait ProfileRepo
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
 
     /// Same as load(), but also contains hints for resolution, therefore it's more efficient than load(id)
-    /// 
+    ///
     /// The `url` may contain
     /// * ProfileID (mandatory)
     /// * some profile metadata (for user experience enhancement) (big fat warning should be thrown if it does not match the latest info)
@@ -197,7 +237,11 @@ pub trait ProfileRepo
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct OwnProfile
 {
+    /// The public part of the profile. In the current implementation it must contain a single PersonaFacet.
     pub profile:    Profile,
+
+    /// Hierarchical, json-like data structure, encoded using multicodec library,
+    /// encrypted with the persona's keys, and stored on the home server
     pub priv_data:  Vec<u8>, // TODO maybe multicodec output?
 }
 
@@ -219,9 +263,9 @@ pub struct RelationSignablePart {
 pub struct RelationHalfProof
 {
     pub relation_type:  String,
-    pub my_id:          ProfileId,
-    pub my_sign:        Signature,
+    pub signer_id:      ProfileId,
     pub peer_id:        ProfileId,
+    pub signature:      Signature,
     // TODO is a nonce needed?
 }
 
@@ -229,18 +273,29 @@ impl RelationHalfProof
 {
     // TODO add params and properly initialize
     pub fn new() -> Self
-        { Self{ relation_type: String::new(), my_id: ProfileId(Vec::new()),
-                my_sign: Signature(Vec::new()), peer_id: ProfileId(Vec::new()) } }
+        { Self{ relation_type: String::new(), signer_id: ProfileId(Vec::new()),
+                signature: Signature(Vec::new()), peer_id: ProfileId(Vec::new()) } }
 
-    pub fn from_signable_part(signable_part: &RelationSignablePart, signer: Rc<Signer>) -> Self {
-        let signature = signer.sign(&serialize(&signable_part).unwrap());
+    pub fn from_signable_part(signable_part: RelationSignablePart, signer: Rc<Signer>) -> Self {
+        let signature = signer.sign(&serialize(&signable_part).unwrap());  // TODO remove unwrap(), investigate how it can fail
 
         RelationHalfProof {
-            relation_type: signable_part.relation_type.clone(),
-            my_id: signable_part.signer_id.clone(),
-            peer_id: signable_part.peer_id.clone(),
-            my_sign: signature,
+            relation_type: signable_part.relation_type,
+            signer_id: signable_part.signer_id,
+            peer_id: signable_part.peer_id,
+            signature: signature,
         }
+    }
+
+    pub fn validate(&self, validator: Rc<Validator>, public_key: &PublicKey) -> Result<(), ErrorToBeSpecified> {
+        let signable_part = RelationSignablePart {
+            relation_type: self.relation_type.clone(),
+            signer_id: self.signer_id.clone(),
+            peer_id: self.peer_id.clone(),
+        };
+
+        validator.validate_signature(public_key, &serialize(&signable_part).unwrap(), &self.signature)?;
+        Ok(())
     }
 }
 
@@ -250,68 +305,72 @@ pub struct RelationProof
 {
     pub relation_type:  String,        // TODO inline halfproof fields with macro, if possible at all
     pub a_id:           ProfileId,
-    pub a_sign:         Signature,
+    pub a_signature:    Signature,
     pub b_id:           ProfileId,
-    pub b_sign:         Signature,
+    pub b_signature:    Signature,
     // TODO is a nonce needed?
 
 }
 
 impl RelationProof
 {
-    pub fn new(rel_type: &str, a_id: &ProfileId, a_sign: &Signature, b_id: &ProfileId, b_sign: &Signature) -> Self {
-        assert!(a_id < b_id); // TODO make the same match as in from_halfproof
-        Self {
-            relation_type: rel_type.to_owned(),
-            a_id: a_id.to_owned(),
-            a_sign: a_sign.to_owned(),
-            b_id: b_id.to_owned(),
-            b_sign: b_sign.to_owned(),
-        }
-    }
-
-    pub fn from_halfproof(half_proof: RelationHalfProof, peer_sign: Signature) -> Self
-    {
-        match half_proof.my_id < half_proof.peer_id {
-            true => Self {
-                relation_type: half_proof.relation_type.clone(),
-                a_id: half_proof.my_id.clone(),
-                a_sign: half_proof.my_sign.clone(),
-                b_id: half_proof.peer_id.clone(),
-                b_sign: peer_sign.clone(),
-            },
-            false => Self {
-                relation_type: half_proof.relation_type.clone(),
-                a_id: half_proof.peer_id.clone(),
-                a_sign: peer_sign.clone(),
-                b_id: half_proof.my_id.clone(),
-                b_sign: half_proof.my_sign.clone(),
+    pub fn new(rel_type: &str, a_id: &ProfileId, a_signature: &Signature, b_id: &ProfileId, b_signature: &Signature) -> Self {
+        if a_id < b_id {
+            Self {
+                relation_type: rel_type.to_owned(),
+                a_id: a_id.to_owned(),
+                a_signature: a_signature.to_owned(),
+                b_id: b_id.to_owned(),
+                b_signature: b_signature.to_owned(),
+            }
+        } else {
+            Self {
+                relation_type: rel_type.to_owned(),  // TODO decide which relation_type belongs here (`a_is_home_of_b` or `b_is_home_of_a`)
+                a_id: b_id.to_owned(),
+                a_signature: b_signature.to_owned(),
+                b_id: a_id.to_owned(),
+                b_signature: a_signature.to_owned(),
             }
         }
     }
 
-    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, String> {
+    pub fn from_halfproof(half_proof: RelationHalfProof, peer_signature: Signature) -> Self
+    {
+        Self::new(half_proof.relation_type.as_ref(), &half_proof.signer_id, &half_proof.signature, &half_proof.peer_id, &peer_signature)
+    }
+
+    pub fn sign_halfproof(half_proof: RelationHalfProof, signer: &Signer) -> Self
+    {
+        let signable_part = RelationSignablePart {
+            relation_type: half_proof.relation_type.clone(),
+            signer_id: half_proof.peer_id.clone(),
+            peer_id: half_proof.signer_id.clone(),
+        };
+        let signable_data = serialize(&signable_part).unwrap();  // TODO change to an implementation that cannot fail
+        let home_signature = signer.sign(&signable_data);
+        Self::from_halfproof(half_proof, home_signature)
+    }
+
+    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, ErrorToBeSpecified> {
         if self.a_id == *my_id {
             Ok(&self.b_id)
         } else if self.b_id == *my_id {
             Ok(&self.a_id)
         } else {
-            Err(format!("{:?} is not present in relation {:?}", my_id, self))
+            Err(ErrorToBeSpecified::TODO(format!("{:?} is not present in relation {:?}", my_id, self)))
         }
     }
 
-    pub fn peer_sign(&self, my_id: &ProfileId) -> Result<&Signature, String> {
+    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, ErrorToBeSpecified> {
         if self.a_id == *my_id {
-            Ok(&self.b_sign)
+            Ok(&self.b_signature)
         } else if self.b_id == *my_id {
-            Ok(&self.a_sign)
+            Ok(&self.a_signature)
         } else {
-            Err(format!("{:?} is not present in relation {:?}", my_id, self))
+            Err(ErrorToBeSpecified::TODO(format!("{:?} is not present in relation {:?}", my_id, self)))
         }
     }
 }
-
-
 
 /// This invitation allows a persona to register on the specified home.
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -369,6 +428,23 @@ pub trait Home: ProfileRepo
     //      with the pairing proof, especially the error case
     fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
+
+    // TODO decide: login() takes a ProfileId parameter because the hashing algorithm, which
+    //              we use to create a profile id from a public key is not fixed. We use multihash,
+    //              which means we pick one algorithm for now, and when we consider it insecure, we
+    //              use another one. Let's say it takes 5 years to break our current hashing algorithm.
+    //              This means for the first 5 years we don't have to guess, and in the next 5 years
+    //              we could start guessing with the new algorithm, and fall-back to the deprecated
+    //              algorithm. This does not involve much performance neither complexity to the server code.
+    //
+    //              However, the `profile` parameter increases learning curve for the API by a small amount.
+    //              Newcomers might raise (stupid, but without prior knowledge, reasonable) questions like these:
+    //               * Why do I need to specify my ProfileId if it was already specified during authentication?
+    //               * Why do I need to specify my ProfileId if it can be calculated from my public key I just used?
+    //               * If this is a login, and we provide the credential, where is the password?
+    //
+    //              Since we would like to provide the most simple api possible, my suggestion is to rename
+    //              this function to `start_session(&self)` and remove the ProfileId parameter.
 
     // NOTE this closes all previous sessions of the same profile
     fn login(&self, profile: ProfileId) ->

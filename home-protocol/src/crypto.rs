@@ -1,16 +1,22 @@
 use std::error::Error;
 
 use multihash;
+use rand::{OsRng, Rng};
+use sha2::{Sha512};
 use signatory::{ed25519::FromSeed, providers::dalek};
 
-use mercury_home_protocol::*;
-
-
+use ::*;
 
 pub trait ProfileValidator
 {
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
         -> Result<bool, ErrorToBeSpecified>;
+}
+
+impl Default for Box<ProfileValidator> {
+    fn default() -> Self {
+        Box::new(MultiHashProfileValidator::default())
+    }
 }
 
 pub trait SignatureValidator
@@ -19,36 +25,40 @@ pub trait SignatureValidator
         -> Result<bool, ErrorToBeSpecified>;
 }
 
-
-pub struct CompositeValidator<P,S>
-{
-    profile_validator:      P,
-    signature_validator:    S,
+impl Default for Box<SignatureValidator> {
+    fn default() -> Self {
+        Box::new(Ed25519Validator::default())
+    }
 }
 
-impl<P,S> CompositeValidator<P,S>
+#[derive(Default)]
+pub struct CompositeValidator
 {
-    pub fn new(profile_validator: P, signature_validator: S) -> Self
-        { Self{ profile_validator: profile_validator, signature_validator: signature_validator } }
+    profile_validator:      Box<ProfileValidator>,
+    signature_validator:    Box<SignatureValidator>,
 }
 
-impl<P: ProfileValidator, S: SignatureValidator> Validator for CompositeValidator<P,S>
+impl CompositeValidator
+{
+    pub fn compose(profile_validator: Box<ProfileValidator>, signature_validator: Box<SignatureValidator>) -> Self
+        { Self{ profile_validator, signature_validator } }
+}
+
+impl ProfileValidator for CompositeValidator
 {
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
         -> Result<bool, ErrorToBeSpecified>
     { self.profile_validator.validate_profile(public_key, profile_id) }
+}
 
+impl SignatureValidator for CompositeValidator
+{
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
         -> Result<bool, ErrorToBeSpecified>
     { self.signature_validator.validate_signature(public_key, data, signature) }
 }
 
-
-
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct PrivateKey(pub Vec<u8>);
-
-
+impl Validator for CompositeValidator {}
 
 pub struct Ed25519Signer
 {
@@ -88,9 +98,9 @@ impl Signer for Ed25519Signer
 
 pub struct Ed25519Validator {}
 
-impl Ed25519Validator
+impl Default for Ed25519Validator
 {
-    pub fn new() -> Self { Self{} }
+    fn default() -> Self { Self {} }
 }
 
 impl SignatureValidator for Ed25519Validator
@@ -110,12 +120,11 @@ impl SignatureValidator for Ed25519Validator
     }
 }
 
-
 pub struct MultiHashProfileValidator {}
 
-impl MultiHashProfileValidator
+impl Default for MultiHashProfileValidator
 {
-    pub fn new() -> Self { Self{} }
+    fn default() -> Self { Self{} }
 }
 
 impl ProfileValidator for MultiHashProfileValidator
@@ -130,6 +139,49 @@ impl ProfileValidator for MultiHashProfileValidator
             .map_err(|e| ErrorToBeSpecified::TODO(e.description().to_owned()))?;
         Ok(key_hash == profile_id.0)
     }
+}
+
+impl<'a> From<ed25519_dalek::SecretKey> for PrivateKey {
+    fn from(secret_key: ed25519_dalek::SecretKey) -> Self {
+        PrivateKey(secret_key.to_bytes().to_vec())
+    }
+}
+
+impl<'a> From<ed25519_dalek::PublicKey> for PublicKey {
+    fn from(public_key: ed25519_dalek::PublicKey) -> Self {
+        PublicKey(public_key.to_bytes().to_vec())
+    }
+}
+
+impl<'a> From<&'a PublicKey> for ProfileId {
+    fn from(public_key: &'a PublicKey) -> Self {
+        let hash = multihash::encode( multihash::Hash::Keccak256, public_key.0.as_slice() );
+        match hash {
+            Ok(hash) => ProfileId(hash),
+            Err(e) => panic!("TODO: This should never happen. Error: {}", e),
+        }
+    }
+}
+
+pub fn generate_keypair() -> (PrivateKey, PublicKey) {
+    let mut csprng: OsRng = OsRng::new().unwrap();
+    let secret_key = ed25519_dalek::SecretKey::generate(&mut csprng);
+    let public_key = ed25519_dalek::PublicKey::from_secret::<Sha512>(&secret_key);
+    (PrivateKey::from(secret_key), PublicKey::from(public_key))
+}
+
+pub fn generate_profile(facet: ::ProfileFacet) -> (Profile, Ed25519Signer) {
+    let (private_key, public_key) = generate_keypair();
+
+    let signer = Ed25519Signer::new(&private_key, &public_key).expect("TODO: this should not be able to fail");
+
+    let profile = Profile {
+        id: ProfileId::from(&public_key),
+        pub_key: public_key,
+        facets: vec![facet],
+    };
+
+    (profile, signer)
 }
 
 
