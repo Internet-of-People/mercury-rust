@@ -68,37 +68,52 @@ pub trait Signer
 
 pub trait Validator: ProfileValidator + SignatureValidator
 {
-    fn validate_relation_proof(&self, relation_proof: &RelationProof, profile1: &Profile, profile2: &Profile) -> Result<(), ErrorToBeSpecified> {
+    fn validate_half_proof(&self, half_proof: &RelationHalfProof, signer_public_key: &PublicKey) -> Result<(), ErrorToBeSpecified> {
+        let signable_part = RelationSignablePart {
+            relation_type: half_proof.relation_type.clone(),
+            signer_id: half_proof.signer_id.clone(),
+            peer_id: half_proof.peer_id.clone(),
+        };
+
+        self.validate_signature(signer_public_key, &signable_part.serialized(), &half_proof.signature)?;
+        Ok(())
+    }
+
+    fn validate_relation_proof(
+        &self,
+        relation_proof: &RelationProof,
+        id_1: &ProfileId,
+        public_key_1: &PublicKey,
+        id_2: &ProfileId,
+        public_key_2: &PublicKey
+    ) -> Result<(), ErrorToBeSpecified> {
 
         let signable_a = RelationSignablePart {
             relation_type: relation_proof.relation_type.clone(),
             signer_id: relation_proof.a_id.clone(),
             peer_id: relation_proof.b_id.clone(),
-        };
-        let signable_a_serialized = serialize(&signable_a).unwrap();
-        // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
-        //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
-        //      But anyway this serialization will be swapped with something that in the first place cannot fail at all.
+        }.serialized();
+
         let signable_b = RelationSignablePart {
             relation_type: relation_proof.relation_type.clone(),
             signer_id: relation_proof.b_id.clone(),
             peer_id: relation_proof.a_id.clone(),
-        };
-        let signable_b_serialized = serialize(&signable_b).unwrap();
+        }.serialized();
         // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
         //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
         //      But anyway this serialization will be swapped with something that in the first place cannot fail at all.
 
-        // TODO check if profile2.id is in relation_proof first, and if not, return an error indicating that instead of
-        //      a signature error.
-        if *relation_proof.peer_id(&profile1.id)? == relation_proof.b_id {
-            // profile1 is 'a'
-            self.validate_signature(&profile1.pub_key, &signable_a_serialized, &relation_proof.a_signature)?;
-            self.validate_signature(&profile2.pub_key, &signable_b_serialized, &relation_proof.b_signature)?;
+        let peer_of_id_1 = relation_proof.peer_id(&id_1)?;
+        if peer_of_id_1 != id_2 {return Err(ErrorToBeSpecified::TODO("The relation does not contain both id_1 and id_2".to_owned()));}
+
+        if *peer_of_id_1 == relation_proof.b_id {
+            // id_1 is 'proof.id_a'
+            self.validate_signature(&public_key_1, &signable_a, &relation_proof.a_signature)?;
+            self.validate_signature(&public_key_2, &signable_b, &relation_proof.b_signature)?;
         } else {
-            // profile1 is 'b'
-            self.validate_signature(&profile1.pub_key, &signable_b_serialized, &relation_proof.b_signature)?;
-            self.validate_signature(&profile2.pub_key, &signable_a_serialized, &relation_proof.a_signature)?;
+            // id_1 is 'proof.id_b'
+            self.validate_signature(&public_key_1, &signable_b, &relation_proof.b_signature)?;
+            self.validate_signature(&public_key_2, &signable_a, &relation_proof.a_signature)?;
         }
 
         Ok(())
@@ -257,6 +272,15 @@ pub struct RelationSignablePart {
     pub peer_id: ProfileId,
 }
 
+impl RelationSignablePart {
+    fn serialized(&self) -> Vec<u8> {
+        // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
+        //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
+        //      But still, to be on the safe side, this serialization shoule be swapped later with a call that cannot fail.
+        Vec::from(serialize(self).unwrap())
+    }
+}
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct RelationHalfProof
 {
@@ -283,17 +307,6 @@ impl RelationHalfProof
             peer_id: signable_part.peer_id,
             signature: signature,
         }
-    }
-
-    pub fn validate(&self, validator: Rc<Validator>, public_key: &PublicKey) -> Result<(), ErrorToBeSpecified> {
-        let signable_part = RelationSignablePart {
-            relation_type: self.relation_type.clone(),
-            signer_id: self.signer_id.clone(),
-            peer_id: self.peer_id.clone(),
-        };
-
-        validator.validate_signature(public_key, &serialize(&signable_part).unwrap(), &self.signature)?;
-        Ok(())
     }
 }
 
@@ -437,20 +450,21 @@ pub trait Home: ProfileRepo
     //
     //              However, the `profile` parameter increases learning curve for the API by a small amount.
     //              Newcomers might raise (stupid, but without prior knowledge, reasonable) questions like these:
-    //               * Why do I need to specify my ProfileId if it was already specified during authentication?
+    //               * Why do I need to specify my ProfileId if I am already authenticated?
     //               * Why do I need to specify my ProfileId if it can be calculated from my public key I just used?
     //               * If this is a login, and we provide the credential, where is the password?
     //
     //              Since we would like to provide the most simple api possible, my suggestion is to rename
     //              this function to `start_session(&self)` and remove the ProfileId parameter.
+    //              The same applies to `claim(&self)`.
 
-    // NOTE this closes all previous sessions of the same profile
+    /// By calling this method, any active session of the same profile is closed.
     fn login(&self, profile: ProfileId) ->
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >;
 
-
-    // NOTE acceptor must have this server as its home
-    // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
+    /// The peer in `half_proof` must be hosted on this home server.
+    /// Returns Error if the peer is not hosted on this home server or an empty result if it is.
+    /// Note that the peer will directly invoke `pair_response` on the initiator's home server and call pair_response to send PairingResponse event
     fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
