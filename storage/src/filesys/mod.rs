@@ -64,20 +64,37 @@ impl AsyncFileHandler{
             File::create(self.get_path(file_path))          //Future<File, io::error>
                 .or_else(|e| {
                     tx.send(
-                        Arc::new(Err(StorageError::StringError(String::from("File couldn't be created")))) 
-                    )                                       //Result<(), Arc<Result<(), StorageError>>>
+                        Arc::new(Err(StorageError::StringError(String::from("File couldn't be created"))))
+                    );                                       //Result<(), Arc<Result<(), StorageError>>>
+                    future::err(StorageError::StringError(String::from("File couldn't be created"))) 
                 })
                 .and_then(move |file|{
                     write_all(file, content.as_bytes())     //Future<(tokio_fs::File, &[u8]), io::Error>
-                        // .map(|written| {
-                            // tx.send(Arc::new(Ok(())))    //Result<(), Arc<Result<(), StorageError>>>
+                        .map_err(|e|StorageError::StringError(String::from("whatevet")))
+                        // .and_then(|written| {
+                        //     tx.send(Arc::new(Ok(())));    //Result<(), Arc<Result<(), StorageError>>>
+                        //     future::ok(())
                         // } )
-                        // .map_err(|e| {
-                            // tx.send(
-                            //     Arc::new(Err(StorageError::StringError(String::from("File couldn't be created"))))
-                            // )                            //Result<(), Arc<Result<(), StorageError>>>
+                        // .or_else(|e| {
+                        //     tx.send(
+                        //         Arc::new(Err(StorageError::StringError(String::from("File couldn't be created"))))
+                        //     );                            //Result<(), Arc<Result<(), StorageError>>>
+                        //     future::err(())
                         // } )
-                })       
+                }) 
+                .and_then(|written| {
+                    tx.send(Arc::new(Ok(())));    //Result<(), Arc<Result<(), StorageError>>>
+                    future::ok(())
+                } )
+                .or_else(|e| {
+                    tx.send(
+                        Arc::new(Err(StorageError::StringError(String::from("File couldn't be created"))))
+                    );                                       //Result<(), Arc<Result<(), StorageError>>>
+                    future::err(()) 
+                })
+                .then(|_|
+                 future::ok(())       
+                )
         );
         Box::new(
             rx                                              //Receiver< Arc<Result<(), StorageError>>>
@@ -93,7 +110,7 @@ impl AsyncFileHandler{
         //(Sender<Arc<Result<String, error::StorageError>>>, 
         //Receiver<Arc<Result<String, error::StorageError>>>)
         if !Path::new(&self.get_path(file_path.clone())).exists(){
-            return Box::new(Arc::new(future::err(StorageError::InvalidKey)));
+            return Box::new(future::err(Arc::new(StorageError::InvalidKey)));
         }
         let mut buffer = Vec::new();
         self.pool.spawn({        
@@ -133,7 +150,7 @@ impl AsyncFileHandler{
         Box::new(
             rx                                          //Receiver<Arc<Result<String, error::StorageError>>>
                 .map_err(|e|Arc::new(StorageError::InvalidKey))
-                .and_then(|file|Arc::new(file))
+                .and_then(|file|future::ok(file))
             )
             //read_from_file should return type : Box< Future< Item = String, Error = Arc<StorageError>> >
     }
