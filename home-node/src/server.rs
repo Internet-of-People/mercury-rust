@@ -80,13 +80,13 @@ impl HomeConnectionServer
     }
 
 
-    fn get_live_session(&self, to_profile: ProfileId)
+    fn get_live_session(server: Rc<HomeServer>, to_profile: ProfileId)
         -> Box< Future<Item=Option<Rc<HomeSessionServer>>, Error=ErrorToBeSpecified> >
     {
-        let sessions_clone = self.server.sessions.clone();
+        let sessions_clone = server.sessions.clone();
 
         // Check if this profile is hosted on this server
-        let session_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone() )
+        let session_fut = server.hosted_profile_db.borrow().get( to_profile.clone() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             .and_then( move |_profile_data|
             {
@@ -103,10 +103,10 @@ impl HomeConnectionServer
     }
 
 
-    fn push_event(&self, to_profile: ProfileId, event: ProfileEvent)
+    fn push_event(server: Rc<HomeServer>, to_profile: ProfileId, event: ProfileEvent)
         -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        let push_fut = self.get_live_session(to_profile)
+        let push_fut = Self::get_live_session(server, to_profile)
             .and_then( |session_rc_opt|
             {
                 match session_rc_opt
@@ -123,10 +123,10 @@ impl HomeConnectionServer
     }
 
 
-    fn push_call(&self, to_profile: ProfileId, to_app: ApplicationId, call: Box<IncomingCall>)
+    fn push_call(server: Rc<HomeServer>, to_profile: ProfileId, to_app: ApplicationId, call: Box<IncomingCall>)
         -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        let push_fut = self.get_live_session(to_profile)
+        let push_fut = Self::get_live_session(server, to_profile)
             .and_then( |session_rc_opt|
             {
                 match session_rc_opt
@@ -288,7 +288,7 @@ impl Home for HomeConnectionServer
 //            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different public key".to_owned() )) ) ) }
 
         let to_profile = half_proof.peer_id.clone();
-        self.push_event( to_profile, ProfileEvent::PairingRequest(half_proof) )
+        Self::push_event(self.server.clone(), to_profile, ProfileEvent::PairingRequest(half_proof) )
     }
 
 
@@ -306,7 +306,7 @@ impl Home for HomeConnectionServer
             Ok(profile_id) => profile_id.to_owned(),
             Err(e) => return Box::new( future::err(e) )
         };
-        self.push_event( to_profile, ProfileEvent::PairingResponse(relation) )
+        Self::push_event(self.server.clone(), to_profile, ProfileEvent::PairingResponse(relation))
     }
 
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
@@ -324,7 +324,7 @@ impl Home for HomeConnectionServer
         let (send, recv) = oneshot::channel();
         let call = Box::new( Call::new(call_req, send) );
         let handle = self.server.handle.clone();
-        let answer_fut = self.push_call(to_profile, app, call)
+        let answer_fut = Self::push_call(self.server.clone(), to_profile, app, call)
             .and_then( move |_void|
             {
                 let answer_fut = recv
