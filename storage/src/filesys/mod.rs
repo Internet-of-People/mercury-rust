@@ -57,58 +57,73 @@ impl AsyncFileHandler{
     pub fn write_to_file(&self, file_path : String, content : String) 
     -> Box< Future< Item = (), Error = Arc<StorageError> > >{
         let (tx, rx) = oneshot::channel::<Arc<Result<(), StorageError>>>();
-        self.pool.spawn(    
-            // let mut file_fut = 
-            File::create(self.get_path(file_path))
+        //(futures::Sender<std::sync::Arc<std::result::Result<(), error::StorageError>>>, 
+        //futures::Receiver<std::sync::Arc<std::result::Result<(), error::StorageError>>>)
+        self.pool.spawn(    //no return value //pub fn spawn<F>(&self, future: F) 
+                                              //where F: Future<Item = (), Error = ()> + Send + 'static,
+            File::create(self.get_path(file_path))          //Future<File, io::error>
                 .or_else(|e| {
-                    tx.send(Arc::new(Err(StorageError::StringError(String::from("File couldn't be created")))) );
-                    Ok(())
+                    tx.send(
+                        Arc::new(Err(StorageError::StringError(String::from("File couldn't be created")))) 
+                    )                                       //Result<(), Arc<Result<(), StorageError>>>
                 })
-                // .and_then(move |file|{
-                //     write_all(file, content.as_bytes())
-                //         // .map(|written| {
-                //         //     tx.send(Arc::new(Ok(())))
-                //         //     // future::ok(())
-                //         // } )
-                //         // .map_err(|e| {
-                //         //     tx.send(Arc::new(Err(StorageError::StringError(String::from("File couldn't be created")))))
-                //         //     // future::err(())
-                //         // } )
-                // })       
-                // .map(|_|())
+                .and_then(move |file|{
+                    write_all(file, content.as_bytes())     //Future<(tokio_fs::File, &[u8]), io::Error>
+                        // .map(|written| {
+                            // tx.send(Arc::new(Ok(())))    //Result<(), Arc<Result<(), StorageError>>>
+                        // } )
+                        // .map_err(|e| {
+                            // tx.send(
+                            //     Arc::new(Err(StorageError::StringError(String::from("File couldn't be created"))))
+                            // )                            //Result<(), Arc<Result<(), StorageError>>>
+                        // } )
+                })       
         );
         Box::new(
-            rx.map(|_|()).map_err(|e|Arc::new(StorageError::Other(Box::new(e))  ) )
+            rx                                              //Receiver< Arc<Result<(), StorageError>>>
+                .map(|_|())
+                .map_err(|e|Arc::new(StorageError::Other(Box::new(e))  ) )
         )
+        //write_to_file should return type : Box< Future< Item = (), Error = Arc<StorageError> > >
     }
 
     pub fn read_from_file(&self, file_path : String) 
-    -> Box< Future< Item = String, Error = StorageError> > {
-        let (tx, rx) = oneshot::channel::<Result<String,StorageError>>();
+    -> Box< Future< Item = String, Error = Arc<StorageError> > > {
+        let (tx, rx) = oneshot::channel::<Arc<Result<String,StorageError>>>();
+        //(Sender<Arc<Result<String, error::StorageError>>>, 
+        //Receiver<Arc<Result<String, error::StorageError>>>)
         if !Path::new(&self.get_path(file_path.clone())).exists(){
-            return Box::new(future::err(StorageError::InvalidKey));
+            return Box::new(Arc::new(future::err(StorageError::InvalidKey)));
         }
         let mut buffer = Vec::new();
         self.pool.spawn({        
-            File::open(self.get_path(file_path))
+            File::open(self.get_path(file_path))        //Future<File, io::error>
                 .or_else(|e|{
-                    tx.send(Err(StorageError::StringError(String::from("File couldn't be created"))) );
+                    tx.send(
+                        Arc::new(Err(StorageError::StringError(String::from("File couldn't be created"))))
+                    );                                  //Result<(), Arc<Result<String, error::StorageError>>>
                     future::err(())
                 })
                 .and_then(|mut file|{
-                    read_to_end(file , buffer)
+                    read_to_end(file , buffer)          //Future<(tokio_fs::File, Vec<u8>), io::Error>
                         .or_else(|e|{
-                            tx.send(Err(StorageError::StringError(String::from("File couldn't be created"))));
+                            tx.send(
+                                Arc::new(Err(StorageError::StringError(String::from("File couldn't be created"))))
+                            );                          //Result<(), Arc<Result<String, error::StorageError>>>
                             future::err(())
                         } )
                         .and_then(move |_|{
                             match String::from_utf8(buffer){
                                 Ok(content)=>{
-                                    tx.send(Ok(content));
+                                    tx.send(
+                                        Arc::new(Ok(content))
+                                    );                  //Result<(), Arc<Result<String, error::StorageError>>>
                                     future::ok(())
                                 }
                                 Err(e)=>{
-                                    tx.send(Err(StorageError::StringError(String::from("File couldn't be created"))));
+                                    tx.send(
+                                        Arc::new(Err(StorageError::StringError(String::from("File couldn't be created"))))
+                                    );                  //Result<(), Arc<Result<String, error::StorageError>>>
                                     future::err(())
                                 }
                             }
@@ -116,8 +131,11 @@ impl AsyncFileHandler{
                 })
         });
         Box::new(
-            rx.map_err(|e|Err(StorageError::InvalidKey) )
-        )
+            rx                                          //Receiver<Arc<Result<String, error::StorageError>>>
+                .map_err(|e|Arc::new(StorageError::InvalidKey))
+                .and_then(|file|Arc::new(file))
+            )
+            //read_from_file should return type : Box< Future< Item = String, Error = Arc<StorageError>> >
     }
 
     pub fn get_path(&self, file_path: String)
@@ -131,13 +149,12 @@ impl AsyncFileHandler{
 impl KeyValueStore<String, String> for AsyncFileHandler{
     fn set(&mut self, key: String, value: String)
     -> Box< Future<Item=(), Error=StorageError> >{
-        self.write_to_file(key, value)   
+        Box::new(self.write_to_file(key, value).map_err(|e|StorageError::OutOfDiskSpace ) )    
     }
 
     fn get(&self, key: String)
     -> Box< Future<Item=String, Error=StorageError> >{
-        self.read_from_file(key)
-        // Box::new(self.read_from_file(key).map_err(|e|StorageError::InvalidKey))
+        Box::new(self.read_from_file(key).map_err(|e|StorageError::InvalidKey ) )
     }
 }
 
