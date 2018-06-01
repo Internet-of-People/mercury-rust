@@ -180,7 +180,7 @@ mod test{
 
             let validator = CompositeValidator::default();
 
-            assert_eq!(validator.validate_relation_proof(&home_proof, &home_profile, &profile), Ok(()));
+            assert_eq!(validator.validate_relation_proof(&home_proof, &home_profile.id, &home_profile.pub_key, &profile.id, &profile.pub_key), Ok(()));
         } else {
             assert!(false);
         }

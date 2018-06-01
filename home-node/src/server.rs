@@ -79,14 +79,15 @@ impl HomeConnectionServer
         Ok( Self{ context: context, server: server } )
     }
 
-
-    fn get_live_session(&self, to_profile: ProfileId)
+    /// Returns Error if the profile is not hosted on this home server
+    /// Returns None if the profile is not online
+    fn get_live_session(server: Rc<HomeServer>, to_profile: ProfileId)
         -> Box< Future<Item=Option<Rc<HomeSessionServer>>, Error=ErrorToBeSpecified> >
     {
-        let sessions_clone = self.server.sessions.clone();
+        let sessions_clone = server.sessions.clone();
 
         // Check if this profile is hosted on this server
-        let session_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone() )
+        let session_fut = server.hosted_profile_db.borrow().get( to_profile.clone() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             .and_then( move |_profile_data|
             {
@@ -103,10 +104,10 @@ impl HomeConnectionServer
     }
 
 
-    fn push_event(&self, to_profile: ProfileId, event: ProfileEvent)
+    fn push_event(server: Rc<HomeServer>, to_profile: ProfileId, event: ProfileEvent)
         -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        let push_fut = self.get_live_session(to_profile)
+        let push_fut = Self::get_live_session(server, to_profile)
             .and_then( |session_rc_opt|
             {
                 match session_rc_opt
@@ -123,10 +124,10 @@ impl HomeConnectionServer
     }
 
 
-    fn push_call(&self, to_profile: ProfileId, to_app: ApplicationId, call: Box<IncomingCall>)
+    fn push_call(server: Rc<HomeServer>, to_profile: ProfileId, to_app: ApplicationId, call: Box<IncomingCall>)
         -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        let push_fut = self.get_live_session(to_profile)
+        let push_fut = Self::get_live_session(server, to_profile)
             .and_then( |session_rc_opt|
             {
                 match session_rc_opt
@@ -166,7 +167,6 @@ impl ProfileRepo for HomeConnectionServer
         Box::new(profile_fut)
     }
 
-    // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
     fn resolve(&self, url: &str) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
@@ -191,7 +191,6 @@ impl Home for HomeConnectionServer
     }
 
 
-    // TODO consider how to issue and process invites
     fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, _invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
@@ -200,9 +199,6 @@ impl Home for HomeConnectionServer
 
         if own_prof.profile.pub_key != *self.context.peer_pubkey()
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different public key".to_owned() )) ) ) }
-
-        if half_proof.validate(self.server.validator.clone(), self.context.peer_pubkey()).is_err()
-            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register(): access denied: invalid signature in half_proof".to_owned())))); }
 
         if half_proof.signer_id != *self.context.peer_id()
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the authenticated profile id does not match the signer id in the half_proof".to_owned() )) ) )}
@@ -213,10 +209,12 @@ impl Home for HomeConnectionServer
         if half_proof.relation_type != "home"
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the requested relation type should be 'home'".to_owned() )) ) )}
 
+        if self.server.validator.validate_half_proof(&half_proof, &self.context.peer_pubkey()).is_err()
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register(): access denied: invalid signature in half_proof".to_owned())))); }
+
         let own_prof_original = own_prof.clone();
         let error_mapper = |e: StorageError| ( own_prof_original, ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         let error_mapper_clone = error_mapper.clone();
-
 
         let home_proof = RelationProof::sign_halfproof(half_proof, self.context.my_signer());
 
@@ -251,7 +249,6 @@ impl Home for HomeConnectionServer
         Box::new(reg_fut)
     }
 
-
     fn login(&self, profile_id: ProfileId) ->
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
@@ -275,57 +272,82 @@ impl Home for HomeConnectionServer
     }
 
 
-    // NOTE acceptor must have this server as its home
     fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         if half_proof.signer_id != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
-        // TODO validate halfproof signature
-        let lez_should_implement_halfproof_validation_here = true;
-//        let data = b""; // TODO halfproof must be serialized here
-//        self.server.validator.validate_signature( self.context.peer_pubkey(), data, half_proof.my_sign );
-//            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different public key".to_owned() )) ) ) }
+        if self.server.validator.validate_half_proof(&half_proof, &self.context.peer_pubkey()).is_err()
+            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different public key".to_owned() )) ) }
 
         let to_profile = half_proof.peer_id.clone();
-        self.push_event( to_profile, ProfileEvent::PairingRequest(half_proof) )
+        Self::push_event(self.server.clone(), to_profile, ProfileEvent::PairingRequest(half_proof) )
     }
 
 
-    // NOTE acceptor must have this server as its home
     fn pair_response(&self, relation: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        // TODO validate sender profile id and both signatures
-        let lez_should_implement_relation_validation_here = true;
-//        if proof.wtf? != *self.context.peer_id()
-//            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_response() access denied: you authenticated with a different profile".to_owned() ) ) ) }
-
         let to_profile = match relation.peer_id( self.context.peer_id() )
         {
             Ok(profile_id) => profile_id.to_owned(),
-            Err(e) => return Box::new( future::err(e) )
+            Err(_) => return Box::new(future::err(ErrorToBeSpecified::TODO(
+                "pair_response: access denied: the profile id that you authenticated with does not show up in the relation_proof".to_owned())))
         };
-        self.push_event( to_profile, ProfileEvent::PairingResponse(relation) )
+
+        let server_clone = self.server.clone();
+        let server_clone2 = self.server.clone();
+        let peer_id_clone = self.context.peer_id().clone();
+        let peer_pubkey_clone = self.context.peer_pubkey().clone();
+        let relation_clone = relation.clone();
+
+        // We need to look up the public key to be able to validate the proof
+        let fut = self.server.hosted_profile_db.borrow().get(to_profile.clone())
+            .map_err(|_| ErrorToBeSpecified::TODO("pair_response: The other party in the relation is not hosted on this home server".to_owned()))
+            .and_then(move |profile_data|
+            {
+                server_clone.validator.validate_relation_proof(
+                    &relation, &peer_id_clone, &peer_pubkey_clone,
+                    &profile_data.profile.id, &profile_data.profile.pub_key
+                )
+            })
+            .map_err(|_| ErrorToBeSpecified::TODO("pair_response: Invalid relation proof".to_owned()))
+            .and_then(|_| Self::push_event(server_clone2, to_profile, ProfileEvent::PairingResponse(relation_clone)));
+
+        Box::new(fut)
     }
 
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
-        // TODO validate sender profile id and both signatures
-        let lez_should_implement_relation_validation_here = true;
-
         let to_profile = match call_req.relation.peer_id( self.context.peer_id() )
         {
             Ok(profile_id) => profile_id.to_owned(),
-            Err(e) => return Box::new( future::err(e) )
+            Err(e) => return Box::new( future::err(ErrorToBeSpecified::TODO(
+                "pair_response: access denied: the profile id that you authenticated with does not show up in the call_req.relation".to_owned())) )
         };
 
+        let server_clone = self.server.clone();
+        let server_clone2 = self.server.clone();
+        let peer_id_clone = self.context.peer_id().clone();
+        let peer_pubkey_clone = self.context.peer_pubkey().clone();
+        let relation = call_req.relation.clone();
         let (send, recv) = oneshot::channel();
         let call = Box::new( Call::new(call_req, send) );
         let handle = self.server.handle.clone();
-        let answer_fut = self.push_call(to_profile, app, call)
+
+        let answer_fut = self.server.hosted_profile_db.borrow().get(to_profile.clone())
+            .map_err(|_| ErrorToBeSpecified::TODO("pair_response: The other party in the relation is not hosted on this home server".to_owned()))
+            .and_then(move |profile_data|
+            {
+                server_clone.validator.validate_relation_proof(
+                    &relation, &peer_id_clone, &peer_pubkey_clone,
+                    &profile_data.profile.id, &profile_data.profile.pub_key
+                )
+            })
+            .map_err(|_| ErrorToBeSpecified::TODO("pair_response: Invalid relation proof".to_owned()))
+            .and_then(|_| Self::push_call(server_clone2, to_profile, app, call))
             .and_then( move |_void|
             {
                 let answer_fut = recv
