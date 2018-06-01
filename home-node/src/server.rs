@@ -278,11 +278,8 @@ impl Home for HomeConnectionServer
         if half_proof.signer_id != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
-        // TODO validate halfproof signature
-        let lez_should_implement_halfproof_validation_here = true;
-//        let data = b""; // TODO halfproof must be serialized here
-//        self.server.validator.validate_signature( self.context.peer_pubkey(), data, half_proof.my_sign );
-//            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different public key".to_owned() )) ) ) }
+        if self.server.validator.validate_half_proof(&half_proof, &self.context.peer_pubkey()).is_err()
+            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_request() access denied: you authenticated with a different public key".to_owned() )) ) }
 
         let to_profile = half_proof.peer_id.clone();
         Self::push_event(self.server.clone(), to_profile, ProfileEvent::PairingRequest(half_proof) )
@@ -292,35 +289,65 @@ impl Home for HomeConnectionServer
     fn pair_response(&self, relation: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        // TODO validate sender profile id and both signatures
-        let lez_should_implement_relation_validation_here = true;
-//        if proof.wtf? != *self.context.peer_id()
-//            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Pair_response() access denied: you authenticated with a different profile".to_owned() ) ) ) }
-
         let to_profile = match relation.peer_id( self.context.peer_id() )
         {
             Ok(profile_id) => profile_id.to_owned(),
-            Err(e) => return Box::new( future::err(e) )
+            Err(_) => return Box::new(future::err(ErrorToBeSpecified::TODO(
+                "pair_response: access denied: the profile id that you authenticated with does not show up in the relation_proof".to_owned())))
         };
-        Self::push_event(self.server.clone(), to_profile, ProfileEvent::PairingResponse(relation))
+
+        let server_clone = self.server.clone();
+        let server_clone2 = self.server.clone();
+        let peer_id_clone = self.context.peer_id().clone();
+        let peer_pubkey_clone = self.context.peer_pubkey().clone();
+        let relation_clone = relation.clone();
+
+        // We need to look up the public key to be able to validate the proof
+        let fut = self.server.hosted_profile_db.borrow().get(to_profile.clone())
+            .map_err(|_| ErrorToBeSpecified::TODO("pair_response: The other party in the relation is not hosted on this home server".to_owned()))
+            .and_then(move |profile_data|
+            {
+                server_clone.validator.validate_relation_proof(
+                    &relation, &peer_id_clone, &peer_pubkey_clone,
+                    &profile_data.profile.id, &profile_data.profile.pub_key
+                )
+            })
+            .map_err(|_| ErrorToBeSpecified::TODO("pair_response: Invalid relation proof".to_owned()))
+            .and_then(|_| Self::push_event(server_clone2, to_profile, ProfileEvent::PairingResponse(relation_clone)));
+
+        Box::new(fut)
     }
 
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
-        // TODO validate sender profile id and both signatures
-        let lez_should_implement_relation_validation_here = true;
-
         let to_profile = match call_req.relation.peer_id( self.context.peer_id() )
         {
             Ok(profile_id) => profile_id.to_owned(),
-            Err(e) => return Box::new( future::err(e) )
+            Err(e) => return Box::new( future::err(ErrorToBeSpecified::TODO(
+                "pair_response: access denied: the profile id that you authenticated with does not show up in the call_req.relation".to_owned())) )
         };
 
+        let server_clone = self.server.clone();
+        let server_clone2 = self.server.clone();
+        let peer_id_clone = self.context.peer_id().clone();
+        let peer_pubkey_clone = self.context.peer_pubkey().clone();
+        let relation = call_req.relation.clone();
         let (send, recv) = oneshot::channel();
         let call = Box::new( Call::new(call_req, send) );
         let handle = self.server.handle.clone();
-        let answer_fut = Self::push_call(self.server.clone(), to_profile, app, call)
+
+        let answer_fut = self.server.hosted_profile_db.borrow().get(to_profile.clone())
+            .map_err(|_| ErrorToBeSpecified::TODO("pair_response: The other party in the relation is not hosted on this home server".to_owned()))
+            .and_then(move |profile_data|
+            {
+                server_clone.validator.validate_relation_proof(
+                    &relation, &peer_id_clone, &peer_pubkey_clone,
+                    &profile_data.profile.id, &profile_data.profile.pub_key
+                )
+            })
+            .map_err(|_| ErrorToBeSpecified::TODO("pair_response: Invalid relation proof".to_owned()))
+            .and_then(|_| Self::push_call(server_clone2, to_profile, app, call))
             .and_then( move |_void|
             {
                 let answer_fut = recv
