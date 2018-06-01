@@ -20,7 +20,8 @@ use rand::OsRng;
 use sha2::Sha512;
 use tokio_core::reactor;
 
-use mercury_home_protocol::{*, crypto::*};
+use mercury_home_protocol::*;
+use mercury_home_protocol::crypto::*;
 use mercury_home_node::server::HomeServer;
 use mercury_storage::async::imp::InMemoryStore;
 
@@ -42,18 +43,22 @@ pub fn generate_keypair() -> (PrivateKey, PublicKey) {
 }
 
 
-pub fn generate_profile(facet: ProfileFacet) -> (Profile, Ed25519Signer) {
+pub fn generate_ownprofile(facet: ProfileFacet, private_data: Vec<u8>)
+    -> (OwnProfile, Ed25519Signer)
+{
     let (private_key, public_key) = generate_keypair();
-
     let signer = Ed25519Signer::new(&private_key, &public_key).expect("TODO: this should not be able to fail");
+    // TODO why isn't into() working here?
+    let profile = Profile::new( &(&public_key).into(), &public_key, &vec![facet] );
+    //let profile = Profile::new( &ProfileId::from(&public_key), &public_key, vec![facet] );
+    let own_profile = OwnProfile::new(&profile, &private_data);
+    (own_profile, signer)
+}
 
-    let profile = Profile {
-        id: ProfileId::from(&public_key),
-        pub_key: public_key,
-        facets: vec![facet],
-    };
-
-    (profile, signer)
+pub fn generate_profile(facet: ProfileFacet) -> (Profile, Ed25519Signer)
+{
+    let (own_profile, signer) = generate_ownprofile(facet, vec![]);
+    (own_profile.profile, signer)
 }
 
 
