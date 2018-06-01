@@ -450,20 +450,21 @@ pub trait Home: ProfileRepo
     //
     //              However, the `profile` parameter increases learning curve for the API by a small amount.
     //              Newcomers might raise (stupid, but without prior knowledge, reasonable) questions like these:
-    //               * Why do I need to specify my ProfileId if it was already specified during authentication?
+    //               * Why do I need to specify my ProfileId if I am already authenticated?
     //               * Why do I need to specify my ProfileId if it can be calculated from my public key I just used?
     //               * If this is a login, and we provide the credential, where is the password?
     //
     //              Since we would like to provide the most simple api possible, my suggestion is to rename
     //              this function to `start_session(&self)` and remove the ProfileId parameter.
+    //              The same applies to `claim(&self)`.
 
-    // NOTE this closes all previous sessions of the same profile
+    /// By calling this method, any active session of the same profile is closed.
     fn login(&self, profile: ProfileId) ->
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >;
 
-
-    // NOTE acceptor must have this server as its home
-    // NOTE empty result, acceptor will connect initiator's home and call pair_response to send PairingResponse event
+    /// The peer in `half_proof` must be hosted on this home server.
+    /// Returns Error if the peer is not hosted on this home server or an empty result if it is.
+    /// Note that the peer will directly invoke `pair_response` on the initiator's home server and call pair_response to send PairingResponse event
     fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 

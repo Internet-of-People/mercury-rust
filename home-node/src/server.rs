@@ -79,7 +79,8 @@ impl HomeConnectionServer
         Ok( Self{ context: context, server: server } )
     }
 
-
+    /// Returns Error if the profile is not hosted on this home server
+    /// Returns None if the profile is not online
     fn get_live_session(server: Rc<HomeServer>, to_profile: ProfileId)
         -> Box< Future<Item=Option<Rc<HomeSessionServer>>, Error=ErrorToBeSpecified> >
     {
@@ -166,7 +167,6 @@ impl ProfileRepo for HomeConnectionServer
         Box::new(profile_fut)
     }
 
-    // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
     fn resolve(&self, url: &str) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
@@ -191,7 +191,6 @@ impl Home for HomeConnectionServer
     }
 
 
-    // TODO consider how to issue and process invites
     fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, _invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
     {
@@ -250,7 +249,6 @@ impl Home for HomeConnectionServer
         Box::new(reg_fut)
     }
 
-
     fn login(&self, profile_id: ProfileId) ->
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
@@ -274,7 +272,6 @@ impl Home for HomeConnectionServer
     }
 
 
-    // NOTE acceptor must have this server as its home
     fn pair_request(&self, half_proof: RelationHalfProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
@@ -292,7 +289,6 @@ impl Home for HomeConnectionServer
     }
 
 
-    // NOTE acceptor must have this server as its home
     fn pair_response(&self, relation: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
