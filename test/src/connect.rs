@@ -98,13 +98,6 @@ fn test_register(){
         Rc::new(home_server),
     ).unwrap();
 
-    // initiate registration
-//    let signable_part = RelationSignablePart {
-//        relation_type: "home".to_owned(),
-//        signer_id: profile.id.clone(),
-//        peer_id: home_profile.id.clone(),
-//    };
-//    let half_proof = RelationHalfProof::from_signable_part(signable_part, signer);
     let half_proof = RelationHalfProof::new("home", &home_profile.id, &*signer);
     let ownprofile_returned = home_connection_server.register(
         ownprofile.clone(),
