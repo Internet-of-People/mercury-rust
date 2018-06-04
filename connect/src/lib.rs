@@ -70,7 +70,7 @@ impl HomeContext
 impl PeerContext for HomeContext
 {
     fn my_signer(&self) -> &Signer { &*self.signer }
-    fn peer_pubkey(&self) -> &PublicKey { &self.home_profile.pub_key }
+    fn peer_pubkey(&self) -> &PublicKey { &self.home_profile.public_key }
     fn peer_id(&self) -> &ProfileId { &self.home_profile.id }
 }
 
@@ -175,7 +175,7 @@ impl ProfileGatewayImpl
                     connector: Rc<HomeConnector>, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >
     {
-        let profile_id = signer.prof_id().clone();
+        let profile_id = signer.profile_id().clone();
         let home_ids = profile.facets.iter()
             .flat_map( |facet|
             {
@@ -219,19 +219,6 @@ impl ProfileGatewayImpl
         let result = future::select_ok(home_conn_futs)
             .map( |(home_conn, _pending_conn_futs)| home_conn );
         Box::new(result)
-    }
-
-
-    fn new_half_proof(relation_type: &str, peer_id: &ProfileId, signer: Rc<Signer>) ->
-        RelationHalfProof
-    {
-        let signable_part = RelationSignablePart {
-            relation_type: relation_type.to_owned(),
-            signer_id: signer.prof_id().to_owned(),
-            peer_id: peer_id.to_owned(),
-        };
-
-        RelationHalfProof::from_signable_part(signable_part, signer)
     }
 }
 
@@ -280,7 +267,7 @@ impl ProfileGateway for ProfileGatewayImpl
     {
         let own_prof_clone = own_prof.clone();
         let signer_clone = self.signer.clone();
-        let half_proof = Self::new_half_proof("home", &home_id, signer_clone);
+        let half_proof = RelationHalfProof::new("home", &home_id, &*self.signer);
         let reg_fut = self.connect_home(&home_id)
             .map_err( move |e| (own_prof_clone, e) )
             .and_then( move | home : Rc<RefCell<Home>>| home.borrow_mut().register(own_prof, half_proof, invite) );
@@ -314,8 +301,8 @@ impl ProfileGateway for ProfileGatewayImpl
         let profile_repo_clone = self.profile_repo.clone();
         let home_conn_clone = self.home_connector.clone();
         let signer_clone = self.signer.clone();
-        let prof_id = self.signer.prof_id().clone();
-        let log_fut = self.profile_repo.borrow().load( &self.signer.prof_id() )
+        let prof_id = self.signer.profile_id().clone();
+        let log_fut = self.profile_repo.borrow().load( &self.signer.profile_id() )
             .and_then( move |profile| ProfileGatewayImpl::any_home_of2(
                 &profile, profile_repo_clone, home_conn_clone, signer_clone) )
             .and_then( move |home| home.borrow().login(prof_id) ) ;
@@ -336,7 +323,8 @@ impl ProfileGateway for ProfileGatewayImpl
             .resolve(with_profile_url)
             .and_then( move |profile|
             {
-                let half_proof = ProfileGatewayImpl::new_half_proof(rel_type_clone.as_str(), &profile.id, signer_clone.clone() );
+                //let half_proof = ProfileGatewayImpl::new_half_proof(rel_type_clone.as_str(), &profile.id, signer_clone.clone() );
+                let half_proof = RelationHalfProof::new(&rel_type_clone, &profile.id, &*signer_clone.clone() );
                 ProfileGatewayImpl::any_home_of2(&profile, profile_repo_clone, home_connector_clone, signer_clone)
                     .and_then( move |home| home.borrow_mut().pair_request(half_proof) )
             } );

@@ -80,8 +80,8 @@ impl Ed25519Signer
 
 impl Signer for Ed25519Signer
 {
-    fn prof_id(&self) -> &ProfileId { &self.profile_id }
-    fn pub_key(&self) -> &PublicKey { &self.public_key }
+    fn profile_id(&self) -> &ProfileId { &self.profile_id }
+    fn public_key(&self) -> &PublicKey { &self.public_key }
 
     fn sign(&self, data: &[u8]) -> Signature
     {

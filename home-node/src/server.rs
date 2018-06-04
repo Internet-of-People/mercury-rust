@@ -196,13 +196,13 @@ impl Home for HomeConnectionServer
         if own_prof.profile.id != *self.context.peer_id()
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different profile id".to_owned() )) ) ) }
 
-        if own_prof.profile.pub_key != *self.context.peer_pubkey()
+        if own_prof.profile.public_key != *self.context.peer_pubkey()
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: you authenticated with a different public key".to_owned() )) ) ) }
 
         if half_proof.signer_id != *self.context.peer_id()
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the authenticated profile id does not match the signer id in the half_proof".to_owned() )) ) )}
 
-        if half_proof.peer_id != *self.context.my_signer().prof_id()
+        if half_proof.peer_id != *self.context.my_signer().profile_id()
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the requested home id does not match this home".to_owned() )) ) )}
 
         if half_proof.relation_type != "home"
@@ -215,7 +215,11 @@ impl Home for HomeConnectionServer
         let error_mapper = |e: StorageError| ( own_prof_original, ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         let error_mapper_clone = error_mapper.clone();
 
-        let home_proof = RelationProof::sign_halfproof(half_proof, self.context.my_signer());
+        let home_proof = match RelationProof::sign_remaining_half( &half_proof, self.context.my_signer() )
+        {
+            Err(e) => return Box::new( future::err( (own_prof, e) ) ),
+            Ok(proof) => proof,
+        };
 
         let mut own_prof_modified = own_prof.clone();
         if let ProfileFacet::Persona(ref mut profile_facet) = own_prof_modified.profile.facets[0] {
@@ -308,7 +312,7 @@ impl Home for HomeConnectionServer
             {
                 server_clone.validator.validate_relation_proof(
                     &relation, &peer_id_clone, &peer_pubkey_clone,
-                    &profile_data.profile.id, &profile_data.profile.pub_key
+                    &profile_data.profile.id, &profile_data.profile.public_key
                 )
             })
             .map_err(|_| ErrorToBeSpecified::TODO("pair_response: Invalid relation proof".to_owned()))
@@ -316,6 +320,7 @@ impl Home for HomeConnectionServer
 
         Box::new(fut)
     }
+
 
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
@@ -342,7 +347,7 @@ impl Home for HomeConnectionServer
             {
                 server_clone.validator.validate_relation_proof(
                     &relation, &peer_id_clone, &peer_pubkey_clone,
-                    &profile_data.profile.id, &profile_data.profile.pub_key
+                    &profile_data.profile.id, &profile_data.profile.public_key
                 )
             })
             .map_err(|_| ErrorToBeSpecified::TODO("pair_response: Invalid relation proof".to_owned()))
@@ -467,7 +472,7 @@ impl HomeSession for HomeSessionServer
     {
         if own_prof.profile.id != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Update() access denied: you authenticated with a different profile".to_owned() ) ) ) }
-        if own_prof.profile.pub_key != *self.context.peer_pubkey()
+        if own_prof.profile.public_key != *self.context.peer_pubkey()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Update() access denied: you authenticated with a different public key".to_owned() )) ) }
 
         let upd_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )

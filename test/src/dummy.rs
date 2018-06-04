@@ -293,9 +293,8 @@ impl Home for MyDummyHome
             match facet {
                 &mut ProfileFacet::Persona(ref mut persona) => {
                     let half_proof_clone = half_proof.clone();
-                    let relation_proof = RelationProof::from_halfproof(half_proof_clone, Signature(self.home_profile.pub_key.0.clone()));
-                    
-                    persona.homes.append( &mut vec!(relation_proof ) );
+//                    let relation_proof = RelationProof::from_halfproof(half_proof_clone, Signature(self.home_profile.public_key.0.clone()));
+//                    persona.homes.append( &mut vec!(relation_proof ) );
                     storing = true;
                 },
                 _ => {

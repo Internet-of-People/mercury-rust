@@ -55,8 +55,8 @@ fn test_events()
         {
             let (private_key, public_key) = generate_keypair();
             let signer = Rc::new(Ed25519Signer::new(&private_key, &public_key).unwrap());
-            let my_profile = signer.prof_id().clone();
-            let home_profile = make_home_profile("localhost:9876", signer.pub_key());
+            let my_profile = signer.profile_id().clone();
+            let home_profile = make_home_profile("localhost:9876", signer.public_key());
             let home_ctx = Box::new(HomeContext::new(signer, &home_profile));
             let client = HomeClientCapnProto::new_tcp( tcp_stream, home_ctx, handle2 );
             client.login(my_profile) // TODO maybe we should require only a reference in login()
@@ -89,7 +89,7 @@ fn test_register(){
     let home_server = default_home_server(&setup.handle);
     let client_context = ClientContext::new(
         Rc::new(home_signer),
-        profile.pub_key.clone(),
+        profile.public_key.clone(),
         profile.id.clone(),
     );
 
@@ -99,13 +99,13 @@ fn test_register(){
     ).unwrap();
 
     // initiate registration
-    let signable_part = RelationSignablePart {
-        relation_type: "home".to_owned(),
-        signer_id: profile.id.clone(),
-        peer_id: home_profile.id.clone(),
-    };
-    let half_proof = RelationHalfProof::from_signable_part(signable_part, signer);
-
+//    let signable_part = RelationSignablePart {
+//        relation_type: "home".to_owned(),
+//        signer_id: profile.id.clone(),
+//        peer_id: home_profile.id.clone(),
+//    };
+//    let half_proof = RelationHalfProof::from_signable_part(signable_part, signer);
+    let half_proof = RelationHalfProof::new("home", &home_profile.id, &*signer);
     let ownprofile_returned = home_connection_server.register(
         ownprofile.clone(),
         half_proof,
@@ -117,7 +117,7 @@ fn test_register(){
 
         let validator = CompositeValidator::default();
 
-        assert_eq!(validator.validate_relation_proof(&home_proof, &home_profile.id, &home_profile.pub_key, &profile.id, &profile.pub_key), Ok(()));
+        assert_eq!(validator.validate_relation_proof(&home_proof, &home_profile.id, &home_profile.public_key, &profile.id, &profile.public_key), Ok(()));
     } else {
         assert!(false);
     }
@@ -306,7 +306,7 @@ fn and_then_story(){
     let (request_sender, request_receiver) : (mpsc::Sender<String>, mpsc::Receiver<String>) = mpsc::channel(1);
 
     let sess = own_gateway.register(
-            homesigno.prof_id().to_owned(),
+            homesigno.profile_id().to_owned(),
             dummy::create_ownprofile( profile.clone() ),
             None
     )
@@ -314,7 +314,7 @@ fn and_then_story(){
     .join( reg_receiver.take(1).collect().map_err(|_e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )
     .and_then(|_reg_string|{
         println!("user_one_requests");
-        let f = other_signo.prof_id().0.clone();
+        let f = other_signo.profile_id().0.clone();
         let problem = unsafe{String::from_utf8_unchecked(f)};
         own_gateway.pair_request( "relation_dummy_type", &problem )
     })
@@ -366,7 +366,7 @@ fn and_then_story(){
     let other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
     let home_storage_other = Rc::clone(&home_storage);
 
-    let other_profile = make_own_persona_profile(other_signo.pub_key() );
+    let other_profile = make_own_persona_profile(other_signo.public_key() );
     let other_gateway = ProfileGatewayImpl::new(
         other_signo.clone(),
         home_storage_other,
@@ -375,7 +375,7 @@ fn and_then_story(){
 
     // let mut othersession : Box<HomeSession>;
     let other_reg = other_gateway.register(
-        other_homesigno.prof_id().to_owned(),
+        other_homesigno.profile_id().to_owned(),
         dummy::create_ownprofile( other_profile.clone() ),
         None
     )
@@ -410,12 +410,13 @@ fn and_then_story(){
             let event = &first[0];
             match event{
                 &Ok(ProfileEvent::PairingRequest(ref half_proof))=>{
-                    //TODO should look something like gateway.accept(half_proof)
-                    Box::new(other_gateway.pair_response(
-                            Relation::new(
-                            &other_profile,
-                            &RelationProof::from_halfproof(half_proof.clone(), other_gateway.signer.sign("apples".as_bytes())))
-                    ))
+                    match RelationProof::sign_remaining_half(half_proof, &*other_gateway.signer)
+                    {
+                        Err(e) => panic!("ProfileEvent assert fail"),
+                        Ok(ref proof) => //TODO should look something like gateway.accept(half_proof)
+                            other_gateway.pair_response(
+                                Relation::new(&other_profile, proof) )
+                    }
                 },
                 _=>panic!("ProfileEvent assert fail")
             }
