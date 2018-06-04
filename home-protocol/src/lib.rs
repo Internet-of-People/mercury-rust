@@ -58,9 +58,9 @@ pub trait Seed
 pub trait Signer
 {
     // TODO consider if this is needed here or should only be provided by trait PeerContext?
-    fn prof_id(&self) -> &ProfileId;
+    fn profile_id(&self) -> &ProfileId;
 
-    fn pub_key(&self) -> &PublicKey;
+    fn public_key(&self) -> &PublicKey;
     // NOTE the data to be signed ideally will be the output from Mudlee's multicodec lib
     fn sign(&self, data: &[u8]) -> Signature;
 }
@@ -69,13 +69,8 @@ pub trait Signer
 pub trait Validator: ProfileValidator + SignatureValidator
 {
     fn validate_half_proof(&self, half_proof: &RelationHalfProof, signer_public_key: &PublicKey) -> Result<(), ErrorToBeSpecified> {
-        let signable_part = RelationSignablePart {
-            relation_type: half_proof.relation_type.clone(),
-            signer_id: half_proof.signer_id.clone(),
-            peer_id: half_proof.peer_id.clone(),
-        };
-
-        self.validate_signature(signer_public_key, &signable_part.serialized(), &half_proof.signature)?;
+        self.validate_signature(signer_public_key,
+            &RelationSignablePart::from(half_proof).serialized(), &half_proof.signature)?;
         Ok(())
     }
 
@@ -87,18 +82,18 @@ pub trait Validator: ProfileValidator + SignatureValidator
         id_2: &ProfileId,
         public_key_2: &PublicKey
     ) -> Result<(), ErrorToBeSpecified> {
+        // TODO consider inverting relation_type for different directions
+        let signable_a = RelationSignablePart::new(
+            &relation_proof.relation_type,
+            &relation_proof.a_id,
+            &relation_proof.b_id,
+        ).serialized();
 
-        let signable_a = RelationSignablePart {
-            relation_type: relation_proof.relation_type.clone(),
-            signer_id: relation_proof.a_id.clone(),
-            peer_id: relation_proof.b_id.clone(),
-        }.serialized();
-
-        let signable_b = RelationSignablePart {
-            relation_type: relation_proof.relation_type.clone(),
-            signer_id: relation_proof.b_id.clone(),
-            peer_id: relation_proof.a_id.clone(),
-        }.serialized();
+        let signable_b = RelationSignablePart::new(
+            &relation_proof.relation_type,
+            &relation_proof.b_id,
+            &relation_proof.a_id,
+        ).serialized();
         // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
         //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
         //      But anyway this serialization will be swapped with something that in the first place cannot fail at all.
@@ -173,28 +168,24 @@ pub struct Profile
     pub id:         ProfileId,
 
     /// Public key used for validating the identity of the profile.
-    pub pub_key:    PublicKey,
+    pub public_key: PublicKey,
     pub facets:     Vec<ProfileFacet>, // TODO consider redesigning facet Rust types/storage
     // TODO consider having a signature of the profile data here
 }
 
 impl Profile
 {
-    pub fn new(id: &ProfileId, pub_key: &PublicKey, facets: &[ProfileFacet]) -> Self
-        { Self{ id: id.to_owned(), pub_key: pub_key.to_owned(), facets: facets.to_owned() } }
+    pub fn new(id: &ProfileId, public_key: &PublicKey, facets: &[ProfileFacet]) -> Self
+        { Self{ id: id.to_owned(), public_key: public_key.to_owned(), facets: facets.to_owned() } }
 
-    pub fn new_home(id: ProfileId, pub_key: PublicKey, address: Multiaddr) -> Self {
-
+    pub fn new_home(id: ProfileId, public_key: PublicKey, address: Multiaddr) -> Self
+    {
         let facet = HomeFacet {
             addrs: vec![address],
             data: vec![],
         };
 
-        Self {
-            id,
-            pub_key,
-            facets: vec![ProfileFacet::Home(facet)]
-        }
+        Self { id, public_key, facets: vec![ProfileFacet::Home(facet)] }
     }
 }
 
@@ -264,22 +255,45 @@ impl OwnProfile
         { Self{ profile: profile.clone(), priv_data: private_data.to_owned() } }
 }
 
+
+
+// NOTE the binary blob to be signed is rust-specific: Strings are serialized to a u64 (size) and the encoded string itself.
+// TODO consider if this is platform-agnostic enough, especially when combined with capnproto
 #[derive(Serialize)]
 pub struct RelationSignablePart {
-    // the binary blob to be signed is rust-specific: Strings are serialized to a u64 (size) and the encoded string itself.
     pub relation_type: String,
     pub signer_id: ProfileId,
     pub peer_id: ProfileId,
 }
 
-impl RelationSignablePart {
+impl RelationSignablePart
+{
+    fn new(relation_type: &str, signer_id: &ProfileId, peer_id: &ProfileId) -> Self
+        { Self{ relation_type: relation_type.to_owned(),
+                signer_id: signer_id.to_owned(),
+                peer_id: peer_id.to_owned() } }
+
     fn serialized(&self) -> Vec<u8> {
         // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
         //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
         //      But still, to be on the safe side, this serialization shoule be swapped later with a call that cannot fail.
         Vec::from(serialize(self).unwrap())
     }
+
+    fn sign(&self, signer: &Signer) -> Signature
+        { signer.sign( &self.serialized() ) }
 }
+
+impl<'a> From<&'a RelationHalfProof> for RelationSignablePart {
+    fn from(src: &'a RelationHalfProof) -> Self {
+        RelationSignablePart{
+            relation_type: src.relation_type.clone(),
+            signer_id: src.signer_id.clone(),
+            peer_id: src.peer_id.clone(),
+        }
+    }
+}
+
 
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct RelationHalfProof
@@ -294,19 +308,14 @@ pub struct RelationHalfProof
 impl RelationHalfProof
 {
     // TODO add params and properly initialize
-    pub fn new() -> Self
-        { Self{ relation_type: String::new(), signer_id: ProfileId(Vec::new()),
-                signature: Signature(Vec::new()), peer_id: ProfileId(Vec::new()) } }
-
-    pub fn from_signable_part(signable_part: RelationSignablePart, signer: Rc<Signer>) -> Self {
-        let signature = signer.sign(&serialize(&signable_part).unwrap());  // TODO remove unwrap(), investigate how it can fail
-
-        RelationHalfProof {
-            relation_type: signable_part.relation_type,
-            signer_id: signable_part.signer_id,
-            peer_id: signable_part.peer_id,
-            signature: signature,
-        }
+    pub fn new(relation_type: &str, peer_id: &ProfileId, signer: &Signer) -> Self
+    {
+        let mut result = Self{ relation_type: relation_type.to_owned(),
+                               signer_id: signer.profile_id().to_owned(),
+                               peer_id: peer_id.to_owned(),
+                               signature: Signature( Vec::new() ) };
+        result.signature = RelationSignablePart::from(&result).sign(signer);
+        result
     }
 }
 
@@ -345,21 +354,20 @@ impl RelationProof
         }
     }
 
-    pub fn from_halfproof(half_proof: RelationHalfProof, peer_signature: Signature) -> Self
+    pub fn sign_remaining_half(half_proof: &RelationHalfProof, signer: &Signer)
+        -> Result<Self, ErrorToBeSpecified>
     {
-        Self::new(half_proof.relation_type.as_ref(), &half_proof.signer_id, &half_proof.signature, &half_proof.peer_id, &peer_signature)
-    }
+        let my_profile_id = signer.profile_id().to_owned();
+        if half_proof.peer_id != my_profile_id
+            { return Err(ErrorToBeSpecified::TODO( "RelationHalfProof peer_id is not my ProfileId, refused to sign".to_owned() ) ); }
 
-    pub fn sign_halfproof(half_proof: RelationHalfProof, signer: &Signer) -> Self
-    {
-        let signable_part = RelationSignablePart {
-            relation_type: half_proof.relation_type.clone(),
-            signer_id: half_proof.peer_id.clone(),
-            peer_id: half_proof.signer_id.clone(),
-        };
-        let signable_data = serialize(&signable_part).unwrap();  // TODO change to an implementation that cannot fail
-        let home_signature = signer.sign(&signable_data);
-        Self::from_halfproof(half_proof, home_signature)
+        let signable = RelationSignablePart::new(
+            &half_proof.relation_type,
+            &my_profile_id,
+            &half_proof.signer_id,
+        );
+        Ok( Self::new( &half_proof.relation_type, &half_proof.signer_id, &half_proof.signature,
+                       &my_profile_id, &signable.sign(signer) ) )
     }
 
     pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, ErrorToBeSpecified> {

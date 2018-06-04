@@ -61,7 +61,7 @@ fn main(){
     };
 
     println!("\nRegistering\n");
-    let reg = profilegateway.register(homesigno.prof_id().to_owned(), dummy::create_ownprofile( profile ), None);
+    let reg = profilegateway.register(homesigno.profile_id().to_owned(), dummy::create_ownprofile( profile ), None);
     let ownprofile = reactor.run(reg).unwrap();
     
     println!("\nLogging in\n");

@@ -117,7 +117,7 @@ impl<'a> FillFrom<::Profile> for profile::Builder<'a>
     fn fill_from(mut self, src: &::Profile)
     {
         self.set_id( (&src.id).into() );
-        self.set_public_key( (&src.pub_key).into() );
+        self.set_public_key( (&src.public_key).into() );
         match src.facets.iter().next() {
             Some(::ProfileFacet::Persona(facet)) => {
                 let persona_builder = self.init_facet().init_persona();
