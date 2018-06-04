@@ -6,13 +6,12 @@ use mercury_connect::*;
 use super::*;
 
 
-
 pub struct TestSetup
 {
     pub reactor: reactor::Core,
     pub client_ownprofile: OwnProfile,
-    pub home_context: PeerContext,
-    pub home: Rc<RefCell<Home>>,
+    pub client_home_context: PeerContext,
+    pub home: Rc<Home>,
 }
 
 impl TestSetup
@@ -33,10 +32,9 @@ impl TestSetup
             client_ownprofile.profile.public_key.clone(), client_ownprofile.profile.id.clone() ) );
         let home = HomeConnectionServer::new(server_context, server).unwrap();
 
-        let client_context = PeerContext::new_from_profile( Rc::new(client_signer), &home_ownprofile.profile);
+        let client_home_context = PeerContext::new_from_profile( Rc::new(client_signer), &home_ownprofile.profile);
 
-        Self{ reactor, client_ownprofile, home_context: client_context,
-              home: Rc::new( RefCell::new(home) ) }
+        Self{ reactor, client_ownprofile, client_home_context, home: Rc::new(home)}
     }
 
     pub fn init_capnp() -> Self
@@ -45,14 +43,26 @@ impl TestSetup
     }
 }
 
-
-
 fn test_home_register(mut setup: TestSetup)
 {
-    let halfproof = RelationHalfProof::new( "home", setup.home_context.peer_id(), setup.home_context.my_signer() );
-    let reg_fut = setup.home.borrow().register(setup.client_ownprofile, halfproof, None);
-    let reg_res = setup.reactor.run(reg_fut).unwrap();
-    // TODO assert that resulted profile contains new home in persona facet
+    let half_proof = RelationHalfProof::new( "home", setup.client_home_context.peer_id(), setup.client_home_context.my_signer() );
+    let reg_fut = setup.home.register(setup.client_ownprofile.clone(), half_proof, None);
+    let ownprofile_returned = setup.reactor.run(reg_fut).unwrap();
+    let validator = CompositeValidator::default();
+
+    if let ProfileFacet::Persona(ref facet) = ownprofile_returned.profile.facets[0] {
+        let home_proof = &facet.homes[0];
+
+        assert_eq!(validator.validate_relation_proof(
+            &home_proof,
+            &setup.client_home_context.peer_id(),
+            &setup.client_home_context.peer_pubkey(),
+            &setup.client_ownprofile.profile.id,
+            &setup.client_ownprofile.profile.public_key
+        ), Ok(()));
+    } else {
+        assert!(false);
+    }
 }
 
 #[test]
@@ -62,13 +72,11 @@ fn test_home_register_configs()
     test_home_register( TestSetup::init_capnp() );
 }
 
-
 #[test]
 fn test_home_login()
 {
 
 }
-
 
 #[test]
 fn test_session_update()
