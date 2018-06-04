@@ -43,14 +43,29 @@ impl TestSetup
     }
 }
 
-fn test_home_register(mut setup: TestSetup)
+fn register_client(setup: &mut TestSetup) -> OwnProfile
 {
     let half_proof = RelationHalfProof::new( "home", setup.client_home_context.peer_id(), setup.client_home_context.my_signer() );
     let reg_fut = setup.home.register(setup.client_ownprofile.clone(), half_proof, None);
-    let ownprofile_returned = setup.reactor.run(reg_fut).unwrap();
+    setup.reactor.run(reg_fut).unwrap()
+}
+
+fn test_home_claim(mut setup: TestSetup)
+{
+    let registered_ownprofile = register_client(&mut setup);
+
+    let claim_fut = setup.home.claim(setup.client_ownprofile.profile.id.clone());
+    let claimed_ownprofile = setup.reactor.run(claim_fut).unwrap();
+
+    assert_eq!(registered_ownprofile, claimed_ownprofile);
+}
+
+fn test_home_register(mut setup: TestSetup)
+{
+    let registered_ownprofile = register_client(&mut setup);
     let validator = CompositeValidator::default();
 
-    if let ProfileFacet::Persona(ref facet) = ownprofile_returned.profile.facets[0] {
+    if let ProfileFacet::Persona(ref facet) = registered_ownprofile.profile.facets[0] {
         let home_proof = &facet.homes[0];
 
         assert_eq!(validator.validate_relation_proof(
@@ -70,6 +85,13 @@ fn test_home_register_configs()
 {
     test_home_register( TestSetup::init_direct() );
     test_home_register( TestSetup::init_capnp() );
+}
+
+#[test]
+fn test_home_claim_configs()
+{
+    test_home_claim( TestSetup::init_direct() );
+    test_home_claim( TestSetup::init_capnp() );
 }
 
 #[test]
