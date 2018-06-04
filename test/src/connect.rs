@@ -86,7 +86,7 @@ fn test_register(){
     // make home
     let (home_profile, home_signer) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
 
-    let home_server = default_home(&setup.handle);
+    let home_server = default_home_server(&setup.handle);
     let client_context = ClientContext::new(
         Rc::new(home_signer),
         profile.pub_key.clone(),

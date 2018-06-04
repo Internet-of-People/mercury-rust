@@ -45,7 +45,6 @@ pub struct ClientContext
     signer:             Rc<Signer>,
     client_pub_key:     PublicKey,
     client_profile_id:  ProfileId,
-    //client_profile: Profile,
 }
 
 impl ClientContext

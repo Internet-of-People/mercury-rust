@@ -26,7 +26,7 @@ use mercury_home_node::server::HomeServer;
 use mercury_storage::async::imp::InMemoryStore;
 
 
-pub mod dummy;
+pub mod dummy; // TODO this will not be needed with real components ready and tested
 
 #[cfg(test)]
 pub mod connect;
@@ -48,7 +48,6 @@ pub fn generate_ownprofile(facet: ProfileFacet, private_data: Vec<u8>)
 {
     let (private_key, public_key) = generate_keypair();
     let signer = Ed25519Signer::new(&private_key, &public_key).expect("TODO: this should not be able to fail");
-    // TODO why isn't into() working here?
     let profile = Profile::new( &(&public_key).into(), &public_key, &vec![facet] );
     //let profile = Profile::new( &ProfileId::from(&public_key), &public_key, vec![facet] );
     let own_profile = OwnProfile::new(&profile, &private_data);
@@ -63,7 +62,7 @@ pub fn generate_profile(facet: ProfileFacet) -> (Profile, Ed25519Signer)
 
 
 
-pub fn default_home(handle: &reactor::Handle) -> HomeServer {
+pub fn default_home_server(handle: &reactor::Handle) -> HomeServer {
     HomeServer::new( handle,
         Rc::new( CompositeValidator::default() ),
         Rc::new( RefCell::new( InMemoryStore::new() ) ),
