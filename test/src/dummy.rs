@@ -16,7 +16,6 @@ use mercury_home_protocol::*;
 use super::*;
 use mercury_connect::net::*;
 
-use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::HashMap;
 use std::io::{BufRead, Read, Write, stdin};
@@ -47,7 +46,7 @@ pub struct TestSetup{
     pub homesigner: Rc<Signer>,
     pub homeaddr: String,
     pub homemultiaddr: Multiaddr,
-    pub home: Rc< RefCell< MyDummyHome > >,
+    pub home: Rc<MyDummyHome>,
     pub user: Profile,
     pub userid: ProfileId,
     pub usersinger: Rc<Signer>,
@@ -70,16 +69,16 @@ impl TestSetup{
 
         let mut dht = ProfileStore::new();
         dht.insert(homeprofileid.clone(), homeprof.clone());
-        let mut home_storage = Rc::new( RefCell::new(dht) );
+        let mut home_storage = Rc::new(dht);
         let mut store_rc = Rc::clone(&home_storage);
-        let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
+        let mut home = Rc::new( MyDummyHome::new( homeprof.clone() , home_storage ) );
         let homerc = Rc::clone(&home);
 
         let usersigner = Rc::new(usersigner);
         let profilegateway = ProfileGatewayImpl{
             signer:         usersigner.clone(),
             profile_repo:   store_rc,
-            home_connector: Rc::new( dummy::DummyConnector::new_with_home( home ) ),
+            home_connector: Rc::new( dummy::DummyConnector::new_with_home(home) ),
         };
 
         let reactor = tokio_core::reactor::Core::new().unwrap();
@@ -150,24 +149,24 @@ pub fn dummy_relation_proof(rel_type: &str)->RelationProof{
 
 #[derive(Debug)]
 pub struct ProfileStore{
-    content : HashMap<ProfileId, Profile>,
+    content : RefCell< HashMap<ProfileId, Profile> >,
 }
 
 impl ProfileStore{
     pub fn new() -> Self {
         ProfileStore{
-            content : HashMap::new(),
+            content : RefCell::new( HashMap::new() ),
         }
     }
 }
 
 impl ProfileStore{
-    pub fn insert(&mut self, id : ProfileId, profile : Profile) -> Option<Profile>{
-        self.content.insert(id, profile)
+    pub fn insert(&self, id : ProfileId, profile : Profile) -> Option<Profile>{
+        self.content.borrow_mut().insert(id, profile)
     }
 
-    pub fn get( &self, id : ProfileId ) -> Option<&Profile>{
-        self.content.get(&id)
+    pub fn get( &self, id : ProfileId ) -> Option<Profile>{
+        self.content.borrow().get(&id).map( |x| x.to_owned() )
     }
 }
 
@@ -181,7 +180,8 @@ impl ProfileRepo for ProfileStore{
 
     fn load(&self, id: &ProfileId) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
-        let prof = self.content.get(&id);
+        let store = self.content.borrow();
+        let prof = store.get(&id);
         match prof {
             Some(profile) => {
                 Box::new( future::ok(profile.to_owned()) )},
@@ -211,12 +211,12 @@ impl ProfileRepo for ProfileStore{
 pub struct MyDummyHome{
     pub home_profile   : Profile, 
     pub local_prof_store : RefCell<HashMap<ProfileId, Vec<u8>>>,
-    pub storage_layer : Rc<RefCell<ProfileStore>>,
+    pub storage_layer : Rc<ProfileStore>,
     pub events : RefCell<HashMap<ProfileId, Vec<ProfileEvent>>>,
 }
 
 impl MyDummyHome{
-    pub fn new(profile : Profile, dht : Rc<RefCell<ProfileStore>>) -> Self {
+    pub fn new(profile : Profile, dht : Rc<ProfileStore>) -> Self {
         MyDummyHome{
             home_profile : profile,
             local_prof_store : RefCell::new( HashMap::new() ),
@@ -227,7 +227,7 @@ impl MyDummyHome{
     
     pub fn insert(&self, id : ProfileId, profile : Profile)->Option<Profile>{
         println!("MyDummyHome.insert");
-        self.storage_layer.borrow_mut().insert(id, profile)
+        self.storage_layer.insert(id, profile)
     }
 }
 
@@ -242,8 +242,7 @@ impl ProfileRepo for MyDummyHome{
     fn load(&self, id: &ProfileId) ->
     Box< Future<Item=Profile, Error=ErrorToBeSpecified> >{
         println!("MyDummyHome.load");
-        let pr = self.storage_layer.borrow();
-        let prof = pr.get(id.to_owned());
+        let prof = self.storage_layer.get(id.to_owned());
         match prof {
             Some(profile) => Box::new( future::ok(profile.to_owned()) ),
             None => Box::new( future::err(ErrorToBeSpecified::TODO(String::from("MyDummyHome.load "))) ),
@@ -269,11 +268,11 @@ impl Home for MyDummyHome
     fn claim(&self, profile: ProfileId) ->
     Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >{
         println!("MyDummyHome.claim");
-        match self.storage_layer.borrow().get(profile.clone()){
+        match self.storage_layer.get(profile.clone()){
             Some(own) => {
                 match self.local_prof_store.borrow().get(&profile){
-                        Some(privdata) => Box::new( future::ok( OwnProfile::new( own, privdata ) ) ),
-                        None => Box::new( future::ok( OwnProfile::new( own, &Vec::new()) ) )
+                        Some(privdata) => Box::new( future::ok( OwnProfile::new( &own, privdata ) ) ),
+                        None => Box::new( future::ok( OwnProfile::new( &own, &Vec::new()) ) )
                 }
             },
             None => Box::new( future::err( ErrorToBeSpecified::TODO( String::from( "MyDummyHome.claim" ) ) ) )
@@ -324,7 +323,7 @@ impl Home for MyDummyHome
 
     // NOTE this closes all previous sessions of the same profile
     fn login(&self, profile: ProfileId) ->
-    Box< Future< Item=Rc< HomeSession >, Error=ErrorToBeSpecified > >{
+    Box< Future< Item=Rc<HomeSession>, Error=ErrorToBeSpecified > >{
         println!("MyDummyHome.login");
         //let selfcell = Rc::new(RefCell::new(*self));
         let session = Rc::new(HomeSessionDummy::new( profile ,Rc::clone(&self.storage_layer)/*, selfcell */) ) as Rc<HomeSession>;
@@ -369,10 +368,10 @@ impl Home for MyDummyHome
 }
  
 pub struct DummyConnector{
-    home : Rc<RefCell<Home>>
+    home : Rc<Home>
 }
 impl DummyConnector{
-    pub fn new_with_home(home : Rc<RefCell<Home>>)->Self{
+    pub fn new_with_home(home : Rc<Home>)->Self{
         Self{home: home}
     }
 }
@@ -382,7 +381,7 @@ impl mercury_connect::HomeConnector for DummyConnector{
     /// `home_profile` must have a HomeFacet with at least an address filled in.
     /// `signer` belongs to me.
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<RefCell<Home>>, Error=ErrorToBeSpecified> >{
+        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >{
             println!("DummyConnector.connect");
             Box::new( future::ok( Rc::clone( &self.home ) ) )
     }
@@ -391,14 +390,14 @@ impl mercury_connect::HomeConnector for DummyConnector{
 pub struct HomeSessionDummy
 {
     prof : ProfileId,
-    repo : Rc< RefCell< ProfileStore > >,
+    repo : Rc<ProfileStore>,
     //home : Rc< RefCell< MyDummyHome > >,
 }
 
 
 impl HomeSessionDummy
 {
-    pub fn new( prof : ProfileId, repo : Rc<RefCell<ProfileStore>>/*, home : Rc<RefCell<MyDummyHome>> */) -> Self{ 
+    pub fn new( prof : ProfileId, repo : Rc<ProfileStore>/*, home : Rc<RefCell<MyDummyHome>> */) -> Self{
         Self{ prof : prof, repo : repo/*, home : home */} 
     }
 }

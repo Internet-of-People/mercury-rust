@@ -1,6 +1,5 @@
 use std::net::ToSocketAddrs;
 use std::rc::Rc;
-use std::cell::RefCell;
 
 use futures::future;
 use futures::{Future, Stream, Sink};
@@ -32,9 +31,9 @@ fn test_events()
     let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
     let (homeprof, _homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
-    let mut dht = ProfileStore::new();
+    let dht = ProfileStore::new();
     dht.insert(homeprof.id.clone(), homeprof.clone());
-    let home_storage = Rc::new( RefCell::new(dht) );
+    let home_storage = Rc::new(dht);
 
     let handle1 = reactor.handle();
     let server_socket = TcpListener::bind( &addr, &reactor.handle() ).expect("Failed to bind socket");
@@ -197,7 +196,7 @@ fn test_update(){
     let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
     let (otherhome, _other_home_signer) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
-    setup.home.borrow_mut().insert(otherhome.id.clone(), otherhome.clone());
+    setup.home.insert(otherhome.id.clone(), otherhome.clone());
     let home_session = setup.profilegate.update(
         otherhome.id,
         &setup.userownprofile,
@@ -275,13 +274,13 @@ fn and_then_story(){
     let homemultiaddr = "/ip4/127.0.0.1/udp/9877".to_multiaddr().unwrap();
     let (other_homeprof, other_homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
 
-    let mut dht = ProfileStore::new();
+    let dht = ProfileStore::new();
     dht.insert(homeprof.id.clone(), homeprof.clone());
     dht.insert(other_homeprof.id.clone(), other_homeprof.clone());
 
-    let home_storage = Rc::new( RefCell::new(dht) );
+    let home_storage = Rc::new(dht);
     let ownhomestore = Rc::clone(&home_storage);
-    let home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
+    let home = Rc::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) );
 
     let (profile, signo) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
     let signo = Rc::new(signo);
@@ -356,7 +355,7 @@ fn and_then_story(){
         future::ok(())
     });
 
-    let other_home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) ) );
+    let other_home = Rc::new( MyDummyHome::new( homeprof.clone() , Rc::clone(&home_storage) ) );
     let home_storage_other = Rc::clone(&home_storage);
 
     let other_profile = make_own_persona_profile(other_signo.public_key() );

@@ -49,9 +49,9 @@ fn main(){
 
     let mut dht = ProfileStore::new();
     dht.insert(homeprof.id.clone(), homeprof.clone());
-    let mut home_storage = Rc::new( RefCell::new(dht) );
+    let mut home_storage = Rc::new(dht);
     let mut store_rc = Rc::clone(&home_storage);
-    let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
+    let mut home = Rc::new( MyDummyHome::new( homeprof.clone() , home_storage ) );
 
     let signo = Rc::new(signo);
     let profilegateway = ProfileGatewayImpl{
