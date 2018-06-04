@@ -543,7 +543,7 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
             .and_then( move |(stmt, conn)| {
                 conn.execute(&stmt, &[&key_str, &value])
             } )
-            .map_err( |(e, conn)| StorageError::Other( Box::new(e) ) )
+            .map_err( |(e, conn)| StorageError::StringError( e.description().to_owned() ) )
             .map( | exec_res| () );
         Box::new(result)
     }
@@ -566,7 +566,7 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
                     //      if multiple rows are found in the result set
                     .map( |(vec, state)| vec.concat() )
             )
-            .map_err( |(e, conn)| StorageError::Other( Box::new(e) ) );
+            .map_err( |(e, conn)| StorageError::StringError( e.description().to_owned() ) );
 
         Box::new(result)
     }

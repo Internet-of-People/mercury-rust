@@ -59,7 +59,7 @@ impl Error for SerializerError {
 pub enum StorageError {
     OutOfDiskSpace,
     InvalidKey,
-    Other(Box<Error>),
+//    Other(Box<Error>),
     StringError(String),
 }
 
@@ -74,8 +74,8 @@ impl Error for StorageError {
         match *self {
             StorageError::OutOfDiskSpace    => "Run out of disk space",
             StorageError::InvalidKey        => "The given key holds no value",
-            StorageError::Other(ref e)      => e.description(),
-            StorageError::StringError(s)    => &s,
+            // StorageError::Other(ref e)      => e.description(),
+            StorageError::StringError(ref _s)    => "FIXME",
         }
     }
 }

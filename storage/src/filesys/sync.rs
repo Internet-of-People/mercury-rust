@@ -1,14 +1,5 @@
-use ::async::*;
-use ::error::*;
-
-use std::path::Path;
-use std::fs::*;
-use std::collections::HashMap;
-use std::io::{Read, Write};
-use futures::*;
-
 /* SYNCRONOUS FILESYSTEM HANDLER */
-
+/*
 pub struct SyncFileHandler{
     path : String,
     file_map : HashMap<String, String>
@@ -117,3 +108,4 @@ fn medusa_key_value() {
     let res = reactor.run(read).unwrap();
     assert_eq!(res, json);
 }
+*/
