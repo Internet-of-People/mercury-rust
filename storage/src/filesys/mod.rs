@@ -20,13 +20,26 @@ pub struct AsyncFileHandler{
 }
 
 impl AsyncFileHandler{
-    pub fn init(main_directory : String) 
+    pub fn new(main_directory : String) 
     -> Result<Self, StorageError>{
         match create_dir_all(Path::new(&main_directory)){
             Ok(_)=>Ok(
                 AsyncFileHandler{
                     path: main_directory, 
                     pool : tokio_threadpool::ThreadPool::new(),
+                }
+            ),
+            Err(e)=>Err(StorageError::StringError(e.description().to_owned()))
+        }
+    }
+
+    pub fn init_with_pool(main_directory : String, pool: tokio_threadpool::ThreadPool) 
+    -> Result<Self, StorageError>{
+        match create_dir_all(Path::new(&main_directory)){
+            Ok(_)=>Ok(
+                AsyncFileHandler{
+                    path: main_directory, 
+                    pool : pool,
                 }
             ),
             Err(e)=>Err(StorageError::StringError(e.description().to_owned()))
@@ -192,11 +205,11 @@ fn future_file_key_value() {
 
     let mut reactor = reactor::Core::new().unwrap();
     println!("\n\n\n");
-    let mut storage : AsyncFileHandler = AsyncFileHandler::init(String::from("./ipfs/banan/")).unwrap();
+    let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/banan/")).unwrap();
     let file_path = String::from("alma.json");
     let json = String::from("<Json:json>");
     let set = storage.set(file_path.clone(), json.clone());
-    reactor.run(set);
+    reactor.run(set).unwrap();
     // reactor.run(storage.set(file_path, String::from("<<profile:almagyar>>")));
     let read = storage.get(file_path);
     let res = reactor.run(read).unwrap();
