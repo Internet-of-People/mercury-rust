@@ -5,10 +5,16 @@ extern crate futures;
 extern crate multiaddr;
 extern crate multihash;
 extern crate tokio_core;
+extern crate serde;
+extern crate serde_json;
+
+#[macro_use]
+extern crate serde_derive;
 
 use std::rc::Rc;
 
 use futures::{Future, sync::mpsc};
+
 use multiaddr::Multiaddr;
 
 
@@ -23,13 +29,13 @@ pub enum ErrorToBeSpecified { TODO(String) }
 
 
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct PublicKey(pub Vec<u8>);
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct Signature(pub Vec<u8>);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -68,7 +74,7 @@ pub trait Validator
 
 
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct PersonaFacet
 {
     // TODO should we use only a RelationProof here instead of full Relation info?
@@ -79,17 +85,60 @@ pub struct PersonaFacet
     pub data:   Vec<u8>,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+pub struct MyMultiaddr{
+    #[serde(with = "MultiaddrDef")]
+    pub inner : Multiaddr
+} 
+
+#[derive(Serialize, Deserialize)]
+#[serde(remote = "Multiaddr")]
+pub struct MultiaddrDef {
+    #[serde(getter = "Multiaddr::to_bytes")]
+    bytes: Vec<u8>,
+}
+
+impl From<MultiaddrDef> for Multiaddr {
+    fn from(def: MultiaddrDef) -> Multiaddr {
+        Multiaddr::from_bytes(def.bytes).unwrap()
+    }
+}
+
+impl From<MyMultiaddr> for Multiaddr{
+    fn from(def: MyMultiaddr) -> Multiaddr {
+        def.inner
+    }
+}
+
+impl<'a> From<&'a MyMultiaddr> for Multiaddr {
+    fn from(def: &'a MyMultiaddr) -> Multiaddr {
+        def.inner.to_owned()
+    }
+}
+
+impl From<Multiaddr> for MyMultiaddr {
+    fn from(def: Multiaddr) -> MyMultiaddr {
+        MyMultiaddr{inner : def.to_owned()}
+    }
+}
+
+impl<'a> From<&'a Multiaddr> for MyMultiaddr {
+    fn from(def: &'a Multiaddr) -> MyMultiaddr {
+        MyMultiaddr{inner : def.to_owned()}
+    }
+}
+
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct HomeFacet
 {
     /// Addresses of the same home server. A typical scenario of multiple addresses is when there is
     /// one IPv4 address/port, one onion address/port and some IPv6 address/port pairs.
-    pub addrs:  Vec<Multiaddr>,
+    pub addrs:  Vec<MyMultiaddr>,
     pub data:   Vec<u8>,
 }
 
 // NOTE Given for each SUPPORTED app, not currently available (checked in) app, checkins are managed differently
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct ApplicationFacet
 {
     /// unique id of the application - like 'iop-chat'
@@ -97,13 +146,13 @@ pub struct ApplicationFacet
     pub data:   Vec<u8>,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct RawFacet
 {
     pub data: Vec<u8>, // TODO or maybe multicodec output?
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum ProfileFacet
 {
     Home(HomeFacet),
@@ -112,7 +161,7 @@ pub enum ProfileFacet
     Unknown(RawFacet),
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct Profile
 {
     pub id:         ProfileId,
@@ -129,7 +178,7 @@ impl Profile
     pub fn new_home(id: ProfileId, pub_key: PublicKey, address: Multiaddr) -> Self {
         
         let facet = HomeFacet {
-            addrs: vec![address],
+            addrs: vec![MyMultiaddr{ inner : address}],
             data: vec![],
         };
 
@@ -216,7 +265,7 @@ impl RelationHalfProof
 }
 
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct RelationProof
 {
     pub relation_type:  String,        // TODO inline halfproof fields with macro, if possible at all
@@ -279,7 +328,7 @@ impl HomeInvitation
 }
 
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct ApplicationId(pub String);
 
 #[derive(PartialEq, Eq, Clone, Debug)]

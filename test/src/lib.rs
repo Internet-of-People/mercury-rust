@@ -12,6 +12,10 @@ extern crate multihash;
 
 pub mod dummy;
 
+#[cfg(test)]
+mod test{
+
+use super::*;
 use ::dummy::*;
 
 use std::net::ToSocketAddrs;
@@ -40,10 +44,6 @@ use mercury_connect::ProfileGatewayImpl;
 #[test]
 fn test_events()
 {
-
-
-
-
     let mut reactor = reactor::Core::new().unwrap();
 
     let homeaddr = "127.0.0.1:9876";
@@ -401,3 +401,9 @@ fn test_events()
         
         println!( "We're done here, let's go packing" );
     }
+
+     #[test]
+    fn name() {
+        unimplemented!();
+    }
+}

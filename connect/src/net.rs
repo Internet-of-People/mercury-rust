@@ -114,7 +114,7 @@ impl HomeConnector for SimpleTcpHomeConnector
                     _ => Vec::new()
                 }
             )
-            .map(  move |addr| SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone) );
+            .map(  move |addr| SimpleTcpHomeConnector::connect_addr(&addr.into(), &handle_clone) );
 
         let home_profile_clone = home_profile.clone();
         let handle_clone = self.handle.clone();

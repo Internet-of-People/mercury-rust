@@ -9,6 +9,8 @@ use tokio_io::io::*;
 use tokio_fs::*;
 use tokio_fs::file::*;
 use tokio_threadpool;
+use serde_json;
+use mercury_home_protocol::{Profile, ProfileId};
 
 pub mod sync;
 
@@ -61,12 +63,13 @@ impl AsyncFileHandler{
                     write_all(file, content)
                         .map(|_| ()) 
                         .map_err(|_e|StorageError::StringError(String::from("Write to file failed")))
-                    
                 })
                 .then(
                     move |res| {                        
-                        tx.send(res);  
-                        future::ok(())
+                        match tx.send(res){
+                            Ok(_)=>future::ok(()),
+                            Err(_)=>future::err(())
+                        }
                     }
                 )
         );
@@ -95,7 +98,6 @@ impl AsyncFileHandler{
                     StorageError::StringError(String::from("File couldn't be opened"))
                 )
                 .and_then(move |file|
-
                     read_to_end(file , Vec::new())          
                         .map_err(|_e|{ StorageError::StringError(String::from("Read from file failed"))})
                 )
@@ -106,8 +108,10 @@ impl AsyncFileHandler{
                     }
                 )
                 .then( move |res| {
-                    tx.send(res);
-                    future::ok(())                    
+                    match tx.send(res){
+                        Ok(_)=>future::ok(()),
+                        Err(_)=>future::err(())
+                    }                    
                 })              
         );
         Box::new(
@@ -139,6 +143,44 @@ impl KeyValueStore<String, String> for AsyncFileHandler{
     fn get(&self, key: String)
     -> Box< Future<Item=String, Error=StorageError> >{
         Box::new(self.read_from_file(key).map_err(|_e|StorageError::InvalidKey ) )
+    }
+}
+
+impl KeyValueStore<ProfileId, Profile> for AsyncFileHandler{
+    fn set(&mut self, key: ProfileId, value: Profile)
+    -> Box< Future<Item=(), Error=StorageError> >{
+        let mut str_key = String::new();
+        let str_profile = serde_json::to_string(&value);
+        let mut res;
+        match String::from_utf8(key.0) {
+            Ok(content)=> {res = self.write_to_file(str_key, content)},                                
+            Err(e)=> {res = Box::new( future::err( StorageError::StringError( e.description().to_owned() ) ) )}                                
+        }
+        Box::new( res )    
+    }
+
+    fn get(&self, key: ProfileId)
+    -> Box< Future<Item=Profile, Error=StorageError> >{
+        let mut str_key = String::new();
+        let mut res;
+        match String::from_utf8(key.0) {
+            Ok(content)=> {res = self.read_from_file(content)
+                                    
+            },                                
+            Err(e)=> {res = Box::new(future::err( StorageError::StringError( e.description().to_owned() ) )) }                                
+        }
+        Box::new( 
+            res
+                .map_err(|e| 
+                    StorageError::StringError( e.description().to_owned() )
+                )
+                .and_then(|profile|{
+                    serde_json::from_str(&profile)
+                        .map_err(|e| 
+                            StorageError::StringError( e.description().to_owned() )
+                        )
+                })
+        )
     }
 }
 

@@ -120,7 +120,7 @@ pub fn make_own_persona_profile(pubkey : &PublicKey)->Profile{
 }
 
 pub fn make_home_profile(addr : &str, pubkey : &PublicKey)->Profile{
-    let homeaddr = addr.to_multiaddr().unwrap();
+    let homeaddr = MyMultiaddr{ inner : addr.to_multiaddr().unwrap() };
     let home_hash = generate_hash_from_vec(pubkey.0.clone());
     let empty = vec![];
     let homevec = vec![homeaddr];
@@ -130,6 +130,7 @@ pub fn make_home_profile(addr : &str, pubkey : &PublicKey)->Profile{
         &[ProfileFacet::Home( HomeFacet{ addrs : homevec , data : empty } ) ] 
     )
 }
+
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Signo{
     prof_id : ProfileId,

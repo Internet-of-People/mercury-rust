@@ -15,6 +15,7 @@ extern crate tokio_core;
 extern crate tokio_postgres;
 extern crate tokio_fs;
 extern crate tokio_threadpool;
+extern crate mercury_home_protocol;
 
 #[macro_use]
 extern crate serde_derive;
