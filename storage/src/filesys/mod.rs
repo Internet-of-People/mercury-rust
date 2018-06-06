@@ -80,6 +80,9 @@ impl AsyncFileHandler{
         Box::new(
             rx
                 .or_else(|e| future::err(StorageError::StringError(e.description().to_owned())))
+                //up until this point the type is std::result::Result<(), error::StorageError>
+                //so we need to use an and_then to convert to either future::ok<()> or future::err<StorageError>
+                //otherwise it would be Future<Item = std::result::Result<(), error::StorageError>, Error = _>
                 .and_then(|res| {
                     match res {
                         Ok(()) => future::ok(()),
@@ -120,6 +123,9 @@ impl AsyncFileHandler{
         Box::new(
             rx                                          
             .or_else(|e| future::err(StorageError::StringError(e.description().to_owned())))
+            //up until this point the type is std::result::Result<std::string::String, error::StorageError>
+            //so we need to use an and_then to convert to either future::ok<String> or future::err<StorageError>
+            //otherwise it would be Future<Item = std::result::Result<std::string::String, error::StorageError>, Error = _>
             .and_then(|res| {
                 match res {
                     Ok(s) => future::ok(s),

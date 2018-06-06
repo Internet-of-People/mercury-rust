@@ -151,18 +151,6 @@ impl Signo{
     }
 }
 
-// impl Signer for Signo{
-//     fn prof_id(&self) -> &ProfileId{
-//         &self.prof_id
-//     }
-//     fn pub_key(&self) -> &PublicKey{
-//         &self.pubkey
-//     }
-//     fn sign(&self, data: &[u8]) -> Signature{
-//         Signature( Vec::from(data) )
-//     }
-// }
-
 pub fn dummy_relation(rel_type: &str) -> Relation{
     Relation::new(
         &make_own_persona_profile( &PublicKey( Vec::from( "too_hot_today" ) ) ),
