@@ -130,6 +130,39 @@ pub fn make_home_profile(addr : &str, pubkey : &PublicKey)->Profile{
     )
 }
 
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct Signo{
+    prof_id : ProfileId,
+    pubkey : PublicKey,
+    privkey : Vec<u8>,
+}
+
+impl Signo{
+    pub fn new( whatever : &str)->Self{
+        Signo{
+            prof_id : ProfileId( generate_hash_from_vec( generate_hash(whatever) ) ),
+            pubkey : PublicKey( generate_hash(whatever) ),
+            privkey : generate_hash(whatever),
+        }
+    }
+
+    pub fn get_base64_id(&self)->String{
+        base64::encode(&self.prof_id.0)
+    }
+}
+
+impl Signer for Signo{
+    fn prof_id(&self) -> &ProfileId{
+        &self.prof_id
+    }
+    fn pub_key(&self) -> &PublicKey{
+        &self.pubkey
+    }
+    fn sign(&self, data: &[u8]) -> Signature{
+        Signature( Vec::from(data) )
+    }
+}
+
 pub fn dummy_relation(rel_type: &str) -> Relation{
     Relation::new(
         &make_own_persona_profile( &PublicKey( Vec::from( "too_hot_today" ) ) ),
