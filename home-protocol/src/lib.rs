@@ -99,8 +99,12 @@ pub struct MultiaddrDef {
 }
 
 impl From<MultiaddrDef> for Multiaddr {
+    //TODO recursion warning
     fn from(def: MultiaddrDef) -> Multiaddr {
-        Multiaddr::from_bytes(def.bytes).unwrap()
+        match Multiaddr::from_bytes(def.bytes.to_owned()){
+            Ok(maddr) => maddr,
+            Err(_) => def.into()
+        }
     }
 }
 

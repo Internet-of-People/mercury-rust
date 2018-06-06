@@ -10,6 +10,7 @@ futures = "0.1"
 mercury-home-protocol = { path="../home-protocol" }
 mercury-connect = { path="../connect" }
 mercury-home-node = { path="../home-node" }
+mercury-storage = { path="../storage" }
 multiaddr = "*"
 multihash = "*"
 tokio-core = "0.1"
