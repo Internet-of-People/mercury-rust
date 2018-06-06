@@ -2,7 +2,6 @@ extern crate capnp;
 extern crate capnp_rpc;
 extern crate ed25519_dalek;
 extern crate futures;
-extern crate mercury_storage;
 extern crate mercury_connect;
 extern crate mercury_home_protocol;
 extern crate mercury_home_node;
@@ -14,7 +13,6 @@ extern crate multiaddr;
 extern crate multihash;
 extern crate rand;
 extern crate sha2;
-extern crate tokio_stdin_stdout;
 
 use std::{cell::RefCell, rc::Rc};
 
@@ -70,43 +68,4 @@ pub fn default_home_server(handle: &reactor::Handle) -> HomeServer {
         Rc::new( RefCell::new( InMemoryStore::new() ) ),
         Rc::new( RefCell::new( InMemoryStore::new() ) ),
     )
-}
-
-
-//TODO might need to place this to some other place
-#[test]
-fn profile_serialize_async_key_value_test() {
-    use tokio_core;
-    use tokio_core::reactor;
-
-    
-    let profile = Profile::new(
-        &ProfileId("userprofile".into()), 
-        &PublicKey("userkey".into()), 
-        &vec![]
-    );
-
-    let homeprofile = Profile::new_home(
-        ProfileId("homeprofile".into()), 
-        PublicKey("homekey".into()), 
-        String::from("/ip4/127.0.0.1/udp/9876").to_multiaddr().unwrap()
-    );
-
-    let mut reactor = reactor::Core::new().unwrap();
-    println!("\n\n\n");
-    let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/homeserverid/")).unwrap();
-
-    let set = storage.set(profile.id.clone(), profile.clone());
-    let sethome = storage.set(homeprofile.id.clone(), homeprofile.clone());
-
-    reactor.run(set).unwrap();
-    reactor.run(sethome).unwrap();
-
-    let read = storage.get(profile.id.clone());
-    let readhome = storage.get(homeprofile.id.clone());
-
-    let res = reactor.run(read).unwrap();
-    let reshome = reactor.run(readhome).unwrap();
-    assert_eq!(res, profile);
-    assert_eq!(reshome, homeprofile);
 }

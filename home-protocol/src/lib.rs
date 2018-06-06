@@ -33,13 +33,16 @@ pub enum ErrorToBeSpecified { TODO(String) }
 
 
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
+#[derive(PartialEq, PartialOrd, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct PublicKey(pub Vec<u8>);
 
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
+pub struct PrivateKey(pub Vec<u8>);
+
+#[derive(PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct Signature(pub Vec<u8>);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -461,7 +464,7 @@ impl HomeInvitation
 }
 
 
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct ApplicationId(pub String);
 
 #[derive(PartialEq, Eq, Clone, Debug)]

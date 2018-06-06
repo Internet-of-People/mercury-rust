@@ -59,7 +59,7 @@ impl TestSetup{
 
         let homeaddr = String::from("/ip4/127.0.0.1/udp/9876");
         let homemultiaddr = homeaddr.to_multiaddr().unwrap();
-        let (homeprof, homesigner) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+        let (homeprof, homesigner) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone().into()], data: vec![]}));
 
         let homeprofileid =  homeprof.id.clone();
 
@@ -151,17 +151,17 @@ impl Signo{
     }
 }
 
-impl Signer for Signo{
-    fn prof_id(&self) -> &ProfileId{
-        &self.prof_id
-    }
-    fn pub_key(&self) -> &PublicKey{
-        &self.pubkey
-    }
-    fn sign(&self, data: &[u8]) -> Signature{
-        Signature( Vec::from(data) )
-    }
-}
+// impl Signer for Signo{
+//     fn prof_id(&self) -> &ProfileId{
+//         &self.prof_id
+//     }
+//     fn pub_key(&self) -> &PublicKey{
+//         &self.pubkey
+//     }
+//     fn sign(&self, data: &[u8]) -> Signature{
+//         Signature( Vec::from(data) )
+//     }
+// }
 
 pub fn dummy_relation(rel_type: &str) -> Relation{
     Relation::new(

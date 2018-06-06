@@ -12,8 +12,6 @@ use tokio_threadpool;
 use serde_json;
 use mercury_home_protocol::{Profile, ProfileId};
 
-pub mod sync;
-
 pub struct AsyncFileHandler{
     path : String,
     pool : tokio_threadpool::ThreadPool,
