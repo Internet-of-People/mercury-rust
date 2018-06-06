@@ -46,14 +46,6 @@ impl AsyncFileHandler{
         }
     }
 
-    pub fn create_subdir(&self, path : String) 
-    -> Result<(), StorageError>{
-        match create_dir_all(Path::new(&self.get_path(path))){
-            Ok(_)=>Ok(()),
-            Err(e)=>Err(StorageError::StringError(e.description().to_owned()))
-        }
-    }
-
     pub fn new_file(&self, file_path : String) 
     -> CreateFuture<String>{
         File::create(self.get_path(file_path))
@@ -162,19 +154,21 @@ impl KeyValueStore<String, String> for AsyncFileHandler{
 impl KeyValueStore<ProfileId, Profile> for AsyncFileHandler{
     fn set(&mut self, key: ProfileId, value: Profile)
     -> Box< Future<Item=(), Error=StorageError> >{
-        let mut str_key = String::new();
-        let str_profile = serde_json::to_string(&value);
         let mut res;
-        match String::from_utf8(key.0) {
-            Ok(content)=> {res = self.write_to_file(str_key, content)},                                
-            Err(e)=> {res = Box::new( future::err( StorageError::StringError( e.description().to_owned() ) ) )}                                
+        match serde_json::to_string(&value){
+            Ok(str_profile)=>{
+                match String::from_utf8(key.0) {
+                    Ok(str_key)=> {res = self.write_to_file(str_key, str_profile)},                                
+                    Err(e)=> {res = Box::new( future::err( StorageError::StringError( e.description().to_owned() ) ) )}                                
+                }
+            }
+            Err(e)=> {res = Box::new( future::err( StorageError::StringError( e.description().to_owned() ) ) )} 
         }
         Box::new( res )    
     }
 
     fn get(&self, key: ProfileId)
     -> Box< Future<Item=Profile, Error=StorageError> >{
-        let mut str_key = String::new();
         let mut res;
         match String::from_utf8(key.0) {
             Ok(content)=> {res = self.read_from_file(content)
@@ -198,14 +192,12 @@ impl KeyValueStore<ProfileId, Profile> for AsyncFileHandler{
 }
 
 #[test]
-fn future_file_key_value() {
-    use tokio_core;
+fn future_file_key_value(){
     use tokio_core::reactor;
-
 
     let mut reactor = reactor::Core::new().unwrap();
     println!("\n\n\n");
-    let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/banan/")).unwrap();
+    let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/homeserverid/")).unwrap();
     let file_path = String::from("alma.json");
     let json = String::from("<Json:json>");
     let set = storage.set(file_path.clone(), json.clone());
@@ -215,31 +207,3 @@ fn future_file_key_value() {
     let res = reactor.run(read).unwrap();
     assert_eq!(res, json);
 }
-
-//test from the tokio_threadpool crate
-// #[test]
-// fn multi_threadpool() {
-//     use futures::sync::oneshot;
-
-//     let pool1 = ThreadPool::new();
-//     let pool2 = ThreadPool::new();
-
-//     let (tx, rx) = oneshot::channel();
-//     let (done_tx, done_rx) = mpsc::channel();
-
-//     pool2.spawn({
-//         rx.and_then(move |_| {
-//             done_tx.send(()).unwrap();
-//             Ok(())
-//         })
-//         .map_err(|e| panic!("err={:?}", e))
-//     });
-
-//     pool1.spawn(lazy(move || {
-//         tx.send(()).unwrap();
-//         Ok(())
-//     }));
-
-//     done_rx.recv().unwrap();
-// }
-

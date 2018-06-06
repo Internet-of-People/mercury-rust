@@ -2,6 +2,7 @@ extern crate capnp;
 extern crate capnp_rpc;
 extern crate ed25519_dalek;
 extern crate futures;
+extern crate mercury_storage;
 extern crate mercury_connect;
 extern crate mercury_home_protocol;
 extern crate mercury_home_node;
