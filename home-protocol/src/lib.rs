@@ -11,11 +11,8 @@ extern crate serde;
 extern crate serde_derive;
 extern crate signatory;
 extern crate tokio_core;
-extern crate serde;
 extern crate serde_json;
 
-#[macro_use]
-extern crate serde_derive;
 
 use std::rc::Rc;
 

@@ -15,8 +15,6 @@ ed25519-dalek = "*"
 futures = "0.1"
 multiaddr = "*"
 multihash = "*"
-serde = "*"
-serde_derive = "*"
 signatory = { version="0.5", features=["std"] }
 tokio-core = "0.1"
 serde = "1"
