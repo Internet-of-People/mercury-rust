@@ -60,7 +60,17 @@ pub fn generate_profile(facet: ProfileFacet) -> (Profile, Ed25519Signer)
     (own_profile.profile, signer)
 }
 
+pub fn generate_persona() -> (OwnProfile, Ed25519Signer)
+{
+    let persona_facet = ProfileFacet::Persona( PersonaFacet{ homes: vec![] , data: Vec::new() } );
+    generate_ownprofile(persona_facet, vec![])
+}
 
+pub fn generate_home() -> (Profile, Ed25519Signer)
+{
+    let home_facet = ProfileFacet::Home( HomeFacet{ addrs: vec![] , data: Vec::new() } );
+    generate_profile(home_facet)
+}
 
 pub fn default_home_server(handle: &reactor::Handle) -> HomeServer {
     HomeServer::new( handle,

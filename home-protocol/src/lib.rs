@@ -194,6 +194,7 @@ impl Profile
 
 
 /// Represents a connection to another Profile (Home <-> Persona), (Persona <-> Persona)
+#[derive(Clone)]
 pub struct PeerContext
 {
     my_signer: Rc<Signer>,
