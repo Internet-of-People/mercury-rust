@@ -30,7 +30,7 @@ impl HomeClientCapnProto
         where R: std::io::Read + 'static,
               W: std::io::Write + 'static
     {
-        println!("Initializing Cap'n'Proto");
+        debug!("Initializing Cap'n'Proto");
 
         // TODO maybe we should set up only single party capnp first
         let rpc_network = Box::new( capnp_rpc::twoparty::VatNetwork::new( reader, writer,
@@ -42,7 +42,7 @@ impl HomeClientCapnProto
         let repo: mercury_capnp::profile_repo::Client =
             rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
 
-        handle.spawn( rpc_system.map_err( |e| println!("Capnp RPC failed: {}", e) ) );
+        handle.spawn( rpc_system.map_err( |e| warn!("Capnp RPC failed: {}", e) ) );
 
         Self{ context: context, home: home, repo: repo, handle: handle }
     }

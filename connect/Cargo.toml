@@ -7,6 +7,7 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 capnp = "0.8"
 capnp-rpc = "0.8"
 futures = "0.1"
+log = "0.4"
 mercury-home-protocol = { path="../home-protocol" }
 multiaddr = "*"
 multihash = "*"

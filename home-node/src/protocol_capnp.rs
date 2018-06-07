@@ -35,7 +35,7 @@ impl HomeDispatcherCapnProto
 
         let rpc_system = capnp_rpc::RpcSystem::new( Box::new(network), Some( home_capnp.clone().client ) );
 
-        handle.spawn( rpc_system.map_err( |e| println!("Capnp RPC failed: {}", e) ) );
+        handle.spawn( rpc_system.map_err( |e| warn!("Capnp RPC failed: {}", e) ) );
     }
 
 
@@ -52,7 +52,7 @@ impl HomeDispatcherCapnProto
 
 // NOTE useful for testing connection lifecycles
 //impl Drop for HomeDispatcherCapnProto
-//    { fn drop(&mut self) { println!("Home dropped"); } }
+//    { fn drop(&mut self) { debug!("Home dropped"); } }
 
 
 impl profile_repo::Server for HomeDispatcherCapnProto
@@ -235,7 +235,7 @@ impl HomeSessionDispatcherCapnProto
 
 // NOTE useful for testing connection lifecycles
 //impl Drop for HomeSessionDispatcherCapnProto
-//    { fn drop(&mut self) { println!("Session dropped"); } }
+//    { fn drop(&mut self) { debug!("Session dropped"); } }
 
 impl home_session::Server for HomeSessionDispatcherCapnProto
 {

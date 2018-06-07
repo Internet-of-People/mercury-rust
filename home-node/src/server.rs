@@ -589,7 +589,7 @@ impl HomeSession for HomeSessionServer
     fn ping(&self, txt: &str) ->
         Box< Future<Item=String, Error=ErrorToBeSpecified> >
     {
-        println!("Ping received `{}`, sending it back", txt);
+        debug!("Ping received `{}`, sending it back", txt);
         Box::new( future::ok( txt.to_owned() ) )
     }
 }

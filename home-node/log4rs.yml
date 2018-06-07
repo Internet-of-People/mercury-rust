@@ -21,6 +21,7 @@ root:
     - stdout
 
 loggers:
+  # Suppress fine-grained debug info from the Tokio reactor
   tokio_core::reactor:
     level: info
 
