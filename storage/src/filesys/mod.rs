@@ -2,18 +2,19 @@ use ::async::*;
 use ::error::*;
 use futures::*;
 use futures::sync::oneshot;
+use std::rc::Rc;
 use std::path::Path;
 use std::error::Error;
 use std::fs::create_dir_all;
 use tokio_io::io::*;
 use tokio_fs::*;
-use tokio_threadpool;
+use tokio_threadpool::ThreadPool;
 use serde_json;
 use mercury_home_protocol::{Profile, ProfileId};
 
 pub struct AsyncFileHandler{
     path : String,
-    pool : tokio_threadpool::ThreadPool,
+    pool : ThreadPool,
 }
 
 impl AsyncFileHandler{
@@ -23,7 +24,7 @@ impl AsyncFileHandler{
             Ok(_)=>Ok(
                 AsyncFileHandler{
                     path: main_directory, 
-                    pool : tokio_threadpool::ThreadPool::new(),
+                    pool : ThreadPool::new(),
                 }
             ),
             Err(e)=>Err(StorageError::StringError(e.description().to_owned()))
@@ -32,12 +33,12 @@ impl AsyncFileHandler{
 
     // TODO: this call will move away the ThreadPool, which still makes sharing of pools impossible across multiple 
     // entities. Some solution need to be invented to permit sharing Rc<ThreadPool> maybe
-    pub fn new_with_pool(main_directory : String, pool: tokio_threadpool::ThreadPool) 
+    pub fn new_with_pool(main_directory : String, pool: ThreadPool) 
     -> Result<Self, StorageError>{
         match create_dir_all(Path::new(&main_directory)){
             Ok(_)=>Ok(
                 AsyncFileHandler{
-                    path: main_directory, 
+                    path : main_directory, 
                     pool : pool,
                 }
             ),
@@ -57,13 +58,28 @@ impl AsyncFileHandler{
         Box::new(File::create(subpath))
     }
 
+    fn check_and_create_structure(&self, path : String) -> Result<String, StorageError>{
+        let path_clone = path.clone();
+        let dir_str = path_clone.rsplitn(2,"/").collect::<Vec<_>>();
+        if dir_str.len() > 1{
+            create_dir_all(self.get_path(dir_str[1].to_string()))
+                .map_err(|e| return StorageError::StringError(e.description().to_owned()));
+        }
+        Ok(path)
+    }
+
     pub fn write_to_file(&self, file_path : String, content : String) 
     -> Box< Future< Item = (), Error = StorageError > > {
-        let (tx, rx) = oneshot::channel::<Result<(), StorageError>>();   
+        let (tx, rx) = oneshot::channel::<Result<(), StorageError>>();
+        let mut path;
+        match self.check_and_create_structure(file_path){
+            Ok(checked_path) => {path = checked_path;}
+            Err(e) => {return Box::new(future::err(e));}
+        }   
         self.pool.spawn(
-            File::create(self.get_path(file_path))
+            File::create(self.get_path(path))
                 // TODO: map the error in a way to preserve the original error too
-                .map_err(|_err| StorageError::StringError(String::from("File couldn't be created")))
+                .map_err(|e| StorageError::StringError(e.description().to_owned()))
                 .and_then(move |file| {                     
                     write_all(file, content)
                         .map(|_| ()) 
@@ -78,7 +94,10 @@ impl AsyncFileHandler{
     
         Box::new(
             rx
-                .or_else(|e| future::err(StorageError::StringError(e.description().to_owned())))
+                .or_else(|e| {
+                    println!("{:?}",e.description().to_owned());
+                    future::err(StorageError::StringError(e.description().to_owned()))
+                })
                 .and_then(|res| res )       // unpacking result
                 
         )        
@@ -130,12 +149,12 @@ impl AsyncFileHandler{
 impl KeyValueStore<String, String> for AsyncFileHandler{
     fn set(&mut self, key: String, value: String)
     -> Box< Future<Item=(), Error=StorageError> >{
-        Box::new(self.write_to_file(key, value).map_err(|_e|StorageError::OutOfDiskSpace ) )    
+        Box::new(self.write_to_file(key, value).map_err(|e|StorageError::StringError(e.description().to_owned()) ) )    
     }
 
     fn get(&self, key: String)
     -> Box< Future<Item=String, Error=StorageError> >{
-        Box::new(self.read_from_file(key).map_err(|_e|StorageError::InvalidKey ) )
+        Box::new(self.read_from_file(key).map_err(|e|StorageError::StringError(e.description().to_owned()) ) )
     }
 }
 
@@ -190,4 +209,25 @@ fn future_file_key_value(){
     let read = storage.get(file_path);
     let res = reactor.run(read).unwrap();
     assert_eq!(res, json);
+}
+
+#[test]
+fn one_pool_multiple_filehandler(){
+    //tokio reactor is only needed to read from a file not to write into a file
+    use tokio_core::reactor;
+
+    let mut reactor = reactor::Core::new().unwrap();
+    println!("\n\n\n");
+    let tpool = ThreadPool::new();
+    let mut alpha_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/alpha/"), tpool).unwrap();
+    let mut beta_storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/beta/")).unwrap();
+    let json = String::from("<Json:json>");
+    let file_path = String::from("alma.json");
+    for i in 0..100{
+        alpha_storage.set(String::from(i.to_string()+"/"+&file_path), json.clone());
+        beta_storage.set(String::from(i.to_string()+"/"+&file_path), json.clone());
+    }
+    let aread = reactor.run(alpha_storage.get(String::from("99/alma.json"))).unwrap();
+    let bread = reactor.run(beta_storage.get(String::from("99/alma.json"))).unwrap();
+    assert_eq!(aread, bread);
 }

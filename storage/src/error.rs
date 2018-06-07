@@ -75,7 +75,7 @@ impl Error for StorageError {
             StorageError::OutOfDiskSpace    => "Run out of disk space",
             StorageError::InvalidKey        => "The given key holds no value",
             // StorageError::Other(ref e)      => e.description(),
-            StorageError::StringError(ref _s)    => "FIXME",
+            StorageError::StringError(ref s)    => s,
         }
     }
 }
