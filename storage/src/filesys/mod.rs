@@ -7,7 +7,6 @@ use std::error::Error;
 use std::fs::create_dir_all;
 use tokio_io::io::*;
 use tokio_fs::*;
-use tokio_fs::file::*;
 use tokio_threadpool;
 use serde_json;
 use mercury_home_protocol::{Profile, ProfileId};
@@ -31,7 +30,9 @@ impl AsyncFileHandler{
         }
     }
 
-    pub fn init_with_pool(main_directory : String, pool: tokio_threadpool::ThreadPool) 
+    // TODO: this call will move away the ThreadPool, which still makes sharing of pools impossible across multiple 
+    // entities. Some solution need to be invented to permit sharing Rc<ThreadPool> maybe
+    pub fn new_with_pool(main_directory : String, pool: tokio_threadpool::ThreadPool) 
     -> Result<Self, StorageError>{
         match create_dir_all(Path::new(&main_directory)){
             Ok(_)=>Ok(
@@ -45,15 +46,15 @@ impl AsyncFileHandler{
     }
 
     pub fn new_file(&self, file_path : String) 
-    -> CreateFuture<String>{
-        File::create(self.get_path(file_path))
+    -> Box<Future<Item=File, Error=::std::io::Error>> {
+        Box::new(File::create(self.get_path(file_path)))
     }
     
     pub fn new_file_with_name(&self, directory_path : String, file_name : String) 
-    -> CreateFuture<String>{
+    -> Box< Future<Item=File, Error=::std::io::Error> > {
         let mut subpath = self.get_path(directory_path);
         subpath.push_str(&file_name);
-        File::create(subpath)
+        Box::new(File::create(subpath))
     }
 
     pub fn write_to_file(&self, file_path : String, content : String) 
@@ -61,34 +62,25 @@ impl AsyncFileHandler{
         let (tx, rx) = oneshot::channel::<Result<(), StorageError>>();   
         self.pool.spawn(
             File::create(self.get_path(file_path))
+                // TODO: map the error in a way to preserve the original error too
                 .map_err(|_err| StorageError::StringError(String::from("File couldn't be created")))
                 .and_then(move |file| {                     
                     write_all(file, content)
                         .map(|_| ()) 
+                        // TODO: map the error in a way to preserve the original error too
                         .map_err(|_e|StorageError::StringError(String::from("Write to file failed")))
                 })
-                .then(
-                    move |res| {                        
-                        match tx.send(res){
-                            Ok(_)=>future::ok(()),
-                            Err(_)=>future::err(())
-                        }
-                    }
-                )
+                .then( move |res| tx.send(res))
+                .map_err(|_| ())
+                .map(|_| ())                        
+
         );
     
         Box::new(
             rx
                 .or_else(|e| future::err(StorageError::StringError(e.description().to_owned())))
-                //up until this point the type is std::result::Result<(), error::StorageError>
-                //so we need to use an and_then to convert to either future::ok<()> or future::err<StorageError>
-                //otherwise it would be Future<Item = std::result::Result<(), error::StorageError>, Error = _>
-                .and_then(|res| {
-                    match res {
-                        Ok(()) => future::ok(()),
-                        Err(e) => future::err(e)
-                    }
-                })
+                .and_then(|res| res )       // unpacking result
+                
         )        
     }
 
@@ -101,37 +93,29 @@ impl AsyncFileHandler{
         self.pool.spawn(
             File::open(self.get_path(file_path))        
                 .map_err(|_e| 
+                    // TODO: map the error in a way to preserve the original error too
                     StorageError::StringError(String::from("File couldn't be opened"))
                 )
                 .and_then(move |file|
                     read_to_end(file , Vec::new())          
+                        // TODO: map the error in a way to preserve the original error too
                         .map_err(|_e|{ StorageError::StringError(String::from("Read from file failed"))})
                 )
                 .and_then(|(_, buffer)|
                     match String::from_utf8(buffer) {
                         Ok(content)=> future::ok(content),                                
+                        // TODO: map the error in a way to preserve the original error too
                         Err(_e)=> future::err(StorageError::StringError(String::from("Failed to convert to UTF-8")))                                
                     }
                 )
-                .then( move |res| {
-                    match tx.send(res){
-                        Ok(_)=>future::ok(()),
-                        Err(_)=>future::err(())
-                    }                    
-                })              
+                .then( move |res| tx.send(res))
+                .map_err(|_| ())
+                .map(|_| ())             
         );
         Box::new(
-            rx                                          
-            .or_else(|e| future::err(StorageError::StringError(e.description().to_owned())))
-            //up until this point the type is std::result::Result<std::string::String, error::StorageError>
-            //so we need to use an and_then to convert to either future::ok<String> or future::err<StorageError>
-            //otherwise it would be Future<Item = std::result::Result<std::string::String, error::StorageError>, Error = _>
-            .and_then(|res| {
-                match res {
-                    Ok(s) => future::ok(s),
-                    Err(e) => future::err(e)
-                }
-            })                
+            rx                                  
+                .or_else(|e| future::err(StorageError::StringError(e.description().to_owned())))
+                .and_then(|res| res)                
         )                
     }
 
@@ -158,7 +142,7 @@ impl KeyValueStore<String, String> for AsyncFileHandler{
 impl KeyValueStore<ProfileId, Profile> for AsyncFileHandler{
     fn set(&mut self, key: ProfileId, value: Profile)
     -> Box< Future<Item=(), Error=StorageError> >{
-        let mut res;
+        let res;
         match serde_json::to_string(&value){
             Ok(str_profile)=>{
                 match String::from_utf8(key.0) {
@@ -173,7 +157,7 @@ impl KeyValueStore<ProfileId, Profile> for AsyncFileHandler{
 
     fn get(&self, key: ProfileId)
     -> Box< Future<Item=Profile, Error=StorageError> >{
-        let mut res;
+        let res;
         match String::from_utf8(key.0) {
             Ok(content)=> {res = self.read_from_file(content)
                                     
@@ -182,14 +166,10 @@ impl KeyValueStore<ProfileId, Profile> for AsyncFileHandler{
         }
         Box::new( 
             res
-                .map_err(|e| 
-                    StorageError::StringError( e.description().to_owned() )
-                )
+                .map_err(|e| StorageError::StringError( e.description().to_owned()))
                 .and_then(|profile|{
                     serde_json::from_str(&profile)
-                        .map_err(|e| 
-                            StorageError::StringError( e.description().to_owned() )
-                        )
+                        .map_err(|e| StorageError::StringError( e.description().to_owned()))
                 })
         )
     }

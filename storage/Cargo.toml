@@ -11,7 +11,7 @@ license = "LGPL-3.0+"
 #bip_util = { git = "https://github.com/GGist/bip-rs" }
 futures = "0.1"
 futures-state-stream = "0.2"
-ipfs-api = "0.4.0-alpha.3"
+ipfs-api = "0.4.0-alpha"
 multibase = "0.6"
 multihash = "0.7"
 serde = "1"
