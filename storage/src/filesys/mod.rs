@@ -14,7 +14,7 @@ use mercury_home_protocol::{Profile, ProfileId};
 
 pub struct AsyncFileHandler{
     path : String,
-    pool : ThreadPool,
+    pool : Rc<ThreadPool>,
 }
 
 impl AsyncFileHandler{
@@ -24,7 +24,7 @@ impl AsyncFileHandler{
             Ok(_)=>Ok(
                 AsyncFileHandler{
                     path: main_directory, 
-                    pool : ThreadPool::new(),
+                    pool : Rc::new(ThreadPool::new()),
                 }
             ),
             Err(e)=>Err(StorageError::StringError(e.description().to_owned()))
@@ -33,7 +33,7 @@ impl AsyncFileHandler{
 
     // TODO: this call will move away the ThreadPool, which still makes sharing of pools impossible across multiple 
     // entities. Some solution need to be invented to permit sharing Rc<ThreadPool> maybe
-    pub fn new_with_pool(main_directory : String, pool: ThreadPool) 
+    pub fn new_with_pool(main_directory : String, pool: Rc<ThreadPool>) 
     -> Result<Self, StorageError>{
         match create_dir_all(Path::new(&main_directory)){
             Ok(_)=>Ok(
@@ -80,7 +80,7 @@ impl AsyncFileHandler{
             File::create(self.get_path(path))
                 // TODO: map the error in a way to preserve the original error too
                 .map_err(|e| StorageError::StringError(e.description().to_owned()))
-                .and_then(move |file| {                     
+                .and_then(move |file| {                
                     write_all(file, content)
                         .map(|_| ()) 
                         // TODO: map the error in a way to preserve the original error too
@@ -214,13 +214,14 @@ fn future_file_key_value(){
 #[test]
 fn one_pool_multiple_filehandler(){
     //tokio reactor is only needed to read from a file not to write into a file
+    //this error fails because the same pool with default 100 thread limit is used for two 100-100 thread jobs
     use tokio_core::reactor;
 
     let mut reactor = reactor::Core::new().unwrap();
     println!("\n\n\n");
-    let tpool = ThreadPool::new();
-    let mut alpha_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/alpha/"), tpool).unwrap();
-    let mut beta_storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/beta/")).unwrap();
+    let tpool = Rc::new(ThreadPool::new());
+    let mut alpha_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/alpha/"), Rc::clone(&tpool)).unwrap();
+    let mut beta_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/beta/"), tpool).unwrap();
     let json = String::from("<Json:json>");
     let file_path = String::from("alma.json");
     for i in 0..100{
