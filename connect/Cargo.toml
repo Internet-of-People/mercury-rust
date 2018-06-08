@@ -10,7 +10,7 @@ futures = "0.1"
 log = "0.4"
 mercury-home-protocol = { path="../home-protocol" }
 multiaddr = "*"
-multihash = "*"
+#multihash = "*"
 tokio-core = "0.1"
 tokio-io = "*"
 

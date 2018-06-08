@@ -5,6 +5,8 @@ use signatory::{ed25519::FromSeed, providers::dalek};
 
 use ::*;
 
+
+
 pub trait ProfileValidator
 {
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
@@ -16,6 +18,31 @@ impl Default for Box<ProfileValidator> {
         Box::new(MultiHashProfileValidator::default())
     }
 }
+
+
+
+pub struct MultiHashProfileValidator {}
+
+impl Default for MultiHashProfileValidator
+{
+    fn default() -> Self { Self{} }
+}
+
+impl ProfileValidator for MultiHashProfileValidator
+{
+    fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
+        -> Result<bool, ErrorToBeSpecified>
+    {
+        let id_hashalgo = multihash::decode(profile_id.0.as_slice())
+            .map_err(|e| ErrorToBeSpecified::TODO(e.description().to_owned()))
+            ?.alg;
+        let key_hash = multihash::encode(id_hashalgo, public_key.0.as_slice())
+            .map_err(|e| ErrorToBeSpecified::TODO(e.description().to_owned()))?;
+        Ok(key_hash == profile_id.0)
+    }
+}
+
+
 
 pub trait SignatureValidator
 {
@@ -29,34 +56,7 @@ impl Default for Box<SignatureValidator> {
     }
 }
 
-#[derive(Default)]
-pub struct CompositeValidator
-{
-    profile_validator:      Box<ProfileValidator>,
-    signature_validator:    Box<SignatureValidator>,
-}
 
-impl CompositeValidator
-{
-    pub fn compose(profile_validator: Box<ProfileValidator>, signature_validator: Box<SignatureValidator>) -> Self
-        { Self{ profile_validator, signature_validator } }
-}
-
-impl ProfileValidator for CompositeValidator
-{
-    fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
-        -> Result<bool, ErrorToBeSpecified>
-    { self.profile_validator.validate_profile(public_key, profile_id) }
-}
-
-impl SignatureValidator for CompositeValidator
-{
-    fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
-        -> Result<bool, ErrorToBeSpecified>
-    { self.signature_validator.validate_signature(public_key, data, signature) }
-}
-
-impl Validator for CompositeValidator {}
 
 pub struct Ed25519Signer
 {
@@ -94,6 +94,7 @@ impl Signer for Ed25519Signer
 }
 
 
+
 pub struct Ed25519Validator {}
 
 impl Default for Ed25519Validator
@@ -118,26 +119,6 @@ impl SignatureValidator for Ed25519Validator
     }
 }
 
-pub struct MultiHashProfileValidator {}
-
-impl Default for MultiHashProfileValidator
-{
-    fn default() -> Self { Self{} }
-}
-
-impl ProfileValidator for MultiHashProfileValidator
-{
-    fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
-        -> Result<bool, ErrorToBeSpecified>
-    {
-        let id_hashalgo = multihash::decode(profile_id.0.as_slice())
-            .map_err(|e| ErrorToBeSpecified::TODO(e.description().to_owned()))
-            ?.alg;
-        let key_hash = multihash::encode(id_hashalgo, public_key.0.as_slice())
-            .map_err(|e| ErrorToBeSpecified::TODO(e.description().to_owned()))?;
-        Ok(key_hash == profile_id.0)
-    }
-}
 
 impl<'a> From<ed25519_dalek::SecretKey> for PrivateKey {
     fn from(secret_key: ed25519_dalek::SecretKey) -> Self {
@@ -160,6 +141,37 @@ impl<'a> From<&'a PublicKey> for ProfileId {
         }
     }
 }
+
+
+
+#[derive(Default)]
+pub struct CompositeValidator
+{
+    profile_validator:      Box<ProfileValidator>,
+    signature_validator:    Box<SignatureValidator>,
+}
+
+impl CompositeValidator
+{
+    pub fn compose(profile_validator: Box<ProfileValidator>, signature_validator: Box<SignatureValidator>) -> Self
+        { Self{ profile_validator, signature_validator } }
+}
+
+impl ProfileValidator for CompositeValidator
+{
+    fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
+        -> Result<bool, ErrorToBeSpecified>
+    { self.profile_validator.validate_profile(public_key, profile_id) }
+}
+
+impl SignatureValidator for CompositeValidator
+{
+    fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
+        -> Result<bool, ErrorToBeSpecified>
+    { self.signature_validator.validate_signature(public_key, data, signature) }
+}
+
+impl Validator for CompositeValidator {}
 
 
 

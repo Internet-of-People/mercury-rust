@@ -565,10 +565,17 @@ mod tests
         use std::time::Duration;
         use super::protocol_capnp::*;
 
+//        use mercury_storage::common::Hasher;
+//        let test = b"\xD7\x5A\x98\x01\x82\xB1\x0A\xB7\xD5\x4B\xFE\xD3\xC9\x64\x07\x3A\x0E\xE1\x72\xF3\xDA\xA6\x23\x25\xAF\x02\x1A\x68\xF7\x07\x51\x1A".to_vec();
+//        let hasher = mercury_storage::common::imp::MultiHasher::new(multihash::Hash::Keccak256);
+//        let hash = hasher.get_hash(&test).unwrap();
+//        let mapped = hash.iter().map( |x| format!("\\x{:X?}", x) ).collect::<Vec<_>>().join("");
+//        println!("HASH: {:?}", mapped );
+
         let mut setup = TestSetup::new();
 
-        let prof_id = ProfileId( "joooozsi".as_bytes().to_owned() );
-        let home_id = ProfileId( "HomeSweetHome".as_bytes().to_owned() );
+        let prof_id = ProfileId( b"\x1B\x20\x9E\xE7\xC0\x9B\x84\x64\x02\x8B\x2C\xD4\x06\xF7\xF7\xCC\x70\xAD\xC6\x36\x59\xB5\xD3\x76\x71\xDC\x2B\x58\x8D\xB3\x24\x46\x68\x4A".to_vec() );
+        let home_id = ProfileId( b"\xEC\x17\x2B\x93\xAD\x5E\x56\x3B\xF4\x93\x2C\x70\xE1\x24\x50\x34\xC3\x54\x67\xEF\x2E\xFD\x4D\x64\xEB\xF8\x19\x68\x34\x67\xE2\xBF".to_vec() );
         let signer = Rc::new( DummySigner{ prof_id: prof_id.clone(), pub_key: PublicKey(Vec::new()) } );
         let home_facet = HomeFacet{ addrs: Vec::new(), data: Vec::new() };
         let home_prof = Profile::new( &home_id,

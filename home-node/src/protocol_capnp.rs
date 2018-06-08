@@ -51,8 +51,8 @@ impl HomeDispatcherCapnProto
 
 
 // NOTE useful for testing connection lifecycles
-//impl Drop for HomeDispatcherCapnProto
-//    { fn drop(&mut self) { debug!("Home dropped"); } }
+impl Drop for HomeDispatcherCapnProto
+    { fn drop(&mut self) { debug!("Home connection dropped"); } }
 
 
 impl profile_repo::Server for HomeDispatcherCapnProto

@@ -13,7 +13,7 @@ log4rs = "0.8"
 mercury-home-protocol = { path="../home-protocol" }
 mercury-storage = { path="../storage" }
 multiaddr = "*"
-multihash = "*"
+#multihash = "*"
 tokio-core = "0.1"
 
 tokio-io = "*"

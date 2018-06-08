@@ -6,7 +6,7 @@ extern crate futures;
 extern crate log;
 extern crate mercury_home_protocol;
 extern crate multiaddr;
-extern crate multihash;
+//extern crate multihash;
 extern crate tokio_core;
 extern crate tokio_io;
 
