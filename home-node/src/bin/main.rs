@@ -33,6 +33,7 @@ fn main()
     let handle = core.handle();
 
     // TODO parse a configuration and set up keys accordingly, possibly from hardware wallet
+    //      until then for some test keys see https://github.com/tendermint/signatory/blob/master/src/ed25519/test_vectors.rs
     let secret_key = PrivateKey( b"\x83\x3F\xE6\x24\x09\x23\x7B\x9D\x62\xEC\x77\x58\x75\x20\x91\x1E\x9A\x75\x9C\xEC\x1D\x19\x75\x5B\x7D\xA9\x01\xB9\x6D\xCA\x3D\x42".to_vec() );
     let public_key = PublicKey( b"\xEC\x17\x2B\x93\xAD\x5E\x56\x3B\xF4\x93\x2C\x70\xE1\x24\x50\x34\xC3\x54\x67\xEF\x2E\xFD\x4D\x64\xEB\xF8\x19\x68\x34\x67\xE2\xBF".to_vec() );
     let signer = Rc::new( Ed25519Signer::new(&secret_key, &public_key)

@@ -234,8 +234,8 @@ impl HomeSessionDispatcherCapnProto
 }
 
 // NOTE useful for testing connection lifecycles
-//impl Drop for HomeSessionDispatcherCapnProto
-//    { fn drop(&mut self) { debug!("Session dropped"); } }
+impl Drop for HomeSessionDispatcherCapnProto
+    { fn drop(&mut self) { debug!("Session over Home connection dropped"); } }
 
 impl home_session::Server for HomeSessionDispatcherCapnProto
 {
