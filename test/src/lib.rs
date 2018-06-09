@@ -48,7 +48,7 @@ pub fn generate_ownprofile(facet: ProfileFacet, private_data: Vec<u8>)
 {
     let (private_key, public_key) = generate_keypair();
     let signer = Ed25519Signer::new(&private_key, &public_key).expect("TODO: this should not be able to fail");
-    let profile = Profile::new( &(&public_key).into(), &public_key, &vec![facet] );
+    let profile = Profile::new( &(&public_key).into(), &public_key, &facet );
     //let profile = Profile::new( &ProfileId::from(&public_key), &public_key, vec![facet] );
     let own_profile = OwnProfile::new(&profile, &private_data);
     (own_profile, signer)

@@ -106,7 +106,7 @@ impl<'a> TryFrom<profile::Reader<'a>> for ::Profile
         };
 
         match facet_res {
-            Ok(facet) => Ok(::Profile::new(&profile_id, &public_key, &[facet]) ),
+            Ok(facet) => Ok(::Profile::new(&profile_id, &public_key, &facet) ),
             Err(e) => Err(::capnp::Error::failed(e.to_owned())),
         }
     }
@@ -118,19 +118,16 @@ impl<'a> FillFrom<::Profile> for profile::Builder<'a>
     {
         self.set_id( (&src.id).into() );
         self.set_public_key( (&src.public_key).into() );
-        match src.facets.iter().next() {
-            Some(::ProfileFacet::Persona(facet)) => {
+        match src.facet {
+            ::ProfileFacet::Persona(ref facet) => {
                 let persona_builder = self.init_facet().init_persona();
                 let mut homes = persona_builder.init_homes(facet.homes.len() as u32);
                 for (i, home) in facet.homes.iter().enumerate() {
                     homes.reborrow().get(i as u32).fill_from(&home);
                 }
             }
-            Some(_) => {
+            _ => {
                 panic!("Unimplemented");  // TODO implement home and application facets
-            }
-            None => {
-                panic!("Should be unreachable code"); // TODO refactor Profile to have a single mandatory facet
             }
         }
     }

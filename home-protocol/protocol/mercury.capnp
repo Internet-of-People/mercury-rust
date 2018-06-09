@@ -21,7 +21,6 @@ struct Profile
     id        @0 : ProfileId;
     publicKey @1 : PublicKey;
 
-    # Currently only a single facet is supported in a profile
     facet        : union {
         persona :group {
             homes @2 : List(RelationProof);

@@ -151,7 +151,7 @@ fn test_home_register(mut setup: TestSetup)
     let registered_ownprofile = register_client_from_setup(&mut setup);
     let validator = CompositeValidator::default();
 
-    if let ProfileFacet::Persona(ref facet) = registered_ownprofile.profile.facets[0] {
+    if let ProfileFacet::Persona(ref facet) = registered_ownprofile.profile.facet {
         let home_proof = &facet.homes[0];
 
         assert_eq!(validator.validate_relation_proof(

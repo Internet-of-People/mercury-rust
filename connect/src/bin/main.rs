@@ -39,7 +39,8 @@ fn main()
     let client_public_key = PublicKey( b"\xD7\x5A\x98\x01\x82\xB1\x0A\xB7\xD5\x4B\xFE\xD3\xC9\x64\x07\x3A\x0E\xE1\x72\xF3\xDA\xA6\x23\x25\xAF\x02\x1A\x68\xF7\x07\x51\x1A".to_vec() );
     let client_profile_id = ProfileId( b"\x1B\x20\x9E\xE7\xC0\x9B\x84\x64\x02\x8B\x2C\xD4\x06\xF7\xF7\xCC\x70\xAD\xC6\x36\x59\xB5\xD3\x76\x71\xDC\x2B\x58\x8D\xB3\x24\x46\x68\x4A".to_vec() );
     let client_signer = Rc::new( Ed25519Signer::new(&client_private_key, &client_public_key).unwrap() );
-    let client_profile = Profile::new(&client_profile_id, &client_public_key, &vec![]);
+    let client_facet = ProfileFacet::Persona(PersonaFacet {homes: vec![], data: vec![]});
+    let client_profile = Profile::new(&client_profile_id, &client_public_key, &client_facet);
     let client_own_profile = OwnProfile::new(&client_profile, &vec![]);
 
     let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");

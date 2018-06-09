@@ -103,15 +103,13 @@ impl HomeConnector for SimpleTcpHomeConnector
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
     {
+        let addrs = match home_profile.facet {
+            ProfileFacet::Home(ref home_facet) => home_facet.addrs.clone(),
+            _ => return Box::new(future::err(ErrorToBeSpecified::TODO("connect: not a home profile".to_owned()))),
+        };
+
         let handle_clone = self.handle.clone();
-        let tcp_conns = home_profile.facets.iter()
-            .flat_map( |facet|
-                match facet {
-                    &ProfileFacet::Home(ref home) => home.addrs.clone(),
-                    _ => Vec::new()
-                }
-            )
-            .map(  move |addr| SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone) );
+        let tcp_conns = addrs.iter().map( move |addr| SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone) );
 
         let home_profile_clone = home_profile.clone();
         let handle_clone = self.handle.clone();

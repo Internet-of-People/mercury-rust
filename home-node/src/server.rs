@@ -200,7 +200,7 @@ impl Home for HomeConnectionServer
         };
 
         let mut own_prof_modified = own_prof.clone();
-        if let ProfileFacet::Persona(ref mut profile_facet) = own_prof_modified.profile.facets[0] {
+        if let ProfileFacet::Persona(ref mut profile_facet) = own_prof_modified.profile.facet {
             profile_facet.homes.push(home_proof)
         } else {
             return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: Only personas are allowed to register".to_owned() )) ) )
