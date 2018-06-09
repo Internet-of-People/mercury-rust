@@ -151,18 +151,19 @@ fn test_home_register(mut setup: TestSetup)
     let registered_ownprofile = register_client_from_setup(&mut setup);
     let validator = CompositeValidator::default();
 
-    if let ProfileFacet::Persona(ref facet) = registered_ownprofile.profile.facet {
-        let home_proof = &facet.homes[0];
+    match registered_ownprofile.profile.facet {
+        ProfileFacet::Persona(ref facet) => {
+            let home_proof = &facet.homes[0];
 
-        assert_eq!(validator.validate_relation_proof(
-            &home_proof,
-            &setup.testclient.home_context.peer_id(),
-            &setup.testclient.home_context.peer_pubkey(),
-            &setup.testclient.ownprofile.profile.id,
-            &setup.testclient.ownprofile.profile.public_key
-        ), Ok(()));
-    } else {
-        assert!(false);
+            assert_eq!(validator.validate_relation_proof(
+                &home_proof,
+                &setup.testclient.home_context.peer_id(),
+                &setup.testclient.home_context.peer_pubkey(),
+                &setup.testclient.ownprofile.profile.id,
+                &setup.testclient.ownprofile.profile.public_key
+            ), Ok(()));
+        },
+        _ => panic!(),
     }
 }
 
