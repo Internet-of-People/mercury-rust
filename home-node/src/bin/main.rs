@@ -74,7 +74,7 @@ fn main()
                         warn!("Failed to create server instance: {:?}", e);
                         ()
                     } )?;
-                protocol_capnp::HomeDispatcherCapnProto::dispatch_tcp( Box::new(home), socket, handle_clone.clone() );
+                protocol_capnp::HomeDispatcherCapnProto::dispatch_tcp( Rc::new(home), socket, handle_clone.clone() );
                 Ok( () )
             } );
 

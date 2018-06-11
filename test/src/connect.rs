@@ -42,7 +42,7 @@ fn test_events()
         println!("Accepted client connection, serving requests");
         //let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
         let store_clone = Rc::clone(&home_storage);
-        let home = Box::new( MyDummyHome::new( homeprof.clone() , store_clone ) );
+        let home = Rc::new( MyDummyHome::new( homeprof.clone() , store_clone ) );
         HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle1.clone() );
         Ok( () )
     } ).map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")));

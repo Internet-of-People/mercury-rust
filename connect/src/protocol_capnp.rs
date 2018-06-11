@@ -47,7 +47,6 @@ impl HomeClientCapnProto
         Self{ context, home, repo, handle }
     }
 
-
     pub fn new_tcp(tcp_stream: TcpStream, context: PeerContext, handle: reactor::Handle) -> Self
     {
         use tokio_io::AsyncRead;
@@ -56,6 +55,8 @@ impl HomeClientCapnProto
         let (reader, writer) = tcp_stream.split();
         HomeClientCapnProto::new(reader, writer, context, handle)
     }
+
+
 }
 
 

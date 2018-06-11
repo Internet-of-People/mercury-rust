@@ -240,16 +240,33 @@ impl<'a> TryFrom<profile_event::Reader<'a>> for ::ProfileEvent
 
     fn try_from(src: profile_event::Reader) -> Result<Self, Self::Error>
     {
-        // TODO
-        Ok( ::ProfileEvent::Unknown( Vec::new() ) )
+        match src.which()? {
+            profile_event::Which::Unknown(data) => Ok(::ProfileEvent::Unknown(Vec::from(data?))),
+            profile_event::Which::PairingRequest(half_proof) => Ok(::ProfileEvent::PairingRequest(::RelationHalfProof::try_from(half_proof?)?)),
+            profile_event::Which::PairingResponse(proof) => Ok(::ProfileEvent::PairingResponse(::RelationProof::try_from(proof?)?)),
+        }
     }
 }
 
 impl<'a> FillFrom<::ProfileEvent> for profile_event::Builder<'a>
 {
-    fn fill_from(mut self, src: &::ProfileEvent)
+    fn fill_from(self, src: &::ProfileEvent)
     {
-        // TODO
+        match src {
+            ::ProfileEvent::PairingRequest(half_proof) => {
+                let mut builder = self.init_pairing_request();
+                builder.reborrow().fill_from(half_proof);
+            },
+            ::ProfileEvent::PairingResponse(proof) => {
+                let mut builder = self.init_pairing_response();
+                builder.reborrow().fill_from(proof);
+            },
+            ::ProfileEvent::Unknown(data) => {
+                let _builder = self.init_unknown(data.len() as u32);
+                // TODO fill with data
+                // builder.reborrow().fill_with(data);
+            },
+        };
     }
 }
 

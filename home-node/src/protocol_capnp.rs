@@ -13,7 +13,7 @@ use mercury_home_protocol::mercury_capnp::*;
 
 pub struct HomeDispatcherCapnProto
 {
-    home:   Box<Home>,
+    home:   Rc<Home>,
     handle: reactor::Handle,
     // TODO probably we should have a SessionFactory here instead of instantiating sessions "manually"
 }
@@ -22,7 +22,7 @@ pub struct HomeDispatcherCapnProto
 impl HomeDispatcherCapnProto
 {
     // TODO how to access PeerContext in the Home implementation?
-    pub fn dispatch<R,W>(home: Box<Home>, reader: R, writer: W, handle: reactor::Handle)
+    pub fn dispatch<R,W>(home: Rc<Home>, reader: R, writer: W, handle: reactor::Handle)
         where R: std::io::Read  + 'static,
               W: std::io::Write + 'static
     {
@@ -39,7 +39,7 @@ impl HomeDispatcherCapnProto
     }
 
 
-    pub fn dispatch_tcp(home: Box<Home>, tcp_stream: TcpStream, handle: reactor::Handle)
+    pub fn dispatch_tcp(home: Rc<Home>, tcp_stream: TcpStream, handle: reactor::Handle)
     {
         use tokio_io::AsyncRead;
 

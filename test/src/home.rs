@@ -1,8 +1,9 @@
 use tokio_core::reactor;
 
 use mercury_home_protocol::*;
-use mercury_home_node::server::*;
-use mercury_connect::*;
+use mercury_home_node::{ server::*, protocol_capnp::HomeDispatcherCapnProto };
+use mercury_connect::{ *, protocol_capnp::HomeClientCapnProto };
+
 use futures::Stream;
 use super::*;
 
@@ -11,13 +12,85 @@ pub struct TestClient
 {
     ownprofile: OwnProfile,
     home_context: PeerContext,
-    home_connection: Rc<HomeConnectionServer>,
+    home_connection: Rc<Home>,
+}
+
+#[derive(Clone)]
+pub enum TestMode {
+    Direct,
+    Memsocket,
 }
 
 impl TestClient
 {
-    fn new(client_ownprofile: OwnProfile, client_signer: Rc<Signer>, home_server: Rc<HomeServer>, home_signer: Rc<Signer>, home_profile: &Profile) -> Self
-    {
+
+    fn new(
+        test_mode: TestMode,
+        ownprofile: OwnProfile,
+        client_signer: Rc<Signer>,
+        home_server: Rc<HomeServer>,
+        home_signer: Rc<Signer>,
+        home_profile: &Profile,
+        handle: reactor::Handle
+    ) -> Self {
+        match test_mode {
+            TestMode::Direct => Self::direct(ownprofile, client_signer, home_server, home_signer, home_profile),
+            TestMode::Memsocket => Self::memsocket(ownprofile, client_signer, home_server, home_signer, home_profile, handle),
+        }
+    }
+
+    fn memsocket(
+        ownprofile: OwnProfile,
+        client_signer: Rc<Signer>,
+        home_server: Rc<HomeServer>,
+        home_signer: Rc<Signer>,
+        home_profile: &Profile,
+        handle: reactor::Handle
+    ) -> Self {
+
+        let (receiver_from_client, sender_from_client) = memsocket::unbounded();  // client to server
+        let (receiver_from_server, sender_from_server) = memsocket::unbounded();  // server to client
+
+        // server
+        let home_client_context = Rc::new(PeerContext::new(
+            home_signer.clone(),
+            ownprofile.profile.public_key.clone(),
+            ownprofile.profile.id.clone()
+        ));
+
+        let home_connection = Rc::new(HomeConnectionServer::new(home_client_context, home_server.clone()).unwrap());
+
+        HomeDispatcherCapnProto::dispatch(
+            home_connection,
+            receiver_from_client,
+            sender_from_server,
+            handle.clone()
+        );
+
+        // client
+        let home_context = PeerContext::new_from_profile(client_signer.clone(), &home_profile);
+
+        let client_capnp = HomeClientCapnProto::new(
+            receiver_from_server,
+            sender_from_client,
+            home_context.clone(),
+            handle.clone()
+        );
+
+        TestClient {
+            ownprofile: ownprofile.clone(),
+            home_context,
+            home_connection: Rc::new(client_capnp),
+        }
+    }
+
+    fn direct(
+        client_ownprofile: OwnProfile,
+        client_signer: Rc<Signer>,
+        home_server: Rc<HomeServer>,
+        home_signer: Rc<Signer>,
+        home_profile: &Profile
+    ) -> Self {
         let home_client_context = Rc::new(PeerContext::new(
             home_signer.clone(),
             client_ownprofile.profile.public_key.clone(),
@@ -35,8 +108,10 @@ impl TestClient
     }
 }
 
+
 pub struct TestSetup
 {
+    pub mode: TestMode,
     pub reactor: reactor::Core,
     pub home_server: Rc<HomeServer>,
     pub home_signer: Rc<Signer>,
@@ -46,7 +121,7 @@ pub struct TestSetup
 
 impl TestSetup
 {
-    pub fn init_direct()-> Self
+    pub fn init(mode: TestMode)-> Self
     {
         let reactor = reactor::Core::new().unwrap();
 
@@ -58,19 +133,15 @@ impl TestSetup
         let (testclient_ownprofile, testclient_signer) = generate_persona();
 
         let testclient = TestClient::new(
+            mode.clone(),
             testclient_ownprofile,
             Rc::new(testclient_signer),
             home_server.clone(),
             home_signer.clone(),
-            &home_profile
+            &home_profile,
+            reactor.handle()
         );
-
-        Self { reactor, home_server, home_signer, home_profile, testclient }
-    }
-
-    pub fn init_capnp() -> Self
-    {
-        Self::init_direct() // TODO add capnp communication layer here
+        Self { mode, reactor, home_server, home_signer, home_profile, testclient }
     }
 }
 
@@ -94,7 +165,15 @@ fn test_home_events(mut setup: TestSetup)
     let (ownprofile2, signer2) = generate_persona();
     let signer2 = Rc::new(signer2);
 
-    let testclient2 = TestClient::new(ownprofile2, signer2.clone(), setup.home_server.clone(), setup.home_signer.clone(), &setup.home_profile.clone());
+    let home_server_clone = setup.home_server.clone();
+    let home_signer_clone = setup.home_signer.clone();
+    let home_profile_clone = setup.home_profile.clone();
+    let testclient2 = TestClient::new(
+        setup.mode.clone(),
+        ownprofile2, signer2.clone(),
+        home_server_clone, home_signer_clone, &home_profile_clone,
+        setup.reactor.handle()
+    );
     let ownprofile2 = register_client(&mut setup, &testclient2);
 
     let session1 = setup.reactor.run(setup.testclient.home_connection.login(ownprofile1.profile.id.clone())).unwrap();
@@ -107,24 +186,33 @@ fn test_home_events(mut setup: TestSetup)
     let pair_result = setup.reactor.run(setup.testclient.home_connection.pair_request(half_proof)).unwrap();
     assert_eq!(pair_result, ());
 
-    let pairing_request_event = events2.wait().next().unwrap().unwrap().unwrap();
-    if let ProfileEvent::PairingRequest(half_proof) = pairing_request_event {
-        assert_eq!(half_proof.peer_id, ownprofile2.profile.id);
-        let proof = RelationProof::sign_remaining_half(&half_proof, &*signer2).unwrap();
-        setup.reactor.run(testclient2.home_connection.pair_response(proof)).unwrap();
-    } else {
-        panic!();
+    let events_fut = events2.take(1).collect();
+    let single_event: Vec<Result<ProfileEvent, String>> = setup.reactor.run(events_fut).unwrap();
+    let pairing_request_event = single_event.get(0).unwrap().clone().unwrap();
+
+    match pairing_request_event {
+        ProfileEvent::PairingRequest(half_proof) => {
+            assert_eq!(half_proof.peer_id, ownprofile2.profile.id);
+
+            let proof = RelationProof::sign_remaining_half(&half_proof, &*signer2).unwrap();
+            setup.reactor.run(testclient2.home_connection.pair_response(proof)).unwrap();
+        },
+        _ => panic!("not a PairingRequest"),
     }
 
-    let pairing_response_event = events1.wait().next().unwrap().unwrap().unwrap();
-    if let ProfileEvent::PairingResponse(proof) = pairing_response_event {
-        let validator = CompositeValidator::default();
-        validator.validate_relation_proof(&proof,
-            &ownprofile1.profile.id, &ownprofile1.profile.public_key,
-            &ownprofile2.profile.id, &ownprofile2.profile.public_key
-        ).expect("proof should be valid");
-    } else {
-        panic!();
+    let events_fut = events1.take(1).collect();
+    let single_event = setup.reactor.run(events_fut).unwrap();
+    let pairing_response_event = single_event.get(0).unwrap().clone().unwrap();
+
+    match pairing_response_event {
+        ProfileEvent::PairingResponse(proof) => {
+            let validator = CompositeValidator::default();
+            validator.validate_relation_proof(&proof,
+                &ownprofile1.profile.id, &ownprofile1.profile.public_key,
+                &ownprofile2.profile.id, &ownprofile2.profile.public_key
+            ).expect("proof should be valid");
+        },
+        _ => panic!("not a PairingResponse"),
     }
 }
 
@@ -170,29 +258,29 @@ fn test_home_register(mut setup: TestSetup)
 #[test]
 fn test_home_register_configs()
 {
-    test_home_register( TestSetup::init_direct() );
-    test_home_register( TestSetup::init_capnp() );
+    test_home_register( TestSetup::init(TestMode::Direct) );
+    test_home_register( TestSetup::init(TestMode::Memsocket) );
 }
 
 #[test]
 fn test_home_claim_configs()
 {
-    test_home_claim( TestSetup::init_direct() );
-    test_home_claim( TestSetup::init_capnp() );
+    test_home_claim( TestSetup::init(TestMode::Direct) );
+    test_home_claim( TestSetup::init(TestMode::Memsocket) );
 }
 
 #[test]
 fn test_home_events_configs()
 {
-    test_home_events( TestSetup::init_direct() );
-    test_home_events( TestSetup::init_capnp() );
+    test_home_events( TestSetup::init(TestMode::Direct) );
+    test_home_events( TestSetup::init(TestMode::Memsocket) );
 }
 
 #[test]
 fn test_home_login_configs()
 {
-    test_home_login( TestSetup::init_direct() );
-    test_home_login( TestSetup::init_capnp() );
+    test_home_login( TestSetup::init(TestMode::Direct) );
+    test_home_login( TestSetup::init(TestMode::Memsocket) );
 }
 
 #[test]
