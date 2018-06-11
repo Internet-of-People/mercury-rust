@@ -49,14 +49,20 @@ fn main()
     let client_signer_clone = client_signer.clone();
     let test_fut = TcpStream::connect( &addr, &reactor.handle() )
         .map_err( |e| ErrorToBeSpecified::TODO( format!("temporaty_test_capnproto connect: {:?}", e) ) )
-        .map( move |tcp_stream|
+        .and_then( move |socket|
         {
-            let home_id = ProfileId( b"\xEC\x17\x2B\x93\xAD\x5E\x56\x3B\xF4\x93\x2C\x70\xE1\x24\x50\x34\xC3\x54\x67\xEF\x2E\xFD\x4D\x64\xEB\xF8\x19\x68\x34\x67\xE2\xBF".to_vec() );
-            let home_public_key = PublicKey( b"\xEC\x17\x2B\x93\xAD\x5E\x56\x3B\xF4\x93\x2C\x70\xE1\x24\x50\x34\xC3\x54\x67\xEF\x2E\xFD\x4D\x64\xEB\xF8\x19\x68\x34\x67\xE2\xBF".to_vec() );
-            let home_facet = HomeFacet{ addrs: Vec::new(), data: Vec::new() };
-            let home_prof = Profile::new( &home_id, &home_public_key, &[ ProfileFacet::Home(home_facet) ] );
-            let home_ctx = PeerContext::new_from_profile(client_signer_clone, &home_prof);
-            ( home_id, HomeClientCapnProto::new_tcp(tcp_stream, home_ctx, handle) )
+            handshake::temp_handshake_until_tls_is_implemented( socket, client_signer_clone )
+        } )
+        .map( move |(socket, home_context)|
+        {
+//            let home_id = ProfileId( b"\xEC\x17\x2B\x93\xAD\x5E\x56\x3B\xF4\x93\x2C\x70\xE1\x24\x50\x34\xC3\x54\x67\xEF\x2E\xFD\x4D\x64\xEB\xF8\x19\x68\x34\x67\xE2\xBF".to_vec() );
+//            let home_public_key = PublicKey( b"\xEC\x17\x2B\x93\xAD\x5E\x56\x3B\xF4\x93\x2C\x70\xE1\x24\x50\x34\xC3\x54\x67\xEF\x2E\xFD\x4D\x64\xEB\xF8\x19\x68\x34\x67\xE2\xBF".to_vec() );
+//            let home_facet = HomeFacet{ addrs: Vec::new(), data: Vec::new() };
+//            let home_prof = Profile::new( &home_id, &home_public_key, &[ ProfileFacet::Home(home_facet) ] );
+//            let home_ctx = PeerContext::new_from_profile(client_signer_clone, &home_prof);
+            let home_id = home_context.peer_id().clone();
+            let home_client = HomeClientCapnProto::new_tcp(socket, home_context, handle);
+            (home_id, home_client)
         } )
         .and_then( |(home_id, home)|
         {

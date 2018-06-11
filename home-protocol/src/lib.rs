@@ -5,6 +5,8 @@ extern crate capnp;
 extern crate capnp_rpc;
 extern crate ed25519_dalek;
 extern crate futures;
+#[macro_use]
+extern crate log;
 extern crate multiaddr;
 extern crate multihash;
 extern crate serde;

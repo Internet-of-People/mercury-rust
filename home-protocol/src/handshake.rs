@@ -19,9 +19,10 @@ struct AuthenticationInfo
 }
 
 
-pub fn temp_handshake_until_tls_is_implemented(conn: TcpStream, signer: Rc<Signer>)
+pub fn temp_handshake_until_tls_is_implemented(socket: TcpStream, signer: Rc<Signer>)
     -> Box< Future<Item=(TcpStream, PeerContext), Error=ErrorToBeSpecified> >
 {
+    debug!("Starting handshake with peer");
     let auth_info = AuthenticationInfo{
         profile_id: signer.profile_id().to_owned(), public_key: signer.public_key().to_owned() };
 
@@ -33,34 +34,34 @@ pub fn temp_handshake_until_tls_is_implemented(conn: TcpStream, signer: Rc<Signe
 
     let mut size_out_bytes = BytesMut::with_capacity( mem::size_of_val(&bufsize) );
     size_out_bytes.put_u32_le(bufsize);
+    debug!("Sending serialized auth info of myself");
 
-    let handshake_fut = io::write_all(conn, size_out_bytes)
-        .and_then( move |(conn, _buf)| { io::write_all(conn, out_bytes) } )
-        .and_then( move |(conn, _buf)|
+    let handshake_fut = io::write_all(socket, size_out_bytes)
+        .and_then( move |(socket, _buf)| { io::write_all(socket, out_bytes) } )
+        .and_then( move |(socket, _buf)|
         {
-            let mut size_bytes = BytesMut::with_capacity( mem::size_of_val(&bufsize) );
-            io::read_exact(conn, size_bytes)
+            debug!("Reading buffer size for peer info");
+            let mut size_bytes = BytesMut::new();
+            size_bytes.resize( mem::size_of_val(&bufsize), 0 );
+            io::read_exact(socket, size_bytes)
         } )
-        .and_then( |(conn, buf)|
+        .and_then( |(socket, buf)|
         {
-            let size_in_bytes = Bytes::from(buf).into_buf().get_u32_le();
-            let in_bytes = BytesMut::with_capacity(size_in_bytes as usize);
-            io::read_exact(conn, in_bytes)
+            debug!("Reading peer info, size: {:?}", buf);
+            let size_in_bytes = buf.into_buf().get_u32_le();
+            let mut in_bytes = BytesMut::new();
+            in_bytes.resize(size_in_bytes as usize, 0);
+            io::read_exact(socket, in_bytes)
         } )
         .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
-        .and_then( |(conn, buf)|
+        .and_then( |(socket, buf)|
         {
+            debug!("Processing peer info received");
             let peer_auth: AuthenticationInfo = deserialize(&buf)
                 .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
-
-//            let peer_auth: AuthenticationInfo = match deserialize(&buf)
-//            {
-//                Ok(auth) => auth,
-//                Err(e) => return Err(ErrorToBeSpecified::TODO( e.description().to_owned() ) ),
-//            };
+            debug!("Received peer identity: {:?}", peer_auth);
             let peer_ctx = PeerContext::new( signer, peer_auth.public_key, peer_auth.profile_id );
-            Ok( (conn, peer_ctx) )
+            Ok( (socket, peer_ctx) )
         } );
     Box::new(handshake_fut)
-    //Box::new( future::err(ErrorToBeSpecified::TODO("unimplemented".to_owned())))
 }
