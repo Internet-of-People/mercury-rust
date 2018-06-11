@@ -19,7 +19,7 @@ use std::rc::Rc;
 use bincode::serialize;
 use futures::{Future, sync::mpsc};
 
-use multiaddr::Multiaddr;
+use multiaddr::{Multiaddr, ToMultiaddr};
 use crypto::{ProfileValidator, SignatureValidator};
 
 use serde::{Deserialize, Deserializer, Serializer};
@@ -134,50 +134,31 @@ pub struct PersonaFacet
     pub data:   Vec<u8>,
 }
 
-fn join_serialize<S>(x: &Vec<Multiaddr>, s: S) -> Result<S::Ok, S::Error>
+fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
     let mut seq = s.serialize_seq(Some(x.len()))?;
     for mr in x{
-        seq.serialize_element(&mr.to_bytes());
+        seq.serialize_element(&mr.to_string());
     }
     seq.end()
 }
 
-fn split_deserialize<'de, D>(deserializer: D) -> Result<Vec<Multiaddr>, D::Error>
+fn deserialize_multiaddr_vec<'de, D>(deserializer: D) -> Result<Vec<Multiaddr>, D::Error>
 where
     D: Deserializer<'de>,
 {
     //wrong deserializer function
-    let mapped: Vec<u8> = Deserialize::deserialize(deserializer)?;
+    let mapped: Vec<String> = Deserialize::deserialize(deserializer)?;
     let mut res = Vec::new();
-    println!("mapped : {:?}", mapped);
-    // for bytes_vec in mapped.iter(){
-        // let bytes = bytes_vec.to_owned();
-        // match Multiaddr::from_bytes(mapped){
-        //     Ok(multi)=>{println!("ok : {:?}", multi);res.push(multi);}
-        //     Err(_e)=>{println!("err : {:?}", _e);();}
-        // }
-        // println!("bytes_vec : {:?}", bytes_vec);
-        
-    // }   
-
-impl<'de> Deserialize<'de> for Multiaddr {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        let s: &str = Deserialize::deserialize(deserializer)?;
-        // do better hex decoding than this
-        u64::from_str_radix(&s[2..], 16)
-            .map(Account)
-            .map_err(D::Error::custom)
-    }
-}
-
-    // let ret = deserializer.deserialize_any();
-    println!("multi_vec : {:?}", res);
+    for str_ma in mapped.iter(){;
+        match str_ma.to_multiaddr(){
+            Ok(multi)=>{res.push(multi);}
+            //TODO fix error handling
+            Err(_e)=>{();}
+        } 
+    }   
     Ok(res)
 }
 
@@ -187,8 +168,8 @@ pub struct HomeFacet
 {
     /// Addresses of the same home server. A typical scenario of multiple addresses is when there is
     /// one IPv4 address/port, one onion address/port and some IPv6 address/port pairs.
-    #[serde(serialize_with = "join_serialize")]
-    #[serde(deserialize_with = "split_deserialize")]
+    #[serde(serialize_with = "serialize_multiaddr_vec")]
+    #[serde(deserialize_with = "deserialize_multiaddr_vec")]
     pub addrs:  Vec<Multiaddr>,
     pub data:   Vec<u8>,
 }
