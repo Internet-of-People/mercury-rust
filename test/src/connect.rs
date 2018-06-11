@@ -453,16 +453,13 @@ fn profile_serialize_async_key_value_test() {
         &ProfileId("userprofile".into()), 
         &PublicKey("userkey".into()), 
         &vec![]
-    );
-
+    ); 
     let homeprofile = Profile::new_home(
         ProfileId("homeprofile".into()), 
         PublicKey("homekey".into()), 
         String::from("/ip4/127.0.0.1/udp/9876").to_multiaddr().unwrap()
     );
-
     let mut reactor = reactor::Core::new().unwrap();
-    println!("\n\n\n");
     let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/homeserverid/")).unwrap();
 
     let set = storage.set(profile.id.clone(), profile.clone());
@@ -473,7 +470,6 @@ fn profile_serialize_async_key_value_test() {
 
     let read = storage.get(profile.id.clone());
     let readhome = storage.get(homeprofile.id.clone());
-
     let res = reactor.run(read).unwrap();
     let reshome = reactor.run(readhome).unwrap();
     assert_eq!(res, profile);

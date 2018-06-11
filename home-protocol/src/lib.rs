@@ -22,6 +22,8 @@ use futures::{Future, sync::mpsc};
 use multiaddr::Multiaddr;
 use crypto::{ProfileValidator, SignatureValidator};
 
+use serde::{Deserialize, Deserializer, Serializer};
+use serde::ser::SerializeSeq;
 
 pub mod mercury_capnp;
 pub mod crypto;
@@ -132,59 +134,62 @@ pub struct PersonaFacet
     pub data:   Vec<u8>,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
-pub struct MyMultiaddr{
-    #[serde(with = "MultiaddrDef")]
-    pub inner : Multiaddr
-} 
-
-#[derive(Serialize, Deserialize)]
-#[serde(remote = "Multiaddr")]
-pub struct MultiaddrDef {
-    #[serde(getter = "Multiaddr::to_bytes")]
-    bytes: Vec<u8>,
+fn join_serialize<S>(x: &Vec<Multiaddr>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut seq = s.serialize_seq(Some(x.len()))?;
+    for mr in x{
+        seq.serialize_element(&mr.to_bytes());
+    }
+    seq.end()
 }
 
-impl From<MultiaddrDef> for Multiaddr {
-    //TODO recursion warning
-    fn from(def: MultiaddrDef) -> Multiaddr {
-        match Multiaddr::from_bytes(def.bytes.to_owned()){
-            Ok(maddr) => maddr,
-            Err(_) => def.into()
-        }
+fn split_deserialize<'de, D>(deserializer: D) -> Result<Vec<Multiaddr>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    //wrong deserializer function
+    let mapped: Vec<u8> = Deserialize::deserialize(deserializer)?;
+    let mut res = Vec::new();
+    println!("mapped : {:?}", mapped);
+    // for bytes_vec in mapped.iter(){
+        // let bytes = bytes_vec.to_owned();
+        // match Multiaddr::from_bytes(mapped){
+        //     Ok(multi)=>{println!("ok : {:?}", multi);res.push(multi);}
+        //     Err(_e)=>{println!("err : {:?}", _e);();}
+        // }
+        // println!("bytes_vec : {:?}", bytes_vec);
+        
+    // }   
+
+impl<'de> Deserialize<'de> for Multiaddr {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let s: &str = Deserialize::deserialize(deserializer)?;
+        // do better hex decoding than this
+        u64::from_str_radix(&s[2..], 16)
+            .map(Account)
+            .map_err(D::Error::custom)
     }
 }
 
-impl From<MyMultiaddr> for Multiaddr{
-    fn from(def: MyMultiaddr) -> Multiaddr {
-        def.inner
-    }
+    // let ret = deserializer.deserialize_any();
+    println!("multi_vec : {:?}", res);
+    Ok(res)
 }
 
-impl<'a> From<&'a MyMultiaddr> for Multiaddr {
-    fn from(def: &'a MyMultiaddr) -> Multiaddr {
-        def.inner.to_owned()
-    }
-}
-
-impl From<Multiaddr> for MyMultiaddr {
-    fn from(def: Multiaddr) -> MyMultiaddr {
-        MyMultiaddr{inner : def.to_owned()}
-    }
-}
-
-impl<'a> From<&'a Multiaddr> for MyMultiaddr {
-    fn from(def: &'a Multiaddr) -> MyMultiaddr {
-        MyMultiaddr{inner : def.to_owned()}
-    }
-}
 
 #[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct HomeFacet
 {
     /// Addresses of the same home server. A typical scenario of multiple addresses is when there is
     /// one IPv4 address/port, one onion address/port and some IPv6 address/port pairs.
-    pub addrs:  Vec<MyMultiaddr>,
+    #[serde(serialize_with = "join_serialize")]
+    #[serde(deserialize_with = "split_deserialize")]
+    pub addrs:  Vec<Multiaddr>,
     pub data:   Vec<u8>,
 }
 
@@ -232,7 +237,7 @@ impl Profile
     pub fn new_home(id: ProfileId, public_key: PublicKey, address: Multiaddr) -> Self
     {
         let facet = HomeFacet {
-            addrs: vec![MyMultiaddr{ inner : address}],
+            addrs: vec![address],
             data: vec![],
         };
 

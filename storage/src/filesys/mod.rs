@@ -178,8 +178,8 @@ impl KeyValueStore<ProfileId, Profile> for AsyncFileHandler{
     -> Box< Future<Item=Profile, Error=StorageError> >{
         let res;
         match String::from_utf8(key.0) {
-            Ok(content)=> {res = self.read_from_file(content)
-                                    
+            Ok(content)=> {
+                res = self.read_from_file(content)                    
             },                                
             Err(e)=> {res = Box::new(future::err( StorageError::StringError( e.description().to_owned() ) )) }                                
         }
