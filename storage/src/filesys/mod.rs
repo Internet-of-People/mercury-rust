@@ -84,7 +84,7 @@ impl AsyncFileHandler{
                     write_all(file, content)
                         .map(|_| ()) 
                         // TODO: map the error in a way to preserve the original error too
-                        .map_err(|_e|StorageError::StringError(String::from("Write to file failed")))
+                        .map_err(|e|StorageError::StringError(e.description().to_owned()))
                 })
                 .then( move |res| tx.send(res))
                 .map_err(|_| ())
@@ -111,20 +111,20 @@ impl AsyncFileHandler{
         }
         self.pool.spawn(
             File::open(self.get_path(file_path))        
-                .map_err(|_e| 
+                .map_err(|e| 
                     // TODO: map the error in a way to preserve the original error too
-                    StorageError::StringError(String::from("File couldn't be opened"))
+                    StorageError::StringError(e.description().to_owned())
                 )
                 .and_then(move |file|
                     read_to_end(file , Vec::new())          
                         // TODO: map the error in a way to preserve the original error too
-                        .map_err(|_e|{ StorageError::StringError(String::from("Read from file failed"))})
+                        .map_err(|e|{ StorageError::StringError(e.description().to_owned())})
                 )
                 .and_then(|(_, buffer)|
                     match String::from_utf8(buffer) {
                         Ok(content)=> future::ok(content),                                
                         // TODO: map the error in a way to preserve the original error too
-                        Err(_e)=> future::err(StorageError::StringError(String::from("Failed to convert to UTF-8")))                                
+                        Err(e)=> future::err(StorageError::StringError(e.description().to_owned()))                                
                     }
                 )
                 .then( move |res| tx.send(res))
@@ -214,7 +214,6 @@ fn future_file_key_value(){
 #[test]
 fn one_pool_multiple_filehandler(){
     //tokio reactor is only needed to read from a file not to write into a file
-    //this error fails because the same pool with default 100 thread limit is used for two 100-100 thread jobs
     use tokio_core::reactor;
 
     let mut reactor = reactor::Core::new().unwrap();
