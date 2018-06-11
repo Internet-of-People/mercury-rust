@@ -46,16 +46,21 @@ impl AsyncFileHandler{
         }
     }
 
-    pub fn new_file(&self, file_path : String) 
-    -> Box<Future<Item=File, Error=::std::io::Error>> {
-        Box::new(File::create(self.get_path(file_path)))
-    }
-    
-    pub fn new_file_with_name(&self, directory_path : String, file_name : String) 
-    -> Box< Future<Item=File, Error=::std::io::Error> > {
-        let mut subpath = self.get_path(directory_path);
-        subpath.push_str(&file_name);
-        Box::new(File::create(subpath))
+    pub fn new_with_pool_maxblocking(main_directory : String, pool: Rc<ThreadPool>, max_blocking_size : usize) 
+    -> Result<Self, StorageError>{
+        let thread_pool = Rc::new(Builder::new()
+            .max_blocking(max_blocking_size)
+            .build()
+        );
+        match create_dir_all(Path::new(&main_directory)){
+            Ok(_)=>Ok(
+                AsyncFileHandler{
+                    path : main_directory, 
+                    pool : pool,
+                }
+            ),
+            Err(e)=>Err(StorageError::StringError(e.description().to_owned()))
+        }
     }
 
     fn check_and_create_structure(&self, path : String) -> Result<String, StorageError>{
@@ -220,7 +225,7 @@ fn one_pool_multiple_filehandler(){
     println!("\n\n\n");
     let thread_pool = Rc::new(Builder::new()
         .max_blocking(200)
-        .pool_size(30)
+        .pool_size(8)
         .build()
     );
     let mut alpha_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/alpha/"), Rc::clone(&thread_pool)).unwrap();
