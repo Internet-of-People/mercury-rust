@@ -15,6 +15,7 @@ extern crate serde_json;
 
 
 use std::rc::Rc;
+use serde::de::Error;
 
 use bincode::serialize;
 use futures::{Future, sync::mpsc};
@@ -140,7 +141,10 @@ where
 {
     let mut seq = s.serialize_seq(Some(x.len()))?;
     for mr in x{
-        seq.serialize_element(&mr.to_string());
+        match seq.serialize_element(&mr.to_string()){
+            Ok(_)=>{();},
+            Err(e)=>{return Err(e);}
+        }
     }
     seq.end()
 }
@@ -149,14 +153,12 @@ fn deserialize_multiaddr_vec<'de, D>(deserializer: D) -> Result<Vec<Multiaddr>, 
 where
     D: Deserializer<'de>,
 {
-    //wrong deserializer function
     let mapped: Vec<String> = Deserialize::deserialize(deserializer)?;
     let mut res = Vec::new();
     for str_ma in mapped.iter(){;
         match str_ma.to_multiaddr(){
             Ok(multi)=>{res.push(multi);}
-            //TODO fix error handling
-            Err(_e)=>{();}
+            Err(e)=>{return Err(D::Error::custom(e));}
         } 
     }   
     Ok(res)

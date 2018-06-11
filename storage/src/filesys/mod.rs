@@ -8,7 +8,7 @@ use std::error::Error;
 use std::fs::create_dir_all;
 use tokio_io::io::*;
 use tokio_fs::*;
-use tokio_threadpool::ThreadPool;
+use tokio_threadpool::{ThreadPool, Builder};
 use serde_json;
 use mercury_home_protocol::{Profile, ProfileId};
 
@@ -219,9 +219,13 @@ fn one_pool_multiple_filehandler(){
 
     let mut reactor = reactor::Core::new().unwrap();
     println!("\n\n\n");
-    let tpool = Rc::new(ThreadPool::new());
-    let mut alpha_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/alpha/"), Rc::clone(&tpool)).unwrap();
-    let mut beta_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/beta/"), tpool).unwrap();
+    let thread_pool = Rc::new(Builder::new()
+        .max_blocking(200)
+        .pool_size(30)
+        .build()
+    );
+    let mut alpha_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/alpha/"), Rc::clone(&thread_pool)).unwrap();
+    let mut beta_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/beta/"), thread_pool).unwrap();
     let json = String::from("<Json:json>");
     let file_path = String::from("alma.json");
     for i in 0..100{
