@@ -16,7 +16,7 @@ use super::*;
 
 pub struct HomeClientCapnProto
 {
-    context: Box<PeerContext>,
+    context: PeerContext,
     repo:    profile_repo::Client,
     home:    home::Client,
     handle:  reactor::Handle,
@@ -26,7 +26,7 @@ pub struct HomeClientCapnProto
 impl HomeClientCapnProto
 {
     pub fn new<R,W>(reader: R, writer: W,
-               context: Box<PeerContext>, handle: reactor::Handle) -> Self
+               context: PeerContext, handle: reactor::Handle) -> Self
         where R: std::io::Read + 'static,
               W: std::io::Write + 'static
     {
@@ -44,11 +44,11 @@ impl HomeClientCapnProto
 
         handle.spawn( rpc_system.map_err( |e| warn!("Capnp RPC failed: {}", e) ) );
 
-        Self{ context: context, home: home, repo: repo, handle: handle }
+        Self{ context, home, repo, handle }
     }
 
 
-    pub fn new_tcp(tcp_stream: TcpStream, context: Box<PeerContext>, handle: reactor::Handle) -> Self
+    pub fn new_tcp(tcp_stream: TcpStream, context: PeerContext, handle: reactor::Handle) -> Self
     {
         use tokio_io::AsyncRead;
 

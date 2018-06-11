@@ -58,27 +58,6 @@ impl Relation
 
 
 
-pub struct HomeContext
-{
-    signer:         Rc<Signer>,
-    home_profile:   Profile,
-}
-
-impl HomeContext
-{
-    pub fn new(signer: Rc<Signer>, home_profile: &Profile) -> Self
-        { Self{ signer: signer, home_profile: home_profile.clone() } }
-}
-
-impl PeerContext for HomeContext
-{
-    fn my_signer(&self) -> &Signer { &*self.signer }
-    fn peer_pubkey(&self) -> &PublicKey { &self.home_profile.public_key }
-    fn peer_id(&self) -> &ProfileId { &self.home_profile.id }
-}
-
-
-
 pub trait ProfileGateway
 {
 // TODO consider if using streams here is a good idea considering implementation complexity

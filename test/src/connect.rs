@@ -56,7 +56,7 @@ fn test_events()
             let signer = Rc::new(Ed25519Signer::new(&private_key, &public_key).unwrap());
             let my_profile = signer.profile_id().clone();
             let home_profile = make_home_profile("localhost:9876", signer.public_key());
-            let home_ctx = Box::new(HomeContext::new(signer, &home_profile));
+            let home_ctx = PeerContext::new_from_profile(signer, &home_profile);
             let client = HomeClientCapnProto::new_tcp( tcp_stream, home_ctx, handle2 );
             client.login(my_profile) // TODO maybe we should require only a reference in login()
         } )
@@ -86,7 +86,7 @@ fn test_register(){
     let (home_profile, home_signer) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
 
     let home_server = default_home_server(&setup.handle);
-    let client_context = ClientContext::new(
+    let client_context = PeerContext::new(
         Rc::new(home_signer),
         profile.public_key.clone(),
         profile.id.clone(),
