@@ -2,9 +2,10 @@ extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
 extern crate futures;
+#[macro_use]
+extern crate log;
 extern crate mercury_home_protocol;
 extern crate multiaddr;
-extern crate multihash;
 extern crate tokio_core;
 extern crate tokio_io;
 
@@ -52,27 +53,6 @@ impl Relation
 {
     pub fn new(peer: &Profile, proof: &RelationProof) -> Self
         { Self { peer: peer.clone(), proof: proof.clone() } }
-}
-
-
-
-pub struct HomeContext
-{
-    signer:         Rc<Signer>,
-    home_profile:   Profile,
-}
-
-impl HomeContext
-{
-    pub fn new(signer: Rc<Signer>, home_profile: &Profile) -> Self
-        { Self{ signer: signer, home_profile: home_profile.clone() } }
-}
-
-impl PeerContext for HomeContext
-{
-    fn my_signer(&self) -> &Signer { &*self.signer }
-    fn peer_pubkey(&self) -> &PublicKey { &self.home_profile.public_key }
-    fn peer_id(&self) -> &ProfileId { &self.home_profile.id }
 }
 
 

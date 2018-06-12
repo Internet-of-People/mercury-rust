@@ -1,9 +1,12 @@
 extern crate bincode;
+extern crate bytes;
 extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
 extern crate ed25519_dalek;
 extern crate futures;
+#[macro_use]
+extern crate log;
 extern crate multiaddr;
 extern crate multihash;
 extern crate serde;
@@ -11,6 +14,7 @@ extern crate serde;
 extern crate serde_derive;
 extern crate signatory;
 extern crate tokio_core;
+extern crate tokio_io;
 
 use std::rc::Rc;
 
@@ -20,8 +24,9 @@ use multiaddr::Multiaddr;
 use crypto::{ProfileValidator, SignatureValidator};
 
 
-pub mod mercury_capnp;
 pub mod crypto;
+pub mod handshake;
+pub mod mercury_capnp;
 
 
 // TODO
@@ -29,10 +34,10 @@ pub mod crypto;
 pub enum ErrorToBeSpecified { TODO(String) }
 
 
-#[derive(Serialize, PartialEq, PartialOrd, Eq, Clone, Debug, Hash)]
+#[derive(Deserialize, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Deserialize, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct PublicKey(pub Vec<u8>);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -57,9 +62,7 @@ pub trait Seed
 /// Usually implemented using a private key internally, but also enables hardware wallets.
 pub trait Signer
 {
-    // TODO consider if this is needed here or should only be provided by trait PeerContext?
     fn profile_id(&self) -> &ProfileId;
-
     fn public_key(&self) -> &PublicKey;
     // NOTE the data to be signed ideally will be the output from Mudlee's multicodec lib
     fn sign(&self, data: &[u8]) -> Signature;
@@ -191,13 +194,25 @@ impl Profile
 
 
 /// Represents a connection to another Profile (Home <-> Persona), (Persona <-> Persona)
-pub trait PeerContext
+pub struct PeerContext
 {
-    fn my_signer(&self) -> &Signer;
-    fn peer_pubkey(&self) -> &PublicKey;
-    fn peer_id(&self) -> &ProfileId;
+    my_signer: Rc<Signer>,
+    peer_pubkey: PublicKey,
+    peer_id: ProfileId,
+}
 
-    fn validate(&self, validator: &Validator) -> Result<(),ErrorToBeSpecified>
+impl PeerContext
+{
+    pub fn new(my_signer: Rc<Signer>, peer_pubkey: PublicKey, peer_id: ProfileId) -> Self
+        { Self{my_signer, peer_pubkey, peer_id} }
+    pub fn new_from_profile(my_signer: Rc<Signer>, peer: &Profile) -> Self
+        { Self::new( my_signer, peer.public_key.clone(), peer.id.clone() ) }
+
+    pub fn my_signer(&self) -> &Signer { &*self.my_signer }
+    pub fn peer_pubkey(&self) -> &PublicKey { &self.peer_pubkey }
+    pub fn peer_id(&self) -> &ProfileId { &self.peer_id }
+
+    pub fn validate(&self, validator: &Validator) -> Result<(),ErrorToBeSpecified>
     {
         validator.validate_profile( self.peer_pubkey(), self.peer_id() )
             .and_then( |valid|
@@ -277,7 +292,7 @@ impl RelationSignablePart
         // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
         //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
         //      But still, to be on the safe side, this serialization shoule be swapped later with a call that cannot fail.
-        Vec::from(serialize(self).unwrap())
+        serialize(self).unwrap()
     }
 
     fn sign(&self, signer: &Signer) -> Signature

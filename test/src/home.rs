@@ -11,7 +11,7 @@ pub struct TestSetup
 {
     pub reactor: reactor::Core,
     pub client_ownprofile: OwnProfile,
-    pub home_context: HomeContext,
+    pub home_context: PeerContext,
     pub home: Rc<RefCell<Home>>,
 }
 
@@ -29,11 +29,11 @@ impl TestSetup
         let persona_facet = ProfileFacet::Persona( PersonaFacet{ homes: vec![] , data: Vec::new() } );
         let (client_ownprofile, client_signer) = generate_ownprofile(persona_facet, vec![]);
 
-        let server_context = Rc::new(ClientContext::new( Rc::new(home_signer),
+        let server_context = Rc::new(PeerContext::new( Rc::new(home_signer),
             client_ownprofile.profile.public_key.clone(), client_ownprofile.profile.id.clone() ) );
         let home = HomeConnectionServer::new(server_context, server).unwrap();
 
-        let client_context = HomeContext::new( Rc::new(client_signer), &home_ownprofile.profile);
+        let client_context = PeerContext::new_from_profile( Rc::new(client_signer), &home_ownprofile.profile);
 
         Self{ reactor, client_ownprofile, home_context: client_context,
               home: Rc::new( RefCell::new(home) ) }

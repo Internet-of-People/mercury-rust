@@ -16,7 +16,7 @@ use super::*;
 
 pub struct HomeClientCapnProto
 {
-    context: Box<PeerContext>,
+    context: PeerContext,
     repo:    profile_repo::Client,
     home:    home::Client,
     handle:  reactor::Handle,
@@ -26,11 +26,11 @@ pub struct HomeClientCapnProto
 impl HomeClientCapnProto
 {
     pub fn new<R,W>(reader: R, writer: W,
-               context: Box<PeerContext>, handle: reactor::Handle) -> Self
+               context: PeerContext, handle: reactor::Handle) -> Self
         where R: std::io::Read + 'static,
               W: std::io::Write + 'static
     {
-        println!("Initializing Cap'n'Proto");
+        debug!("Initializing Cap'n'Proto");
 
         // TODO maybe we should set up only single party capnp first
         let rpc_network = Box::new( capnp_rpc::twoparty::VatNetwork::new( reader, writer,
@@ -42,13 +42,13 @@ impl HomeClientCapnProto
         let repo: mercury_capnp::profile_repo::Client =
             rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
 
-        handle.spawn( rpc_system.map_err( |e| println!("Capnp RPC failed: {}", e) ) );
+        handle.spawn( rpc_system.map_err( |e| warn!("Capnp RPC failed: {}", e) ) );
 
-        Self{ context: context, home: home, repo: repo, handle: handle }
+        Self{ context, home, repo, handle }
     }
 
 
-    pub fn new_tcp(tcp_stream: TcpStream, context: Box<PeerContext>, handle: reactor::Handle) -> Self
+    pub fn new_tcp(tcp_stream: TcpStream, context: PeerContext, handle: reactor::Handle) -> Self
     {
         use tokio_io::AsyncRead;
 
@@ -518,93 +518,5 @@ impl IncomingCall for IncomingCallCapnProto
             Ok( () ) => {},
             Err(_e) => {}, // TODO what to do with the error? Only log or can we handle it somehow?
         }
-    }
-}
-
-
-
-#[cfg(test)]
-mod tests
-{
-    use super::*;
-    use tokio_core::reactor;
-
-
-    struct TestSetup
-    {
-        reactor: reactor::Core,
-    }
-
-    impl TestSetup
-    {
-        fn new() -> Self
-        {
-            Self{ reactor: reactor::Core::new().unwrap() }
-        }
-    }
-
-
-    struct DummySigner
-    {
-        prof_id: ProfileId,
-        pub_key: PublicKey,
-    }
-
-    impl Signer for DummySigner
-    {
-        fn profile_id(&self) -> &ProfileId { &self.prof_id }
-        fn public_key(&self) -> &PublicKey { &self.pub_key }
-        fn sign(&self, data: &[u8]) -> Signature { Signature( Vec::new() ) }
-    }
-
-
-    #[test]
-    fn temporary_test_capnproto()
-    {
-        use std::net::ToSocketAddrs;
-        use std::time::Duration;
-        use super::protocol_capnp::*;
-
-        let mut setup = TestSetup::new();
-
-        let prof_id = ProfileId( "joooozsi".as_bytes().to_owned() );
-        let home_id = ProfileId( "HomeSweetHome".as_bytes().to_owned() );
-        let signer = Rc::new( DummySigner{ prof_id: prof_id.clone(), pub_key: PublicKey(Vec::new()) } );
-        let home_facet = HomeFacet{ addrs: Vec::new(), data: Vec::new() };
-        let home_prof = Profile::new( &home_id,
-            &PublicKey( "HomePubKey".as_bytes().to_owned() ),
-            &[ ProfileFacet::Home(home_facet) ] );
-        let home_ctx = Box::new( HomeContext::new(signer, &home_prof) );
-
-        let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
-        let handle = setup.reactor.handle();
-        let handle2 = setup.reactor.handle();
-        let handle3 = setup.reactor.handle();
-        let test_fut = TcpStream::connect( &addr, &setup.reactor.handle() )
-            .map_err( |e| ErrorToBeSpecified::TODO( format!("temporaty_test_capnproto connect: {:?}", e) ) )
-            .and_then( move |tcp_stream|
-            {
-                let home = HomeClientCapnProto::new_tcp(tcp_stream, home_ctx, handle);
-                //home.load(&prof_id)
-                home.login(prof_id)
-            } )
-            .and_then( |session| reactor::Timeout::new( Duration::from_secs(5), &handle2 ).unwrap()
-                .map( move |_| session )
-                .map_err( |e| ErrorToBeSpecified::TODO( format!("temporary_test_capnproto session: {:?}", e) ) ) )
-            .and_then( |session| session.ping("hahoooo") )
-            .and_then( |pong|
-            {
-                println!("Got pong {}", pong);
-                reactor::Timeout::new( Duration::from_secs(5), &handle3 ).unwrap()
-                    .map( move |_| pong )
-                    .map_err( |e| ErrorToBeSpecified::TODO( format!("temporary_test_capnproto can't play ping-pong {:?}", e) ) )
-            } );
-
-        let pong = setup.reactor.run(test_fut);
-        println!("Response: {:?}", pong);
-
-        let handle = setup.reactor.handle();
-        let result = setup.reactor.run( reactor::Timeout::new( Duration::from_secs(5), &handle ).unwrap() );
-        println!("Client result {:?}", result);
     }
 }

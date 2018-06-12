@@ -119,7 +119,7 @@ impl HomeConnector for SimpleTcpHomeConnector
             .map( move |(tcp_stream, _pending_futs)|
             {
                 use protocol_capnp::HomeClientCapnProto;
-                let home_ctx = Box::new( HomeContext::new(signer, &home_profile_clone) );
+                let home_ctx = PeerContext::new_from_profile(signer, &home_profile_clone);
 
                 Rc::new( HomeClientCapnProto::new_tcp(tcp_stream, home_ctx, handle_clone) ) as Rc<Home>
             } );

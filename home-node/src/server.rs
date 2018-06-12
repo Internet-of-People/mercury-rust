@@ -40,28 +40,6 @@ impl HomeServer
 
 
 
-pub struct ClientContext
-{
-    signer:             Rc<Signer>,
-    client_pub_key:     PublicKey,
-    client_profile_id:  ProfileId,
-}
-
-impl ClientContext
-{
-    pub fn new(signer: Rc<Signer>, client_pub_key: PublicKey, client_profile_id: ProfileId) -> Self // client_profile: Profile) -> Self
-        { Self{ signer: signer, client_pub_key: client_pub_key.clone(), client_profile_id: client_profile_id.clone() } } //  client_profile: client_profile } }
-}
-
-impl PeerContext for ClientContext
-{
-    fn my_signer(&self) -> &Signer { &*self.signer }
-    fn peer_pubkey(&self) -> &PublicKey { &self.client_pub_key }
-    fn peer_id(&self) -> &ProfileId { &self.client_profile_id }
-}
-
-
-
 pub struct HomeConnectionServer
 {
     server:     Rc<HomeServer>, // TODO consider if we should have a RefCell<> for mutability here
@@ -589,7 +567,7 @@ impl HomeSession for HomeSessionServer
     fn ping(&self, txt: &str) ->
         Box< Future<Item=String, Error=ErrorToBeSpecified> >
     {
-        println!("Ping received `{}`, sending it back", txt);
+        debug!("Ping received `{}`, sending it back", txt);
         Box::new( future::ok( txt.to_owned() ) )
     }
 }
