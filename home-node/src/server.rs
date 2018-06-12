@@ -303,6 +303,7 @@ impl Home for HomeConnectionServer
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
+        // TODO add error case for calling self
         let to_profile = match call_req.relation.peer_id( self.context.peer_id() )
         {
             Ok(profile_id) => profile_id.to_owned(),
