@@ -1,4 +1,4 @@
-use bytes::{Buf, BufMut, Bytes, BytesMut, IntoBuf};
+use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use std::error::Error;
 use std::mem;
 use std::rc::Rc;
