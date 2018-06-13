@@ -6,11 +6,13 @@ use std::rc::Rc;
 use std::path::Path;
 use std::error::Error;
 use std::fs::create_dir_all;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use tokio_io::io::*;
 use tokio_fs::*;
 use tokio_threadpool::{ThreadPool, Builder};
 use serde_json;
-use mercury_home_protocol::{Profile, ProfileId};
+
 
 pub struct AsyncFileHandler{
     path : String,
@@ -46,7 +48,7 @@ impl AsyncFileHandler{
         }
     }
 
-    pub fn new_with_pool_maxblocking(main_directory : String, pool: Rc<ThreadPool>, max_blocking_size : usize) 
+    pub fn new_with_pool_maxblocking(main_directory : String, max_blocking_size : usize) 
     -> Result<Self, StorageError>{
         let thread_pool = Rc::new(Builder::new()
             .max_blocking(max_blocking_size)
@@ -56,7 +58,7 @@ impl AsyncFileHandler{
             Ok(_)=>Ok(
                 AsyncFileHandler{
                     path : main_directory, 
-                    pool : pool,
+                    pool : thread_pool,
                 }
             ),
             Err(e)=>Err(StorageError::StringError(e.description().to_owned()))
@@ -151,45 +153,24 @@ impl AsyncFileHandler{
     }
 }
 
-impl KeyValueStore<String, String> for AsyncFileHandler{
-    fn set(&mut self, key: String, value: String)
-    -> Box< Future<Item=(), Error=StorageError> >{
-        Box::new(self.write_to_file(key, value).map_err(|e|StorageError::StringError(e.description().to_owned()) ) )    
-    }
-
-    fn get(&self, key: String)
-    -> Box< Future<Item=String, Error=StorageError> >{
-        Box::new(self.read_from_file(key).map_err(|e|StorageError::StringError(e.description().to_owned()) ) )
-    }
-}
-
-impl KeyValueStore<ProfileId, Profile> for AsyncFileHandler{
-    fn set(&mut self, key: ProfileId, value: Profile)
+impl<V> KeyValueStore<String, V> for AsyncFileHandler
+    where  V: 'static + Serialize + DeserializeOwned{
+    fn set(&mut self, key: String, value: V)
     -> Box< Future<Item=(), Error=StorageError> >{
         let res;
         match serde_json::to_string(&value){
-            Ok(str_profile)=>{
-                match String::from_utf8(key.0) {
-                    Ok(str_key)=> {res = self.write_to_file(str_key, str_profile)},                                
-                    Err(e)=> {res = Box::new( future::err( StorageError::StringError( e.description().to_owned() ) ) )}                                
-                }
+            Ok(str_value)=>{
+                res = self.write_to_file(key, str_value);                                
             }
             Err(e)=> {res = Box::new( future::err( StorageError::StringError( e.description().to_owned() ) ) )} 
         }
         Box::new( res )    
     }
 
-    fn get(&self, key: ProfileId)
-    -> Box< Future<Item=Profile, Error=StorageError> >{
-        let res;
-        match String::from_utf8(key.0) {
-            Ok(content)=> {
-                res = self.read_from_file(content)                    
-            },                                
-            Err(e)=> {res = Box::new(future::err( StorageError::StringError( e.description().to_owned() ) )) }                                
-        }
+    fn get(&self, key: String)
+    -> Box< Future<Item=V, Error=StorageError> >{
         Box::new( 
-            res
+            self.read_from_file(key)
                 .map_err(|e| StorageError::StringError( e.description().to_owned()))
                 .and_then(|profile|{
                     serde_json::from_str(&profile)
