@@ -22,7 +22,7 @@ impl MultiHasher
     {
         match error {
             multihash::Error::BadInputLength    => HashError::BadInputLength,
-            multihash::Error::UnkownCode        => HashError::UnknownCode,
+            multihash::Error::UnknownCode        => HashError::UnknownCode,
             multihash::Error::UnsupportedType   => HashError::UnsupportedType,
         }
     }

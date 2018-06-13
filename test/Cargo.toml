@@ -4,10 +4,12 @@ version = "0.1.0"
 authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 
 [dependencies]
+base64 = "0.9.0"
 capnp = "0.8"
 capnp-rpc = "0.8"
 ed25519-dalek = "*"
 futures = "0.1"
+memsocket = "*"
 mercury-home-protocol = { path="../home-protocol" }
 mercury-connect = { path="../connect" }
 mercury-home-node = { path="../home-node" }
@@ -17,8 +19,5 @@ multihash = "*"
 rand = "0.4.2"
 sha2 = "*"
 tokio-core = "0.1"
-
 tokio-io = "*"
-
 tokio-stdin-stdout = "0.1.1"
-base64 = "0.9.0"

@@ -8,7 +8,7 @@ extern crate mercury_home_node;
 extern crate mercury_storage;
 extern crate tokio_core;
 extern crate tokio_io;
-extern crate tokio_stdin_stdout;
+extern crate memsocket;
 extern crate multiaddr;
 extern crate multihash;
 extern crate rand;
@@ -48,7 +48,7 @@ pub fn generate_ownprofile(facet: ProfileFacet, private_data: Vec<u8>)
 {
     let (private_key, public_key) = generate_keypair();
     let signer = Ed25519Signer::new(&private_key, &public_key).expect("TODO: this should not be able to fail");
-    let profile = Profile::new( &(&public_key).into(), &public_key, &vec![facet] );
+    let profile = Profile::new( &(&public_key).into(), &public_key, &facet );
     //let profile = Profile::new( &ProfileId::from(&public_key), &public_key, vec![facet] );
     let own_profile = OwnProfile::new(&profile, &private_data);
     (own_profile, signer)
@@ -60,7 +60,17 @@ pub fn generate_profile(facet: ProfileFacet) -> (Profile, Ed25519Signer)
     (own_profile.profile, signer)
 }
 
+pub fn generate_persona() -> (OwnProfile, Ed25519Signer)
+{
+    let persona_facet = ProfileFacet::Persona( PersonaFacet{ homes: vec![] , data: Vec::new() } );
+    generate_ownprofile(persona_facet, vec![])
+}
 
+pub fn generate_home() -> (Profile, Ed25519Signer)
+{
+    let home_facet = ProfileFacet::Home( HomeFacet{ addrs: vec![] , data: Vec::new() } );
+    generate_profile(home_facet)
+}
 
 pub fn default_home_server(handle: &reactor::Handle) -> HomeServer {
     HomeServer::new( handle,

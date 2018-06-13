@@ -9,14 +9,14 @@ capnpc = "0.8"
 
 [dependencies]
 bincode = "*"
+bytes = "*"
 capnp = "0.8"
 capnp-rpc = "0.8"
 ed25519-dalek = "*"
 futures = "0.1"
+log = "0.4"
 multiaddr = "*"
 multihash = "*"
 signatory = { version="0.5", features=["std"] }
 tokio-core = "0.1"
-serde = "1"
-serde_json = "1"
-serde_derive = "1"
+tokio-io = "0.1"

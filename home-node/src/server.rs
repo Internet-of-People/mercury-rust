@@ -40,28 +40,6 @@ impl HomeServer
 
 
 
-pub struct ClientContext
-{
-    signer:             Rc<Signer>,
-    client_pub_key:     PublicKey,
-    client_profile_id:  ProfileId,
-}
-
-impl ClientContext
-{
-    pub fn new(signer: Rc<Signer>, client_pub_key: PublicKey, client_profile_id: ProfileId) -> Self // client_profile: Profile) -> Self
-        { Self{ signer: signer, client_pub_key: client_pub_key.clone(), client_profile_id: client_profile_id.clone() } } //  client_profile: client_profile } }
-}
-
-impl PeerContext for ClientContext
-{
-    fn my_signer(&self) -> &Signer { &*self.signer }
-    fn peer_pubkey(&self) -> &PublicKey { &self.client_pub_key }
-    fn peer_id(&self) -> &ProfileId { &self.client_profile_id }
-}
-
-
-
 pub struct HomeConnectionServer
 {
     server:     Rc<HomeServer>, // TODO consider if we should have a RefCell<> for mutability here
@@ -222,7 +200,7 @@ impl Home for HomeConnectionServer
         };
 
         let mut own_prof_modified = own_prof.clone();
-        if let ProfileFacet::Persona(ref mut profile_facet) = own_prof_modified.profile.facets[0] {
+        if let ProfileFacet::Persona(ref mut profile_facet) = own_prof_modified.profile.facet {
             profile_facet.homes.push(home_proof)
         } else {
             return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: Only personas are allowed to register".to_owned() )) ) )
@@ -325,6 +303,7 @@ impl Home for HomeConnectionServer
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
+        // TODO add error case for calling self
         let to_profile = match call_req.relation.peer_id( self.context.peer_id() )
         {
             Ok(profile_id) => profile_id.to_owned(),
@@ -589,7 +568,7 @@ impl HomeSession for HomeSessionServer
     fn ping(&self, txt: &str) ->
         Box< Future<Item=String, Error=ErrorToBeSpecified> >
     {
-        println!("Ping received `{}`, sending it back", txt);
+        debug!("Ping received `{}`, sending it back", txt);
         Box::new( future::ok( txt.to_owned() ) )
     }
 }

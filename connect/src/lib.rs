@@ -2,9 +2,10 @@ extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
 extern crate futures;
+#[macro_use]
+extern crate log;
 extern crate mercury_home_protocol;
 extern crate multiaddr;
-extern crate multihash;
 extern crate tokio_core;
 extern crate tokio_io;
 
@@ -52,27 +53,6 @@ impl Relation
 {
     pub fn new(peer: &Profile, proof: &RelationProof) -> Self
         { Self { peer: peer.clone(), proof: proof.clone() } }
-}
-
-
-
-pub struct HomeContext
-{
-    signer:         Rc<Signer>,
-    home_profile:   Profile,
-}
-
-impl HomeContext
-{
-    pub fn new(signer: Rc<Signer>, home_profile: &Profile) -> Self
-        { Self{ signer: signer, home_profile: home_profile.clone() } }
-}
-
-impl PeerContext for HomeContext
-{
-    fn my_signer(&self) -> &Signer { &*self.signer }
-    fn peer_pubkey(&self) -> &PublicKey { &self.home_profile.public_key }
-    fn peer_id(&self) -> &ProfileId { &self.home_profile.id }
 }
 
 
@@ -176,17 +156,13 @@ impl ProfileGatewayImpl
                     connector: Rc<HomeConnector>, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
     {
+        let homes = match profile.facet {
+            // TODO consider how to get homes/addresses for apps and smartfridges
+            ProfileFacet::Persona(ref facet) => facet.homes.clone(),
+            _ => return Box::new(future::err(ErrorToBeSpecified::TODO("any_home_of: not a home profile".to_owned()))),
+        };
         let profile_id = signer.profile_id().clone();
-        let home_ids = profile.facets.iter()
-            .flat_map( |facet|
-            {
-                match facet
-                {
-                    // TODO consider how to get homes/addresses for apps and smartfridges
-                    &ProfileFacet::Persona(ref persona) => persona.homes.clone(),
-                    _ => Vec::new(),
-                }
-            })
+        let home_ids = homes.iter()
             .map(move |relation_proof| {
                 relation_proof.peer_id(&profile_id).map(|peer_id_ref| {
                     peer_id_ref.to_owned()

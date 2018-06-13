@@ -13,7 +13,7 @@ use mercury_home_protocol::mercury_capnp::*;
 
 pub struct HomeDispatcherCapnProto
 {
-    home:   Box<Home>,
+    home:   Rc<Home>,
     handle: reactor::Handle,
     // TODO probably we should have a SessionFactory here instead of instantiating sessions "manually"
 }
@@ -22,7 +22,7 @@ pub struct HomeDispatcherCapnProto
 impl HomeDispatcherCapnProto
 {
     // TODO how to access PeerContext in the Home implementation?
-    pub fn dispatch<R,W>(home: Box<Home>, reader: R, writer: W, handle: reactor::Handle)
+    pub fn dispatch<R,W>(home: Rc<Home>, reader: R, writer: W, handle: reactor::Handle)
         where R: std::io::Read  + 'static,
               W: std::io::Write + 'static
     {
@@ -35,11 +35,11 @@ impl HomeDispatcherCapnProto
 
         let rpc_system = capnp_rpc::RpcSystem::new( Box::new(network), Some( home_capnp.clone().client ) );
 
-        handle.spawn( rpc_system.map_err( |e| println!("Capnp RPC failed: {}", e) ) );
+        handle.spawn( rpc_system.map_err( |e| warn!("Capnp RPC failed: {}", e) ) );
     }
 
 
-    pub fn dispatch_tcp(home: Box<Home>, tcp_stream: TcpStream, handle: reactor::Handle)
+    pub fn dispatch_tcp(home: Rc<Home>, tcp_stream: TcpStream, handle: reactor::Handle)
     {
         use tokio_io::AsyncRead;
 
@@ -51,8 +51,8 @@ impl HomeDispatcherCapnProto
 
 
 // NOTE useful for testing connection lifecycles
-//impl Drop for HomeDispatcherCapnProto
-//    { fn drop(&mut self) { println!("Home dropped"); } }
+impl Drop for HomeDispatcherCapnProto
+    { fn drop(&mut self) { debug!("Home connection dropped"); } }
 
 
 impl profile_repo::Server for HomeDispatcherCapnProto
@@ -234,8 +234,8 @@ impl HomeSessionDispatcherCapnProto
 }
 
 // NOTE useful for testing connection lifecycles
-//impl Drop for HomeSessionDispatcherCapnProto
-//    { fn drop(&mut self) { println!("Session dropped"); } }
+impl Drop for HomeSessionDispatcherCapnProto
+    { fn drop(&mut self) { debug!("Session over Home connection dropped"); } }
 
 impl home_session::Server for HomeSessionDispatcherCapnProto
 {

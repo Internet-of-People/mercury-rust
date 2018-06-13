@@ -114,7 +114,7 @@ pub fn make_own_persona_profile(pubkey : &PublicKey)->Profile{
     Profile::new(
         &ProfileId(id), 
         &pubkey,
-        &[ProfileFacet::Persona( PersonaFacet{ homes : homes , data : empty } )] 
+        &ProfileFacet::Persona( PersonaFacet{ homes : homes , data : empty } )
     )
 }
 
@@ -126,7 +126,7 @@ pub fn make_home_profile(addr : &str, pubkey : &PublicKey)->Profile{
     Profile::new(
         &ProfileId(home_hash), 
         &pubkey,
-        &[ProfileFacet::Home( HomeFacet{ addrs : homevec , data : empty } ) ] 
+        &ProfileFacet::Home( HomeFacet{ addrs : homevec , data : empty } )
     )
 }
 
@@ -309,19 +309,17 @@ impl Home for MyDummyHome
         let profile = own_prof.profile.clone();
         let mut own_profile = own_prof.clone();
         let mut storing = false;
-        for mut facet in own_profile.profile.facets.iter_mut(){
-            match facet {
-                &mut ProfileFacet::Persona(ref mut persona) => {
-                    let half_proof_clone = half_proof.clone();
+        match own_profile.profile.facet {
+            ProfileFacet::Persona(ref mut persona) => {
+                let half_proof_clone = half_proof.clone();
 //                    let relation_proof = RelationProof::from_halfproof(half_proof_clone, Signature(self.home_profile.public_key.0.clone()));
 //                    persona.homes.append( &mut vec!(relation_proof ) );
-                    storing = true;
-                },
-                _ => {
-                    return Box::new( future::err( (own_prof.clone(), 
-                    ErrorToBeSpecified::TODO(String::from("MyDummyHome.register fails at finding Persona Facet on given profile "))) ) );
-                },
-            };
+                storing = true;
+            },
+            _ => {
+                return Box::new( future::err( (own_prof.clone(),
+                ErrorToBeSpecified::TODO(String::from("MyDummyHome.register fails at finding Persona Facet on given profile "))) ) );
+            },
         };
 
         let mut ret : Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> > = Box::new( future::err( (own_prof.clone(), ErrorToBeSpecified::TODO(String::from("MyDummyHome.register had unknown error "))) ) );
