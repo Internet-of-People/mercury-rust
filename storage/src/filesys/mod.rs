@@ -193,7 +193,7 @@ fn future_file_key_value(){
     reactor.run(set).unwrap();
     // reactor.run(storage.set(file_path, String::from("<<profile:almagyar>>")));
     let read = storage.get(file_path);
-    let res = reactor.run(read).unwrap();
+    let res : String = reactor.run(read).unwrap();
     assert_eq!(res, json);
 }
 
@@ -217,7 +217,7 @@ fn one_pool_multiple_filehandler(){
         alpha_storage.set(String::from(i.to_string()+"/"+&file_path), json.clone());
         beta_storage.set(String::from(i.to_string()+"/"+&file_path), json.clone());
     }
-    let aread = reactor.run(alpha_storage.get(String::from("99/alma.json"))).unwrap();
-    let bread = reactor.run(beta_storage.get(String::from("99/alma.json"))).unwrap();
+    let aread : String = reactor.run(alpha_storage.get(String::from("99/alma.json"))).unwrap();
+    let bread : String = reactor.run(beta_storage.get(String::from("99/alma.json"))).unwrap();
     assert_eq!(aread, bread);
 }

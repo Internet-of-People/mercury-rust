@@ -464,16 +464,16 @@ fn profile_serialize_async_key_value_test() {
     let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/homeserverid/")).unwrap();
     let mut storage2 : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/homeserverid/")).unwrap();
 
-    let client = storage.set(profile.id.clone(), profile.clone())
+    let client = storage.set(String::from_utf8(profile.id.clone().0).unwrap(), profile.clone())
         .and_then(|_|{
-            storage.get(profile.id.clone())
+            storage.get(String::from_utf8(profile.id.clone().0).unwrap())
         });
-    let home = storage2.set(homeprofile.id.clone(), homeprofile.clone())
+    let home = storage2.set(String::from_utf8(homeprofile.id.clone().0).unwrap(), homeprofile.clone())
         .and_then(|_|{
-            storage2.get(homeprofile.id.clone())
+            storage2.get(String::from_utf8(homeprofile.id.clone().0).unwrap())
         });
 
-    let (res,reshome) = reactor.run(client.join(home)).unwrap();
+    let (res,reshome) : (Profile, Profile)= reactor.run(client.join(home)).unwrap();
     // let reshome = reactor.run(home).unwrap();
     assert_eq!(res, profile);
     assert_eq!(reshome, homeprofile);
