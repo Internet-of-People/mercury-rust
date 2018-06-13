@@ -7,15 +7,16 @@ use futures::sync::mpsc;
 
 use tokio_core::net::{TcpListener, TcpStream};
 use tokio_core::reactor;
+use tokio_threadpool::{Builder, ThreadPool};
 
 use multiaddr::{ToMultiaddr};
+use base64;
 
 use mercury_home_protocol::{*, crypto::*};
 use mercury_connect::{*, protocol_capnp::HomeClientCapnProto};
 use mercury_home_node::{server::*, protocol_capnp::HomeDispatcherCapnProto};
 use mercury_storage::async::KeyValueStore;
 use mercury_storage::filesys::AsyncFileHandler;
-use tokio_threadpool::ThreadPool;
 
 use ::dummy::*;
 use super::*;
@@ -413,23 +414,25 @@ fn profile_serialize_async_key_value_test() {
 
     
     let profile = make_own_persona_profile(&PublicKey("user_key".as_bytes().to_vec()));
-    let homeprofile = make_home_profile("localhost:4001", &PublicKey("home_key".as_bytes().to_vec()));
+    let homeprofile = make_home_profile("/ip4/127.0.0.1/udp/9876", &PublicKey("home_key".as_bytes().to_vec()));
     let mut reactor = reactor::Core::new().unwrap();
     //TODO FIXME 
     let thread_pool = Rc::new(Builder::new()
-            .max_blocking(max_blocking_size)
+            .max_blocking(200)
             .build()
     );
-    let mut storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/homeserverid/"),Rc::clone(thread_pool)).unwrap();
-    let mut storage2 : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/homeserverid/"),thread_pool).unwrap();
+    let mut storage : AsyncFileHandler = 
+        AsyncFileHandler::new_with_pool(String::from("./ipfs/homeserverid/"),Rc::clone(&thread_pool)).unwrap();
+    let mut storage2 : AsyncFileHandler = 
+        AsyncFileHandler::new_with_pool(String::from("./ipfs/homeserverid/"),thread_pool).unwrap();
 
-    let client = storage.set(String::from_utf8(profile.id.clone().0).unwrap(), profile.clone())
+    let client = storage.set(base64::encode(&profile.id.clone().0), profile.clone())
         .and_then(|_|{
-            storage.get(String::from_utf8(profile.id.clone().0).unwrap())
+            storage.get(base64::encode(&profile.id.clone().0))
         });
-    let home = storage2.set(String::from_utf8(homeprofile.id.clone().0).unwrap(), homeprofile.clone())
+    let home = storage2.set(base64::encode(&homeprofile.id.clone().0), homeprofile.clone())
         .and_then(|_|{
-            storage2.get(String::from_utf8(homeprofile.id.clone().0).unwrap())
+            storage2.get(base64::encode(&homeprofile.id.clone().0))
         });
 
     let (res,reshome) : (Profile, Profile)= reactor.run(client.join(home)).unwrap();

@@ -14,6 +14,7 @@ extern crate multiaddr;
 extern crate multihash;
 extern crate rand;
 extern crate sha2;
+extern crate base64;
 
 use std::{cell::RefCell, rc::Rc};
 
