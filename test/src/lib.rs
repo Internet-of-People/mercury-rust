@@ -8,12 +8,13 @@ extern crate mercury_home_node;
 extern crate mercury_storage;
 extern crate tokio_core;
 extern crate tokio_io;
+extern crate tokio_threadpool;
 extern crate memsocket;
 extern crate multiaddr;
 extern crate multihash;
 extern crate rand;
 extern crate sha2;
-extern crate tokio_stdin_stdout;
+extern crate base64;
 
 use std::{cell::RefCell, rc::Rc};
 

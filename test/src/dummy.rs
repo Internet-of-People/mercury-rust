@@ -59,7 +59,7 @@ impl TestSetup{
 
         let homeaddr = String::from("/ip4/127.0.0.1/udp/9876");
         let homemultiaddr = homeaddr.to_multiaddr().unwrap();
-        let (homeprof, homesigner) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+        let (homeprof, homesigner) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone().into()], data: vec![]}));
 
         let homeprofileid =  homeprof.id.clone();
 
@@ -128,6 +128,27 @@ pub fn make_home_profile(addr : &str, pubkey : &PublicKey)->Profile{
         &pubkey,
         &ProfileFacet::Home( HomeFacet{ addrs : homevec , data : empty } )
     )
+}
+
+#[derive(PartialEq, Eq, Clone, Debug)]
+pub struct Signo{
+    prof_id : ProfileId,
+    pubkey : PublicKey,
+    privkey : Vec<u8>,
+}
+
+impl Signo{
+    pub fn new( whatever : &str)->Self{
+        Signo{
+            prof_id : ProfileId( generate_hash_from_vec( generate_hash(whatever) ) ),
+            pubkey : PublicKey( generate_hash(whatever) ),
+            privkey : generate_hash(whatever),
+        }
+    }
+
+    pub fn get_base64_id(&self)->String{
+        base64::encode(&self.prof_id.0)
+    }
 }
 
 pub fn dummy_relation(rel_type: &str) -> Relation{

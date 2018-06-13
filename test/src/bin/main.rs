@@ -43,7 +43,7 @@ fn main(){
     let homemultiaddr = homeaddr.to_multiaddr().unwrap();
     
     let (profile, signo) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
-    let (homeprof, homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+    let (homeprof, homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone().into()], data: vec![]}));
     
     println!("Setting up connection\n");
 

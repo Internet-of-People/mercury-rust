@@ -7,12 +7,16 @@ use futures::sync::mpsc;
 
 use tokio_core::net::{TcpListener, TcpStream};
 use tokio_core::reactor;
+use tokio_threadpool::{Builder, ThreadPool};
 
 use multiaddr::{ToMultiaddr};
+use base64;
 
 use mercury_home_protocol::{*, crypto::*};
 use mercury_connect::{*, protocol_capnp::HomeClientCapnProto};
 use mercury_home_node::{server::*, protocol_capnp::HomeDispatcherCapnProto};
+use mercury_storage::async::KeyValueStore;
+use mercury_storage::filesys::AsyncFileHandler;
 
 use ::dummy::*;
 use super::*;
@@ -29,7 +33,7 @@ fn test_events()
     let addr = homeaddr.clone().to_socket_addrs().unwrap().next().expect("Failed to parse address");
 
     let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
-    let (homeprof, _homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+    let (homeprof, _homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone().into()], data: vec![]}));
 
     let dht = ProfileStore::new();
     dht.insert(homeprof.id.clone(), homeprof.clone());
@@ -156,7 +160,7 @@ fn test_update(){
     let mut setup = dummy::TestSetup::setup();
 
     let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
-    let (otherhome, _other_home_signer) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+    let (otherhome, _other_home_signer) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone().into()], data: vec![]}));
 
     setup.home.insert(otherhome.id.clone(), otherhome.clone());
     let home_session = setup.profilegate.update(
@@ -231,10 +235,10 @@ fn and_then_story(){
     //let handle = reactor.handle();
 
     let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
-    let (homeprof, homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+    let (homeprof, homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone().into()], data: vec![]}));
 
     let homemultiaddr = "/ip4/127.0.0.1/udp/9877".to_multiaddr().unwrap();
-    let (other_homeprof, other_homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone()], data: vec![]}));
+    let (other_homeprof, other_homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone().into()], data: vec![]}));
 
     let dht = ProfileStore::new();
     dht.insert(homeprof.id.clone(), homeprof.clone());
@@ -397,4 +401,42 @@ fn and_then_story(){
     let joined_f4t = Future::join(sess, other_reg);
     let _definitive_success = reactor.run(joined_f4t);
     println!( "***We're done here, let's go packing" );
+}
+
+
+
+
+//TODO might need to place this to some other place
+#[test]
+fn profile_serialize_async_key_value_test() {
+    use tokio_core;
+    use tokio_core::reactor;
+
+    
+    let profile = make_own_persona_profile(&PublicKey("user_key".as_bytes().to_vec()));
+    let homeprofile = make_home_profile("/ip4/127.0.0.1/udp/9876", &PublicKey("home_key".as_bytes().to_vec()));
+    let mut reactor = reactor::Core::new().unwrap();
+    //TODO FIXME 
+    let thread_pool = Rc::new(Builder::new()
+            .max_blocking(200)
+            .build()
+    );
+    let mut storage : AsyncFileHandler = 
+        AsyncFileHandler::new_with_pool(String::from("./ipfs/homeserverid/"),Rc::clone(&thread_pool)).unwrap();
+    let mut storage2 : AsyncFileHandler = 
+        AsyncFileHandler::new_with_pool(String::from("./ipfs/homeserverid/"),thread_pool).unwrap();
+
+    let client = storage.set(base64::encode(&profile.id.clone().0), profile.clone())
+        .and_then(|_|{
+            storage.get(base64::encode(&profile.id.clone().0))
+        });
+    let home = storage2.set(base64::encode(&homeprofile.id.clone().0), homeprofile.clone())
+        .and_then(|_|{
+            storage2.get(base64::encode(&homeprofile.id.clone().0))
+        });
+
+    let (res,reshome) : (Profile, Profile)= reactor.run(client.join(home)).unwrap();
+    // let reshome = reactor.run(home).unwrap();
+    assert_eq!(res, profile);
+    assert_eq!(reshome, homeprofile);
 }

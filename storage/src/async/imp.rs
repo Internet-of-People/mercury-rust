@@ -321,6 +321,39 @@ impl HashSpace<Vec<u8>, String> for Ipfs
         Box::new(cat_fut)
     }
 
+    // fn resolve(&self, hash: &String)
+    //     -> Box< Future<Item=Vec<u8>, Error=HashSpaceError> >
+    // {
+    //     unimplemented!();
+    //     let res = self.client.object_stat(hash);
+        // .map_err( |e| HashSpaceError::Other( Box::new(e) ) )
+        // .and_then(|stat|{
+        //     let link_number = stat.num_links;
+        //     if link_number == 0 {
+        //         let file_fut = self.client.cat(hash).concat2()
+        //             .map( |chunk| chunk.to_vec() )
+        //             // TODO error should be mapped to something more descriptive than Other
+        //             .map_err( |e| HashSpaceError::Other( Box::new(e) ) );
+        //         return Box::new(file_fut) as Box<Future<Item=Vec<u8>, Error = _>>
+        //     }
+        //     else {
+        //         //this gives back an LsResponse that contains a vec of ipfs files that has its ipfs hash as "hash" field
+        //         let dir_fut = self.client.ls(Some(hash))
+        //         .map( |response| {
+        //             let out = String::new();
+        //             for file in response.objects{
+        //                 out.push_str(&file.hash)
+        //             }
+        //             out.into_bytes()
+        //         })
+        //         // TODO error should be mapped to something more descriptive than Other
+        //         .map_err( |e| HashSpaceError::Other( Box::new(e) ) );
+        //         return Box::new(dir_fut) as Box<Future<Item=Vec<u8>, Error = _>>
+        //     }
+        // });
+        // Box::new(res)
+    // }
+
     fn validate(&self, object: &Vec<u8>, hash: &String)
         -> Box< Future<Item=bool, Error=HashSpaceError> >
     {
@@ -510,7 +543,7 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
             .and_then( move |(stmt, conn)| {
                 conn.execute(&stmt, &[&key_str, &value])
             } )
-            .map_err( |(e, conn)| StorageError::Other( Box::new(e) ) )
+            .map_err( |(e, conn)| StorageError::StringError( e.description().to_owned() ) )
             .map( | exec_res| () );
         Box::new(result)
     }
@@ -533,7 +566,7 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
                     //      if multiple rows are found in the result set
                     .map( |(vec, state)| vec.concat() )
             )
-            .map_err( |(e, conn)| StorageError::Other( Box::new(e) ) );
+            .map_err( |(e, conn)| StorageError::StringError( e.description().to_owned() ) );
 
         Box::new(result)
     }

@@ -17,12 +17,16 @@ extern crate tokio_core;
 extern crate tokio_io;
 
 use std::rc::Rc;
+use serde::de::Error;
 
 use bincode::serialize;
 use futures::{Future, sync::mpsc};
-use multiaddr::Multiaddr;
+
+use multiaddr::{Multiaddr, ToMultiaddr};
 use crypto::{ProfileValidator, SignatureValidator};
 
+use serde::{Deserialize, Deserializer, Serializer};
+use serde::ser::SerializeSeq;
 
 pub mod crypto;
 pub mod handshake;
@@ -40,10 +44,10 @@ pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
 #[derive(Deserialize, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct PublicKey(pub Vec<u8>);
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct PrivateKey(pub Vec<u8>);
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct Signature(pub Vec<u8>);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
@@ -120,7 +124,7 @@ pub trait Validator: ProfileValidator + SignatureValidator
 
 
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct PersonaFacet
 {
     // TODO should we use only a RelationProof here instead of full Relation info?
@@ -131,17 +135,49 @@ pub struct PersonaFacet
     pub data:   Vec<u8>,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+{
+    let mut seq = s.serialize_seq(Some(x.len()))?;
+    for mr in x{
+        match seq.serialize_element(&mr.to_string()){
+            Ok(_)=>{();},
+            Err(e)=>{return Err(e);}
+        }
+    }
+    seq.end()
+}
+
+fn deserialize_multiaddr_vec<'de, D>(deserializer: D) -> Result<Vec<Multiaddr>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let mapped: Vec<String> = Deserialize::deserialize(deserializer)?;
+    let mut res = Vec::new();
+    for str_ma in mapped.iter(){;
+        match str_ma.to_multiaddr(){
+            Ok(multi)=>{res.push(multi);}
+            Err(e)=>{return Err(D::Error::custom(e));}
+        } 
+    }   
+    Ok(res)
+}
+
+
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct HomeFacet
 {
     /// Addresses of the same home server. A typical scenario of multiple addresses is when there is
     /// one IPv4 address/port, one onion address/port and some IPv6 address/port pairs.
+    #[serde(serialize_with = "serialize_multiaddr_vec")]
+    #[serde(deserialize_with = "deserialize_multiaddr_vec")]
     pub addrs:  Vec<Multiaddr>,
     pub data:   Vec<u8>,
 }
 
 // NOTE Given for each SUPPORTED app, not currently available (checked in) app, checkins are managed differently
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct ApplicationFacet
 {
     /// unique id of the application - like 'iop-chat'
@@ -149,13 +185,13 @@ pub struct ApplicationFacet
     pub data:   Vec<u8>,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct RawFacet
 {
     pub data: Vec<u8>, // TODO or maybe multicodec output?
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub enum ProfileFacet
 {
     Home(HomeFacet),
@@ -164,7 +200,7 @@ pub enum ProfileFacet
     Unknown(RawFacet),
 }
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct Profile
 {
     /// The Profile ID is a hash of the public key, similar to cryptocurrency addresses.
@@ -336,7 +372,7 @@ impl RelationHalfProof
 }
 
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
 pub struct RelationProof
 {
     pub relation_type:  String,        // TODO inline halfproof fields with macro, if possible at all
@@ -429,7 +465,7 @@ impl HomeInvitation
 }
 
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash)]
+#[derive(PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
 pub struct ApplicationId(pub String);
 
 #[derive(PartialEq, Eq, Clone, Debug)]
