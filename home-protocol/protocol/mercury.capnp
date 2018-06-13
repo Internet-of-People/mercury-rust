@@ -21,7 +21,6 @@ struct Profile
     id        @0 : ProfileId;
     publicKey @1 : PublicKey;
 
-    # Currently only a single facet is supported in a profile
     facet        : union {
         persona :group {
             homes @2 : List(RelationProof);
@@ -122,8 +121,8 @@ struct ProfileEvent
     {
         # TODO maybe we could optimize pairing data by omitting most fields, signature and sender profile_id is mandatory
         unknown         @0 : Data;
-        pairingRequest  @1 : Signature; # RelationHalfProof;
-        pairingResponse @2 : Signature; # RelationProof;
+        pairingRequest  @1 : RelationHalfProof;
+        pairingResponse @2 : RelationProof;
     }
 }
 

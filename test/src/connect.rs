@@ -42,7 +42,7 @@ fn test_events()
         println!("Accepted client connection, serving requests");
         //let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
         let store_clone = Rc::clone(&home_storage);
-        let home = Box::new( MyDummyHome::new( homeprof.clone() , store_clone ) );
+        let home = Rc::new( MyDummyHome::new( homeprof.clone() , store_clone ) );
         HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle1.clone() );
         Ok( () )
     } ).map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")));
@@ -74,45 +74,7 @@ fn test_events()
 
 #[test]
 fn test_register(){
-
-    let setup = dummy::TestSetup::setup();
-
-    // make persona
-    let (profile, signer) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
-    let ownprofile = OwnProfile{profile: profile.clone(), priv_data: vec![]};
-    let signer = Rc::new(signer);
-
-    // make home
-    let (home_profile, home_signer) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
-
-    let home_server = default_home_server(&setup.handle);
-    let client_context = PeerContext::new(
-        Rc::new(home_signer),
-        profile.public_key.clone(),
-        profile.id.clone(),
-    );
-
-    let home_connection_server = HomeConnectionServer::new(
-        Rc::new(client_context),
-        Rc::new(home_server),
-    ).unwrap();
-
-    let half_proof = RelationHalfProof::new("home", &home_profile.id, &*signer);
-    let ownprofile_returned = home_connection_server.register(
-        ownprofile.clone(),
-        half_proof,
-        None
-    ).wait().unwrap();
-
-    if let ProfileFacet::Persona(ref facet) = ownprofile_returned.profile.facets[0] {
-        let home_proof = &facet.homes[0];
-
-        let validator = CompositeValidator::default();
-
-        assert_eq!(validator.validate_relation_proof(&home_proof, &home_profile.id, &home_profile.public_key, &profile.id, &profile.public_key), Ok(()));
-    } else {
-        assert!(false);
-    }
+    // direct test moved to home.rs; See git history for the original, through-profilegateway test.
 }
 
 #[test]

@@ -106,7 +106,7 @@ impl<'a> TryFrom<profile::Reader<'a>> for ::Profile
         };
 
         match facet_res {
-            Ok(facet) => Ok(::Profile::new(&profile_id, &public_key, &[facet]) ),
+            Ok(facet) => Ok(::Profile::new(&profile_id, &public_key, &facet) ),
             Err(e) => Err(::capnp::Error::failed(e.to_owned())),
         }
     }
@@ -118,19 +118,16 @@ impl<'a> FillFrom<::Profile> for profile::Builder<'a>
     {
         self.set_id( (&src.id).into() );
         self.set_public_key( (&src.public_key).into() );
-        match src.facets.iter().next() {
-            Some(::ProfileFacet::Persona(facet)) => {
+        match src.facet {
+            ::ProfileFacet::Persona(ref facet) => {
                 let persona_builder = self.init_facet().init_persona();
                 let mut homes = persona_builder.init_homes(facet.homes.len() as u32);
                 for (i, home) in facet.homes.iter().enumerate() {
                     homes.reborrow().get(i as u32).fill_from(&home);
                 }
             }
-            Some(_) => {
+            _ => {
                 panic!("Unimplemented");  // TODO implement home and application facets
-            }
-            None => {
-                panic!("Should be unreachable code"); // TODO refactor Profile to have a single mandatory facet
             }
         }
     }
@@ -243,16 +240,33 @@ impl<'a> TryFrom<profile_event::Reader<'a>> for ::ProfileEvent
 
     fn try_from(src: profile_event::Reader) -> Result<Self, Self::Error>
     {
-        // TODO
-        Ok( ::ProfileEvent::Unknown( Vec::new() ) )
+        match src.which()? {
+            profile_event::Which::Unknown(data) => Ok(::ProfileEvent::Unknown(Vec::from(data?))),
+            profile_event::Which::PairingRequest(half_proof) => Ok(::ProfileEvent::PairingRequest(::RelationHalfProof::try_from(half_proof?)?)),
+            profile_event::Which::PairingResponse(proof) => Ok(::ProfileEvent::PairingResponse(::RelationProof::try_from(proof?)?)),
+        }
     }
 }
 
 impl<'a> FillFrom<::ProfileEvent> for profile_event::Builder<'a>
 {
-    fn fill_from(mut self, src: &::ProfileEvent)
+    fn fill_from(self, src: &::ProfileEvent)
     {
-        // TODO
+        match src {
+            ::ProfileEvent::PairingRequest(half_proof) => {
+                let mut builder = self.init_pairing_request();
+                builder.reborrow().fill_from(half_proof);
+            },
+            ::ProfileEvent::PairingResponse(proof) => {
+                let mut builder = self.init_pairing_response();
+                builder.reborrow().fill_from(proof);
+            },
+            ::ProfileEvent::Unknown(data) => {
+                let _builder = self.init_unknown(data.len() as u32);
+                // TODO fill with data
+                // builder.reborrow().fill_with(data);
+            },
+        };
     }
 }
 

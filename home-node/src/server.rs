@@ -200,7 +200,7 @@ impl Home for HomeConnectionServer
         };
 
         let mut own_prof_modified = own_prof.clone();
-        if let ProfileFacet::Persona(ref mut profile_facet) = own_prof_modified.profile.facets[0] {
+        if let ProfileFacet::Persona(ref mut profile_facet) = own_prof_modified.profile.facet {
             profile_facet.homes.push(home_proof)
         } else {
             return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: Only personas are allowed to register".to_owned() )) ) )
@@ -303,6 +303,7 @@ impl Home for HomeConnectionServer
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
+        // TODO add error case for calling self
         let to_profile = match call_req.relation.peer_id( self.context.peer_id() )
         {
             Ok(profile_id) => profile_id.to_owned(),

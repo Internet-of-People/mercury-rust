@@ -172,14 +172,14 @@ pub struct Profile
 
     /// Public key used for validating the identity of the profile.
     pub public_key: PublicKey,
-    pub facets:     Vec<ProfileFacet>, // TODO consider redesigning facet Rust types/storage
+    pub facet:      ProfileFacet, // TODO consider redesigning facet Rust types/storage
     // TODO consider having a signature of the profile data here
 }
 
 impl Profile
 {
-    pub fn new(id: &ProfileId, public_key: &PublicKey, facets: &[ProfileFacet]) -> Self
-        { Self{ id: id.to_owned(), public_key: public_key.to_owned(), facets: facets.to_owned() } }
+    pub fn new(id: &ProfileId, public_key: &PublicKey, facet: &ProfileFacet) -> Self
+        { Self{ id: id.to_owned(), public_key: public_key.to_owned(), facet: facet.to_owned() } }
 
     pub fn new_home(id: ProfileId, public_key: PublicKey, address: Multiaddr) -> Self
     {
@@ -188,12 +188,13 @@ impl Profile
             data: vec![],
         };
 
-        Self { id, public_key, facets: vec![ProfileFacet::Home(facet)] }
+        Self { id, public_key, facet: ProfileFacet::Home(facet) }
     }
 }
 
 
 /// Represents a connection to another Profile (Home <-> Persona), (Persona <-> Persona)
+#[derive(Clone)]
 pub struct PeerContext
 {
     my_signer: Rc<Signer>,

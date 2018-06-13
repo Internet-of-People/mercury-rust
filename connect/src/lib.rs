@@ -156,17 +156,13 @@ impl ProfileGatewayImpl
                     connector: Rc<HomeConnector>, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
     {
+        let homes = match profile.facet {
+            // TODO consider how to get homes/addresses for apps and smartfridges
+            ProfileFacet::Persona(ref facet) => facet.homes.clone(),
+            _ => return Box::new(future::err(ErrorToBeSpecified::TODO("any_home_of: not a home profile".to_owned()))),
+        };
         let profile_id = signer.profile_id().clone();
-        let home_ids = profile.facets.iter()
-            .flat_map( |facet|
-            {
-                match facet
-                {
-                    // TODO consider how to get homes/addresses for apps and smartfridges
-                    &ProfileFacet::Persona(ref persona) => persona.homes.clone(),
-                    _ => Vec::new(),
-                }
-            })
+        let home_ids = homes.iter()
             .map(move |relation_proof| {
                 relation_proof.peer_id(&profile_id).map(|peer_id_ref| {
                     peer_id_ref.to_owned()
