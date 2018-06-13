@@ -411,16 +411,8 @@ fn profile_serialize_async_key_value_test() {
     use tokio_core::reactor;
 
     
-    let profile = Profile::new(
-        &ProfileId("userprofile".into()), 
-        &PublicKey("userkey".into()), 
-        &vec![]
-    ); 
-    let homeprofile = Profile::new_home(
-        ProfileId("homeprofile".into()), 
-        PublicKey("homekey".into()), 
-        String::from("/ip4/127.0.0.1/udp/9876").to_multiaddr().unwrap()
-    );
+    let profile = make_own_persona_profile(&PublicKey("user_key".as_bytes().to_vec()));
+    let homeprofile = make_home_profile("localhost:4001", &PublicKey("home_key".as_bytes().to_vec()));
     let mut reactor = reactor::Core::new().unwrap();
     //TODO FIXME 
     let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/homeserverid/")).unwrap();
