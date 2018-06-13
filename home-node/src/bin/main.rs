@@ -61,20 +61,20 @@ fn main()
         let server_clone = server.clone();
 
         // TODO fill this in properly for each connection based on TLS authentication info
-        let handshake_fut = handshake::temp_handshake_until_tls_is_implemented( socket, signer.clone() )
+        let handshake_fut = handshake::temp_tcp_handshake_until_tls_is_implemented( socket, signer.clone() )
             .map_err( |e|
             {
                 warn!("Client handshake failed: {:?}", e);
                 ()
             } )
-            .and_then( move |(socket, client_context)|
+            .and_then( move |(reader, writer, client_context)|
             {
                 let home = HomeConnectionServer::new( Rc::new(client_context), server_clone.clone() )
                     .map_err( |e| {
                         warn!("Failed to create server instance: {:?}", e);
                         ()
                     } )?;
-                protocol_capnp::HomeDispatcherCapnProto::dispatch_tcp( Rc::new(home), socket, handle_clone.clone() );
+                protocol_capnp::HomeDispatcherCapnProto::dispatch( Rc::new(home), reader, writer, handle_clone.clone() );
                 Ok( () )
             } );
 

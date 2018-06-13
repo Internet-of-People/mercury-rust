@@ -52,12 +52,12 @@ fn main()
         .map_err( |e| ErrorToBeSpecified::TODO( format!("temporaty_test_capnproto connect: {:?}", e) ) )
         .and_then( move |socket|
         {
-            handshake::temp_handshake_until_tls_is_implemented( socket, client_signer_clone )
+            handshake::temp_tcp_handshake_until_tls_is_implemented( socket, client_signer_clone )
         } )
-        .map( move |(socket, home_context)|
+        .map( move |(reader, writer, home_context)|
         {
             let home_id = home_context.peer_id().clone();
-            let home_client = HomeClientCapnProto::new_tcp(socket, home_context, handle);
+            let home_client = HomeClientCapnProto::new(reader, writer, home_context, handle);
             (home_id, home_client)
         } )
         .and_then( |(home_id, home)|

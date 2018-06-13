@@ -51,6 +51,7 @@ impl HomeClientCapnProto
     {
         use tokio_io::AsyncRead;
 
+        // TODO consider if this unwrap() is acceptable here
         tcp_stream.set_nodelay(true).unwrap();
         let (reader, writer) = tcp_stream.split();
         HomeClientCapnProto::new(reader, writer, context, handle)
