@@ -20,7 +20,7 @@ use futures::{Future, Stream};
 use tokio_core::{reactor, net::TcpListener};
 
 use mercury_home_protocol::{*, crypto::*, handshake};
-use mercury_home_node::{server::*, protocol_capnp};
+use mercury_home_node::{config::*, server::*, protocol_capnp};
 use mercury_storage::async::imp::InMemoryStore;
 
 
@@ -28,6 +28,9 @@ use mercury_storage::async::imp::InMemoryStore;
 fn main()
 {
     log4rs::init_file( "log4rs.yml", Default::default() ).unwrap();
+
+    let config = parse_config();
+    //println!( "Profile Id: {:?}", config.args.value_of("profile_id") );
 
     let mut core = reactor::Core::new().unwrap();
     let handle = core.handle();
@@ -77,11 +80,6 @@ fn main()
                 protocol_capnp::HomeDispatcherCapnProto::dispatch( Rc::new(home), reader, writer, handle_clone.clone() );
                 Ok( () )
             } );
-
-//        // let secret = b"\x9D\x61\xB1\x9D\xEF\xFD\x5A\x60\xBA\x84\x4A\xF4\x92\xEC\x2C\xC4\x44\x49\xC5\x69\x7B\x32\x69\x19\x70\x3B\xAC\x03\x1C\xAE\x7F\x60";
-//        let client_pub_key = PublicKey( b"\xD7\x5A\x98\x01\x82\xB1\x0A\xB7\xD5\x4B\xFE\xD3\xC9\x64\x07\x3A\x0E\xE1\x72\xF3\xDA\xA6\x23\x25\xAF\x02\x1A\x68\xF7\x07\x51\x1A".to_vec() );
-//        let client_profile_id = ProfileId( b"\x1B\x20\x9E\xE7\xC0\x9B\x84\x64\x02\x8B\x2C\xD4\x06\xF7\xF7\xCC\x70\xAD\xC6\x36\x59\xB5\xD3\x76\x71\xDC\x2B\x58\x8D\xB3\x24\x46\x68\x4A".to_vec() );
-//        let context = Rc::new( PeerContext::new( signer.clone(), client_pub_key, client_profile_id ) );
 
         handle.spawn(handshake_fut);
         Ok( () )
