@@ -8,6 +8,7 @@ extern crate mercury_home_node;
 extern crate mercury_storage;
 extern crate tokio_core;
 extern crate tokio_io;
+extern crate tokio_threadpool;
 extern crate memsocket;
 extern crate multiaddr;
 extern crate multihash;

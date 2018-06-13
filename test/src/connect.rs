@@ -15,6 +15,7 @@ use mercury_connect::{*, protocol_capnp::HomeClientCapnProto};
 use mercury_home_node::{server::*, protocol_capnp::HomeDispatcherCapnProto};
 use mercury_storage::async::KeyValueStore;
 use mercury_storage::filesys::AsyncFileHandler;
+use tokio_threadpool::ThreadPool;
 
 use ::dummy::*;
 use super::*;
@@ -415,8 +416,12 @@ fn profile_serialize_async_key_value_test() {
     let homeprofile = make_home_profile("localhost:4001", &PublicKey("home_key".as_bytes().to_vec()));
     let mut reactor = reactor::Core::new().unwrap();
     //TODO FIXME 
-    let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/homeserverid/")).unwrap();
-    let mut storage2 : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/homeserverid/")).unwrap();
+    let thread_pool = Rc::new(Builder::new()
+            .max_blocking(max_blocking_size)
+            .build()
+    );
+    let mut storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/homeserverid/"),Rc::clone(thread_pool)).unwrap();
+    let mut storage2 : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/homeserverid/"),thread_pool).unwrap();
 
     let client = storage.set(String::from_utf8(profile.id.clone().0).unwrap(), profile.clone())
         .and_then(|_|{
