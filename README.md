@@ -77,4 +77,6 @@ Directories/crates of the project are
    We currently use only some interfaces like `KeyValueStore` from this crate,
    you should ignore it for now.
 
-Copyright © 2017-2018 Libertaria Corp., Decentralized Society Foundation, IoP Ventures LLC
+Copyright © 2017-2018
+Libertaria Ventures LLP, UK
+Decentralized Society Foundation, PA
