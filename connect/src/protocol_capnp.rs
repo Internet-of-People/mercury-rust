@@ -16,7 +16,7 @@ use super::*;
 
 pub struct HomeClientCapnProto
 {
-    context: PeerContext,
+//    context: PeerContext,
     repo:    profile_repo::Client,
     home:    home::Client,
     handle:  reactor::Handle,
@@ -32,7 +32,6 @@ impl HomeClientCapnProto
     {
         debug!("Initializing Cap'n'Proto");
 
-        // TODO maybe we should set up only single party capnp first
         let rpc_network = Box::new( capnp_rpc::twoparty::VatNetwork::new( reader, writer,
             capnp_rpc::rpc_twoparty_capnp::Side::Client, Default::default() ) );
         let mut rpc_system = capnp_rpc::RpcSystem::new(rpc_network, None);
@@ -44,8 +43,9 @@ impl HomeClientCapnProto
 
         handle.spawn( rpc_system.map_err( |e| warn!("Capnp RPC failed: {}", e) ) );
 
-        Self{ context, home, repo, handle }
+        Self{ home, repo, handle } //, context }
     }
+
 
     pub fn new_tcp(tcp_stream: TcpStream, context: PeerContext, handle: reactor::Handle) -> Self
     {
@@ -56,19 +56,7 @@ impl HomeClientCapnProto
         let (reader, writer) = tcp_stream.split();
         HomeClientCapnProto::new(reader, writer, context, handle)
     }
-
-
 }
-
-
-
-// TODO is this needed here or elsewhere?
-//impl PeerContext for HomeClientCapnProto
-//{
-//    fn my_signer(&self)     -> &Signer          { self.context.my_signer() }
-//    fn peer_pubkey(&self)   -> Option<PublicKey>{ self.context.peer_pubkey() }
-//    fn peer(&self)          -> Option<Profile>  { self.context.peer() }
-//}
 
 
 
@@ -80,7 +68,6 @@ impl ProfileRepo for HomeClientCapnProto
         // TODO properly implement this
         let (send, recv) = mpsc::channel(1);
         recv
-        //Box::new( recv.map_err( |_| "Failed but why? TODO".to_owned() ) ) // TODO
     }
 
 

@@ -29,7 +29,7 @@ fn main()
 {
     log4rs::init_file( "log4rs.yml", Default::default() ).unwrap();
 
-    let config = parse_config();
+    let _config = FileCliParser::parse_config();
     //println!( "Profile Id: {:?}", config.args.value_of("profile_id") );
 
     let mut core = reactor::Core::new().unwrap();

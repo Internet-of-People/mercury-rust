@@ -1,38 +1,81 @@
 use std::collections::HashMap;
 use std::env;
-use std::ffi::OsString;
 use std::fs;
-use std::io::prelude::*;
 
 use clap;
 use toml;
 
-
-
-pub fn parse_config<'a>() -> Config<'a>
-{
-    let cli_args = env::args().collect::<Vec<_>>();
-    let file_args = read_config_file(CONFIG_PATH);
-
-    let all_args = cli_args.iter().chain( file_args.iter() );
-    // println!("File contents: {:?}", all_args.collect::<Vec<_>>() );
-
-    let all_args = cli_args.iter().chain( file_args.iter() );
-    let matches = config_parser().get_matches_from(all_args);
-    Config{ args: matches }
-}
-
-
-pub struct Config<'a>
-{
-    pub args: clap::ArgMatches<'a>,
-}
-
+use mercury_home_protocol::*;
 
 
 
 const VERSION: &str = "0.1";
-const CONFIG_PATH: &str = "home.cfg";
+
+
+pub struct Config
+{
+    profile_id: ProfileId,
+    public_key: PublicKey,
+}
+
+impl Config
+{
+    pub fn new<'a>(args: &clap::ArgMatches<'a>) -> Self
+    {
+        let public_key = args.value_of( FileCliParser::ARG_NAME_PUBLIC_KEY)
+            .expect("Public key should have been mandatory").as_bytes(); // TODO use some encoding, e.g. base56
+
+        let profile_id = ProfileId( b"TODO".to_vec() );
+        Self{ public_key: PublicKey( public_key.to_owned() ),
+              profile_id }
+    }
+
+    pub fn profile_id(&self) -> &ProfileId { &self.profile_id }
+    pub fn public_key(&self) -> &PublicKey { &self.public_key }
+}
+
+
+
+pub struct FileCliParser {}
+
+impl FileCliParser
+{
+    pub fn parse_config() -> Config
+    {
+        let cli_args = env::args().collect::<Vec<_>>();
+        let file_args = read_config_file(Self::CONFIG_PATH);
+
+        let all_args = cli_args.iter().chain( file_args.iter() );
+        // println!("File contents: {:?}", all_args.collect::<Vec<_>>() );
+
+        let matches = Self::config_parser().get_matches_from(all_args);
+        Config::new(&matches)
+    }
+
+
+    fn config_parser<'a,'b>() -> clap::App<'a,'b>
+    {
+        clap::App::new("Mercury Home node")
+            .about("Provides an open, distributed, secure communication network")
+            .version(VERSION)
+            .arg( clap::Arg::with_name(Self::ARG_NAME_PUBLIC_KEY)
+                .long(Self::ARG_NAME_PUBLIC_KEY)
+                .aliases(&Self::ARG_ALIASES_PUBLIC_KEY)
+                .required(true)
+                .case_insensitive(true)
+                .takes_value(true)
+                .value_name("PROFILE_ID")
+                .help("TODO.")
+            )
+    }
+
+
+    const CONFIG_PATH: &'static str = "home.cfg";
+
+    const ARG_NAME_PUBLIC_KEY: &'static str = "public_key";
+    const ARG_ALIASES_PUBLIC_KEY: [&'static str; 4] = ["publickey", "public-key", "pub_key", "pub-key"];
+}
+
 
 
 fn read_config_file(config_path: &str) -> Vec<String>
@@ -53,22 +96,6 @@ fn read_config_file(config_path: &str) -> Vec<String>
         },
         Err(e) => Vec::new()
     }
-}
-
-
-fn config_parser<'a,'b>() -> clap::App<'a,'b>
-{
-    clap::App::new("Mercury Home node")
-        .about("Provides an open, distributed communication network")
-        .version(VERSION)
-        .arg( clap::Arg::with_name("profile_id")
-            .long("profile_id")
-            .aliases(&["profile_id", "profileid", "profile-id", "home_profile_id", "homeprofileid", "home-profile-id"])
-            .case_insensitive(true)
-            .takes_value(true)
-            .value_name("PROFILE_ID")
-            .help("TODO.")
-        )
 }
 
 
