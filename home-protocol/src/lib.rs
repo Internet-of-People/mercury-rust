@@ -101,9 +101,6 @@ pub trait Validator: ProfileValidator + SignatureValidator
             &relation_proof.b_id,
             &relation_proof.a_id,
         ).serialized();
-        // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
-        //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
-        //      But anyway this serialization will be swapped with something that in the first place cannot fail at all.
 
         let peer_of_id_1 = relation_proof.peer_id(&id_1)?;
         if peer_of_id_1 != id_2 {return Err(ErrorToBeSpecified::TODO("The relation does not contain both id_1 and id_2".to_owned()));}
@@ -329,6 +326,7 @@ impl RelationSignablePart
         // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
         //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
         //      But still, to be on the safe side, this serialization shoule be swapped later with a call that cannot fail.
+        // TODO consider using unwrap_or( Vec::new() ) instead
         serialize(self).unwrap()
     }
 

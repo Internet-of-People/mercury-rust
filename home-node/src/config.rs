@@ -23,7 +23,7 @@ impl Config
     pub fn new<'a>(args: &clap::ArgMatches<'a>) -> Self
     {
         let public_key = args.value_of( FileCliParser::ARG_NAME_PUBLIC_KEY)
-            .expect("Public key should have been mandatory").as_bytes(); // TODO use some encoding, e.g. base56
+            .expect("Public key should be a mandatory option").as_bytes();
 
         let profile_id = ProfileId( b"TODO".to_vec() );
         Self{ public_key: PublicKey( public_key.to_owned() ),
@@ -43,7 +43,8 @@ impl FileCliParser
     pub fn parse_config() -> Config
     {
         let cli_args = env::args().collect::<Vec<_>>();
-        let file_args = read_config_file(Self::CONFIG_PATH);
+        let file_args = read_config_file(Self::CONFIG_PATH)
+            .unwrap_or( Vec::new() );
 
         let all_args = cli_args.iter().chain( file_args.iter() );
         // println!("File contents: {:?}", all_args.collect::<Vec<_>>() );
@@ -78,24 +79,24 @@ impl FileCliParser
 
 
 
-fn read_config_file(config_path: &str) -> Vec<String>
+fn read_config_file(config_path: &str) -> Option< Vec<String> >
 {
-    match fs::read_to_string(config_path)
-    {
-        Ok(file_contents) =>
-        {
-            let file_args : HashMap<String, String> = match toml::from_str(&file_contents)
-            {
-                Ok(toml) => toml,
-                Err(e) => panic!( format!("Error parsing file {}: {}\nNote that only `key = 'value'` format is supported in the config file", config_path, e) )
-            };
-            // println!("File contents: {:?}", file_args);
-            file_args.iter()
-                .flat_map( |(key,value)| vec![ format!("--{}", key), value.to_owned() ] )
-                .collect()
-        },
-        Err(e) => Vec::new()
-    }
+    let file_contents = fs::read_to_string(config_path)
+        .map_err( |e| error!("Error reading file {}: {}", config_path, e) )
+        .ok()?;
+
+    let file_keyvals : HashMap<String, String> = toml::from_str(&file_contents)
+        .map_err( |e| {
+            error!("Error parsing file {}: {}", config_path, e);
+            warn!("Note that only `key = 'value'` format is supported in the config file");
+        } )
+        .ok()?;
+
+    // println!("File contents: {:?}", file_args);
+    let file_args = file_keyvals.iter()
+        .flat_map( |(key,value)| vec![ format!("--{}", key), value.to_owned() ] )
+        .collect();
+    Some(file_args)
 }
 
 
