@@ -176,8 +176,8 @@ fn test_home_events(mut setup: TestSetup)
     );
     let ownprofile2 = register_client(&mut setup, &testclient2);
 
-    let session1 = setup.reactor.run(setup.testclient.home_connection.login(ownprofile1.profile.id.clone())).unwrap();
-    let session2 = setup.reactor.run(testclient2.home_connection.login(ownprofile2.profile.id.clone())).unwrap();
+    let session1 = setup.reactor.run(setup.testclient.home_connection.login(&ownprofile1.profile.id)).unwrap();
+    let session2 = setup.reactor.run(testclient2.home_connection.login(&ownprofile2.profile.id)).unwrap();
 
     let events1 = session1.events();
     let events2 = session2.events();
@@ -219,7 +219,7 @@ fn test_home_events(mut setup: TestSetup)
 fn test_home_login(mut setup: TestSetup)
 {
     let ownprofile = register_client_from_setup(&mut setup);
-    let session = setup.reactor.run(setup.testclient.home_connection.login(ownprofile.profile.id)).unwrap();
+    let session = setup.reactor.run(setup.testclient.home_connection.login(&ownprofile.profile.id)).unwrap();
     let pong = setup.reactor.run(session.ping("ping")).unwrap();
     assert_eq!("ping", pong);
 }

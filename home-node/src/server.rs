@@ -230,13 +230,14 @@ impl Home for HomeConnectionServer
         Box::new(reg_fut)
     }
 
-    fn login(&self, profile_id: ProfileId) ->
+    fn login(&self, profile_id: &ProfileId) ->
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        if profile_id != *self.context.peer_id()
+        if *profile_id != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Login() access denied: you authenticated with a different profile".to_owned() ) ) ) }
+        let profile_id_clone = profile_id.to_owned();
 
-        let val_fut = self.server.hosted_profile_db.borrow().get( profile_id.clone() )
+        let val_fut = self.server.hosted_profile_db.borrow().get( profile_id.to_owned() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             .map( {
                 let context_clone = self.context.clone();
@@ -244,7 +245,7 @@ impl Home for HomeConnectionServer
                 let sessions_clone = self.server.sessions.clone();
                 move |_own_profile| {
                     let session = Rc::new( HomeSessionServer::new(context_clone, server_clone) );
-                    sessions_clone.borrow_mut().entry(profile_id).or_insert( Rc::downgrade(&session) );
+                    sessions_clone.borrow_mut().entry(profile_id_clone).or_insert( Rc::downgrade(&session) );
                     session as Rc<HomeSession>
                 }
             } );

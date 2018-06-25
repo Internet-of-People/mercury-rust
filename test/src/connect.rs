@@ -56,13 +56,12 @@ fn test_events()
         .map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")))
         .and_then( |tcp_stream|
         {
-            let (private_key, public_key) = generate_keypair();
-            let signer = Rc::new(Ed25519Signer::new(&private_key, &public_key).unwrap());
-            let my_profile = signer.profile_id().clone();
+            let (private_key, _public_key) = generate_keypair();
+            let signer = Rc::new(Ed25519Signer::new(&private_key).unwrap());
             let home_profile = make_home_profile("localhost:9876", signer.public_key());
-            let home_ctx = PeerContext::new_from_profile(signer, &home_profile);
+            let home_ctx = PeerContext::new_from_profile(signer.clone(), &home_profile);
             let client = HomeClientCapnProto::new_tcp( tcp_stream, home_ctx, handle2 );
-            client.login(my_profile) // TODO maybe we should require only a reference in login()
+            client.login( signer.profile_id() )
         } )
         .map( |session|
         {

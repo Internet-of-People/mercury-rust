@@ -150,11 +150,11 @@ impl Home for HomeClientCapnProto
     }
 
 
-    fn login(&self, profile_id: ProfileId) ->
+    fn login(&self, profile_id: &ProfileId) ->
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
         let mut request = self.home.login_request();
-        request.get().set_profile_id( (&profile_id).into() );
+        request.get().set_profile_id( profile_id.into() );
 
         let handle_clone = self.handle.clone();
         let resp_fut = request.send().promise

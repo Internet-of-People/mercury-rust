@@ -256,7 +256,7 @@ impl ProfileGateway for ProfileGatewayImpl
         let own_profile_clone = own_prof.clone();
         let own_profile_id_clone = own_prof.profile.id.clone();
         let upd_fut = self.connect_home(&home_id)
-            .and_then( move |home| home.login(own_profile_id_clone) )
+            .and_then( move |home| home.login(&own_profile_id_clone) )
             .and_then( move |session| session.update(own_profile_clone) );
         Box::new(upd_fut)
     }
@@ -265,7 +265,7 @@ impl ProfileGateway for ProfileGatewayImpl
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let unreg_fut = self.connect_home(&home_id)
-            .and_then( move |home| home.login(own_prof) )
+            .and_then( move |home| home.login(&own_prof) )
             .and_then( move |session| session.unregister(newhome_id) );
         Box::new(unreg_fut)
     }
@@ -281,7 +281,7 @@ impl ProfileGateway for ProfileGatewayImpl
         let log_fut = self.profile_repo.load( &self.signer.profile_id() )
             .and_then( move |profile| ProfileGatewayImpl::any_home_of2(
                 &profile, profile_repo_clone, home_conn_clone, signer_clone) )
-            .and_then( move |home| home.login(prof_id) ) ;
+            .and_then( move |home| home.login(&prof_id) ) ;
 
         Box::new(log_fut)
     }

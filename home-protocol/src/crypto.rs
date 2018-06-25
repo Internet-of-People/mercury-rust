@@ -2,6 +2,7 @@ use std::error::Error;
 
 use multihash;
 use signatory::{ed25519::FromSeed, providers::dalek};
+use signatory::ed25519::Signer as SignatoryEdSigner;
 
 use ::*;
 
@@ -67,11 +68,14 @@ pub struct Ed25519Signer
 
 impl Ed25519Signer
 {
-    pub fn new(private_key: &PrivateKey, public_key: &PublicKey) -> Result<Self, ErrorToBeSpecified>
+    pub fn new(private_key: &PrivateKey) -> Result<Self, ErrorToBeSpecified>
     {
-        let profile_hash = multihash::encode( multihash::Hash::Keccak256, public_key.0.as_slice() )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
         let signer = dalek::Ed25519Signer::from_seed( private_key.0.as_slice() )
+            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
+        let ed_public_key = signer.public_key()
+            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
+        let public_key = PublicKey( ed_public_key.as_ref().to_vec() );
+        let profile_hash = multihash::encode( multihash::Hash::Keccak256, public_key.0.as_slice() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
         Ok( Self{ public_key: public_key.to_owned(), profile_id: ProfileId(profile_hash),
                   signer: signer } )
@@ -110,9 +114,9 @@ impl SignatureValidator for Ed25519Validator
         use signatory::ed25519::{DefaultVerifier, Verifier};
         let pubkey = ::signatory::ed25519::PublicKey::from_bytes( public_key.0.as_slice() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
-        let signo = ::signatory::ed25519::Signature::from_bytes( signature.0.as_slice() )
+        let signature = ::signatory::ed25519::Signature::from_bytes( signature.0.as_slice() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
-        DefaultVerifier::verify(&pubkey, data, &signo)
+        DefaultVerifier::verify(&pubkey, data, &signature)
             // TODO hwo to determine when to return Ok(false) here, i.e. signature does not match but validation was otherwise successful
             .map( |()| true )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
@@ -187,7 +191,7 @@ mod tests
         let public_key = PublicKey( b"\xEC\x17\x2B\x93\xAD\x5E\x56\x3B\xF4\x93\x2C\x70\xE1\x24\x50\x34\xC3\x54\x67\xEF\x2E\xFD\x4D\x64\xEB\xF8\x19\x68\x34\x67\xE2\xBF".to_vec() );
         let message = b"\xDD\xAF\x35\xA1\x93\x61\x7A\xBA\xCC\x41\x73\x49\xAE\x20\x41\x31\x12\xE6\xFA\x4E\x89\xA9\x7E\xA2\x0A\x9E\xEE\xE6\x4B\x55\xD3\x9A\x21\x92\x99\x2A\x27\x4F\xC1\xA8\x36\xBA\x3C\x23\xA3\xFE\xEB\xBD\x45\x4D\x44\x23\x64\x3C\xE8\x0E\x2A\x9A\xC9\x4F\xA5\x4C\xA4\x9F";
 
-        let signer = Ed25519Signer::new(&secret_key, &public_key).unwrap();
+        let signer = Ed25519Signer::new(&secret_key).unwrap();
         let signature = signer.sign(message);
         let expected_signature = b"\xDC\x2A\x44\x59\xE7\x36\x96\x33\xA5\x2B\x1B\xF2\x77\x83\x9A\x00\x20\x10\x09\xA3\xEF\xBF\x3E\xCB\x69\xBE\xA2\x18\x6C\x26\xB5\x89\x09\x35\x1F\xC9\xAC\x90\xB3\xEC\xFD\xFB\xC7\xC6\x64\x31\xE0\x30\x3D\xCA\x17\x9C\x13\x8A\xC1\x7A\xD9\xBE\xF1\x17\x73\x31\xA7\x04";
         assert_eq!( signature.0.as_slice(), expected_signature as &[u8] );

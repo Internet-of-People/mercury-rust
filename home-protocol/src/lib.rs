@@ -517,7 +517,7 @@ pub trait Home: ProfileRepo
     //              The same applies to `claim(&self)`.
 
     /// By calling this method, any active session of the same profile is closed.
-    fn login(&self, profile: ProfileId) ->
+    fn login(&self, profile: &ProfileId) ->
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >;
 
     /// The peer in `half_proof` must be hosted on this home server.

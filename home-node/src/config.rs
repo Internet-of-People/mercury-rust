@@ -1,11 +1,12 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::rc::Rc;
 
 use clap;
 use toml;
 
-use mercury_home_protocol::*;
+use mercury_home_protocol::{*, crypto::*};
 
 
 
@@ -14,24 +15,26 @@ const VERSION: &str = "0.1";
 
 pub struct Config
 {
-    profile_id: ProfileId,
-    public_key: PublicKey,
+    signer: Rc<Signer>,
 }
 
 impl Config
 {
     pub fn new<'a>(args: &clap::ArgMatches<'a>) -> Self
     {
-        let public_key = args.value_of( FileCliParser::ARG_NAME_PUBLIC_KEY)
-            .expect("Public key should be a mandatory option").as_bytes();
+        // TODO support hardware wallets
+        // NOTE for some test keys see https://github.com/tendermint/signatory/blob/master/src/ed25519/test_vectors.rs
+        let private_key_str = args.value_of( FileCliParser::ARG_NAME_PRIVATE_KEY)
+            .expect("Private key should be a mandatory option").as_bytes();
+        // TODO implement base64 and/or multibase parsing
+        let private_key = PrivateKey( b"\x83\x3F\xE6\x24\x09\x23\x7B\x9D\x62\xEC\x77\x58\x75\x20\x91\x1E\x9A\x75\x9C\xEC\x1D\x19\x75\x5B\x7D\xA9\x01\xB9\x6D\xCA\x3D\x42".to_vec() );
+        let signer = Rc::new( Ed25519Signer::new(&private_key)
+            .expect("Invalid private key") );
 
-        let profile_id = ProfileId( b"TODO".to_vec() );
-        Self{ public_key: PublicKey( public_key.to_owned() ),
-              profile_id }
+        Self{ signer }
     }
 
-    pub fn profile_id(&self) -> &ProfileId { &self.profile_id }
-    pub fn public_key(&self) -> &PublicKey { &self.public_key }
+    pub fn signer(&self) -> Rc<Signer> { self.signer.clone() }
 }
 
 
@@ -59,22 +62,23 @@ impl FileCliParser
         clap::App::new("Mercury Home node")
             .about("Provides an open, distributed, secure communication network")
             .version(VERSION)
-            .arg( clap::Arg::with_name(Self::ARG_NAME_PUBLIC_KEY)
-                .long(Self::ARG_NAME_PUBLIC_KEY)
-                .aliases(&Self::ARG_ALIASES_PUBLIC_KEY)
+            .arg( clap::Arg::with_name(Self::ARG_NAME_PRIVATE_KEY)
+                .long(Self::ARG_NAME_PRIVATE_KEY)
+                .aliases(&Self::ARG_ALIASES_PRIVATE_KEY)
                 .required(true)
                 .case_insensitive(true)
                 .takes_value(true)
-                .value_name("PROFILE_ID")
-                .help("TODO.")
+                .value_name("PRIVATE_KEY")
+                .help("Private key used to prove server identity. Currently only ed25519 keys are supported in base64 encoding. TODO.") // TODO
+                .overrides_with(Self::ARG_NAME_PRIVATE_KEY)
             )
     }
 
 
     const CONFIG_PATH: &'static str = "home.cfg";
 
-    const ARG_NAME_PUBLIC_KEY: &'static str = "public_key";
-    const ARG_ALIASES_PUBLIC_KEY: [&'static str; 4] = ["publickey", "public-key", "pub_key", "pub-key"];
+    const ARG_NAME_PRIVATE_KEY: &'static str = "private_key";
+    const ARG_ALIASES_PRIVATE_KEY: [&'static str; 5] = ["privatekey", "private-key", "secretkey", "secret_key", "secret-key"];
 }
 
 

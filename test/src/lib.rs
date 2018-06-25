@@ -48,10 +48,9 @@ pub fn generate_keypair() -> (PrivateKey, PublicKey) {
 pub fn generate_ownprofile(facet: ProfileFacet, private_data: Vec<u8>)
     -> (OwnProfile, Ed25519Signer)
 {
-    let (private_key, public_key) = generate_keypair();
-    let signer = Ed25519Signer::new(&private_key, &public_key).expect("TODO: this should not be able to fail");
-    let profile = Profile::new( &(&public_key).into(), &public_key, &facet );
-    //let profile = Profile::new( &ProfileId::from(&public_key), &public_key, vec![facet] );
+    let (private_key, _public_key) = generate_keypair();
+    let signer = Ed25519Signer::new(&private_key).expect("TODO: this should not be able to fail");
+    let profile = Profile::new( &signer.profile_id(), &signer.public_key(), &facet );
     let own_profile = OwnProfile::new(&profile, &private_data);
     (own_profile, signer)
 }

@@ -140,7 +140,7 @@ impl home::Server for HomeDispatcherCapnProto
     {
         let handle_clone = self.handle.clone();
         let profile_id = pry!( pry!( params.get() ).get_profile_id() );
-        let session_fut = self.home.login( profile_id.into() )
+        let session_fut = self.home.login( &profile_id.into() )
             .map( move |session_impl|
             {
                 let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl, handle_clone);
