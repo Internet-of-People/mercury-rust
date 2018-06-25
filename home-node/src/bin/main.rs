@@ -28,9 +28,7 @@ use mercury_storage::async::imp::InMemoryStore;
 fn main()
 {
     log4rs::init_file( "log4rs.yml", Default::default() ).unwrap();
-
     let config = FileCliParser::parse_config();
-    //println!( "Profile Id: {:?}", config.args.value_of("profile_id") );
 
     let mut core = reactor::Core::new().unwrap();
     let handle = core.handle();
@@ -43,9 +41,9 @@ fn main()
     let validator = Rc::new( CompositeValidator::default() );
     let server = Rc::new( HomeServer::new(&handle, validator, distributed_storage, local_storage) );
 
-    use std::net::ToSocketAddrs;
-    let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
-    let socket = TcpListener::bind(&addr, &handle).expect("Failed to bind socket");
+    info!( "Opening socket {} for incoming TCP clients", config.listen_socket() );
+    let socket = TcpListener::bind( config.listen_socket(), &handle )
+        .expect("Failed to bind socket");
 
     info!("Server started, waiting for clients");
     let done = socket.incoming().for_each( move |(socket, _addr)|

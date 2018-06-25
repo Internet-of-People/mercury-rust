@@ -43,7 +43,7 @@ fn main()
     let client_profile = Profile::new(&client_signer.profile_id(), &client_signer.public_key(), &client_facet);
     let client_own_profile = OwnProfile::new(&client_profile, &vec![]);
 
-    let addr = "localhost:9876".to_socket_addrs().unwrap().next().expect("Failed to parse address");
+    let addr = "localhost:2077".to_socket_addrs().unwrap().next().expect("Failed to parse address");
     let handle = reactor.handle();
     let handle2 = reactor.handle();
     let handle3 = reactor.handle();

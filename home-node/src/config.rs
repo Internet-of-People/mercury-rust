@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::env;
 use std::fs;
+use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
 
 use clap;
@@ -16,6 +17,7 @@ const VERSION: &str = "0.1";
 pub struct Config
 {
     signer: Rc<Signer>,
+    listen_socket: SocketAddr, // TODO consider using Vec if listening on several network devices is needed
 }
 
 impl Config
@@ -31,10 +33,15 @@ impl Config
         let signer = Rc::new( Ed25519Signer::new(&private_key)
             .expect("Invalid private key") );
 
-        Self{ signer }
+        let listen_socket = args.value_of(FileCliParser::ARG_NAME_LOCAL_SOCKET_ADDRESS)
+            .expect("Socket address should have a default value")
+            .to_socket_addrs().unwrap().next().expect("Failed to parse socket address");
+
+        Self{ signer, listen_socket }
     }
 
     pub fn signer(&self) -> Rc<Signer> { self.signer.clone() }
+    pub fn listen_socket(&self) -> &SocketAddr { &self.listen_socket }
 }
 
 
@@ -62,15 +69,27 @@ impl FileCliParser
         clap::App::new("Mercury Home node")
             .about("Provides an open, distributed, secure communication network")
             .version(VERSION)
+// TODO option probably should specify a keyfile instead of the privkey value directly
             .arg( clap::Arg::with_name(Self::ARG_NAME_PRIVATE_KEY)
                 .long(Self::ARG_NAME_PRIVATE_KEY)
                 .aliases(&Self::ARG_ALIASES_PRIVATE_KEY)
-                .required(true)
-                .case_insensitive(true)
-                .takes_value(true)
-                .value_name("PRIVATE_KEY")
-                .help("Private key used to prove server identity. Currently only ed25519 keys are supported in base64 encoding. TODO.") // TODO
                 .overrides_with(Self::ARG_NAME_PRIVATE_KEY)
+                .case_insensitive(true)
+                .required(true)
+                .takes_value(true)
+                .value_name("ENCODED_PRIVATE_KEY")
+                .help("Private key used to prove server identity. Currently only ed25519 keys are supported in base64 encoding. TODO") // TODO
+            )
+            .arg( clap::Arg::with_name(Self::ARG_NAME_LOCAL_SOCKET_ADDRESS)
+                .long(Self::ARG_NAME_LOCAL_SOCKET_ADDRESS)
+                .aliases(&Self::ARG_ALIASES_LOCAL_SOCKET_ADDRESS)
+                .overrides_with(Self::ARG_NAME_LOCAL_SOCKET_ADDRESS)
+                .case_insensitive(true)
+                .required(false)
+                .takes_value(true)
+                .value_name("IP:Port")
+                .default_value("0.0.0.0:2077")
+                .help("Listen on this socket to serve TCP clients")
             )
     }
 
@@ -79,6 +98,8 @@ impl FileCliParser
 
     const ARG_NAME_PRIVATE_KEY: &'static str = "private_key";
     const ARG_ALIASES_PRIVATE_KEY: [&'static str; 5] = ["privatekey", "private-key", "secretkey", "secret_key", "secret-key"];
+    const ARG_NAME_LOCAL_SOCKET_ADDRESS: &'static str = "tcp";
+    const ARG_ALIASES_LOCAL_SOCKET_ADDRESS: [&'static str; 6] = ["tcpsocket", "tcp_socket", "tcp-socket", "bindtcp", "bind_tcp", "bind-tcp"];
 }
 
 
