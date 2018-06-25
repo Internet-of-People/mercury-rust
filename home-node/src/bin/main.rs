@@ -21,7 +21,7 @@ use tokio_core::{reactor, net::TcpListener};
 
 use mercury_home_protocol::{crypto::*, handshake};
 use mercury_home_node::{config::*, server::*, protocol_capnp};
-use mercury_storage::async::imp::InMemoryStore;
+use mercury_storage::{async::imp::InMemoryStore, filesys::AsyncFileHandler};
 
 
 
@@ -37,6 +37,8 @@ fn main()
     //let distributed_storage = Box::new( Ipfs::new( "localhost", 5001, &handle1.clone() )? )
     let distributed_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
     let local_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
+//    let local_storage = Rc::new( RefCell::new( AsyncFileHandler::new(
+//        config.storage_path().to_owned() ).unwrap() ) );
     let signer = config.signer();
     let validator = Rc::new( CompositeValidator::default() );
     let server = Rc::new( HomeServer::new(&handle, validator, distributed_storage, local_storage) );

@@ -16,6 +16,7 @@ const VERSION: &str = "0.1";
 
 pub struct Config
 {
+    storage_path: String,
     signer: Rc<Signer>,
     listen_socket: SocketAddr, // TODO consider using Vec if listening on several network devices is needed
 }
@@ -24,9 +25,12 @@ impl Config
 {
     pub fn new<'a>(args: &clap::ArgMatches<'a>) -> Self
     {
+        let storage_path = args.value_of(FileCliParser::ARG_NAME_STORAGE_PATH)
+            .expect("Storage path should have a default value").to_owned();
+
         // TODO support hardware wallets
         // NOTE for some test keys see https://github.com/tendermint/signatory/blob/master/src/ed25519/test_vectors.rs
-        let private_key_str = args.value_of( FileCliParser::ARG_NAME_PRIVATE_KEY)
+        let private_key_str = args.value_of(FileCliParser::ARG_NAME_PRIVATE_KEY)
             .expect("Private key should be a mandatory option").as_bytes();
         // TODO implement base64 and/or multibase parsing
         let private_key = PrivateKey( b"\x83\x3F\xE6\x24\x09\x23\x7B\x9D\x62\xEC\x77\x58\x75\x20\x91\x1E\x9A\x75\x9C\xEC\x1D\x19\x75\x5B\x7D\xA9\x01\xB9\x6D\xCA\x3D\x42".to_vec() );
@@ -37,9 +41,10 @@ impl Config
             .expect("Socket address should have a default value")
             .to_socket_addrs().unwrap().next().expect("Failed to parse socket address");
 
-        Self{ signer, listen_socket }
+        Self{ storage_path, signer, listen_socket }
     }
 
+    pub fn storage_path(&self) -> &str { &self.storage_path }
     pub fn signer(&self) -> Rc<Signer> { self.signer.clone() }
     pub fn listen_socket(&self) -> &SocketAddr { &self.listen_socket }
 }
@@ -77,7 +82,7 @@ impl FileCliParser
                 .case_insensitive(true)
                 .required(true)
                 .takes_value(true)
-                .value_name("ENCODED_PRIVATE_KEY")
+                .value_name("PRIVATE_KEY")
                 .help("Private key used to prove server identity. Currently only ed25519 keys are supported in base64 encoding. TODO") // TODO
             )
             .arg( clap::Arg::with_name(Self::ARG_NAME_LOCAL_SOCKET_ADDRESS)
@@ -91,6 +96,17 @@ impl FileCliParser
                 .default_value("0.0.0.0:2077")
                 .help("Listen on this socket to serve TCP clients")
             )
+            .arg( clap::Arg::with_name(Self::ARG_NAME_STORAGE_PATH)
+                .long(Self::ARG_NAME_STORAGE_PATH)
+                .aliases(&Self::ARG_ALIASES_STORAGE_PATH)
+                .overrides_with(Self::ARG_NAME_STORAGE_PATH)
+                .case_insensitive(true)
+                .required(false)
+                .takes_value(true)
+                .value_name("path/to/dir")
+                .default_value("/tmp/mercury/storage") // TODO only for testing, make this platform-dependent
+                .help("Directory path to store persistent data in")
+            )
     }
 
 
@@ -100,6 +116,8 @@ impl FileCliParser
     const ARG_ALIASES_PRIVATE_KEY: [&'static str; 5] = ["privatekey", "private-key", "secretkey", "secret_key", "secret-key"];
     const ARG_NAME_LOCAL_SOCKET_ADDRESS: &'static str = "tcp";
     const ARG_ALIASES_LOCAL_SOCKET_ADDRESS: [&'static str; 6] = ["tcpsocket", "tcp_socket", "tcp-socket", "bindtcp", "bind_tcp", "bind-tcp"];
+    const ARG_NAME_STORAGE_PATH: &'static str = "storage";
+    const ARG_ALIASES_STORAGE_PATH: [&'static str; 6] = ["storagepath", "storage_path", "storage-path", "storagedir", "storage_dir", "storage-dir"];
 }
 
 
