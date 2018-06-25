@@ -422,9 +422,9 @@ fn profile_serialize_async_key_value_test() {
             .build()
     );
     let mut storage : AsyncFileHandler = 
-        AsyncFileHandler::new_with_pool(String::from("./ipfs/homeserverid/"),Rc::clone(&thread_pool)).unwrap();
+        AsyncFileHandler::new_with_pool(String::from("./filetest/homeserverid/"),Rc::clone(&thread_pool)).unwrap();
     let mut storage2 : AsyncFileHandler = 
-        AsyncFileHandler::new_with_pool(String::from("./ipfs/homeserverid/"),thread_pool).unwrap();
+        AsyncFileHandler::new_with_pool(String::from("./filetest/homeserverid/"),thread_pool).unwrap();
 
     let client = storage.set(base64::encode(&profile.id.clone().0), profile.clone())
         .and_then(|_|{

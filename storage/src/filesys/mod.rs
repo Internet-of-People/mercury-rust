@@ -186,7 +186,7 @@ fn future_file_key_value(){
 
     let mut reactor = reactor::Core::new().unwrap();
     println!("\n\n\n");
-    let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./ipfs/homeserverid/")).unwrap();
+    let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./filetest/homeserverid/")).unwrap();
     let file_path = String::from("alma.json");
     let json = String::from("<Json:json>");
     let set = storage.set(file_path.clone(), json.clone());
@@ -209,13 +209,13 @@ fn one_pool_multiple_filehandler(){
         .pool_size(8)
         .build()
     );
-    let mut alpha_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/alpha/"), Rc::clone(&thread_pool)).unwrap();
-    let mut beta_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./ipfs/beta/"), thread_pool).unwrap();
+    let mut alpha_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./filetest/alpha/"), Rc::clone(&thread_pool)).unwrap();
+    let mut beta_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./filetest/beta/"), thread_pool).unwrap();
     let json = String::from("<Json:json>");
     let file_path = String::from("alma.json");
     for i in 0..100{
-        alpha_storage.set(String::from(i.to_string()+"/"+&file_path), json.clone());
-        beta_storage.set(String::from(i.to_string()+"/"+&file_path), json.clone());
+        reactor.run(alpha_storage.set(String::from(i.to_string()+"/"+&file_path), json.clone()));
+        reactor.run(beta_storage.set(String::from(i.to_string()+"/"+&file_path), json.clone()));
     }
     let aread : String = reactor.run(alpha_storage.get(String::from("99/alma.json"))).unwrap();
     let bread : String = reactor.run(beta_storage.get(String::from("99/alma.json"))).unwrap();
