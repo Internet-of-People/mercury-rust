@@ -70,7 +70,7 @@ impl AsyncFileHandler{
         let dir_str = path_clone.rsplitn(2,"/").collect::<Vec<_>>();
         if dir_str.len() > 1{
             create_dir_all(self.get_path(dir_str[1].to_string()))
-                .map_err(|e| return StorageError::StringError(e.description().to_owned()));
+                .map_err(|e| return StorageError::StringError(e.description().to_owned()))?;
         }
         Ok(path)
     }
@@ -78,7 +78,7 @@ impl AsyncFileHandler{
     pub fn write_to_file(&self, file_path : String, content : String) 
     -> Box< Future< Item = (), Error = StorageError > > {
         let (tx, rx) = oneshot::channel::<Result<(), StorageError>>();
-        let mut path;
+        let path;
         match self.check_and_create_structure(file_path){
             Ok(checked_path) => {path = checked_path;}
             Err(e) => {return Box::new(future::err(e));}
@@ -214,8 +214,8 @@ fn one_pool_multiple_filehandler(){
     let json = String::from("<Json:json>");
     let file_path = String::from("alma.json");
     for i in 0..100{
-        reactor.run(alpha_storage.set(String::from(i.to_string()+"/"+&file_path), json.clone()));
-        reactor.run(beta_storage.set(String::from(i.to_string()+"/"+&file_path), json.clone()));
+        reactor.run(alpha_storage.set(String::from(i.to_string()+"/"+&file_path), json.clone())).unwrap();
+        reactor.run(beta_storage.set(String::from(i.to_string()+"/"+&file_path), json.clone())).unwrap();
     }
     let aread : String = reactor.run(alpha_storage.get(String::from("99/alma.json"))).unwrap();
     let bread : String = reactor.run(beta_storage.get(String::from("99/alma.json"))).unwrap();
