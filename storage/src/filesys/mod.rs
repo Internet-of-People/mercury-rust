@@ -50,11 +50,12 @@ impl AsyncFileHandler{
     }
 
     fn check_and_create_structure(&self, path : String) -> Result<String, StorageError>{
-        let path_clone = path.clone();
-        let dir_str = path_clone.rsplitn(2,"/").collect::<Vec<_>>();
-        if dir_str.len() > 1{
-            create_dir_all(self.get_path(dir_str[1]))
+        let path_clone = PathBuf::from(path.clone());
+        match path_clone.parent(){
+            Some(parent_path)=>{ create_dir_all(self.get_path(parent_path.to_str().unwrap_or("")))
                 .map_err(|e| return StorageError::StringError(e.description().to_owned()))?;
+            }
+            None=>{();}
         }
         Ok(path)
     }
@@ -62,27 +63,26 @@ impl AsyncFileHandler{
     pub fn write_to_file(&self, file_path : String, content : String) 
     -> Box< Future< Item = (), Error = StorageError > > {
         let (tx, rx) = oneshot::channel::<Result<(), StorageError>>();
-        let path;
         match self.check_and_create_structure(file_path){
-            Ok(checked_path) => {path = checked_path;}
+            Ok(checked_path) => {
+                self.pool.spawn(
+                    File::create(self.get_path(&checked_path))
+                        // TODO: map the error in a way to preserve the original error too
+                        .map_err(|e| StorageError::StringError(e.description().to_owned()))
+                        .and_then(move |file| {                
+                            write_all(file, content)
+                                .map(|_| ()) 
+                                // TODO: map the error in a way to preserve the original error too
+                                .map_err(|e|StorageError::StringError(e.description().to_owned()))
+                        })
+                        .then( move |res| tx.send(res))
+                        .map_err(|_| ())
+                        .map(|_| ())   
+                );
+            }
             Err(e) => {return Box::new(future::err(e));}
         }   
-        self.pool.spawn(
-            File::create(self.get_path(&path))
-                // TODO: map the error in a way to preserve the original error too
-                .map_err(|e| StorageError::StringError(e.description().to_owned()))
-                .and_then(move |file| {                
-                    write_all(file, content)
-                        .map(|_| ()) 
-                        // TODO: map the error in a way to preserve the original error too
-                        .map_err(|e|StorageError::StringError(e.description().to_owned()))
-                })
-                .then( move |res| tx.send(res))
-                .map_err(|_| ())
-                .map(|_| ())                        
-
-        );
-    
+        
         Box::new(
             rx
                 .or_else(|e| {
