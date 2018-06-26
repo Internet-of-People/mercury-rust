@@ -4,7 +4,7 @@ use futures::*;
 use futures::sync::oneshot;
 use multibase::{Base, encode};
 use std::rc::Rc;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::error::Error;
 use std::fs::create_dir_all;
 use serde::Serialize;
@@ -16,7 +16,7 @@ use serde_json;
 
 
 pub struct AsyncFileHandler{
-    path : String,
+    path : PathBuf,
     pool : Rc<ThreadPool>,
 }
 
@@ -26,7 +26,7 @@ impl AsyncFileHandler{
         match create_dir_all(Path::new(&main_directory)){
             Ok(_)=>Ok(
                 AsyncFileHandler{
-                    path: main_directory, 
+                    path : PathBuf::from(main_directory), 
                     pool : Rc::new(ThreadPool::new()),
                 }
             ),
@@ -41,7 +41,7 @@ impl AsyncFileHandler{
         match create_dir_all(Path::new(&main_directory)){
             Ok(_)=>Ok(
                 AsyncFileHandler{
-                    path : main_directory, 
+                    path : PathBuf::from(main_directory), 
                     pool : pool,
                 }
             ),
@@ -58,7 +58,7 @@ impl AsyncFileHandler{
         match create_dir_all(Path::new(&main_directory)){
             Ok(_)=>Ok(
                 AsyncFileHandler{
-                    path : main_directory, 
+                    path : PathBuf::from(main_directory), 
                     pool : thread_pool,
                 }
             ),
@@ -114,7 +114,7 @@ impl AsyncFileHandler{
     pub fn read_from_file(&self, file_path : String) 
     -> Box< Future< Item = String, Error = StorageError> > {
         let (tx, rx) = oneshot::channel::<Result<String,StorageError>>();
-        if !Path::new(&self.get_path(file_path.clone())).exists(){
+        if !&self.get_path(file_path.clone()).exists(){
             return Box::new(future::err(StorageError::InvalidKey));
         }
         self.pool.spawn(
@@ -147,10 +147,10 @@ impl AsyncFileHandler{
     }
 
     pub fn get_path(&self, file_path: String)
-    -> String {
+    -> Box<Path> {
         let mut path = self.path.clone();
-        path.push_str(&file_path);
-        path
+        path.push(&file_path);
+        path.into_boxed_path()
     }
 }
 
