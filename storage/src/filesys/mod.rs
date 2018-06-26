@@ -23,19 +23,10 @@ pub struct AsyncFileHandler{
 impl AsyncFileHandler{
     pub fn new(main_directory : String) 
     -> Result<Self, StorageError>{
-        match create_dir_all(Path::new(&main_directory)){
-            Ok(_)=>Ok(
-                AsyncFileHandler{
-                    path : PathBuf::from(main_directory), 
-                    pool : Rc::new(ThreadPool::new()),
-                }
-            ),
-            Err(e)=>Err(StorageError::StringError(e.description().to_owned()))
-        }
+        let thread_pool = Rc::new(ThreadPool::new());
+        Self::new_with_pool(main_directory, thread_pool)
     }
 
-    // TODO: this call will move away the ThreadPool, which still makes sharing of pools impossible across multiple 
-    // entities. Some solution need to be invented to permit sharing Rc<ThreadPool> maybe
     pub fn new_with_pool(main_directory : String, pool: Rc<ThreadPool>) 
     -> Result<Self, StorageError>{
         match create_dir_all(Path::new(&main_directory)){
@@ -55,22 +46,14 @@ impl AsyncFileHandler{
             .max_blocking(max_blocking_size)
             .build()
         );
-        match create_dir_all(Path::new(&main_directory)){
-            Ok(_)=>Ok(
-                AsyncFileHandler{
-                    path : PathBuf::from(main_directory), 
-                    pool : thread_pool,
-                }
-            ),
-            Err(e)=>Err(StorageError::StringError(e.description().to_owned()))
-        }
+        Self::new_with_pool(main_directory, thread_pool)
     }
 
     fn check_and_create_structure(&self, path : String) -> Result<String, StorageError>{
         let path_clone = path.clone();
         let dir_str = path_clone.rsplitn(2,"/").collect::<Vec<_>>();
         if dir_str.len() > 1{
-            create_dir_all(self.get_path(dir_str[1].to_string()))
+            create_dir_all(self.get_path(dir_str[1]))
                 .map_err(|e| return StorageError::StringError(e.description().to_owned()))?;
         }
         Ok(path)
@@ -85,7 +68,7 @@ impl AsyncFileHandler{
             Err(e) => {return Box::new(future::err(e));}
         }   
         self.pool.spawn(
-            File::create(self.get_path(path))
+            File::create(self.get_path(&path))
                 // TODO: map the error in a way to preserve the original error too
                 .map_err(|e| StorageError::StringError(e.description().to_owned()))
                 .and_then(move |file| {                
@@ -114,11 +97,11 @@ impl AsyncFileHandler{
     pub fn read_from_file(&self, file_path : String) 
     -> Box< Future< Item = String, Error = StorageError> > {
         let (tx, rx) = oneshot::channel::<Result<String,StorageError>>();
-        if !&self.get_path(file_path.clone()).exists(){
+        if !&self.get_path(&file_path).exists(){
             return Box::new(future::err(StorageError::InvalidKey));
         }
         self.pool.spawn(
-            File::open(self.get_path(file_path))        
+            File::open(self.get_path(&file_path))        
                 .map_err(|e| 
                     // TODO: map the error in a way to preserve the original error too
                     StorageError::StringError(e.description().to_owned())
@@ -146,10 +129,10 @@ impl AsyncFileHandler{
         )                
     }
 
-    pub fn get_path(&self, file_path: String)
+    pub fn get_path(&self, file_path: &str)
     -> Box<Path> {
         let mut path = self.path.clone();
-        path.push(&file_path);
+        path.push(file_path);
         path.into_boxed_path()
     }
 }
