@@ -199,7 +199,7 @@ fn future_file_key_value(){
 
     let mut reactor = reactor::Core::new().unwrap();
     println!("\n\n\n");
-    let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./filetest/homeserverid/")).unwrap();
+    let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./filetest/homeserverid")).unwrap();
     let file_path = String::from("alma.json");
     let json = String::from("<Json:json>");
     let set = storage.set(file_path.clone(), json.clone());
@@ -223,7 +223,7 @@ fn one_pool_multiple_filehandler(){
         .build()
     );
     let mut alpha_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./filetest/alpha/"), Rc::clone(&thread_pool)).unwrap();
-    let mut beta_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./filetest/beta/"), thread_pool).unwrap();
+    let mut beta_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./filetest/beta"), thread_pool).unwrap();
     let json = String::from("<Json:json>");
     let file_path = String::from("alma.json");
     for i in 0..100{
