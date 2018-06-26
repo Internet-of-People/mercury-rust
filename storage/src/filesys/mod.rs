@@ -50,8 +50,7 @@ impl AsyncFileHandler{
     }
 
     fn check_and_create_structure(&self, path : String) -> Result<String, StorageError>{
-        let path_clone = PathBuf::from(path.clone());
-        match path_clone.parent(){
+        match PathBuf::from(&path).parent(){
             Some(parent_path)=>{ create_dir_all(self.get_path(parent_path.to_str().unwrap_or("")))
                 .map_err(|e| return StorageError::StringError(e.description().to_owned()))?;
             }
