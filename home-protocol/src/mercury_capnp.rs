@@ -19,13 +19,14 @@ pub trait PromiseUtil<T,E>
 impl<T,E> PromiseUtil<T,E> for Promise<T,E> {}
 
 
-
 // NOTE this is identical to the currently experimental std::convert::TryFrom.
 //      Hopefully this will not be needed soon when it stabilizes.
 pub trait TryFrom<T> : Sized {
     type Error;
     fn try_from(value: T) -> Result<Self, Self::Error>;
 }
+
+
 
 pub trait FillFrom<T>
 {
@@ -36,18 +37,6 @@ impl<'a> From<&'a ::PublicKey> for &'a [u8] {
     fn from(public_key: &'a ::PublicKey) -> Self {
         public_key.0.as_ref()
     }
-}
-
-impl<'a> From<&'a [u8]> for ::ProfileId
-{
-    fn from(src: &'a [u8]) -> Self
-        { ::ProfileId( src.to_owned() ) }
-}
-
-impl<'a> From<&'a ::ProfileId> for &'a [u8]
-{
-    fn from(src: &'a ::ProfileId) -> Self
-        { &src.0 }
 }
 
 

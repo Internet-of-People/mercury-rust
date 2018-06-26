@@ -23,7 +23,7 @@ pub struct HomeServer
     handle:             reactor::Handle,
     validator:          Rc<Validator>,
     public_profile_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
-    hosted_profile_db:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
+    hosted_profile_db:  Rc<RefCell< KeyValueStore<Vec<u8>, OwnProfile> >>,
     sessions:           Rc<RefCell< HashMap<ProfileId, Weak<HomeSessionServer>> >>,
 }
 
@@ -32,7 +32,7 @@ impl HomeServer
     pub fn new(handle: &reactor::Handle,
                validator: Rc<Validator>,
                public_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
-               private_db: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>) -> Self
+               private_db: Rc<RefCell< KeyValueStore<Vec<u8>, OwnProfile> >>) -> Self
     { Self{ handle: handle.clone(), validator: validator,
             public_profile_dht: public_dht, hosted_profile_db: private_db,
             sessions: Rc::new( RefCell::new( HashMap::new() ) ) } }
@@ -64,7 +64,7 @@ impl HomeConnectionServer
         let sessions_clone = server.sessions.clone();
 
         // Check if this profile is hosted on this server
-        let session_fut = server.hosted_profile_db.borrow().get( to_profile.clone() )
+        let session_fut = server.hosted_profile_db.borrow().get( to_profile.clone().into() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             .and_then( move |_profile_data|
             {
@@ -162,7 +162,7 @@ impl Home for HomeConnectionServer
         if profile != *self.context.peer_id()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Claim() access denied: you authenticated with a different profile".to_owned() ) ) ) }
 
-        let claim_fut = self.server.hosted_profile_db.borrow().get(profile)
+        let claim_fut = self.server.hosted_profile_db.borrow().get( profile.into() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
         Box::new(claim_fut)
     }
@@ -209,7 +209,7 @@ impl Home for HomeConnectionServer
         let pub_prof_modified = own_prof_modified.profile.clone();
         let local_store = self.server.hosted_profile_db.clone();
         let distributed_store = self.server.public_profile_dht.clone();
-        let reg_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )
+        let reg_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone().into() )
             .then( |get_res|
             {
                 match get_res {
@@ -223,7 +223,7 @@ impl Home for HomeConnectionServer
                 return distributed_store.borrow_mut().set( pub_prof_modified.id.clone(), pub_prof_modified )
                     .map_err(error_mapper_clone ); } )
             .and_then( move |_| { // Store private profile info in local storage only (e.g. SQL)
-                return local_store.borrow_mut().set( own_prof_modified.profile.id.clone(), own_prof_modified.clone() )
+                return local_store.borrow_mut().set( own_prof_modified.profile.id.clone().into(), own_prof_modified.clone() )
                     .map( |_| own_prof_modified )
                     .map_err(error_mapper); } );
 
@@ -237,7 +237,7 @@ impl Home for HomeConnectionServer
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Login() access denied: you authenticated with a different profile".to_owned() ) ) ) }
         let profile_id_clone = profile_id.to_owned();
 
-        let val_fut = self.server.hosted_profile_db.borrow().get( profile_id.to_owned() )
+        let val_fut = self.server.hosted_profile_db.borrow().get( profile_id.to_owned().into() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             .map( {
                 let context_clone = self.context.clone();
@@ -285,7 +285,7 @@ impl Home for HomeConnectionServer
         let relation_clone = relation.clone();
 
         // We need to look up the public key to be able to validate the proof
-        let fut = self.server.hosted_profile_db.borrow().get(to_profile.clone())
+        let fut = self.server.hosted_profile_db.borrow().get( to_profile.clone().into() )
             .map_err(|_| ErrorToBeSpecified::TODO("pair_response: The other party in the relation is not hosted on this home server".to_owned()))
             .and_then(move |profile_data|
             {
@@ -321,7 +321,7 @@ impl Home for HomeConnectionServer
         let call = Box::new( Call::new(call_req, send) );
         let handle = self.server.handle.clone();
 
-        let answer_fut = self.server.hosted_profile_db.borrow().get(to_profile.clone())
+        let answer_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone().into() )
             .map_err(|_| ErrorToBeSpecified::TODO("pair_response: The other party in the relation is not hosted on this home server".to_owned()))
             .and_then(move |profile_data|
             {
@@ -455,7 +455,7 @@ impl HomeSession for HomeSessionServer
         if own_prof.profile.public_key != *self.context.peer_pubkey()
             { return Box::new( future::err( ErrorToBeSpecified::TODO( "Update() access denied: you authenticated with a different public key".to_owned() )) ) }
 
-        let upd_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )
+        let upd_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone().into() )
             // NOTE Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
             .and_then( {
                 let distributed_store = self.server.public_profile_dht.clone();
@@ -467,7 +467,7 @@ impl HomeSession for HomeSessionServer
             .and_then( {
                 let local_store = self.server.hosted_profile_db.clone();
                 move |_| { // Update private profile info in local storage only (e.g. SQL)
-                    return local_store.borrow_mut().set( own_prof.profile.id.clone(), own_prof );
+                    return local_store.borrow_mut().set( own_prof.profile.id.clone().into(), own_prof );
                 }
             } )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
@@ -494,6 +494,7 @@ impl HomeSession for HomeSessionServer
 
         Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.unregister "))) )
     }
+
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
@@ -527,6 +528,7 @@ impl HomeSession for HomeSessionServer
         // TODO how to detect dropped stream and remove the sink from the session?
         receiver
     }
+
 
     // TODO investigate if race condition is possible, e.g. an event was sent out to the old_sender,
     //      and a repeated events() call is received. In this case, can we be sure that the event

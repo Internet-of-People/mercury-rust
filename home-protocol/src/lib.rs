@@ -16,21 +16,22 @@ extern crate signatory;
 extern crate tokio_core;
 extern crate tokio_io;
 
-use std::rc::Rc;
-use serde::de::Error;
+use std::{rc::Rc, str};
 
 use bincode::serialize;
 use futures::{Future, sync::mpsc};
-
 use multiaddr::{Multiaddr, ToMultiaddr};
+use serde::{Deserialize, Deserializer, Serializer};
+use serde::{de::Error as DeSerError, ser::SerializeSeq};
+
 use crypto::{ProfileValidator, SignatureValidator};
 
-use serde::{Deserialize, Deserializer, Serializer};
-use serde::ser::SerializeSeq;
+
 
 pub mod crypto;
 pub mod handshake;
 pub mod mercury_capnp;
+
 
 
 // TODO
@@ -38,19 +39,19 @@ pub mod mercury_capnp;
 pub enum ErrorToBeSpecified { TODO(String) }
 
 
-#[derive(Deserialize, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct ProfileId(pub Vec<u8>); // NOTE multihash::Multihash::encode() output
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub struct ProfileId(pub Vec<u8>); // NOTE multihash::encode() output
 
-#[derive(Deserialize, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct PublicKey(pub Vec<u8>);
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct PrivateKey(pub Vec<u8>);
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Signature(pub Vec<u8>);
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Bip32Path(String);
 
 
@@ -73,55 +74,8 @@ pub trait Signer
 }
 
 
-pub trait Validator: ProfileValidator + SignatureValidator
-{
-    fn validate_half_proof(&self, half_proof: &RelationHalfProof, signer_public_key: &PublicKey) -> Result<(), ErrorToBeSpecified> {
-        self.validate_signature(signer_public_key,
-            &RelationSignablePart::from(half_proof).serialized(), &half_proof.signature)?;
-        Ok(())
-    }
 
-    fn validate_relation_proof(
-        &self,
-        relation_proof: &RelationProof,
-        id_1: &ProfileId,
-        public_key_1: &PublicKey,
-        id_2: &ProfileId,
-        public_key_2: &PublicKey
-    ) -> Result<(), ErrorToBeSpecified> {
-        // TODO consider inverting relation_type for different directions
-        let signable_a = RelationSignablePart::new(
-            &relation_proof.relation_type,
-            &relation_proof.a_id,
-            &relation_proof.b_id,
-        ).serialized();
-
-        let signable_b = RelationSignablePart::new(
-            &relation_proof.relation_type,
-            &relation_proof.b_id,
-            &relation_proof.a_id,
-        ).serialized();
-
-        let peer_of_id_1 = relation_proof.peer_id(&id_1)?;
-        if peer_of_id_1 != id_2 {return Err(ErrorToBeSpecified::TODO("The relation does not contain both id_1 and id_2".to_owned()));}
-
-        if *peer_of_id_1 == relation_proof.b_id {
-            // id_1 is 'proof.id_a'
-            self.validate_signature(&public_key_1, &signable_a, &relation_proof.a_signature)?;
-            self.validate_signature(&public_key_2, &signable_b, &relation_proof.b_signature)?;
-        } else {
-            // id_1 is 'proof.id_b'
-            self.validate_signature(&public_key_1, &signable_b, &relation_proof.b_signature)?;
-            self.validate_signature(&public_key_2, &signable_a, &relation_proof.a_signature)?;
-        }
-
-        Ok(())
-    }
-}
-
-
-
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct PersonaFacet
 {
     // TODO should we use only a RelationProof here instead of full Relation info?
@@ -132,37 +86,9 @@ pub struct PersonaFacet
     pub data:   Vec<u8>,
 }
 
-fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> Result<S::Ok, S::Error>
-where
-    S: Serializer,
-{
-    let mut seq = s.serialize_seq(Some(x.len()))?;
-    for mr in x{
-        match seq.serialize_element(&mr.to_string()){
-            Ok(_)=>{();},
-            Err(e)=>{return Err(e);}
-        }
-    }
-    seq.end()
-}
-
-fn deserialize_multiaddr_vec<'de, D>(deserializer: D) -> Result<Vec<Multiaddr>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let mapped: Vec<String> = Deserialize::deserialize(deserializer)?;
-    let mut res = Vec::new();
-    for str_ma in mapped.iter(){;
-        match str_ma.to_multiaddr(){
-            Ok(multi)=>{res.push(multi);}
-            Err(e)=>{return Err(D::Error::custom(e));}
-        } 
-    }   
-    Ok(res)
-}
 
 
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct HomeFacet
 {
     /// Addresses of the same home server. A typical scenario of multiple addresses is when there is
@@ -174,7 +100,7 @@ pub struct HomeFacet
 }
 
 // NOTE Given for each SUPPORTED app, not currently available (checked in) app, checkins are managed differently
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ApplicationFacet
 {
     /// unique id of the application - like 'iop-chat'
@@ -182,13 +108,13 @@ pub struct ApplicationFacet
     pub data:   Vec<u8>,
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct RawFacet
 {
     pub data: Vec<u8>, // TODO or maybe multicodec output?
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub enum ProfileFacet
 {
     Home(HomeFacet),
@@ -197,7 +123,7 @@ pub enum ProfileFacet
     Unknown(RawFacet),
 }
 
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct Profile
 {
     /// The Profile ID is a hash of the public key, similar to cryptocurrency addresses.
@@ -209,21 +135,6 @@ pub struct Profile
     // TODO consider having a signature of the profile data here
 }
 
-impl Profile
-{
-    pub fn new(id: &ProfileId, public_key: &PublicKey, facet: &ProfileFacet) -> Self
-        { Self{ id: id.to_owned(), public_key: public_key.to_owned(), facet: facet.to_owned() } }
-
-    pub fn new_home(id: ProfileId, public_key: PublicKey, address: Multiaddr) -> Self
-    {
-        let facet = HomeFacet {
-            addrs: vec![address],
-            data: vec![],
-        };
-
-        Self { id, public_key, facet: ProfileFacet::Home(facet) }
-    }
-}
 
 
 /// Represents a connection to another Profile (Home <-> Persona), (Persona <-> Persona)
@@ -233,26 +144,6 @@ pub struct PeerContext
     my_signer: Rc<Signer>,
     peer_pubkey: PublicKey,
     peer_id: ProfileId,
-}
-
-impl PeerContext
-{
-    pub fn new(my_signer: Rc<Signer>, peer_pubkey: PublicKey, peer_id: ProfileId) -> Self
-        { Self{my_signer, peer_pubkey, peer_id} }
-    pub fn new_from_profile(my_signer: Rc<Signer>, peer: &Profile) -> Self
-        { Self::new( my_signer, peer.public_key.clone(), peer.id.clone() ) }
-
-    pub fn my_signer(&self) -> &Signer { &*self.my_signer }
-    pub fn peer_pubkey(&self) -> &PublicKey { &self.peer_pubkey }
-    pub fn peer_id(&self) -> &ProfileId { &self.peer_id }
-
-    pub fn validate(&self, validator: &Validator) -> Result<(),ErrorToBeSpecified>
-    {
-        validator.validate_profile( self.peer_pubkey(), self.peer_id() )
-            .and_then( |valid|
-                if valid { Ok( () ) }
-                else { Err( ErrorToBeSpecified::TODO( "Peer context is invalid".to_owned() ) ) } )
-    }
 }
 
 
@@ -287,7 +178,7 @@ pub trait ProfileRepo
 
 
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
 pub struct OwnProfile
 {
     /// The public part of the profile. In the current implementation it must contain a single PersonaFacet.
@@ -308,44 +199,16 @@ impl OwnProfile
 
 // NOTE the binary blob to be signed is rust-specific: Strings are serialized to a u64 (size) and the encoded string itself.
 // TODO consider if this is platform-agnostic enough, especially when combined with capnproto
-#[derive(Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct RelationSignablePart {
     pub relation_type: String,
     pub signer_id: ProfileId,
     pub peer_id: ProfileId,
 }
 
-impl RelationSignablePart
-{
-    fn new(relation_type: &str, signer_id: &ProfileId, peer_id: &ProfileId) -> Self
-        { Self{ relation_type: relation_type.to_owned(),
-                signer_id: signer_id.to_owned(),
-                peer_id: peer_id.to_owned() } }
-
-    fn serialized(&self) -> Vec<u8> {
-        // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
-        //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
-        //      But still, to be on the safe side, this serialization shoule be swapped later with a call that cannot fail.
-        // TODO consider using unwrap_or( Vec::new() ) instead
-        serialize(self).unwrap()
-    }
-
-    fn sign(&self, signer: &Signer) -> Signature
-        { signer.sign( &self.serialized() ) }
-}
-
-impl<'a> From<&'a RelationHalfProof> for RelationSignablePart {
-    fn from(src: &'a RelationHalfProof) -> Self {
-        RelationSignablePart{
-            relation_type: src.relation_type.clone(),
-            signer_id: src.signer_id.clone(),
-            peer_id: src.peer_id.clone(),
-        }
-    }
-}
 
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct RelationHalfProof
 {
     pub relation_type:  String,
@@ -370,7 +233,7 @@ impl RelationHalfProof
 }
 
 
-#[derive(PartialEq, Eq, Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct RelationProof
 {
     pub relation_type:  String,        // TODO inline halfproof fields with macro, if possible at all
@@ -382,67 +245,10 @@ pub struct RelationProof
 
 }
 
-impl RelationProof
-{
-    pub fn new(rel_type: &str, a_id: &ProfileId, a_signature: &Signature, b_id: &ProfileId, b_signature: &Signature) -> Self {
-        if a_id < b_id {
-            Self {
-                relation_type: rel_type.to_owned(),
-                a_id: a_id.to_owned(),
-                a_signature: a_signature.to_owned(),
-                b_id: b_id.to_owned(),
-                b_signature: b_signature.to_owned(),
-            }
-        } else {
-            Self {
-                relation_type: rel_type.to_owned(),  // TODO decide which relation_type belongs here (`a_is_home_of_b` or `b_is_home_of_a`)
-                a_id: b_id.to_owned(),
-                a_signature: b_signature.to_owned(),
-                b_id: a_id.to_owned(),
-                b_signature: a_signature.to_owned(),
-            }
-        }
-    }
 
-    pub fn sign_remaining_half(half_proof: &RelationHalfProof, signer: &Signer)
-        -> Result<Self, ErrorToBeSpecified>
-    {
-        let my_profile_id = signer.profile_id().to_owned();
-        if half_proof.peer_id != my_profile_id
-            { return Err(ErrorToBeSpecified::TODO( "RelationHalfProof peer_id is not my ProfileId, refused to sign".to_owned() ) ); }
-
-        let signable = RelationSignablePart::new(
-            &half_proof.relation_type,
-            &my_profile_id,
-            &half_proof.signer_id,
-        );
-        Ok( Self::new( &half_proof.relation_type, &half_proof.signer_id, &half_proof.signature,
-                       &my_profile_id, &signable.sign(signer) ) )
-    }
-
-    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, ErrorToBeSpecified> {
-        if self.a_id == *my_id {
-            Ok(&self.b_id)
-        } else if self.b_id == *my_id {
-            Ok(&self.a_id)
-        } else {
-            Err(ErrorToBeSpecified::TODO(format!("{:?} is not present in relation {:?}", my_id, self)))
-        }
-    }
-
-    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, ErrorToBeSpecified> {
-        if self.a_id == *my_id {
-            Ok(&self.b_signature)
-        } else if self.b_id == *my_id {
-            Ok(&self.a_signature)
-        } else {
-            Err(ErrorToBeSpecified::TODO(format!("{:?} is not present in relation {:?}", my_id, self)))
-        }
-    }
-}
 
 /// This invitation allows a persona to register on the specified home.
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct HomeInvitation
 {
     pub home_id:    ProfileId,
@@ -463,10 +269,10 @@ impl HomeInvitation
 }
 
 
-#[derive(PartialEq, Eq, Clone, Debug, Hash, Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ApplicationId(pub String);
 
-#[derive(PartialEq, Eq, Clone, Debug)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct AppMessageFrame(pub Vec<u8>);
 
 
@@ -541,7 +347,7 @@ pub trait Home: ProfileRepo
 }
 
 
-#[derive(Clone)]
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub enum ProfileEvent
 {
     Unknown(Vec<u8>), // forward compatibility for protocol extension
@@ -563,6 +369,7 @@ pub trait IncomingCall
     //      either included into this function or an additional method
     fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>);
 }
+
 
 pub trait HomeSession
 {
@@ -594,6 +401,241 @@ pub trait HomeSession
 //
 //    fn unban(&self, profile: &ProfileId) ->
 //        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+}
+
+
+
+// ----------------------------------------------------------------------------------
+// NOTE Following from here this is Rust technical stuff that must be defined
+//      in this module to work in Rust but otherwise not strictly part of the protocol
+// ----------------------------------------------------------------------------------
+
+impl<'a> From<&'a [u8]> for ProfileId
+{
+    fn from(src: &'a [u8]) -> Self
+        { ProfileId( src.to_owned() ) }
+}
+
+impl<'a> From<&'a ProfileId> for &'a [u8]
+{
+    fn from(src: &'a ProfileId) -> Self
+        { &src.0 }
+}
+
+impl<'a> From<ProfileId> for Vec<u8>
+{
+    fn from(src: ProfileId) -> Self
+        { src.0 }
+}
+
+
+
+fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> Result<S::Ok, S::Error>
+    where S: Serializer,
+{
+    let mut seq = s.serialize_seq(Some(x.len()))?;
+    for mr in x{
+        match seq.serialize_element(&mr.to_string()){
+            Ok(_)=>{();},
+            Err(e)=>{return Err(e);}
+        }
+    }
+    seq.end()
+}
+
+fn deserialize_multiaddr_vec<'de, D>(deserializer: D) -> Result<Vec<Multiaddr>, D::Error>
+    where D: Deserializer<'de>,
+{
+    let mapped: Vec<String> = Deserialize::deserialize(deserializer)?;
+    let mut res = Vec::new();
+    for str_ma in mapped.iter(){;
+        match str_ma.to_multiaddr(){
+            Ok(multi)=>{res.push(multi);}
+            Err(e)=>{return Err(D::Error::custom(e));}
+        }
+    }
+    Ok(res)
+}
+
+
+
+impl Profile
+{
+    pub fn new(id: &ProfileId, public_key: &PublicKey, facet: &ProfileFacet) -> Self
+        { Self{ id: id.to_owned(), public_key: public_key.to_owned(), facet: facet.to_owned() } }
+
+    pub fn new_home(id: ProfileId, public_key: PublicKey, address: Multiaddr) -> Self
+    {
+        let facet = HomeFacet {
+            addrs: vec![address],
+            data: vec![],
+        };
+
+        Self { id, public_key, facet: ProfileFacet::Home(facet) }
+    }
+}
+
+
+
+impl PeerContext
+{
+    pub fn new(my_signer: Rc<Signer>, peer_pubkey: PublicKey, peer_id: ProfileId) -> Self
+        { Self{my_signer, peer_pubkey, peer_id} }
+    pub fn new_from_profile(my_signer: Rc<Signer>, peer: &Profile) -> Self
+        { Self::new( my_signer, peer.public_key.clone(), peer.id.clone() ) }
+
+    pub fn my_signer(&self) -> &Signer { &*self.my_signer }
+    pub fn peer_pubkey(&self) -> &PublicKey { &self.peer_pubkey }
+    pub fn peer_id(&self) -> &ProfileId { &self.peer_id }
+
+    pub fn validate(&self, validator: &Validator) -> Result<(),ErrorToBeSpecified>
+    {
+        validator.validate_profile( self.peer_pubkey(), self.peer_id() )
+            .and_then( |valid|
+                if valid { Ok( () ) }
+                else { Err( ErrorToBeSpecified::TODO( "Peer context is invalid".to_owned() ) ) } )
+    }
+}
+
+
+
+impl RelationSignablePart
+{
+    fn new(relation_type: &str, signer_id: &ProfileId, peer_id: &ProfileId) -> Self
+        { Self{ relation_type: relation_type.to_owned(),
+                signer_id: signer_id.to_owned(),
+                peer_id: peer_id.to_owned() } }
+
+    fn serialized(&self) -> Vec<u8> {
+        // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
+        //      not supported for the types to be serialized. Neither is possible here, so the unwrap will not fail.
+        //      But still, to be on the safe side, this serialization shoule be swapped later with a call that cannot fail.
+        // TODO consider using unwrap_or( Vec::new() ) instead
+        serialize(self).unwrap()
+    }
+
+    fn sign(&self, signer: &Signer) -> Signature
+        { signer.sign( &self.serialized() ) }
+}
+
+
+impl<'a> From<&'a RelationHalfProof> for RelationSignablePart {
+    fn from(src: &'a RelationHalfProof) -> Self {
+        RelationSignablePart{
+            relation_type: src.relation_type.clone(),
+            signer_id: src.signer_id.clone(),
+            peer_id: src.peer_id.clone(),
+        }
+    }
+}
+
+
+
+impl RelationProof
+{
+    pub fn new(rel_type: &str, a_id: &ProfileId, a_signature: &Signature, b_id: &ProfileId, b_signature: &Signature) -> Self {
+        if a_id < b_id {
+            Self {
+                relation_type: rel_type.to_owned(),
+                a_id: a_id.to_owned(),
+                a_signature: a_signature.to_owned(),
+                b_id: b_id.to_owned(),
+                b_signature: b_signature.to_owned(),
+            }
+        } else {
+            Self {
+                relation_type: rel_type.to_owned(),  // TODO decide which relation_type belongs here (`a_is_home_of_b` or `b_is_home_of_a`)
+                a_id: b_id.to_owned(),
+                a_signature: b_signature.to_owned(),
+                b_id: a_id.to_owned(),
+                b_signature: a_signature.to_owned(),
+            }
+        }
+    }
+
+    pub fn sign_remaining_half(half_proof: &RelationHalfProof, signer: &Signer)
+        -> Result<Self, ErrorToBeSpecified>
+    {
+        let my_profile_id = signer.profile_id().to_owned();
+        if half_proof.peer_id != my_profile_id
+            { return Err(ErrorToBeSpecified::TODO( "RelationHalfProof peer_id is not my ProfileId, refused to sign".to_owned() ) ); }
+
+        let signable = RelationSignablePart::new(
+            &half_proof.relation_type,
+            &my_profile_id,
+            &half_proof.signer_id,
+        );
+        Ok( Self::new( &half_proof.relation_type, &half_proof.signer_id, &half_proof.signature,
+                       &my_profile_id, &signable.sign(signer) ) )
+    }
+
+    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, ErrorToBeSpecified> {
+        if self.a_id == *my_id {
+            Ok(&self.b_id)
+        } else if self.b_id == *my_id {
+            Ok(&self.a_id)
+        } else {
+            Err(ErrorToBeSpecified::TODO(format!("{:?} is not present in relation {:?}", my_id, self)))
+        }
+    }
+
+    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, ErrorToBeSpecified> {
+        if self.a_id == *my_id {
+            Ok(&self.b_signature)
+        } else if self.b_id == *my_id {
+            Ok(&self.a_signature)
+        } else {
+            Err(ErrorToBeSpecified::TODO(format!("{:?} is not present in relation {:?}", my_id, self)))
+        }
+    }
+}
+
+
+
+pub trait Validator: ProfileValidator + SignatureValidator
+{
+    fn validate_half_proof(&self, half_proof: &RelationHalfProof, signer_public_key: &PublicKey) -> Result<(), ErrorToBeSpecified> {
+        self.validate_signature(signer_public_key,
+            &RelationSignablePart::from(half_proof).serialized(), &half_proof.signature)?;
+        Ok(())
+    }
+
+    fn validate_relation_proof(
+        &self,
+        relation_proof: &RelationProof,
+        id_1: &ProfileId,
+        public_key_1: &PublicKey,
+        id_2: &ProfileId,
+        public_key_2: &PublicKey
+    ) -> Result<(), ErrorToBeSpecified> {
+        // TODO consider inverting relation_type for different directions
+        let signable_a = RelationSignablePart::new(
+            &relation_proof.relation_type,
+            &relation_proof.a_id,
+            &relation_proof.b_id,
+        ).serialized();
+
+        let signable_b = RelationSignablePart::new(
+            &relation_proof.relation_type,
+            &relation_proof.b_id,
+            &relation_proof.a_id,
+        ).serialized();
+
+        let peer_of_id_1 = relation_proof.peer_id(&id_1)?;
+        if peer_of_id_1 != id_2 {return Err(ErrorToBeSpecified::TODO("The relation does not contain both id_1 and id_2".to_owned()));}
+
+        if *peer_of_id_1 == relation_proof.b_id {
+            // id_1 is 'proof.id_a'
+            self.validate_signature(&public_key_1, &signable_a, &relation_proof.a_signature)?;
+            self.validate_signature(&public_key_2, &signable_b, &relation_proof.b_signature)?;
+        } else {
+            // id_1 is 'proof.id_b'
+            self.validate_signature(&public_key_1, &signable_b, &relation_proof.b_signature)?;
+            self.validate_signature(&public_key_2, &signable_a, &relation_proof.a_signature)?;
+        }
+
+        Ok(())
+    }
 }
 
 

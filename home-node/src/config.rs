@@ -1,6 +1,5 @@
 use std::collections::HashMap;
-use std::env;
-use std::fs;
+use std::{env, fs};
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::rc::Rc;
 
@@ -83,7 +82,7 @@ impl FileCliParser
                 .required(true)
                 .takes_value(true)
                 .value_name("PRIVATE_KEY")
-                .help("Private key used to prove server identity. Currently only ed25519 keys are supported in base64 encoding. TODO") // TODO
+                .help("Private key used to prove server identity. Currently only ed25519 keys are supported in base64 encoding. TODO: still not functional") // TODO
             )
             .arg( clap::Arg::with_name(Self::ARG_NAME_LOCAL_SOCKET_ADDRESS)
                 .long(Self::ARG_NAME_LOCAL_SOCKET_ADDRESS)

@@ -8,7 +8,6 @@ extern crate mercury_home_protocol;
 extern crate mercury_home_node;
 extern crate mercury_storage;
 extern crate multiaddr;
-//extern crate multihash;
 extern crate tokio_core;
 extern crate tokio_io;
 
@@ -33,12 +32,11 @@ fn main()
     let mut core = reactor::Core::new().unwrap();
     let handle = core.handle();
 
-    // TODO use persistent storages both for local and distributed
+    // TODO use some kind of persistent storage for public distributed storage
     //let distributed_storage = Box::new( Ipfs::new( "localhost", 5001, &handle1.clone() )? )
     let distributed_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
-    let local_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
-//    let local_storage = Rc::new( RefCell::new( AsyncFileHandler::new(
-//        config.storage_path().to_owned() ).unwrap() ) );
+    let local_storage = Rc::new( RefCell::new( AsyncFileHandler::new(
+        config.storage_path().to_owned() ).unwrap() ) );
     let signer = config.signer();
     let validator = Rc::new( CompositeValidator::default() );
     let server = Rc::new( HomeServer::new(&handle, validator, distributed_storage, local_storage) );

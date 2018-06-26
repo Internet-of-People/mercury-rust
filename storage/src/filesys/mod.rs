@@ -2,6 +2,7 @@ use ::async::*;
 use ::error::*;
 use futures::*;
 use futures::sync::oneshot;
+use multibase::{Base, encode};
 use std::rc::Rc;
 use std::path::Path;
 use std::error::Error;
@@ -153,32 +154,44 @@ impl AsyncFileHandler{
     }
 }
 
+
+
 impl<V> KeyValueStore<String, V> for AsyncFileHandler
-    where  V: 'static + Serialize + DeserializeOwned{
+    where  V: 'static + Serialize + DeserializeOwned
+{
     fn set(&mut self, key: String, value: V)
-    -> Box< Future<Item=(), Error=StorageError> >{
-        let res;
-        match serde_json::to_string(&value){
-            Ok(str_value)=>{
-                res = self.write_to_file(key, str_value);                                
-            }
-            Err(e)=> {res = Box::new( future::err( StorageError::StringError( e.description().to_owned() ) ) )} 
+        -> Box< Future<Item=(), Error=StorageError> >
+    {
+        match serde_json::to_string(&value) {
+            Ok(str_value) => self.write_to_file(key, str_value),
+            Err(e) => Box::new( future::err( StorageError::StringError( e.description().to_owned() ) ) ),
         }
-        Box::new( res )    
     }
 
-    fn get(&self, key: String)
-    -> Box< Future<Item=V, Error=StorageError> >{
-        Box::new( 
-            self.read_from_file(key)
-                .map_err(|e| StorageError::StringError( e.description().to_owned()))
-                .and_then(|profile|{
-                    serde_json::from_str(&profile)
-                        .map_err(|e| StorageError::StringError( e.description().to_owned()))
-                })
-        )
+    fn get(&self, key: String) -> Box< Future<Item=V, Error=StorageError> >
+    {
+        let get_fut = self.read_from_file(key)
+            .map_err( |e| StorageError::StringError( e.description().to_owned())  )
+            .and_then( |profile| serde_json::from_str(&profile)
+                .map_err( |e| StorageError::StringError( e.description().to_owned() ) )
+            );
+        Box::new(get_fut)
     }
 }
+
+
+
+impl<V> KeyValueStore<Vec<u8>, V> for AsyncFileHandler
+    where  V: 'static + Serialize + DeserializeOwned
+{
+    fn set(&mut self, key: Vec<u8>, value: V) -> Box< Future<Item=(), Error=StorageError> >
+        { self.set( encode(Base::Base64, &key), value ) }
+
+    fn get(&self, key: Vec<u8>) -> Box< Future<Item=V, Error=StorageError> >
+        { self.get( encode(Base::Base64, key) ) }
+}
+
+
 
 #[test]
 fn future_file_key_value(){
