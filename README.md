@@ -8,7 +8,8 @@ even on your phone.
 
 Mercury is somewhat similar to a cellular mobile network, it provides features like
  SMS, calls, data connections, push notifications, etc, but
- - built as an overlay network on top of any existing transport(s), could also use wire or mesh
+ - built as an overlay network on top of any transport layer
+   (currently Tcp but could use Tor, I2P, mesh, etc)
  - your own "cell tower" can join or leave the network any time
  - selecting a "provider" is the only trustful part of the system
  - uses cryptographic keys instead of phone numbers for p2p encrypted communication,
@@ -34,8 +35,9 @@ We'd like to have feedback to learn problems in the earliest phases,
 priorities of missing features and your requirements we haven't thought of yet.
 
 We think to have an initial functional implementation of the architecture.
-We're working on building some details of server binaries (e.g. configuration)
-and finalizing optimistic test cases, making sure they all pass.
+We're finishing our optimistic test cases, making sure they all pass.
+We're working to improve usability of the server daemon and
+drafting an SDK API for distributed applications.
 There are still a lot of important components to be added,
 existing ones might be changed or redesigned,
 documentation is still lacking nearly everywhere.
@@ -46,12 +48,14 @@ Rough edges of the existing server and client are
  - profile metadata structure and protection levels
 
 Missing important parts are
+ - dApp SDK, including
+   - native GUI plugins interfaces for profile, home and contact management
+   - HD Secret key generation with seeds (Bip32, Bip39)
+   - hiding all possible tech details to be convenient
  - Diffie-Hellman key exchange and encryption, maybe with TLS
- - HD Secret key generation with seeds (Bip32, Bip39)
  - hole punching support (Stun, Upnp, NatPmp, etc)
- - profile search
  - DHT integration (IPFS with custom IPNS, Kademlia or others)
- - simplified dApp SDK
+ - profile search on distributed storage
  - language bindings
  - undelivered message persistance (in case of server reboot)
 
@@ -74,9 +78,9 @@ Directories/crates of the project are
    work together as expected.
  - `storage` contains experimentation on a generic storage layer using hash-based "indexing"
    that could use IPFS, BitTorrent, StoreJ, etc as a simple plugin.
-   We currently use only some interfaces like `KeyValueStore` from this crate,
-   you should ignore it for now.
+   We currently use minimal code like a `KeyValueStore` interface and `AsyncFileHandler`
+   implementation from this crate, you should ignore it for now.
 
-Copyright © 2017-2018
-Libertaria Ventures LLP, UK
+Copyright © 2017-2018  
+Libertaria Ventures LLP, UK  
 Decentralized Society Foundation, PA
