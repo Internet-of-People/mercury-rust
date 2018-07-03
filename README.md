@@ -6,8 +6,37 @@ Our goal is to make the Internet ours again by true decentralised secure communi
 social networking and enabling peer-to-peer business and apps with no middlemen,
 even on your phone.
 
-Mercury is somewhat similar to a cellular mobile network, it provides features like
- SMS, calls, data connections, push notifications, etc, but
+## Why?
+
+The internet was designed to provide open distributed peer to peer communication,
+but your your phone or PC don't have that anymore, only servers in data centers.
+You're closed behind ISPs and home routers so you need intermediaries to communicate.
+Those intermediaries tie you by heavy vendor lockin: you can't change service provider
+(consider email, storage, etc) without sacrificing your old identity and data.
+Even worse, the biggest of them make a living from taxing your payments,
+constantly spying on you for selling your data and usually hinder or censor you
+for their advantage or political orders, already much further than just targeted ads. 
+Just as an appetizer, some Asian countries require a mandatory digital identifier
+for every payment you make and they plan to punish or reward their citizens
+based on their collected digital data, essentially building the Thought Police.
+
+Mercury aims to brings balance by protecting you from all of this.
+Your identity is a cryptographic key owned by you and noone else.
+Data storage and communication is organized around this identity which you can keep
+even changing service provider or application.
+Your data is encrypted until you decide to publicly share.
+Furthermore, you can have several unconnected identities, e.g. for work, family and hobby.
+The network is truly distributed and built on encrypted peer to peer communication
+so you're safe. You can add your own node to the network under your control and trust.
+
+In the end you can get rid of intermediaries or middleman and directly connect persons,
+business with clients or even machines, returning from oligopoly to true competition.
+
+
+### Comparison
+
+Mercury is somewhat similar to a cellular mobile network, it provides features similar to
+SMS, calls, data connections, push notifications, etc, but
  - built as an overlay network on top of any transport layer
    (currently Tcp but could use Tor, I2P, mesh, etc)
  - your own "cell tower" can join or leave the network any time
@@ -16,17 +45,17 @@ Mercury is somewhat similar to a cellular mobile network, it provides features l
    cell/provider and applications use the same kind of identity
  - user data and calls are encrypted, you cannot be spied on or be cheated with contact identity
  - you're free to keep your identity and contacts moving to another provider or application
- - supports you having different unrelated identities (family, professional, hobby, etc) within the system
+ - supports you having different unrelated identities (family, professional, dating, etc) within the system
  - you can restore your identities from a "cold wallet" after lost/broken device
  - the network is extremely resilient, dies only with the last cell
- - built to support any decentralized/distributed application on top 
-
-Mercury is a redesigned and advanced version of the IoP Profile Server and IoP Connect
-which were a step in the right direction but lacked several features from this vision,
-were created by developers who left the community and were hard to fix and maintain.   
+ - built to support any kind of decentralized/distributed application on top 
 
 
 ## Project status
+
+Mercury is a redesigned and advanced version of the IoP Profile Server and IoP Connect
+which were a step in the right direction but lacked several features from our vision,
+were created by developers who left the community and were hard to fix and maintain.   
 
 Please be aware that this project is still in a very early and experimental phase.
 We opened up the source code to give a sneak peek to developers interested in either
