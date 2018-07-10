@@ -12,10 +12,10 @@ use mercury_storage::{async::KeyValueStore, error::StorageError};
 
 
 
-const CHANNEL_CAPACITY :usize = 1;
+const CHANNEL_CAPACITY: usize = 1;
 
 // TODO this should come from user configuration with a reasonable default value close to this
-const CFG_CALL_ANSWER_TIMEOUT:Duration = Duration::from_secs(30);
+const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
 
 
 pub struct HomeServer
