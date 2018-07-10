@@ -255,32 +255,35 @@ fn test_home_register(mut setup: TestSetup)
     }
 }
 
+fn do_test(test_fn: &Fn(TestSetup) -> ()) {
+    println!("> Direct mode");
+    test_fn(TestSetup::init(TestMode::Direct));
+    println!("> Memsocket mode");
+    test_fn(TestSetup::init(TestMode::Memsocket));
+}
+
 #[test]
 fn test_home_register_configs()
 {
-    test_home_register( TestSetup::init(TestMode::Direct) );
-    test_home_register( TestSetup::init(TestMode::Memsocket) );
+    do_test(&test_home_register);
 }
 
 #[test]
 fn test_home_claim_configs()
 {
-    test_home_claim( TestSetup::init(TestMode::Direct) );
-    test_home_claim( TestSetup::init(TestMode::Memsocket) );
+    do_test(&test_home_claim);
 }
 
 #[test]
 fn test_home_events_configs()
 {
-    test_home_events( TestSetup::init(TestMode::Direct) );
-    test_home_events( TestSetup::init(TestMode::Memsocket) );
+    do_test(&test_home_events);
 }
 
 #[test]
 fn test_home_login_configs()
 {
-    test_home_login( TestSetup::init(TestMode::Direct) );
-    test_home_login( TestSetup::init(TestMode::Memsocket) );
+    do_test(&test_home_login);
 }
 
 #[test]
