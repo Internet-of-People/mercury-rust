@@ -18,7 +18,12 @@ use mercury_home_protocol::*;
 
 
 pub mod net;
+pub use net::SimpleTcpHomeConnector;
+
 pub mod protocol_capnp;
+
+pub mod simple_profile_repo;
+pub use simple_profile_repo::SimpleProfileRepo;
 
 
 
