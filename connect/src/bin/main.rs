@@ -16,6 +16,7 @@ extern crate tokio_core;
 use clap::App;
 
 use std::net::ToSocketAddrs;
+use std::net::SocketAddr;
 use std::rc::Rc;
 use std::time::Duration;
 
@@ -59,7 +60,8 @@ fn main()
     // (3) Address (since we don't yet have access to ipfs)
     let server_key = PublicKey(matches.value_of("server-key").unwrap().as_bytes().to_vec());
     let server_id = ProfileId(matches.value_of("server-id").unwrap().as_bytes().to_vec());
-    let addr = matches.value_of("server-addr").unwrap().to_multiaddr().expect("Failed to parse address");    
+    let srv_addr : SocketAddr = matches.value_of("server-addr").unwrap().parse().expect("Failed to parse server address");
+    let addr = srv_addr.to_multiaddr().expect("Failed to parse server address");    
 
     let mut reactor = reactor::Core::new().unwrap();
     let handle = reactor.handle();
@@ -75,12 +77,6 @@ fn main()
     let home_connector = SimpleTcpHomeConnector::new(reactor.handle());
 
     let profile_gw = ProfileGatewayImpl::new(client_signer_clone, Rc::new(profile_store),  Rc::new(home_connector));
-
-
-
-
-
-
 
 /*
     let test_fut = TcpStream::connect( &addr, &reactor.handle() )
@@ -121,7 +117,7 @@ fn main()
     let test_fut = profile_gw.connect_home(&server_id.clone())
         .and_then(move |home| {
             info!("connected, logging in");
-            home.login(&server_id.clone())
+            home.login(client_signer.profile_id())
         })
         .and_then(|session| {
             info!("session created, sending ping");
@@ -131,7 +127,10 @@ fn main()
             info!("received pong");
             pong
         })
-        .map_err(|_| ErrorToBeSpecified::TODO(String::from("profile gateway failed to login()")));
+        .map_err(|err| {
+            warn!("error: {:?}", err);
+            ErrorToBeSpecified::TODO(String::from("profile gateway failed to login()"))
+        });
 
     let pong = reactor.run(test_fut);
     

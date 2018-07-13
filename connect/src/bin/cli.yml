@@ -20,16 +20,19 @@ args:
         help: enable silent logging (warning loglevel)
     - server-key:
         long: server-key
+        takes_value: true
         help: public key hash of the server
         required: true
         value_name: HASH
     - server-addr:
         long: server-addr
+        takes_value: true
         help: ipv4 address of the server
         value_name: ADDRESS
         default_value: 127.0.0.1:2077
-    - server-name:
+    - server-id:
         long: server-id
+        takes_value: true
         help: id of the server
         value_name: ID
         default_value: HomeNode
