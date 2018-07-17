@@ -2,7 +2,7 @@ use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_home_node::{ server::*, protocol_capnp::HomeDispatcherCapnProto };
-use mercury_connect::{ *, protocol_capnp::HomeClientCapnProto };
+use mercury_connect::{ protocol_capnp::HomeClientCapnProto };
 
 use futures::Stream;
 use futures::Sink;

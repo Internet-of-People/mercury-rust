@@ -16,7 +16,7 @@ mercury-home-node = { path="../home-node" }
 mercury-storage= { path="../storage" }
 multiaddr = "*"
 multihash = "*"
-rand = "0.4.2"
+rand = "*"
 sha2 = "*"
 tokio-core = "0.1"
 tokio-io = "*"

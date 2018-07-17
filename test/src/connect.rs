@@ -7,14 +7,14 @@ use futures::sync::mpsc;
 
 use tokio_core::net::{TcpListener, TcpStream};
 use tokio_core::reactor;
-use tokio_threadpool::{Builder, ThreadPool};
+use tokio_threadpool::Builder;
 
 use multiaddr::{ToMultiaddr};
 use base64;
 
 use mercury_home_protocol::{*, crypto::*};
 use mercury_connect::{*, protocol_capnp::HomeClientCapnProto};
-use mercury_home_node::{server::*, protocol_capnp::HomeDispatcherCapnProto};
+use mercury_home_node::{protocol_capnp::HomeDispatcherCapnProto};
 use mercury_storage::async::KeyValueStore;
 use mercury_storage::filesys::AsyncFileHandler;
 
@@ -369,7 +369,7 @@ fn and_then_story(){
                 &Ok(ProfileEvent::PairingRequest(ref half_proof))=>{
                     match RelationProof::sign_remaining_half(half_proof, &*other_gateway.signer)
                     {
-                        Err(e) => panic!("ProfileEvent assert fail"),
+                        Err(_e) => panic!("ProfileEvent assert fail"),
                         Ok(ref proof) => //TODO should look something like gateway.accept(half_proof)
                             other_gateway.pair_response(
                                 Relation::new(&other_profile, proof) )
@@ -408,7 +408,6 @@ fn and_then_story(){
 //TODO might need to place this to some other place
 #[test]
 fn profile_serialize_async_key_value_test() {
-    use tokio_core;
     use tokio_core::reactor;
 
     
