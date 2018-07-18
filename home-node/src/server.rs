@@ -456,6 +456,13 @@ impl HomeSessionServer
     }
 }
 
+impl Drop for HomeSessionServer {
+    fn drop(&mut self) {
+        let peer_id = self.context.peer_id();
+        debug!("dropping session {:?}", peer_id);
+        self.server.sessions.borrow_mut().remove(peer_id);
+    }   
+}
 
 impl HomeSession for HomeSessionServer
 {
