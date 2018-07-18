@@ -280,12 +280,20 @@ pub type AppMsgStream = HomeStream<AppMessageFrame, String>;
 pub type AppMsgSink   = HomeSink<AppMessageFrame, String>;
 
 
+/// A struct that is passed from the caller to the callee. The callee can examine this
+/// before answering the call.
 #[derive(Debug)]
 pub struct CallRequestDetails
 {
+    /// Proof for the home server that the caller is authorized to call the callee.
+    /// The callee can find out who's calling by looking at `relation`.
     pub relation:       RelationProof,
+    /// A message that the callee can examine before answering or rejecting a call. Note that the caller is already
+    /// known to the callee through `relation`.
     pub init_payload:   AppMessageFrame,
     // NOTE A missed call or p2p connection failure will result Option::None
+    /// The sink half of a channel that routes `AppMessageFrame`s back to the caller. If the caller
+    /// does not want to receive any response messages from the callee, `to_caller` should be set to `None`.
     pub to_caller:      Option<AppMsgSink>,
 }
 
@@ -362,11 +370,17 @@ pub enum ProfileEvent
 
 pub trait IncomingCall
 {
+    /// Get a reference to details of the call.
+    /// It contains information about the caller party (`relation`), an initial message (`initial_payload`)
+    /// If the caller wishes to receive App messages from the calee, a sink should be passed in `to_caller`.
     fn request_details(&self) -> &CallRequestDetails;
     // NOTE this assumes boxed trait objects, if Rc of something else is needed, this must be revised
     // TODO consider offering the possibility to somehow send back a single AppMessageFrame
     //      as a reply to init_payload without a to_callee sink,
     //      either included into this function or an additional method
+    /// Indicate to the caller that the call was answered.
+    /// If the callee wishes to receive messages from the caller, it has to create a channel
+    /// and pass the created sink to `answer()`, which is returned by `call()` on the caller side.
     fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>);
 }
 

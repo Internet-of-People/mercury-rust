@@ -2,10 +2,18 @@ use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_home_node::{ server::*, protocol_capnp::HomeDispatcherCapnProto };
-use mercury_connect::{ *, protocol_capnp::HomeClientCapnProto };
+use mercury_connect::{ protocol_capnp::HomeClientCapnProto };
 
 use futures::Stream;
+use futures::Sink;
+use futures::Future;
+
 use super::*;
+
+pub fn app_channel(capacity: usize) -> (AppMsgSink, AppMsgStream)
+{
+    futures::sync::mpsc::channel::<Result<AppMessageFrame, String>>(capacity)
+}
 
 #[derive(Clone)]
 pub struct TestClient
@@ -255,32 +263,134 @@ fn test_home_register(mut setup: TestSetup)
     }
 }
 
+fn test_home_call(mut setup: TestSetup)
+{
+    let callee_ownprofile = register_client_from_setup(&mut setup);
+
+    let (caller_ownprofile, caller_signer) = generate_persona();
+    let caller_signer = Rc::new(caller_signer);
+    let caller_testclient = TestClient::new(setup.mode.clone(), caller_ownprofile, caller_signer.clone(), setup.home_server.clone(), setup.home_signer.clone(), &setup.home_profile.clone(), setup.reactor.handle());
+    let _caller_ownprofile = register_client(&mut setup, &caller_testclient);
+
+    let app = ApplicationId::from("chat");
+    let callee_session = setup.reactor.run(setup.testclient.home_connection.login(&callee_ownprofile.profile.id)).unwrap();
+    let callee_calls = callee_session.checkin_app(&app);
+
+    let relation_type = "friend";
+    let relation_half_proof = RelationHalfProof::new(relation_type, &callee_ownprofile.profile.id, &*caller_signer);
+    let relation = RelationProof::sign_remaining_half(&relation_half_proof, &*setup.testclient.home_context.my_signer()).unwrap();
+
+    let init_payload = AppMessageFrame(Vec::from("hello"));
+
+    let (forward_sink, forward_stream) = app_channel(1);  // forward channel (caller -> callee)
+    let (backwards_sink, backwards_stream) = app_channel(1);  // backwards channel (callee -> caller)
+
+    let call_details = CallRequestDetails {
+        relation,
+        init_payload: init_payload.clone(),
+        to_caller: Some(backwards_sink)
+    };
+    let forward_sink_fut = caller_testclient.home_connection.call(app, call_details);
+
+    // NOTE: an AppMessageFrame can be sent even before answer() is called
+    println!("waiting for call...");
+    let backwards_sink_fut = callee_calls
+        .take(1)
+        .map(|call_res| {
+            match call_res {
+                Ok(call) => {
+                    let backwards_sink;
+                    println!("call received");
+                    {
+                        let details = call.request_details();
+                        assert_eq!(details.relation.relation_type, relation_type);
+                        assert_eq!(details.init_payload, init_payload);
+                        backwards_sink = details.to_caller.clone().unwrap();
+                    }
+                    call.answer(Some(forward_sink.clone()));
+
+                    backwards_sink
+                },
+                Err(_) => panic!(),
+            }
+        })
+        .map_err(|_| ErrorToBeSpecified::TODO("error".to_owned()))
+        .collect();
+
+    let call_and_answer = forward_sink_fut.join(backwards_sink_fut);
+
+    let (forward_sink_returned, backwards_sink_returned_vec) = setup.reactor.run(call_and_answer).unwrap();
+
+    // Testing forward channel (caller -> callee)
+    let banana = AppMessageFrame(Vec::from("banana"));
+    let send_banana_fut = forward_sink_returned.unwrap().send(Ok(banana.clone()));
+    setup.reactor.run(send_banana_fut).unwrap();
+
+    let read_banana_fut = forward_stream.take(1).collect();
+    let banana_vec = setup.reactor.run(read_banana_fut).unwrap();
+    assert_eq!(banana_vec.len(), 1);
+    banana_vec.iter().for_each(|msg_res| {
+        match msg_res {
+            Ok(msg) => {
+                assert_eq!(*msg, banana);
+            },
+            Err(_) => panic!(),
+        };
+    });
+
+    // Testing backwards channel (callee -> caller)
+    let orange = AppMessageFrame(Vec::from("orange"));
+    let backwards_sink_returned = backwards_sink_returned_vec[0].clone();
+    let send_orange_fut = backwards_sink_returned.send(Ok(orange.clone()));
+    setup.reactor.run(send_orange_fut).unwrap();
+
+    let read_orange_fut = backwards_stream.take(1).for_each(|msg_res| {
+        match msg_res {
+            Ok(msg) => {
+                assert_eq!(msg, orange);
+            },
+            Err(_) => panic!(),
+        };
+        futures::future::ok(())
+    });
+    setup.reactor.run(read_orange_fut).unwrap();
+}
+
+fn do_test(test_fn: &Fn(TestSetup) -> ()) {
+    println!("> Direct mode");
+    test_fn(TestSetup::init(TestMode::Direct));
+    println!("> Memsocket mode");
+    test_fn(TestSetup::init(TestMode::Memsocket));
+}
+
 #[test]
 fn test_home_register_configs()
 {
-    test_home_register( TestSetup::init(TestMode::Direct) );
-    test_home_register( TestSetup::init(TestMode::Memsocket) );
+    do_test(&test_home_register);
 }
 
 #[test]
 fn test_home_claim_configs()
 {
-    test_home_claim( TestSetup::init(TestMode::Direct) );
-    test_home_claim( TestSetup::init(TestMode::Memsocket) );
+    do_test(&test_home_claim);
 }
 
 #[test]
 fn test_home_events_configs()
 {
-    test_home_events( TestSetup::init(TestMode::Direct) );
-    test_home_events( TestSetup::init(TestMode::Memsocket) );
+    do_test(&test_home_events);
+}
+
+#[test]
+fn test_home_call_configs()
+{
+    do_test(&test_home_call);
 }
 
 #[test]
 fn test_home_login_configs()
 {
-    test_home_login( TestSetup::init(TestMode::Direct) );
-    test_home_login( TestSetup::init(TestMode::Memsocket) );
+    do_test(&test_home_login);
 }
 
 #[ignore]

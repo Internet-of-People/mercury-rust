@@ -12,10 +12,10 @@ use mercury_storage::{async::KeyValueStore, error::StorageError};
 
 
 
-const CHANNEL_CAPACITY :usize = 1;
+const CHANNEL_CAPACITY: usize = 1;
 
 // TODO this should come from user configuration with a reasonable default value close to this
-const CFG_CALL_ANSWER_TIMEOUT:Duration = Duration::from_secs(30);
+const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
 
 
 pub struct HomeServer
@@ -327,6 +327,13 @@ impl Home for HomeConnectionServer
         let call = Box::new( Call::new(call_req, send) );
         let handle = self.server.handle.clone();
 
+        let timeout_fut = match Timeout::new(CFG_CALL_ANSWER_TIMEOUT, &handle) {
+            Ok(timeout_fut) => timeout_fut
+                .map( |_| None)
+                .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) ),
+            Err(_) => return Box::new(future::err(ErrorToBeSpecified::TODO("internal: cannot create Timeout future".to_owned()))),
+        };
+
         let answer_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone().into() )
             .map_err(|_| ErrorToBeSpecified::TODO("pair_response: The other party in the relation is not hosted on this home server".to_owned()))
             .and_then(move |profile_data|
@@ -342,9 +349,7 @@ impl Home for HomeConnectionServer
             {
                 let answer_fut = recv
                     .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
-                let timeout_fut = Timeout::new(CFG_CALL_ANSWER_TIMEOUT, &handle)
-                    .map( |_void| None )
-                    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
+
                 // Wait for answer with specified timeout
                 answer_fut.select(timeout_fut)
                     .map( |(done,_pending)| done )
