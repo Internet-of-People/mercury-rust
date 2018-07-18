@@ -29,12 +29,14 @@ impl Config
 
         // TODO support hardware wallets
         // NOTE for some test keys see https://github.com/tendermint/signatory/blob/master/src/ed25519/test_vectors.rs
-        let private_key_str = args.value_of(FileCliParser::ARG_NAME_PRIVATE_KEY)
-            .expect("Private key should be a mandatory option").as_bytes();
+        let private_key_file = args.value_of(FileCliParser::ARG_NAME_SERVER_KEY).expect("failed to open private key file"); 
         // TODO implement base64 and/or multibase parsing
-        let private_key = PrivateKey( b"\x83\x3F\xE6\x24\x09\x23\x7B\x9D\x62\xEC\x77\x58\x75\x20\x91\x1E\x9A\x75\x9C\xEC\x1D\x19\x75\x5B\x7D\xA9\x01\xB9\x6D\xCA\x3D\x42".to_vec() );
+        let private_key = PrivateKey(::std::fs::read(private_key_file).unwrap());
         let signer = Rc::new( Ed25519Signer::new(&private_key)
             .expect("Invalid private key") );
+
+        info!("homenode public key: {:?}", signer.public_key());
+        info!("homenode profile id: {:?}", signer.profile_id());
 
         let listen_socket = args.value_of(FileCliParser::ARG_NAME_LOCAL_SOCKET_ADDRESS)
             .expect("Socket address should have a default value")
@@ -74,15 +76,13 @@ impl FileCliParser
             .about("Provides an open, distributed, secure communication network")
             .version(VERSION)
 // TODO option probably should specify a keyfile instead of the privkey value directly
-            .arg( clap::Arg::with_name(Self::ARG_NAME_PRIVATE_KEY)
-                .long(Self::ARG_NAME_PRIVATE_KEY)
-                .aliases(&Self::ARG_ALIASES_PRIVATE_KEY)
-                .overrides_with(Self::ARG_NAME_PRIVATE_KEY)
+            .arg( clap::Arg::with_name(Self::ARG_NAME_SERVER_KEY)
+                .long(Self::ARG_NAME_SERVER_KEY)
                 .case_insensitive(true)
-                .required(true)
                 .takes_value(true)
-                .value_name("PRIVATE_KEY")
-                .help("Private key used to prove server identity. Currently only ed25519 keys are supported in base64 encoding. TODO: still not functional") // TODO
+                .default_value("../etc/homenode.id")
+                .value_name("FILE")
+                .help("Private key file used to prove server identity. Currently only ed25519 keys are supported in raw binary format")
             )
             .arg( clap::Arg::with_name(Self::ARG_NAME_LOCAL_SOCKET_ADDRESS)
                 .long(Self::ARG_NAME_LOCAL_SOCKET_ADDRESS)
@@ -111,8 +111,7 @@ impl FileCliParser
 
     const CONFIG_PATH: &'static str = "home.cfg";
 
-    const ARG_NAME_PRIVATE_KEY: &'static str = "private_key";
-    const ARG_ALIASES_PRIVATE_KEY: [&'static str; 5] = ["privatekey", "private-key", "secretkey", "secret_key", "secret-key"];
+    const ARG_NAME_SERVER_KEY: &'static str = "server-key";
     const ARG_NAME_LOCAL_SOCKET_ADDRESS: &'static str = "tcp";
     const ARG_ALIASES_LOCAL_SOCKET_ADDRESS: [&'static str; 6] = ["tcpsocket", "tcp_socket", "tcp-socket", "bindtcp", "bind_tcp", "bind-tcp"];
     const ARG_NAME_STORAGE_PATH: &'static str = "storage";

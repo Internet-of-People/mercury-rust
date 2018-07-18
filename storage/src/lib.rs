@@ -17,6 +17,11 @@ extern crate tokio_fs;
 extern crate tokio_threadpool;
 
 #[macro_use]
+extern crate log;
+extern crate log4rs;
+
+
+#[macro_use]
 extern crate serde_derive;
 
 pub mod error;

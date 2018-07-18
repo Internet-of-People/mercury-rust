@@ -283,6 +283,20 @@ fn test_home_login_configs()
     test_home_login( TestSetup::init(TestMode::Memsocket) );
 }
 
+#[ignore]
+#[test]
+fn test_generate_key_files() 
+{
+    let (PrivateKey(priv1), PublicKey(pub1)) = generate_keypair();
+    std::fs::write("../etc/homenode.id", priv1).unwrap();
+    std::fs::write("../etc/homenode.id.pub", pub1).unwrap();
+    let (PrivateKey(priv2), PublicKey(pub2)) = generate_keypair();
+    std::fs::write("../etc/client.id", priv2).unwrap();
+    std::fs::write("../etc/client.id.pub", pub2).unwrap();
+
+}
+
+
 #[test]
 #[ignore]
 fn test_session_update()
