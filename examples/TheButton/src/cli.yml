@@ -1,0 +1,63 @@
+name: TheButton
+version: "0.1"
+author: Deusz <lovaszoltanr@gmail.com>
+about: 
+|
+ The application has two modus operandi (selected via command line args) 
+
+ Client - Connects to the server via the dApp SDK. 
+    If connection failed, exits with an error code 
+    or retries with exponential timeout or exits immediately 
+    (controlled by a command line switch). 
+ 
+ Server - Able to provide notifications to connected clients in case of events. 
+    Events can be raised via a timer, 
+    on a specific byte arriving on a uds, 
+    or via signal (SIGUSR2).
+args:
+    - verbose:
+        short: v
+        long: verbose
+        multiple: true
+        help: Sets the level of verbosity
+    - version:
+        short: V
+        long: version
+        help: software version
+subcommands:
+    - server:
+        required: true
+        about: Sets running mode to server
+        args:
+            - event-file:
+                takes_value: true
+                long: event-file
+                value_name: PATH
+                help: path name of device file to poll (every byte on the stream generates an event)
+            - event-timer:
+                takes_value: true
+                long: event-timer
+                value_name: GENTIMER
+                help: takes n, generating an event automatically every n milliseconds
+            - stop-after:
+                takes_value: true
+                long: stop-after
+                value_name: STOPCOUNT
+                help: takes n, when set the server exits after providing n events
+    - client:
+        required: true
+        about: Sets running mode to client
+        args:
+            - on-fail:
+                long: on-fail
+                takes_value: true
+                value_name: FAIL
+                help: |
+                        terminate (default) - 
+                            the client terminates execution on connection errors
+                        retry - 
+                            do an exponential reconnection from 1 sec up to 32 secs 
+            - connect:
+                value_name: ADDR
+                required: true
+                help: address of server

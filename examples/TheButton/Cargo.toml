@@ -1,0 +1,17 @@
+[package]
+name = "the_button"
+version = "0.1.0"
+authors = ["Deusz <lovaszoltanr@gmail.com>"]
+
+[dependencies]
+clap ={version = "*", features = ["yaml"]}
+log = "*"
+log4rs = "*"
+tempdir = "*"
+futures = "*"
+tokio = "*"
+tokio-signal = "*"
+tokio-core = "*"
+tokio-uds = "*"
+tokio-io = "*"
+mercury-connect = {git = "https://github.com/libertaria-project/mercury-rust.git", branch = "master"}

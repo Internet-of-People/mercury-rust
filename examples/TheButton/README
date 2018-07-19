@@ -1,0 +1,5 @@
+The Button Decentralized application is right now non-functional.
+As of 2018.07.19 it is still only a skeleton that will implement the Mercury Connect sdk to provide example functionality.
+
+The files in the logging directory should be put where the executable of the compiled source-code is.
+These files may or may not be replaced later with an code representation
