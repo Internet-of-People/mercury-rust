@@ -14,6 +14,7 @@ extern crate tokio_uds;
 pub mod config;
 pub mod client;
 pub mod server;
+pub mod logging;
 pub mod function;
 pub mod application;
 
@@ -21,6 +22,7 @@ use config::*;
 use function::*;
 use server::Server;
 use client::Client;
+use logging::start_logging;
 use application::{Application, EX_OK, EX_USAGE, EX_SOFTWARE, EX_UNAVAILABLE, EX_TEMPFAIL};
 
 use clap::{App, ArgMatches};
@@ -56,19 +58,19 @@ fn application_code()->i32{
     //VERBOSITY HANDLING
     match matches.occurrences_of("verbose") {
         0 => {
-            log4rs::init_file( "./log4rsoff.yml", Default::default() ).unwrap();
+            start_logging("o");
             println!("verbose 0: logging off")
         },
         1 => {
-            log4rs::init_file( "./log4rswarn.yml", Default::default() ).unwrap();
+            start_logging("w");
             warn!("verbose 1: logging warn")
         },
         2 => {
-            log4rs::init_file( "./log4rsinf.yml", Default::default() ).unwrap();
+            start_logging("i");
             info!("verbose 2: logging info")
         },
         3 | _ => {
-            log4rs::init_file( "./log4rsdeb.yml", Default::default() ).unwrap();
+            start_logging("d");
             debug!("verbose 3 or more: debug")
         },
     }
