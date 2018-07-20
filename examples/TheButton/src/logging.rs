@@ -8,9 +8,11 @@ use log4rs::config::{Appender, Config, Logger, Root};
 pub fn start_logging(levelstr : &str) {
     let level = match levelstr{
         "o"=>LevelFilter::Off,
+        "e"=>LevelFilter::Error,
         "i"=>LevelFilter::Info,
         "w"=>LevelFilter::Warn,
-        "d"|_=>LevelFilter::Debug,
+        "d"=>LevelFilter::Debug,
+        "t"|_=>LevelFilter::Trace,
     }; 
     let stdout = ConsoleAppender::builder().build();
 
