@@ -72,7 +72,6 @@ impl HomeConnectionServer
                 let sessions = sessions_clone.borrow();
                 // If hosted here, check if profile is in reach with an online session
                 let session_rc = sessions.get(&to_profile)
-                    // TODO remove session from server if weak pointer failed to upgrade (session is released with refcount 0)
                     .and_then( |weak| weak.upgrade() );
                 future::ok(session_rc)
             } );
