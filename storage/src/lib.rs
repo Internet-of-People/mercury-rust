@@ -18,7 +18,6 @@ extern crate tokio_threadpool;
 
 #[macro_use]
 extern crate log;
-extern crate log4rs;
 
 
 #[macro_use]
