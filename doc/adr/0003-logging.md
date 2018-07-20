@@ -38,9 +38,11 @@ Loglevel can be specified with -l/--loglevel <LOGLEVEL> command line option (whe
 
 ### Controlling log output ###
 
-By default log output shall be sent to the console. Two options can be used to specify alternative output:
+By default log output shall be sent to the console and to a file defaulting to a well defined place (e.g.: /var/log/<appname>.log). Two options can be used to specify alternative output:
 - --syslog: send log output to syslog
 - --logfile <LOGFILE>: send log output to a file
+
+Log rotation should be handled by an external package (logrotate or similiar) if possible.
 
 ### Printing Error structs ###
 
