@@ -86,7 +86,6 @@ impl FileCliParser
             )
             .arg( clap::Arg::with_name(Self::ARG_NAME_LOCAL_SOCKET_ADDRESS)
                 .long(Self::ARG_NAME_LOCAL_SOCKET_ADDRESS)
-                .aliases(&Self::ARG_ALIASES_LOCAL_SOCKET_ADDRESS)
                 .overrides_with(Self::ARG_NAME_LOCAL_SOCKET_ADDRESS)
                 .case_insensitive(true)
                 .required(false)
@@ -97,7 +96,6 @@ impl FileCliParser
             )
             .arg( clap::Arg::with_name(Self::ARG_NAME_STORAGE_PATH)
                 .long(Self::ARG_NAME_STORAGE_PATH)
-                .aliases(&Self::ARG_ALIASES_STORAGE_PATH)
                 .overrides_with(Self::ARG_NAME_STORAGE_PATH)
                 .case_insensitive(true)
                 .required(false)
@@ -113,9 +111,7 @@ impl FileCliParser
 
     const ARG_NAME_SERVER_KEY: &'static str = "server-key";
     const ARG_NAME_LOCAL_SOCKET_ADDRESS: &'static str = "tcp";
-    const ARG_ALIASES_LOCAL_SOCKET_ADDRESS: [&'static str; 6] = ["tcpsocket", "tcp_socket", "tcp-socket", "bindtcp", "bind_tcp", "bind-tcp"];
     const ARG_NAME_STORAGE_PATH: &'static str = "storage";
-    const ARG_ALIASES_STORAGE_PATH: [&'static str; 6] = ["storagepath", "storage_path", "storage-path", "storagedir", "storage_dir", "storage-dir"];
 }
 
 
