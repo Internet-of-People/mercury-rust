@@ -5,7 +5,11 @@ extern crate futures;
 #[macro_use]
 extern crate log;
 extern crate mercury_home_protocol;
+extern crate mercury_storage;
 extern crate multiaddr;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 extern crate tokio_core;
 extern crate tokio_io;
 
@@ -21,6 +25,7 @@ pub mod net;
 pub use net::SimpleTcpHomeConnector;
 
 pub mod protocol_capnp;
+pub mod sdk;
 
 pub mod simple_profile_repo;
 pub use simple_profile_repo::SimpleProfileRepo;
@@ -39,43 +44,39 @@ pub trait HomeConnector
 
 
 
-//pub trait ProfileConnector
-//{
-//    fn next() -> Bip32Path;
-//    fn connect(bip32_path: &Bip32Path) -> Rc<ProfileGateway>;
-//}
-
-
-
+// TODO maybe this should be transformed to store a relationproof with an operation like
+//      fn profile(&self) -> Box<Future<Item=Profile,Error=SomeError>>
+//      cache profile after fetched in something like an Option<RefCell<Profile>>
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub struct Relation
 {
-    pub peer:       Profile,
     pub proof:      RelationProof,
+// TODO consider transforming Profile to Option<RefCell<Profile>> with an operation like
+//      fn peer(&self) -> Box<Future<Item=Profile,Error=SomeError>>
+//      which could return a cache profile value immediately or load it if not present yet
+    pub peer:       Profile,
 }
 
 impl Relation
 {
     pub fn new(peer: &Profile, proof: &RelationProof) -> Self
         { Self { peer: peer.clone(), proof: proof.clone() } }
+
+    pub fn call(&self, init_payload: AppMessageFrame,
+                to_caller: Option<AppMsgSink>) ->
+        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
+    {
+        unimplemented!();
+    }
 }
 
 
 
 pub trait ProfileGateway
 {
-// TODO consider if using streams here is a good idea considering implementation complexity
-//    fn relations(&self) -> Box< Stream<Item=Contact, Error=()> >;   // TODO error type
-//    fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >; // TODO error type
+    fn signer(&self) -> &Signer;
+    fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >;
 
-// NOTE this interface currently works with a single Profile, so this is not here
-//    fn profiles(&self) ->
-//        Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >;
-    fn relations(&self, profile: &ProfileId) ->
-        Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >;
-
-
-    // TODO do we really want only profileId of homes here would a Profile also comfortable?
     fn claim(&self, home: ProfileId, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
 
@@ -90,13 +91,10 @@ pub trait ProfileGateway
     fn unregister(&self, home: ProfileId, own_prof: ProfileId, newhome: Option<Profile>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    fn login(&self) ->
-        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >;
 
     fn pair_request(&self, relation_type: &str, with_profile_url: &str) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    // TODO it does not update the cached profile details that might cause problems
     fn pair_response(&self, rel: Relation) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
@@ -104,7 +102,9 @@ pub trait ProfileGateway
             to_caller: Option<AppMsgSink>) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >;
 
-    // TODO what else is needed here?
+
+    fn login(&self) ->
+        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >;
 }
 
 
@@ -207,29 +207,10 @@ impl ProfileGatewayImpl
 
 impl ProfileGateway for ProfileGatewayImpl
 {
-//    fn relations(&self) -> Box< Stream<Item=Contact, Error=()> >
-//    {
-//        // TODO
-//        let (send, recv) = futures::sync::mpsc::channel(0);
-//        Box::new(recv)
-//    }
-//
-//
-//    fn profiles(&self) -> Box< Stream<Item=OwnProfile, Error=()> >
-//    {
-//        // TODO
-//        let (send, recv) = futures::sync::mpsc::channel(0);
-//        Box::new(recv)
-//    }
+    fn signer(&self) -> &Signer { &*self.signer }
 
 
-//    fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >
-//    {
-//        Box::new( futures::future::err(ErrorToBeSpecified::TODO) )
-//    }
-
-    fn relations(&self, profile: &ProfileId) ->
-        Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >
+    fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO(String::from("ProfileGateway.relations "))) )
     }
@@ -243,6 +224,7 @@ impl ProfileGateway for ProfileGatewayImpl
         Box::new(claim_fut)
     }
 
+
     fn register(&self, home_id: ProfileId, own_prof: OwnProfile,
                 invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
@@ -255,6 +237,7 @@ impl ProfileGateway for ProfileGatewayImpl
         Box::new(reg_fut)
     }
 
+
     fn update(&self, home_id: ProfileId, own_prof: &OwnProfile) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
@@ -266,6 +249,7 @@ impl ProfileGateway for ProfileGatewayImpl
         Box::new(upd_fut)
     }
 
+
     fn unregister(&self, home_id: ProfileId, own_prof: ProfileId, newhome_id: Option<Profile>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
@@ -273,22 +257,6 @@ impl ProfileGateway for ProfileGatewayImpl
             .and_then( move |home| home.login(&own_prof) )
             .and_then( move |session| session.unregister(newhome_id) );
         Box::new(unreg_fut)
-    }
-
-    // TODO this should try connecting to ALL of our homes
-    fn login(&self) ->
-        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
-    {
-        let profile_repo_clone = self.profile_repo.clone();
-        let home_conn_clone = self.home_connector.clone();
-        let signer_clone = self.signer.clone();
-        let prof_id = self.signer.profile_id().clone();
-        let log_fut = self.profile_repo.load( &self.signer.profile_id() )
-            .and_then( move |profile| ProfileGatewayImpl::any_home_of2(
-                &profile, profile_repo_clone, home_conn_clone, signer_clone) )
-            .and_then( move |home| home.login(&prof_id) ) ;
-
-        Box::new(log_fut)
     }
 
 
@@ -332,5 +300,22 @@ impl ProfileGateway for ProfileGatewayImpl
                 home.call(app, CallRequestDetails { relation: rel.proof,
                     init_payload: init_payload, to_caller: to_caller } ) ) ;
         Box::new(call_fut)
+    }
+
+
+    // TODO this should try connecting to ALL of our homes
+    fn login(&self) ->
+        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
+    {
+        let profile_repo_clone = self.profile_repo.clone();
+        let home_conn_clone = self.home_connector.clone();
+        let signer_clone = self.signer.clone();
+        let prof_id = self.signer.profile_id().clone();
+        let log_fut = self.profile_repo.load( &self.signer.profile_id() )
+            .and_then( move |profile| ProfileGatewayImpl::any_home_of2(
+                &profile, profile_repo_clone, home_conn_clone, signer_clone) )
+            .and_then( move |home| home.login(&prof_id) ) ;
+
+        Box::new(log_fut)
     }
 }

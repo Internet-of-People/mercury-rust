@@ -34,6 +34,7 @@ pub mod mercury_capnp;
 
 
 
+
 // TODO
 #[derive(PartialEq, Eq, Clone, Debug)]
 pub enum ErrorToBeSpecified { TODO(String) }
@@ -51,16 +52,6 @@ pub struct PrivateKey(pub Vec<u8>);
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Signature(pub Vec<u8>);
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct Bip32Path(String);
-
-
-
-pub trait Seed
-{
-    // TODO do we need a password to unlock the private key?
-    fn unlock(bip32_path: &Bip32Path) -> Rc<Signer>;
-}
 
 
 /// Something that can sign data, but cannot give out the private key.
@@ -68,6 +59,7 @@ pub trait Seed
 pub trait Signer
 {
     fn profile_id(&self) -> &ProfileId;
+
     fn public_key(&self) -> &PublicKey;
     // NOTE the data to be signed ideally will be the output from Mudlee's multicodec lib
     fn sign(&self, data: &[u8]) -> Signature;
@@ -78,7 +70,6 @@ pub trait Signer
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct PersonaFacet
 {
-    // TODO should we use only a RelationProof here instead of full Relation info?
     /// `homes` contain items with `relation_type` "home", with proofs included.
     /// Current implementation supports only a single home stored in `homes[0]`,
     /// Support for multiple homes will be implemented in a future release.
@@ -220,7 +211,6 @@ pub struct RelationHalfProof
 
 impl RelationHalfProof
 {
-    // TODO add params and properly initialize
     pub fn new(relation_type: &str, peer_id: &ProfileId, signer: &Signer) -> Self
     {
         let mut result = Self{ relation_type: relation_type.to_owned(),
