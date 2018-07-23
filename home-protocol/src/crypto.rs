@@ -75,9 +75,11 @@ impl Ed25519Signer
         let ed_public_key = signer.public_key()
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
         let public_key = PublicKey( ed_public_key.as_ref().to_vec() );
-        let profile_hash = multihash::encode( multihash::Hash::Keccak256, public_key.0.as_slice() )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
-        Ok( Self{ public_key: public_key.to_owned(), profile_id: ProfileId(profile_hash),
+        //let profile_hash = multihash::encode( multihash::Hash::Keccak256, public_key.0.as_slice() )
+        //    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
+
+        let profile_hash = ProfileId::from(&public_key);
+        Ok( Self{ public_key: public_key.to_owned(), profile_id: profile_hash,
                   signer: signer } )
     }
 }

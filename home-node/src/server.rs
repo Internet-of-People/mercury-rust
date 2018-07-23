@@ -72,7 +72,6 @@ impl HomeConnectionServer
                 let sessions = sessions_clone.borrow();
                 // If hosted here, check if profile is in reach with an online session
                 let session_rc = sessions.get(&to_profile)
-                    // TODO remove session from server if weak pointer failed to upgrade (session is released with refcount 0)
                     .and_then( |weak| weak.upgrade() );
                 future::ok(session_rc)
             } );
@@ -180,8 +179,10 @@ impl Home for HomeConnectionServer
         if half_proof.signer_id != *self.context.peer_id()
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the authenticated profile id does not match the signer id in the half_proof".to_owned() )) ) )}
 
-        if half_proof.peer_id != *self.context.my_signer().profile_id()
-            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the requested home id does not match this home".to_owned() )) ) )}
+        info!("expected peer id: {:?} my id: {:?}", half_proof.peer_id, *self.context.my_signer().profile_id());
+        if half_proof.peer_id != *self.context.my_signer().profile_id() { 
+            return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the requested home id does not match this home".to_owned() )) ) )
+        }
 
         if half_proof.relation_type != "home"
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the requested relation type should be 'home'".to_owned() )) ) )}
@@ -233,12 +234,16 @@ impl Home for HomeConnectionServer
     fn login(&self, profile_id: &ProfileId) ->
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        if *profile_id != *self.context.peer_id()
-            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Login() access denied: you authenticated with a different profile".to_owned() ) ) ) }
+        if *profile_id != *self.context.peer_id() { 
+            return Box::new( future::err( ErrorToBeSpecified::TODO( "Login() access denied: you authenticated with a different profile".to_owned() ) ) ) 
+        }
+
         let profile_id_clone = profile_id.to_owned();
 
         let val_fut = self.server.hosted_profile_db.borrow().get( profile_id.to_owned().into() )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+            .map_err( 
+                |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) 
+            )
             .map( {
                 let context_clone = self.context.clone();
                 let server_clone = self.server.clone();
@@ -450,6 +455,13 @@ impl HomeSessionServer
     }
 }
 
+impl Drop for HomeSessionServer {
+    fn drop(&mut self) {
+        let peer_id = self.context.peer_id();
+        debug!("dropping session {:?}", peer_id);
+        self.server.sessions.borrow_mut().remove(peer_id);
+    }   
+}
 
 impl HomeSession for HomeSessionServer
 {

@@ -23,4 +23,5 @@ tokio-postgres = "0.3"
 tokio-fs = "0.1.0"
 tokio-threadpool = "0.1.3"
 tokio-io = "*"
+log = "*"
 # multicodec = { git = "https://github.com/mudlee/rust-multicodec" }

@@ -127,10 +127,17 @@ for ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
             .map_err( |e| HashSpaceError::StorageError(e) )
             .and_then( move |serialized_obj|
                 match hasher_clone.validate(&serialized_obj, &hash_bytes_clone) {
-                    Err(e) => Err( HashSpaceError::HashError(e) ),
-                    Ok(v)  => if v { Ok(serialized_obj) }
-                        // TODO consider using a different error code
-                        else { Err( HashSpaceError::StorageError(StorageError::InvalidKey) ) }
+                    Err(e) => 
+                        Err( HashSpaceError::HashError(e) ),
+                    Ok(v)  => {
+                        if v { 
+                            Ok(serialized_obj) 
+                        } else { 
+                            // TODO consider using a different error code
+                            Err( HashSpaceError::StorageError(StorageError::InvalidKey) ) 
+                        } 
+                    }
+
                 } );
 //            .and_then( move |serialized_obj|
 //                serializer_clone.deserialize(serialized_obj)

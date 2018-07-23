@@ -252,7 +252,7 @@ impl MyDummyHome{
     }
 }
 
-impl ProfileRepo for MyDummyHome{
+impl ProfileRepo for MyDummyHome {
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
     HomeStream<Profile, String>{
         println!("MyDummyHome.list");

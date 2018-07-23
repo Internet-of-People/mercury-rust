@@ -97,6 +97,7 @@ impl AsyncFileHandler{
     -> Box< Future< Item = String, Error = StorageError> > {
         let (tx, rx) = oneshot::channel::<Result<String,StorageError>>();
         if !&self.get_path(&file_path).exists(){
+            warn!("opening file failed: {}", file_path);
             return Box::new(future::err(StorageError::InvalidKey));
         }
         self.pool.spawn(

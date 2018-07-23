@@ -3,6 +3,9 @@ name = "mercury-home-node"
 version = "0.1.0"
 authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 
+[[bin]]
+name = "mercury-home-node"
+
 [dependencies]
 bincode = "*"
 capnp = "0.8"
