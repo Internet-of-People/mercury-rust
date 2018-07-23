@@ -1,63 +1,52 @@
 use super::*;
 
+
+pub const default_addr : String = "127.0.0.1:7070".into();
+
 pub struct ServerConfig{
-    pub event_file : String,
-    pub event_timer : u64,
-    pub event_count : u32,
+    pub event_file : Option<String>,
+    pub event_timer : Option<u64>,
+    pub event_count : Option<u32>,
 }
 
 impl ServerConfig{
-    pub fn new_from_args(args: ArgMatches)->Self{
-        let file_name = match args.value_of("event-file"){
-            Some(name) => {
-                name.to_string()
-            }
-            None => {
-                "".into()
-            }
-        };
+    pub fn new_from_args(args: ArgMatches)-> Result<Self, std::io::Error> {
+        let file_name = args.value_of("event-file").map(|s| s.into());
 
-        let timer = match args.value_of("event-timer"){
-            Some(time) => {
-                match time.parse::<u64>(){
-                    Ok(int)=>{
-                        int
-                    }
-                    Err(_e)=>{
-                        0
-                    }
-                }
-            }
-            None => {
-                0
-            }
-        };
+        let timer = match args.value_of("event-timer") {
+            Some(s) => 
+                s.parse::<u64>()
+                    .map(|i| Some(i))
+                    .map_err(|err| 
+                        std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse --event-timer")),
+            _ => 
+                Result::Ok(Option::None)
+        }?;
 
+        
+                    
         let count = match args.value_of("stop-after"){
-            Some(times) => {
-                match times.parse::<u32>(){
-                    Ok(int)=>{
-                        int
-                    }
-                    Err(_e)=>{
-                        0
-                    }
-                }
-            }
-            None => {
-                0
-            }
-        };
+            Some(s) => {
+                s.parse::<u32>()
+                    .map(|i| 
+                        Some(i))
+                    .map_err(|err| 
+                        std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse --stop-after"))
+            },
+            _ => 
+                Result::Ok(Option::None)
+            
+        }?;
         
         info!("File descriptor: {:?}", file_name);
         info!("Event loop timer: {:?}", timer);
         info!("Event count: {:?}", count);
 
-        Self{
+        Ok(Self{
             event_file: file_name,
             event_timer: timer,
             event_count: count
-        }
+        })
     }
 }
 
@@ -67,37 +56,31 @@ pub struct ClientConfig{
 }
 
 impl ClientConfig{
-    pub fn new_from_args(args: ArgMatches)->Self{
-        let connect_address = match args.value_of("connect"){
-            Some(addr)=>{
-                addr
-            }
-            None=>{
-                "127.0.0.1:7007".into()
-            }
-        };
-        let on_fail = match args.value_of("on-fail"){
+    pub fn new_from_args(args: ArgMatches)->Result<Self, std::io::Error> {
+        let connect_address = args.value_of("connect").map(|s| s.into()).unwrap_or(default_addr);
+
+        let on_fail = match args.value_of("on-fail") {
             Some(fail) => {
-                match fail{
-                    "retry" => {
-                        OnFail::RETRY
-                    }
-                    _ => {
-                        OnFail::TERMINATE
-                    }
+                match fail {
+                    "retry" => 
+                        OnFail::Retry,
+                    "terminate" => 
+                        OnFail::Terminate,
+                    _ => 
+                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse --on-fail value"))                    
                 }
-            }
+            },
             None => {
-                OnFail::TERMINATE
+                OnFail::Terminate
             }
         };
 
         info!("Connect address: {:?}", connect_address);
         info!("On fail: {:?}",on_fail);
 
-        Self{
+        Ok(Self{
             addr: connect_address.to_string(),
             on_fail: on_fail
-        }
+        })
     }
 }

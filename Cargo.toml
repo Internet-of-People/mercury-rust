@@ -5,6 +5,7 @@ members = [
     "home-node",
     "storage",
     "test",
+    "examples/TheButton"
 ]
 
 [patch.crates-io]

@@ -15,7 +15,7 @@ impl Client{
 
     pub fn run(&self)->i32{
         match self.on_fail {
-            OnFail::RETRY => {
+            OnFail::Retry => {
                 let mut i : u8 = 1;
                 while i<33{
                     if self.connect(){
@@ -31,7 +31,7 @@ impl Client{
                 warn!("Could not connect after repeated tries, exiting app");
                 return EX_TEMPFAIL;
             },
-            OnFail::TERMINATE => {
+            OnFail::Terminate => {
                 if self.connect(){
                     Self::on_event();
                     return EX_OK;

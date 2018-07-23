@@ -36,14 +36,14 @@ use tokio_signal::unix::{SIGINT, SIGUSR1, SIGUSR2};
 
 #[derive(Debug)]
 pub enum OnFail {
-    TERMINATE,
-    RETRY,
+    Terminate,
+    Retry,
 }
 
 enum Mode{
-    SERVER(Server),
-    CLIENT(Client),
-    ERROR(i32),
+    Server(Server),
+    Client(Client),
+    Error(i32),
 }
 
 fn application_code()->i32{
@@ -79,27 +79,31 @@ fn application_code()->i32{
 
     //SERVER MODE HANDLING
     let (sub_name, sub_args) = matches.subcommand();
-    let app_mode : Mode;
-    match sub_args {
+    
+    let app_mode = match sub_args {
         Some(args)=>{
             match sub_name{
                 "server"=>{
-                    let cfg = ServerConfig::new_from_args(args.to_owned());
-                    app_mode = Mode::SERVER(Server::new(cfg));
+                    ServerConfig::new_from_args(args.to_owned())
+                        .map( |cfg| 
+                            Mode::Server(Server::new(cfg))
+                        )
+                    
+                    
                 },
                 "client"=>{
                     let cfg = ClientConfig::new_from_args(args.to_owned());
-                    app_mode = Mode::CLIENT(Client::new(cfg));
+                    Mode::Client(Client::new(cfg))
                 },
                 _=>{
                     warn!("Subcommand could not be parsed");
-                    app_mode = Mode::ERROR(EX_USAGE);
+                    Mode::Error(EX_USAGE)
                 }
             }
         }
         None=>{
             warn!("No subcommand given, starting in server mode");
-            app_mode = Mode::SERVER(Server::default());
+            app_mode = Mode::Server(Server::default());
         }
     };
 
@@ -127,9 +131,17 @@ fn application_code()->i32{
     
     let core_fut = Future::join3(c,u1,u2);
 
-    if let Mode::SERVER(ser) = app_mode {
-        match reactor.run(
-            core_fut.join(ser)
+    let app_fut = match app_mode {
+        Mode::Client(client_fut) => Box::new(client_fut) as Box<Future<Item=i32, Error=std::io::Error>>,
+        Mode::Server(server_fut) => Box::new(server_fut) as Box<Future<Item=i32, Error=std::io::Error>>,
+        Mode::Error(err) => {
+            error!("failed to initialize application: {}", err);
+            return EX_SOFTWARE;
+        }
+    };
+
+    match reactor.run({
+            core_fut.join(app_fut)
             .map(|_|return EX_OK)
             .map_err(|err| {
                 match err.kind(){
@@ -145,37 +157,12 @@ fn application_code()->i32{
                     }
                 }
             })
-        ){
-            Ok(code)=>code,
-            Err(code)=>code   
-        }
-    }else if let Mode::CLIENT(cli) = app_mode{
-        match reactor.run(
-            core_fut.join(cli)
-            .map(|_|return EX_OK)
-            .map_err(|err| {
-                match err.kind(){
-                    std::io::ErrorKind::Interrupted => {
-                        warn!("exiting on SIGINT");
-                        return EX_OK;
-                    }std::io::ErrorKind::NotConnected => {
-                        return EX_UNAVAILABLE;
-                    }std::io::ErrorKind::TimedOut => {
-                        return EX_TEMPFAIL;
-                    }_=>{
-                        return EX_SOFTWARE;
-                    }
-                }
-            })
-        ){
-            Ok(code)=>code,
-            Err(code)=>code   
-        }
-    }else if let Mode::ERROR(e) = app_mode{
-        return e
-    }else{
-        return EX_SOFTWARE;
-    }
+    }){
+        Ok(code)=>code,
+        Err(code)=>code   
+    };
+
+    EX_OK
 }
 
 fn main() {
