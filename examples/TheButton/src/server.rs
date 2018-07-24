@@ -76,9 +76,9 @@ impl Server{
         let uds_incoming = server.incoming()
             .for_each(move | sock| {
                 let s : Vec<u8> = Vec::new();
-                read_to_end(sock, s)
-                    .map(|(_, buf)|{
-                        for _ in 0..buf.len()-1{
+                read(sock, s)
+                    .map(|(stream, buf, byte)|{
+                        for _ in 0..byte-1{
                             Self::generate_event();
                         }
                     })
