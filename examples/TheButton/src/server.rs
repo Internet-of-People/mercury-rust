@@ -29,12 +29,17 @@ impl Server{
     pub fn run(&self){
         info!("Server mode...");
 
-        if self.event_timer > 0{
-            Self::event_cycle(self.event_timer);
-        }else if self.event_file != ""{
-            Self::handle_event_file(&self.event_file);
-        }else if self.event_count > 0{
-            Self::generate_x(self.event_count);
+        match self.cfg.event_timer{
+            Some(timer) => Self::event_cycle(timer),
+            _ => ()
+        }
+        match self.cfg.event_file{
+            Some(ref file_name)=>Self::handle_event_file(file_name.to_string()),
+            _ => ()
+        }
+        match self.cfg.event_count{
+            Some(x) => Self::generate_x(x),
+            _ => ()
         }
     }
 
@@ -62,9 +67,9 @@ impl Server{
         });
     }
 
-    fn handle_event_file(file_name: &str){
+    fn handle_event_file(file_name: String){
         let mut path = String::from("\0");
-        path.push_str(file_name);
+        path.push_str(&file_name);
         path.push_str(".sock");
         let sock_path = std::path::PathBuf::from(path);
         let server = t!(UnixListener::bind(&sock_path));

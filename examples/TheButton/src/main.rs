@@ -23,7 +23,7 @@ use function::*;
 use server::Server;
 use client::Client;
 use logging::start_logging;
-use application::{Application, EX_OK, EX_USAGE, EX_SOFTWARE, EX_UNAVAILABLE, EX_TEMPFAIL};
+use application::{Application, EX_OK, EX_SOFTWARE, EX_UNAVAILABLE, EX_TEMPFAIL};
 
 use clap::{App, ArgMatches};
 

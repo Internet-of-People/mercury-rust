@@ -1,7 +1,7 @@
 use super::*;
 
 
-pub const default_addr : String = "127.0.0.1:7070".into();
+pub const DEFAULT_ADDR : &str = "127.0.0.1:7070";
 
 pub struct ServerConfig{
     pub event_file : Option<String>,
@@ -66,7 +66,7 @@ pub struct ClientConfig{
 
 impl ClientConfig{
     pub fn new_from_args(args: ArgMatches)->Result<Self, std::io::Error> {
-        let connect_address = args.value_of("connect").map(|s| s.into()).unwrap_or(default_addr);
+        let connect_address = args.value_of("connect").map(|s| s.into()).unwrap_or(DEFAULT_ADDR);
 
         let on_fail = match args.value_of("on-fail") {
             Some(fail) => {
