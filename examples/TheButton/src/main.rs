@@ -6,6 +6,7 @@ extern crate log4rs;
 
 extern crate futures;
 extern crate tokio;
+extern crate tokio_io;
 extern crate tokio_core;
 extern crate tokio_signal;
 extern crate mercury_connect;
@@ -30,7 +31,7 @@ use clap::{App, ArgMatches};
 use futures::{future, Future, Stream};
 
 use tokio_uds::*;
-use tokio::io::read_to_end;
+use tokio_io::io::read;
 use tokio_core::reactor::Core;
 use tokio_signal::unix::{SIGINT, SIGUSR1, SIGUSR2};
 
