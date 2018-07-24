@@ -42,11 +42,19 @@ pub enum OnFail {
 
 enum Mode{
     Server(Server),
-    Client(Client),
-    Error(i32),
+    Client(Client)
 }
 
-fn application_code()->i32{
+fn application_code() -> i32 {
+    match application_code_internal() {
+        Ok(_) =>
+            0,
+        Err(err) =>
+            42
+    }
+}
+
+fn application_code_internal() -> Result<(), std::io::Error> {
     //ARGUMENT HANDLING START
     let yaml = load_yaml!("cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
@@ -92,18 +100,19 @@ fn application_code()->i32{
                     
                 },
                 "client"=>{
-                    let cfg = ClientConfig::new_from_args(args.to_owned());
-                    Mode::Client(Client::new(cfg))
+                    ClientConfig::new_from_args(args.to_owned())
+                        .map( |cfg| 
+                            Mode::Client(Client::new(cfg))
+                        )
                 },
                 _=>{
-                    warn!("Subcommand could not be parsed");
-                    Mode::Error(EX_USAGE)
+                    Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse subcommand"))
                 }
             }
-        }
+        },
         None=>{
             warn!("No subcommand given, starting in server mode");
-            app_mode = Mode::Server(Server::default());
+            Ok(Mode::Server(Server::default()))
         }
     };
 
@@ -131,13 +140,12 @@ fn application_code()->i32{
     
     let core_fut = Future::join3(c,u1,u2);
 
-    let app_fut = match app_mode {
-        Mode::Client(client_fut) => Box::new(client_fut) as Box<Future<Item=i32, Error=std::io::Error>>,
-        Mode::Server(server_fut) => Box::new(server_fut) as Box<Future<Item=i32, Error=std::io::Error>>,
-        Mode::Error(err) => {
-            error!("failed to initialize application: {}", err);
-            return EX_SOFTWARE;
-        }
+    let app_fut = match app_mode? {
+        Mode::Client(client_fut) => 
+            Box::new(client_fut) as Box<Future<Item=i32, Error=std::io::Error>>,
+
+        Mode::Server(server_fut) => 
+            Box::new(server_fut) as Box<Future<Item=i32, Error=std::io::Error>>,  
     };
 
     match reactor.run({
@@ -161,8 +169,7 @@ fn application_code()->i32{
         Ok(code)=>code,
         Err(code)=>code   
     };
-
-    EX_OK
+    Ok(())
 }
 
 fn main() {

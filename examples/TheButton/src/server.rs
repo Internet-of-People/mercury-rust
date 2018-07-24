@@ -2,9 +2,7 @@ use super::*;
 use std;
 
 pub struct Server{
-    event_file: String,
-    event_timer: u64,
-    event_count: u32
+    pub cfg : ServerConfig
 }
 
 macro_rules! t {
@@ -17,18 +15,14 @@ macro_rules! t {
 impl Server{
     pub fn default()->Self{
         Self{
-            event_file: String::from(""),
-            event_timer: 0,
-            event_count: 0
+            cfg : ServerConfig::new()
         }
     }
 
     pub fn new(cfg: ServerConfig)->
     Self{
         Server{
-            event_file : cfg.event_file,
-            event_timer : cfg.event_timer,
-            event_count : cfg.event_count,
+            cfg : cfg
         }
     }
 

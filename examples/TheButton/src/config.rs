@@ -10,6 +10,15 @@ pub struct ServerConfig{
 }
 
 impl ServerConfig{
+    pub fn new() -> Self {
+        Self {
+            event_file : None,
+            event_timer : None,
+            event_count : None
+        }
+    }
+
+
     pub fn new_from_args(args: ArgMatches)-> Result<Self, std::io::Error> {
         let file_name = args.value_of("event-file").map(|s| s.into());
 
