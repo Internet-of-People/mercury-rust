@@ -1,20 +1,18 @@
 use super::*;
 
 pub struct Client{
-    addr: String,
-    on_fail: OnFail
+    cfg: ClientConfig
 }
 
 impl Client{
     pub fn new(cfg: ClientConfig) -> Self{
         Self{
-            addr: cfg.addr,
-            on_fail : cfg.on_fail
+            cfg: cfg,
         }
     }
 
     pub fn run(&self)->i32{
-        match self.on_fail {
+        match self.cfg.on_fail {
             OnFail::Retry => {
                 let mut i : u8 = 1;
                 while i<33{
@@ -43,7 +41,7 @@ impl Client{
     }
 
     fn connect(&self)->bool{
-        match self.addr.as_str(){
+        match self.cfg.addr.as_str(){
             "addr" => true,
             _ => false
         }
