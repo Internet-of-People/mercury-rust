@@ -8,22 +8,29 @@ use super::*;
 
 
 
+pub trait Call
+{
+    fn sender(&self) -> &AppMsgSink;
+    fn receiver(&self) -> &AppMsgStream;
+}
+
 pub trait DAppApi
 {
     // Implies asking the user interface to manually pick a profile the app is used with
-    fn new() -> Box< Future<Item=Box<Self>, Error=ErrorToBeSpecified> >;
+    fn new(proposed_profile_id: Option<ProfileId>)
+        -> Box< Future<Item=Box<Self>, Error=ErrorToBeSpecified> >;
 
     // Once initialized, the profile is selected and can be queried any time
     fn selected_profile(&self) -> &ProfileId;
 
-    fn contacts(&self) ->
-        Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >;
+    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >;
 
-    fn app_storage(&self) ->
-        Box< Future<Item=KeyValueStore<String,String>, Error=ErrorToBeSpecified> >;
+    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=ErrorToBeSpecified> >;
 
-    fn checkin(&self) ->
-        Box< Future<Item=HomeStream<Box<IncomingCall>, String>, Error=ErrorToBeSpecified> >;
+    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=ErrorToBeSpecified> >;
+
+    fn call(&self, relation: &RelationProof, init_payload: AppMessageFrame)
+        -> Box< Future<Item=Box<Call>, Error=ErrorToBeSpecified> >;
 }
 
 
