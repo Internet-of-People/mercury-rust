@@ -278,10 +278,11 @@ pub struct CallRequestDetails
     /// Proof for the home server that the caller is authorized to call the callee.
     /// The callee can find out who's calling by looking at `relation`.
     pub relation:       RelationProof,
+
     /// A message that the callee can examine before answering or rejecting a call. Note that the caller is already
     /// known to the callee through `relation`.
     pub init_payload:   AppMessageFrame,
-    // NOTE A missed call or p2p connection failure will result Option::None
+
     /// The sink half of a channel that routes `AppMessageFrame`s back to the caller. If the caller
     /// does not want to receive any response messages from the callee, `to_caller` should be set to `None`.
     pub to_caller:      Option<AppMsgSink>,
@@ -302,26 +303,8 @@ pub trait Home: ProfileRepo
     fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
 
-    // TODO decide: login() takes a ProfileId parameter because the hashing algorithm, which
-    //              we use to create a profile id from a public key is not fixed. We use multihash,
-    //              which means we pick one algorithm for now, and when we consider it insecure, we
-    //              use another one. Let's say it takes 5 years to break our current hashing algorithm.
-    //              This means for the first 5 years we don't have to guess, and in the next 5 years
-    //              we could start guessing with the new algorithm, and fall-back to the deprecated
-    //              algorithm. This does not involve much performance neither complexity to the server code.
-    //
-    //              However, the `profile` parameter increases learning curve for the API by a small amount.
-    //              Newcomers might raise (stupid, but without prior knowledge, reasonable) questions like these:
-    //               * Why do I need to specify my ProfileId if I am already authenticated?
-    //               * Why do I need to specify my ProfileId if it can be calculated from my public key I just used?
-    //               * If this is a login, and we provide the credential, where is the password?
-    //
-    //              Since we would like to provide the most simple api possible, my suggestion is to rename
-    //              this function to `start_session(&self)` and remove the ProfileId parameter.
-    //              The same applies to `claim(&self)`.
-
     /// By calling this method, any active session of the same profile is closed.
-    fn login(&self, profile: &ProfileId) ->
+    fn login(&self, proof_of_home: &RelationProof) ->
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >;
 
     /// The peer in `half_proof` must be hosted on this home server.
@@ -364,6 +347,7 @@ pub trait IncomingCall
     /// It contains information about the caller party (`relation`), an initial message (`initial_payload`)
     /// If the caller wishes to receive App messages from the calee, a sink should be passed in `to_caller`.
     fn request_details(&self) -> &CallRequestDetails;
+
     // NOTE this assumes boxed trait objects, if Rc of something else is needed, this must be revised
     // TODO consider offering the possibility to somehow send back a single AppMessageFrame
     //      as a reply to init_payload without a to_callee sink,
@@ -371,7 +355,7 @@ pub trait IncomingCall
     /// Indicate to the caller that the call was answered.
     /// If the callee wishes to receive messages from the caller, it has to create a channel
     /// and pass the created sink to `answer()`, which is returned by `call()` on the caller side.
-    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>);
+    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>); // -> Option<AppMsgStream>;
 }
 
 
@@ -537,6 +521,8 @@ impl<'a> From<&'a RelationHalfProof> for RelationSignablePart {
 
 impl RelationProof
 {
+    pub const RELATION_TYPE_HOSTED_ON_HOME: &'static str = "hosted_on_home";
+
     pub fn new(rel_type: &str, a_id: &ProfileId, a_signature: &Signature, b_id: &ProfileId, b_signature: &Signature) -> Self {
         if a_id < b_id {
             Self {

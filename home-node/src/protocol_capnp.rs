@@ -139,8 +139,10 @@ impl home::Server for HomeDispatcherCapnProto
         -> Promise<(), ::capnp::Error>
     {
         let handle_clone = self.handle.clone();
-        let profile_id = pry!( pry!( params.get() ).get_profile_id() );
-        let session_fut = self.home.login( &profile_id.into() )
+        //let profile_id = pry!( pry!( params.get() ).get_profile_id() );
+        let proof_of_home_capnp = pry!( pry!( params.get() ).get_proof_of_home() );
+        let proof_of_home = pry!( RelationProof::try_from(proof_of_home_capnp) );
+        let session_fut = self.home.login(&proof_of_home)
             .map( move |session_impl|
             {
                 let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl, handle_clone);

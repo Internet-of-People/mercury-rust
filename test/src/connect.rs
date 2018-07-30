@@ -1,16 +1,18 @@
-use std::net::ToSocketAddrs;
+//use std::net::ToSocketAddrs;
 use std::rc::Rc;
 
 use base64;
 use futures::{future, Future, Stream, Sink, {sync::mpsc}};
 use multiaddr::{ToMultiaddr};
-use tokio_core::net::{TcpListener, TcpStream};
-use tokio_core::reactor;
+//use tokio_core::net::{TcpListener, TcpStream};
+//use tokio_core::reactor;
 use tokio_threadpool::Builder;
 
-use mercury_home_protocol::{*, crypto::*};
-use mercury_connect::{*, protocol_capnp::HomeClientCapnProto};
-use mercury_home_node::{protocol_capnp::HomeDispatcherCapnProto};
+use mercury_home_protocol::*;
+//use mercury_home_protocol::crypto::*;
+use mercury_connect::*;
+//use mercury_connect::protocol_capnp::HomeClientCapnProto};
+//use mercury_home_node::protocol_capnp::HomeDispatcherCapnProto;
 use mercury_storage::async::KeyValueStore;
 use mercury_storage::filesys::AsyncFileHandler;
 
@@ -19,63 +21,62 @@ use super::*;
 
 
 
-#[test]
+//#[test]
+//#[ignore]
+//fn test_events()
+//{
+//    let mut reactor = reactor::Core::new().unwrap();
+//
+//    let homeaddr = "127.0.0.1:9876";
+//    let addr = homeaddr.clone().to_socket_addrs().unwrap().next().expect("Failed to parse address");
+//
+//    let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
+//    let (homeprof, _homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone().into()], data: vec![]}));
+//
+//    let dht = ProfileStore::new();
+//    dht.insert(homeprof.id.clone(), homeprof.clone());
+//    let home_storage = Rc::new(dht);
+//
+//    let handle1 = reactor.handle();
+//    let server_socket = TcpListener::bind( &addr, &reactor.handle() ).expect("Failed to bind socket");
+//    let server_fut = server_socket.incoming().for_each( move |(socket, _addr)|
+//    {
+//        println!("Accepted client connection, serving requests");
+//        //let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
+//        let store_clone = Rc::clone(&home_storage);
+//        let home = Rc::new( MyDummyHome::new( homeprof.clone() , store_clone ) );
+//        HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle1.clone() );
+//        Ok( () )
+//    } ).map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")));
+//
+//    let handle2 = reactor.handle();
+//    let client_fut = TcpStream::connect( &addr, &reactor.handle() )
+//        .map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")))
+//        .and_then( |tcp_stream|
+//        {
+//            let (private_key, _public_key) = generate_keypair();
+//            let signer = Rc::new(Ed25519Signer::new(&private_key).unwrap());
+//            let home_profile = make_home_profile("localhost:9876", signer.public_key());
+//            let home_ctx = PeerContext::new_from_profile(signer.clone(), &home_profile);
+//            let client = HomeClientCapnProto::new_tcp( tcp_stream, home_ctx, handle2 );
+//            client.login( signer.profile_id() )
+//        } )
+//        .map( |session|
+//        {
+//            session.events() //.for_each( |event| () )
+//        } );
+//
+//    let result = reactor.run(Future::join(server_fut,client_fut));
+//    assert!(result.is_ok());
+//}
+
 #[ignore]
-fn test_events()
-{
-    let mut reactor = reactor::Core::new().unwrap();
-
-    let homeaddr = "127.0.0.1:9876";
-    let addr = homeaddr.clone().to_socket_addrs().unwrap().next().expect("Failed to parse address");
-
-    let homemultiaddr = "/ip4/127.0.0.1/udp/9876".to_multiaddr().unwrap();
-    let (homeprof, _homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone().into()], data: vec![]}));
-
-    let dht = ProfileStore::new();
-    dht.insert(homeprof.id.clone(), homeprof.clone());
-    let home_storage = Rc::new(dht);
-
-    let handle1 = reactor.handle();
-    let server_socket = TcpListener::bind( &addr, &reactor.handle() ).expect("Failed to bind socket");
-    let server_fut = server_socket.incoming().for_each( move |(socket, _addr)|
-    {
-        println!("Accepted client connection, serving requests");
-        //let mut home = Rc::new( RefCell::new( MyDummyHome::new( homeprof.clone() , home_storage ) ) );
-        let store_clone = Rc::clone(&home_storage);
-        let home = Rc::new( MyDummyHome::new( homeprof.clone() , store_clone ) );
-        HomeDispatcherCapnProto::dispatch_tcp( home, socket, handle1.clone() );
-        Ok( () )
-    } ).map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")));
-
-    let handle2 = reactor.handle();
-    let client_fut = TcpStream::connect( &addr, &reactor.handle() )
-        .map_err( |_e| ErrorToBeSpecified::TODO(String::from("test_events fails at connect ")))
-        .and_then( |tcp_stream|
-        {
-            let (private_key, _public_key) = generate_keypair();
-            let signer = Rc::new(Ed25519Signer::new(&private_key).unwrap());
-            let home_profile = make_home_profile("localhost:9876", signer.public_key());
-            let home_ctx = PeerContext::new_from_profile(signer.clone(), &home_profile);
-            let client = HomeClientCapnProto::new_tcp( tcp_stream, home_ctx, handle2 );
-            client.login( signer.profile_id() )
-        } )
-        .map( |session|
-        {
-            session.events() //.for_each( |event| () )
-        } );
-
-//    let futs = server_fut.select(client_fut);
-//    let both_fut = select_ok( futs.iter() ); // **i as &Future<Item=(),Error=()> ) );
-//    let result = reactor.run(both_fut);
-    let result = reactor.run(Future::join(server_fut,client_fut));
-    assert!(result.is_ok());
-}
-
 #[test]
 fn test_register(){
     // direct test moved to home.rs; See git history for the original, through-profilegateway test.
 }
 
+#[ignore]
 #[test]
 fn test_unregister(){
     let mut setup = dummy::TestSetup::setup();
@@ -210,6 +211,7 @@ fn test_pair_res(){
     assert!(res.is_ok());
 }
 
+#[ignore]
 #[test]
 fn test_relations(){
     //TODO test by storing relations and asserting the return value of relations to those that were stored
@@ -406,18 +408,18 @@ fn and_then_story(){
 fn profile_serialize_async_key_value_test() {
     use tokio_core::reactor;
 
-    
+
     let profile = make_own_persona_profile(&PublicKey("user_key".as_bytes().to_vec()));
     let homeprofile = make_home_profile("/ip4/127.0.0.1/udp/9876", &PublicKey("home_key".as_bytes().to_vec()));
     let mut reactor = reactor::Core::new().unwrap();
-    //TODO FIXME 
+    //TODO FIXME
     let thread_pool = Rc::new(Builder::new()
             .max_blocking(200)
             .build()
     );
-    let mut storage : AsyncFileHandler = 
+    let mut storage : AsyncFileHandler =
         AsyncFileHandler::new_with_pool(String::from("./filetest/homeserverid/"),Rc::clone(&thread_pool)).unwrap();
-    let mut storage2 : AsyncFileHandler = 
+    let mut storage2 : AsyncFileHandler =
         AsyncFileHandler::new_with_pool(String::from("./filetest/homeserverid/"),thread_pool).unwrap();
 
     let client = storage.set(base64::encode(&profile.id.clone().0), profile.clone())

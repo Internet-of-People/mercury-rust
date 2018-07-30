@@ -1,14 +1,13 @@
+use futures::{Future, Sink, Stream};
 use tokio_core::reactor;
 
+use mercury_connect::{ protocol_capnp::HomeClientCapnProto };
 use mercury_home_protocol::*;
 use mercury_home_node::{ server::*, protocol_capnp::HomeDispatcherCapnProto };
-use mercury_connect::{ protocol_capnp::HomeClientCapnProto };
-
-use futures::Stream;
-use futures::Sink;
-use futures::Future;
 
 use super::*;
+
+
 
 pub fn app_channel(capacity: usize) -> (AppMsgSink, AppMsgStream)
 {
@@ -155,7 +154,8 @@ impl TestSetup
 
 fn register_client(setup: &mut TestSetup, client: &TestClient) -> OwnProfile
 {
-    let half_proof = RelationHalfProof::new("home", setup.testclient.home_context.peer_id(), client.home_context.my_signer());
+    let half_proof = RelationHalfProof::new(RelationProof::RELATION_TYPE_HOSTED_ON_HOME,
+        setup.testclient.home_context.peer_id(), client.home_context.my_signer());
     let reg_fut = client.home_connection.register(client.ownprofile.clone(), half_proof, None);
     setup.reactor.run(reg_fut).unwrap()
 }
@@ -165,6 +165,8 @@ fn register_client_from_setup(setup: &mut TestSetup) -> OwnProfile
     let testclient = setup.testclient.clone();
     register_client(setup, &testclient)
 }
+
+
 
 fn test_home_events(mut setup: TestSetup)
 {
@@ -184,8 +186,8 @@ fn test_home_events(mut setup: TestSetup)
     );
     let ownprofile2 = register_client(&mut setup, &testclient2);
 
-    let session1 = setup.reactor.run(setup.testclient.home_connection.login(&ownprofile1.profile.id)).unwrap();
-    let session2 = setup.reactor.run(testclient2.home_connection.login(&ownprofile2.profile.id)).unwrap();
+    let session1 = setup.reactor.run(setup.testclient.home_connection.login(first_home_of(&ownprofile1))).unwrap();
+    let session2 = setup.reactor.run(testclient2.home_connection.login(first_home_of(&ownprofile2))).unwrap();
 
     let events1 = session1.events();
     let events2 = session2.events();
@@ -227,7 +229,7 @@ fn test_home_events(mut setup: TestSetup)
 fn test_home_login(mut setup: TestSetup)
 {
     let ownprofile = register_client_from_setup(&mut setup);
-    let session = setup.reactor.run(setup.testclient.home_connection.login(&ownprofile.profile.id)).unwrap();
+    let session = setup.reactor.run(setup.testclient.home_connection.login(first_home_of(&ownprofile))).unwrap();
     let pong = setup.reactor.run(session.ping("ping")).unwrap();
     assert_eq!("ping", pong);
 }
@@ -273,7 +275,7 @@ fn test_home_call(mut setup: TestSetup)
     let _caller_ownprofile = register_client(&mut setup, &caller_testclient);
 
     let app = ApplicationId::from("chat");
-    let callee_session = setup.reactor.run(setup.testclient.home_connection.login(&callee_ownprofile.profile.id)).unwrap();
+    let callee_session = setup.reactor.run(setup.testclient.home_connection.login(first_home_of(&callee_ownprofile))).unwrap();
     let callee_calls = callee_session.checkin_app(&app);
 
     let relation_type = "friend";

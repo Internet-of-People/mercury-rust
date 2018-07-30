@@ -80,3 +80,14 @@ pub fn default_home_server(handle: &reactor::Handle) -> HomeServer {
         Rc::new( RefCell::new( InMemoryStore::new() ) ),
     )
 }
+
+
+
+pub fn first_home_of(own_profile: &OwnProfile) -> &RelationProof
+{
+    match own_profile.profile.facet {
+        ProfileFacet::Persona(ref persona) => persona.homes.get(0).unwrap(),
+        _ => panic!("Profile is not a persona, no home found")
+    }
+}
+

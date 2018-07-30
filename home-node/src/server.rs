@@ -184,8 +184,9 @@ impl Home for HomeConnectionServer
             return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the requested home id does not match this home".to_owned() )) ) )
         }
 
-        if half_proof.relation_type != "home"
-            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register() access denied: the requested relation type should be 'home'".to_owned() )) ) )}
+        if half_proof.relation_type != RelationProof::RELATION_TYPE_HOSTED_ON_HOME
+            { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO(
+                format!("Register() access denied: the requested relation type should be '{}'", RelationProof::RELATION_TYPE_HOSTED_ON_HOME) )) ) ) }
 
         if self.server.validator.validate_half_proof(&half_proof, &self.context.peer_pubkey()).is_err()
             { return Box::new( future::err( (own_prof,ErrorToBeSpecified::TODO( "Register(): access denied: invalid signature in half_proof".to_owned())))); }
@@ -231,26 +232,29 @@ impl Home for HomeConnectionServer
         Box::new(reg_fut)
     }
 
-    fn login(&self, profile_id: &ProfileId) ->
+
+    fn login(&self, proof_of_home: &RelationProof) ->
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
-        if *profile_id != *self.context.peer_id() { 
-            return Box::new( future::err( ErrorToBeSpecified::TODO( "Login() access denied: you authenticated with a different profile".to_owned() ) ) ) 
-        }
+        if *proof_of_home.relation_type != *RelationProof::RELATION_TYPE_HOSTED_ON_HOME
+            { return return Box::new(future::err(ErrorToBeSpecified::TODO("login: access denied: wrong relation type".to_owned()) ) ); }
 
-        let profile_id_clone = profile_id.to_owned();
+        let profile_id = match proof_of_home.peer_id( self.context.my_signer().profile_id() )
+        {
+            Ok(profile_id) => profile_id.to_owned(),
+            Err(_) => return Box::new(future::err(ErrorToBeSpecified::TODO(
+                "login: access denied: the profile id that you authenticated with does not show up in the relation_proof".to_owned())))
+        };
 
-        let val_fut = self.server.hosted_profile_db.borrow().get( profile_id.to_owned().into() )
-            .map_err( 
-                |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) 
-            )
+        let val_fut = self.server.hosted_profile_db.borrow().get( profile_id.clone().into() )
+            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             .map( {
                 let context_clone = self.context.clone();
                 let server_clone = self.server.clone();
                 let sessions_clone = self.server.sessions.clone();
                 move |_own_profile| {
                     let session = Rc::new( HomeSessionServer::new(context_clone, server_clone) );
-                    sessions_clone.borrow_mut().entry(profile_id_clone).or_insert( Rc::downgrade(&session) );
+                    sessions_clone.borrow_mut().entry(profile_id).or_insert( Rc::downgrade(&session) );
                     session as Rc<HomeSession>
                 }
             } );

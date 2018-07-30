@@ -58,7 +58,6 @@ fn main()
 
     let mut reactor = reactor::Core::new().unwrap();
     let client_signer_clone = client_signer.clone();
-    let client_signer_clone2 = client_signer.clone();
 
     let mut profile_store = SimpleProfileRepo::new();
 
@@ -69,15 +68,23 @@ fn main()
     let profile_gw = ProfileGatewayImpl::new(client_signer_clone, Rc::new(profile_store),  Rc::new(home_connector));
     let test_fut = profile_gw.connect_home(&server_id.clone())
         .and_then(|home| {
-            let halfproof = RelationHalfProof::new("home", &server_id, &*client_signer);
+            info!("connected, registering");
+            let halfproof = RelationHalfProof::new(
+                RelationProof::RELATION_TYPE_HOSTED_ON_HOME, &server_id, &*client_signer);
             home.register(client_own_profile, halfproof, None)
-                .map(|_own_profile| home)
+                .map(|own_profile| (own_profile, home) )
                 .map_err( |(_own_profile, e)| e )
         })
-        .and_then(move |home| {
-            info!("connected, logging in");
-            home.login(client_signer_clone2.profile_id())
-
+        .and_then(move |(own_profile, home)| {
+            info!("registered, logging in");
+            let home_proof = match own_profile.profile.facet {
+                ProfileFacet::Persona(persona) => persona.homes.get(0).map(|item| item.to_owned()),
+                _ => None
+            };
+            match home_proof {
+                Some(proof) => home.login(&proof),
+                None => Box::new( futures::future::err(ErrorToBeSpecified::TODO("home is still not part of the profile after registration".to_string())))
+            }
         })
         .and_then(|session| {
             info!("session created, sending ping");
