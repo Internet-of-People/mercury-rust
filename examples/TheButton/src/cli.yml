@@ -24,24 +24,24 @@ args:
         short: V
         long: version
         help: software version
-    - private-key:
+    - client-key-file:
+        long: client-key-file
         takes_value: true
-        short: K
-        required: true
-        long: private-key
-        help: Application profile private key
-    - home-node-public:
+        help: private key of the client (binary, ed25519)
+        default_value: ../../etc/client.id
+        value_name: KEY    
+    - server-key-file:
+        long: server-key-file
         takes_value: true
-        short: P
-        required: true
-        long: home-node-public
-        help: Public key of the home node
-    - home-node-address:
+        help: public key of the server (binary, ed25519)
+        default_value: ../../etc/homenode.id.pub
+        value_name: KEY
+    - server-addr:
+        long: server-addr
         takes_value: true
-        short: A
-        required: true
-        long: home-node-public
-        help: Address of the home node
+        help: ipv4 address of the server
+        value_name: ADDRESS
+        default_value: 127.0.0.1:2077
 subcommands:
     - server:
         required: true
