@@ -10,8 +10,11 @@ log4rs = "*"
 tempdir = "*"
 futures = "*"
 tokio = "*"
+tokio-executor = "*"
 tokio-signal = "*"
+tokio-timer = "*"
 tokio-core = "*"
 tokio-uds = "*"
 tokio-io = "*"
-mercury-connect = {git = "https://github.com/libertaria-project/mercury-rust.git", branch = "master"}
+mercury-home-protocol = { path="../../home-protocol" }
+mercury-connect = {path="../../connect"}

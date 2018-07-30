@@ -60,6 +60,7 @@ impl ServerConfig{
 }
 
 pub struct ClientConfig{
+    pub private: PrivateKey,
     pub addr: String,
     pub on_fail: OnFail
 }
@@ -88,6 +89,7 @@ impl ClientConfig{
         info!("On fail: {:?}",on_fail);
 
         Ok(Self{
+            private: PrivateKey("priv".into()),
             addr: connect_address.to_string(),
             on_fail: on_fail
         })
