@@ -7,10 +7,12 @@ extern crate log4rs;
 extern crate futures;
 extern crate tokio;
 extern crate tokio_io;
-extern crate tokio_core;
-extern crate tokio_signal;
-extern crate mercury_connect;
 extern crate tokio_uds;
+extern crate tokio_core;
+extern crate tokio_timer;
+extern crate tokio_signal;
+extern crate tokio_executor;
+//extern crate mercury_connect;
 
 pub mod config;
 pub mod client;
@@ -18,6 +20,8 @@ pub mod server;
 pub mod logging;
 pub mod function;
 pub mod application;
+// pub mod mercury_wire;
+// pub mod signal_handling;
 
 use config::*;
 use function::*;
@@ -28,12 +32,14 @@ use application::{Application, EX_OK, EX_SOFTWARE, EX_UNAVAILABLE, EX_TEMPFAIL};
 
 use clap::{App, ArgMatches};
 
-use futures::{future, Future, Stream};
+use futures::{Async, Future};
 
 use tokio_uds::*;
 use tokio_io::io::read;
 use tokio_core::reactor::Core;
+use tokio_timer::*;
 use tokio_signal::unix::{SIGINT, SIGUSR1, SIGUSR2};
+
 
 #[derive(Debug)]
 pub enum OnFail {
@@ -51,7 +57,10 @@ fn application_code() -> i32 {
         Ok(_) =>
             0,
         Err(err) =>
-            42
+        //TODO
+            match err{
+                _=>42
+            }
     }
 }
 
@@ -97,8 +106,6 @@ fn application_code_internal() -> Result<(), std::io::Error> {
                         .map( |cfg| 
                             Mode::Server(Server::new(cfg))
                         )
-                    
-                    
                 },
                 "client"=>{
                     ClientConfig::new_from_args(args.to_owned())
@@ -117,29 +124,9 @@ fn application_code_internal() -> Result<(), std::io::Error> {
         }
     };
 
-    // SIGNAL HANDLER STREAMS
-    let c = signal_recv(SIGINT).for_each(|_| {
-        info!("SIGINT received!");
-        Err(std::io::Error::new(std::io::ErrorKind::Interrupted, "SIGINT"))
-    });
-
-    let u1 = signal_recv(SIGUSR1).for_each(|_| {
-        info!("SIGUSR1 received!");
-        Server::generate_event();
-        Ok(())
-    });
-
-    let u2 = signal_recv(SIGUSR2).for_each(|_| {
-        info!("SIGUSR2 received!");
-        Server::stop_event_generation();
-        Ok(())
-    });
-
     //TOKIO RUN
     //TODO expand errors if needed
     let mut reactor = Core::new().unwrap();
-    
-    let core_fut = Future::join3(c,u1,u2);
 
     let app_fut = match app_mode? {
         Mode::Client(client_fut) => 
@@ -150,7 +137,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
     };
 
     match reactor.run({
-            core_fut.join(app_fut)
+            app_fut
             .map(|_|return EX_OK)
             .map_err(|err| {
                 match err.kind(){
