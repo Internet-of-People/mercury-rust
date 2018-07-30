@@ -26,7 +26,7 @@ impl ServerConfig{
             Some(s) => 
                 s.parse::<u64>()
                     .map(|i| Some(i))
-                    .map_err(|err| 
+                    .map_err(|_err| 
                         std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse --event-timer")),
             _ => 
                 Result::Ok(Option::None)
@@ -39,8 +39,8 @@ impl ServerConfig{
                 s.parse::<u32>()
                     .map(|i| 
                         Some(i))
-                    .map_err(|err| 
-                        std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse --stop-after"))
+                    .map_err(|_err| 
+                        std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse --stop-after: {}"))
             },
             _ => 
                 Result::Ok(Option::None)
