@@ -24,7 +24,7 @@ pub mod application;
 // pub mod mercury_wire;
 // pub mod signal_handling;
 
-use mercury_home_protocol::PrivateKey;
+use mercury_home_protocol::{PrivateKey, ProfileId};
 
 use config::*;
 use function::*;
@@ -43,6 +43,36 @@ use tokio_core::reactor::Core;
 use tokio_timer::*;
 use tokio_signal::unix::{SIGINT, SIGUSR1, SIGUSR2};
 
+struct AppContext{
+    priv_key: PrivateKey,
+    home_node: ProfileId,
+    home_address: String,
+}
+
+impl AppContext{
+    pub fn new(priv_key: Option<&str>, node_id: Option<&str>, node_addr: Option<&str>)->Result<Self, std::io::Error>{
+        let key : PrivateKey;
+        match priv_key {
+            Some(k) => {key = PrivateKey(k.into());},
+            None => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "no key")),
+        };
+        let prof : ProfileId; 
+        match node_id {
+            Some(id) => {prof = ProfileId(id.into());},
+            None => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "no id")),
+        };
+        let addr;
+        match node_addr {
+            Some(naddr) => {addr = naddr.to_string();},
+            None => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "no id")),
+        };
+        Ok(Self{
+            priv_key: key,
+            home_node: prof,
+            home_address: addr,
+        })
+    }
+}
 
 #[derive(Debug)]
 pub enum OnFail {
@@ -95,8 +125,14 @@ fn application_code_internal() -> Result<(), std::io::Error> {
             debug!("verbose 3 or more: debug")
         },
     }
-    // LOGGING START
-    debug!("Starting TheButtonDapp...");
+    //GET APPLICATION CONTEXT
+    let appcx;
+    match AppContext::new(  matches.value_of("private-key"), 
+                            matches.value_of("home-node-public"), 
+                            matches.value_of("home-node-address")){
+        Ok(cx) => {appcx = cx;},
+        Err(e) => return Err(e)
+    };
 
     //SERVER MODE HANDLING
     let (sub_name, sub_args) = matches.subcommand();

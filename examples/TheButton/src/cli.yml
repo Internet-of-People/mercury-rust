@@ -24,6 +24,24 @@ args:
         short: V
         long: version
         help: software version
+    - private-key:
+        takes_value: true
+        short: K
+        required: true
+        long: private-key
+        help: Application profile private key
+    - home-node-public:
+        takes_value: true
+        short: P
+        required: true
+        long: home-node-public
+        help: Public key of the home node
+    - home-node-address:
+        takes_value: true
+        short: A
+        required: true
+        long: home-node-public
+        help: Address of the home node
 subcommands:
     - server:
         required: true
@@ -60,4 +78,4 @@ subcommands:
             - connect:
                 value_name: ADDR
                 required: true
-                help: address of server
+                help: address of the button app server
