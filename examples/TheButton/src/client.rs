@@ -41,10 +41,7 @@ impl Client{
     }
 
     fn connect(&self)->bool{
-        match self.cfg.addr.as_str(){
-            "addr" => true,
-            _ => false
-        }
+        unimplemented!()
     }
 
     fn on_event(){

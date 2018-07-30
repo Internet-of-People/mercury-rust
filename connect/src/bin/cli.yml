@@ -21,7 +21,7 @@ args:
     - client-key-file:
         long: client-key-file
         takes_value: true
-        help: private key of the c;oemt (binary, ed25519)
+        help: private key of the client (binary, ed25519)
         default_value: ../etc/client.id
         value_name: KEY    
     - server-key-file:
