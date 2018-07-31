@@ -29,7 +29,7 @@ pub trait DAppApi
 
     fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=ErrorToBeSpecified> >;
 
-    fn call(&self, relation: &RelationProof, init_payload: AppMessageFrame)
+    fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
         -> Box< Future<Item=Box<Call>, Error=ErrorToBeSpecified> >;
 }
 
