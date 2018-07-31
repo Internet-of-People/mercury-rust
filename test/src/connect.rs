@@ -1,16 +1,12 @@
 use std::net::ToSocketAddrs;
 use std::rc::Rc;
 
-use futures::future;
-use futures::{Future, Stream, Sink};
-use futures::sync::mpsc;
-
+use base64;
+use futures::{future, Future, Stream, Sink, {sync::mpsc}};
+use multiaddr::{ToMultiaddr};
 use tokio_core::net::{TcpListener, TcpStream};
 use tokio_core::reactor;
 use tokio_threadpool::Builder;
-
-use multiaddr::{ToMultiaddr};
-use base64;
 
 use mercury_home_protocol::{*, crypto::*};
 use mercury_connect::{*, protocol_capnp::HomeClientCapnProto};
@@ -219,7 +215,7 @@ fn test_relations(){
     //TODO test by storing relations and asserting the return value of relations to those that were stored
     let mut setup = dummy::TestSetup::setup();
 
-    let zero = setup.profilegate.relations( &setup.userid );
+    let zero = setup.profilegate.relations();
 
     //let relations = None;
     let res = setup.reactor.run(zero);

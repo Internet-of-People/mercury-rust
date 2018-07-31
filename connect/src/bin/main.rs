@@ -73,8 +73,7 @@ fn main()
             home.register(client_own_profile, halfproof, None)
                 .map(|_own_profile| home)
                 .map_err( |(_own_profile, e)| e )
-
-        })            
+        })
         .and_then(move |home| {
             info!("connected, logging in");
             home.login(client_signer_clone2.profile_id())
@@ -97,7 +96,7 @@ fn main()
     
     debug!("Response: {:?}", pong);
 
-    let handle = reactor.handle();
-    let result = reactor.run( reactor::Timeout::new( Duration::from_secs(5), &handle ).unwrap() );
+    let timeout = reactor::Timeout::new( Duration::from_secs(5), &reactor.handle() ).unwrap();
+    let result = reactor.run(timeout);
     info!("Client result {:?}", result);
 }

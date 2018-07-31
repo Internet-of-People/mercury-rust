@@ -14,7 +14,10 @@ futures = "0.1"
 log = "0.4"
 log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }
+mercury-storage = { path="../storage" }
 multiaddr = "*"
+serde = "*"
+serde_derive = "*"
 tokio-core = "0.1"
 tokio-io = "*"
 
