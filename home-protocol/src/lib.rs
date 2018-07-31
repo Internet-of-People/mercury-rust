@@ -355,7 +355,7 @@ pub trait IncomingCall
     /// Indicate to the caller that the call was answered.
     /// If the callee wishes to receive messages from the caller, it has to create a channel
     /// and pass the created sink to `answer()`, which is returned by `call()` on the caller side.
-    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>); // -> Option<AppMsgStream>;
+    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>) -> CallRequestDetails;
 }
 
 

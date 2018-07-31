@@ -490,7 +490,5 @@ impl IncomingCall for Incall{
     fn request_details(&self) -> &CallRequestDetails{
         &self.request
     }
-    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>){
-        
-    }
+    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>) -> CallRequestDetails { self.request }
 }

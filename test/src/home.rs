@@ -301,17 +301,10 @@ fn test_home_call(mut setup: TestSetup)
         .map(|call_res| {
             match call_res {
                 Ok(call) => {
-                    let backwards_sink;
                     println!("call received");
-                    {
-                        let details = call.request_details();
-                        assert_eq!(details.relation.relation_type, relation_type);
-                        assert_eq!(details.init_payload, init_payload);
-                        backwards_sink = details.to_caller.clone().unwrap();
-                    }
-                    call.answer(Some(forward_sink.clone()));
-
-                    backwards_sink
+                    assert_eq!( call.request_details().relation.relation_type, relation_type );
+                    assert_eq!( call.request_details().init_payload, init_payload );
+                    call.answer( Some(forward_sink.clone()) ).to_caller.unwrap()
                 },
                 Err(_) => panic!(),
             }
@@ -333,9 +326,7 @@ fn test_home_call(mut setup: TestSetup)
     assert_eq!(banana_vec.len(), 1);
     banana_vec.iter().for_each(|msg_res| {
         match msg_res {
-            Ok(msg) => {
-                assert_eq!(*msg, banana);
-            },
+            Ok(msg) => assert_eq!(*msg, banana),
             Err(_) => panic!(),
         };
     });
@@ -348,9 +339,7 @@ fn test_home_call(mut setup: TestSetup)
 
     let read_orange_fut = backwards_stream.take(1).for_each(|msg_res| {
         match msg_res {
-            Ok(msg) => {
-                assert_eq!(msg, orange);
-            },
+            Ok(msg) => assert_eq!(msg, orange),
             Err(_) => panic!(),
         };
         futures::future::ok(())

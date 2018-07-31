@@ -366,23 +366,26 @@ impl Home for HomeConnectionServer
 
 struct Call
 {
-    details: CallRequestDetails,
+    request: CallRequestDetails,
     sender:  oneshot::Sender< Option<AppMsgSink> >,
 }
 
 impl Call
 {
-    pub fn new(details: CallRequestDetails, sender: oneshot::Sender< Option<AppMsgSink> >) -> Self
-        { Self{ details: details, sender: sender } }
+    pub fn new(request: CallRequestDetails, sender: oneshot::Sender< Option<AppMsgSink> >) -> Self
+        { Self{ request: request, sender: sender } }
 }
 
 impl IncomingCall for Call
 {
-    fn request_details(&self) -> &CallRequestDetails { &self.details }
-    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>)
+    fn request_details(&self) -> &CallRequestDetails { &self.request }
+    fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>) -> CallRequestDetails
     {
-        if let Err(e) = self.sender.send(to_callee)
+        // NOTE needed to dereference Box because otherwise the whole self is moved at its first dereference
+        let this = *self;
+        if let Err(e) = this.sender.send(to_callee)
             { } // TODO we should at least log the error here
+        this.request
     }
 }
 
