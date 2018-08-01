@@ -33,6 +33,7 @@ use function::*;
 use server::Server;
 use client::Client;
 use logging::start_logging;
+use std::net::SocketAddr;
 use application::{Application, EX_OK, EX_SOFTWARE, EX_UNAVAILABLE, EX_TEMPFAIL};
 
 use clap::{App, ArgMatches};
@@ -48,26 +49,14 @@ use tokio_signal::unix::{SIGINT, SIGUSR1, SIGUSR2};
 struct AppContext{
     priv_key: PrivateKey,
     home_node: ProfileId,
-    home_address: String,
+    home_address: SocketAddr,
 }
 
 impl AppContext{
     pub fn new(priv_key: Option<&str>, node_id: Option<&str>, node_addr: Option<&str>)->Result<Self, std::io::Error>{
-        let key : PrivateKey;
-        match priv_key {
-            Some(k) => {key = PrivateKey(k.into());},
-            None => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "no key")),
-        };
-        let prof : ProfileId; 
-        match node_id {
-            Some(id) => {prof = ProfileId(id.into());},
-            None => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "no id")),
-        };
-        let addr;
-        match node_addr {
-            Some(naddr) => {addr = naddr.to_string();},
-            None => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "no id")),
-        };
+        let key = PrivateKey(priv_key.unwrap().into());
+        let prof = ProfileId(node_id.unwrap().into());
+        let addr = naddr.unwrap();
         Ok(Self{
             priv_key: key,
             home_node: prof,
