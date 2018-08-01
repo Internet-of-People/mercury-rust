@@ -13,7 +13,7 @@ use mercury_storage::async::KeyValueStore;
 //4. make call from client towards server to declare "active state"
 //5. send event(s) from server to client(s) in active state
 
-struct DAppConnect
+pub struct DAppConnect
 {
     gateway: Rc<ProfileGateway>,
 }
