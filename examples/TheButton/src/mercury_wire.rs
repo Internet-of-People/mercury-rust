@@ -1,12 +1,13 @@
 use super::*;
 
 use std::collections::HashSet;
+use std::rc::Rc;
 
 use mercury_connect::net::SimpleTcpHomeConnector;
 use mercury_connect::simple_profile_repo::SimpleProfileRepo;
 use mercury_connect::sdk::{DAppApi, Call};
 use mercury_connect::{Relation, ProfileGatewayImpl, ProfileGateway};
-use mercury_home_protocol::{ProfileId, AppMessageFrame, HomeStream, IncomingCall, ErrorToBeSpecified};
+use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::Ed25519Signer;
 use mercury_storage::{async::KeyValueStore, filesys::AsyncFileHandler};
 
@@ -21,28 +22,53 @@ struct DappConnect{
     contacts: Vec<Relation>,
     gateway: ProfileGatewayImpl, 
     storage: AsyncFileHandler,
-    homesession : HomeSession //no client side implementation
+    homesession : Box<HomeSession> //no client side implementation
+}
+
+impl DappConnect {
+
+                /// Need to provide:
+    ///  - ProfileId
+    ///  - ProfileRepo
+    ///  - HomeConnector
+    ///  - 
+
+    fn new(private_key: PrivateKey, profile_repo : Box<ProfileRepo>, )
+        -> Self {
+
+        /*
+        let pg = ProfileGatewayImpl::new(
+            Rc::new(Ed25519Signer::new(private_key)),
+            Rc::new(),
+            Rc::new(SimpleTcpHomeConnector::new(/*needs handle*/))
+        );
+
+        */
+        unimplemented!();
+    }
 }
 
 impl DAppApi for DappConnect{
+
     // Implies asking the user interface to manually pick a profile the app is used with
-    fn new(proposed_profile_id: Option<ProfileId>)
-        -> Box< Future<Item=Box<Self>, Error=ErrorToBeSpecified> >{
-        
-        let pg = ProfileGatewayImpl::new(
-            Rc::new(Ed25519Signer::new(/*needs priv key*/)),
-            Rc::new(SimpleProfileRepo::new()),
-            Rc::new(SimpleTcpHomeConnector::new(/*needs handle*/))
-        );
+
+    fn connect(profile : Option<ProfileId>)
+        -> Box< Future<Item=Box<Self>, Error=ErrorToBeSpecified> >
+    {
+        /*
         pg.login().and_then(|homesession|{
             Self{
                 contacts: Vec::new(),
                 gateway: pg, 
                 storage: AsyncFileHandler::new(),
-                homesession : HomeSession //no client side implementation
+                homesession : Box::new(homesession) //no client side implementation
             }
         })
+
+        */    
+        unimplemented!();
     }
+
 
     // Once initialized, the profile is selected and can be queried any time
     fn selected_profile(&self) -> &ProfileId{
