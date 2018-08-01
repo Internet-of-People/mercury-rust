@@ -25,19 +25,22 @@ pub struct Server{
 
 impl Server{
     pub fn default(connect: DAppConnect)->Self{
-        Self{
-            sent : 0,
-            del : None,
-            uds : None,
-            event_stock : 0,
-            cfg : ServerConfig::new(),
-            sig : signal_recv(SIGINT),
-            usr1 : signal_recv(SIGUSR1),
-            usr2 : signal_recv(SIGUSR2),
-            connect: connect,
-            calls: Vec::new(),
-            callstream: connect.checkin(),
-        }
+        connect.checkin().and_then(|rev|{
+            Self{
+                sent : 0,
+                del : None,
+                uds : None,
+                event_stock : 0,
+                cfg : ServerConfig::new(),
+                sig : signal_recv(SIGINT),
+                usr1 : signal_recv(SIGUSR1),
+                usr2 : signal_recv(SIGUSR2),
+                connect: connect,
+                calls: Vec::new(),
+                callstream: rev,
+            }
+
+        })
     }
 
     pub fn new(cfg: ServerConfig, connect: DAppConnect)->
