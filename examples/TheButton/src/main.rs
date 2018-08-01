@@ -47,7 +47,12 @@ use tokio_core::reactor::Core;
 use tokio_timer::*;
 use tokio_signal::unix::{SIGINT, SIGUSR1, SIGUSR2};
 
-pub struct AppContext{
+use mercury_connect::sdk::{DAppApi, Call};
+use mercury_connect::{Relation};
+use mercury_home_protocol::*;
+use mercury_storage::{async::KeyValueStore};
+
+struct AppContext{
     priv_key: PrivateKey,
     home_node: ProfileId,
     home_address: SocketAddr,
@@ -132,7 +137,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
                 "server"=>{
                     ServerConfig::new_from_args(args.to_owned())
                         .map( |cfg| 
-                            Mode::Server(Server::new(cfg))
+                            Mode::Server(Server::new(cfg, Connect))
                         )
                 },
                 "client"=>{
@@ -148,7 +153,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
         },
         None=>{
             warn!("No subcommand given, starting in server mode");
-            Ok(Mode::Server(Server::default()))
+            Ok(Mode::Server(Server::default(Connect)))
         }
     };
 
