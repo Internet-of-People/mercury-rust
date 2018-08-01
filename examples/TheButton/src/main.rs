@@ -58,7 +58,7 @@ impl AppContext{
     pub fn new(priv_key: Option<&str>, node_id: Option<&str>, node_addr: Option<&str>)->Result<Self, std::io::Error>{
         let key = PrivateKey(priv_key.unwrap().into());
         let prof = ProfileId(node_id.unwrap().into());
-        let addr = naddr.unwrap();
+        let addr = node_addr.unwrap().parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
         Ok(Self{
             priv_key: key,
             home_node: prof,
