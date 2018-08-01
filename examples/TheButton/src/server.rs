@@ -19,28 +19,27 @@ pub struct Server{
     usr1 : SigStream,
     usr2 : SigStream,
     connect: DAppConnect,
-    calls : Vec<Box<Call>>,
+    calls : Vec<AppMsgSink>,
     callstream: HomeStream< Box < IncomingCall >, String>,
 }
 
 impl Server{
     pub fn default(connect: DAppConnect)->Self{
-        connect.checkin().and_then(|rev|{
-            Self{
-                sent : 0,
-                del : None,
-                uds : None,
-                event_stock : 0,
-                cfg : ServerConfig::new(),
-                sig : signal_recv(SIGINT),
-                usr1 : signal_recv(SIGUSR1),
-                usr2 : signal_recv(SIGUSR2),
-                connect: connect,
-                calls: Vec::new(),
-                callstream: rev,
-            }
-
-        })
+        let mut reactor = tokio_core::reactor::Core::new().unwrap();
+        let callstream = reactor.run(connect.checkin()).unwrap();
+        Self{
+            sent : 0,
+            del : None,
+            uds : None,
+            event_stock : 0,
+            cfg : ServerConfig::new(),
+            sig : signal_recv(SIGINT),
+            usr1 : signal_recv(SIGUSR1),
+            usr2 : signal_recv(SIGUSR2),
+            connect: connect,
+            calls: Vec::new(),
+            callstream: callstream,
+        }   
     }
 
     pub fn new(cfg: ServerConfig, connect: DAppConnect)->
@@ -64,7 +63,8 @@ impl Server{
                 Err(_e) => {/*TODO*/}
             }
         };
-
+        let mut reactor = tokio_core::reactor::Core::new().unwrap();
+        let callstream = reactor.run(connect.checkin()).unwrap();
         Server{
             sent : 0,
             cfg : cfg,
@@ -76,7 +76,7 @@ impl Server{
             usr2 : signal_recv(SIGUSR2),
             connect: connect,
             calls: Vec::new(),
-            callstream: connect.checkin(),//TODO inconvinient 
+            callstream: callstream,//TODO inconvinient 
         }
     }
 
@@ -153,7 +153,7 @@ impl Server{
                     None=>{();}
                 }
                 for call in self.calls{
-                    self.generate_event(call.sender());
+                    self.generate_event(&call);
                 }
                 return None;    
             }
@@ -212,8 +212,16 @@ impl Future for Server{
         match self.callstream.poll(){
             Ok(Async::Ready(Some(call)))=>{
                 debug!("generate_event");
+                // self.calls.push(call);
                 match call {
-                    Ok(c) =>{ self.calls.push(call);},//handling of incoming calls is problematic
+                    Ok(c) =>{ 
+                        match c.request_details().to_caller{
+                            Some(sink)=>{
+                                self.calls.push(sink.to_owned());
+                            },
+                            _=>(),
+                        }
+                    },//handling of incoming calls is problematic
                     Err(e) =>{ return Ok(Async::NotReady);},
                 }
                 
@@ -242,7 +250,7 @@ impl Future for Server{
                     self.event_stock-=1;
                     self.sent+=1;
                     for call in self.calls{
-                        self.generate_event(call.sender());
+                        self.generate_event(&call);
                     }
                 }
                 ();
