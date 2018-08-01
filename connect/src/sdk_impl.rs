@@ -21,7 +21,7 @@ pub struct DAppConnect
 
 impl DAppConnect
 {
-    fn new(profile_repo : Rc<ProfileGateway>) -> Self
+    pub fn new(profile_repo : Rc<ProfileGateway>) -> Self
     {
         unimplemented!();
     }

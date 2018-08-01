@@ -28,7 +28,7 @@ pub mod application;
 
 use mercury_connect::sdk::DAppApi;
 use mercury_connect::sdk_impl::DAppConnect;
-use mercury_home_protocol::{PrivateKey, ProfileId, PublicKey};
+use mercury_home_protocol::{PrivateKey, ProfileId, PublicKey, AppMsgSink, HomeStream, IncomingCall};
 
 use client_config::*;
 use server_config::*;
@@ -54,7 +54,7 @@ use mercury_connect::{Relation};
 use mercury_home_protocol::*;
 use mercury_storage::{async::KeyValueStore};
 
-struct AppContext{
+pub struct AppContext{
     priv_key: PrivateKey,
     home_node: ProfileId,
     home_address: SocketAddr,
@@ -129,6 +129,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
         matches.value_of("private-key").unwrap(), 
         matches.value_of("home-node-public").unwrap(), 
         matches.value_of("home-node-address").unwrap())?;
+    let prof_rep = mercury_connect::SimpleProfileRepo::new();
 
     //SERVER MODE HANDLING
     let (sub_name, sub_args) = matches.subcommand();
@@ -139,7 +140,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
                 "server"=>{
                     ServerConfig::new_from_args(args.to_owned())
                         .map( |cfg| 
-                            Mode::Server(Server::new(cfg, Connect))
+                            Mode::Server(Server::new(cfg, DAppConnect::new(unimplemented!())))
                         )
                 },
                 "client"=>{
@@ -155,7 +156,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
         },
         None=>{
             warn!("No subcommand given, starting in server mode");
-            Ok(Mode::Server(Server::default(Connect)))
+            Ok(Mode::Server(Server::default(DAppConnect::new(unimplemented!()))))
         }
     };
 
