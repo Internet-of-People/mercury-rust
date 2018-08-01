@@ -84,12 +84,11 @@ enum Mode{
 
 fn application_code() -> i32 {
     match application_code_internal() {
-        Ok(_) =>
-            0,
-        Err(err) =>
-        //TODO
-            match err{
-                _=>42
+        Ok(_) => 
+            EX_OK,
+        Err(err) => 
+            match err.kind() {
+                _ => EX_SOFTWARE
             }
     }
 }
@@ -164,34 +163,13 @@ fn application_code_internal() -> Result<(), std::io::Error> {
 
     let app_fut = match app_mode? {
         Mode::Client(client_fut) => 
-            Box::new(client_fut.into_future().map(|_| 0)) as Box<Future<Item=i32, Error=std::io::Error>>,
+            Box::new(client_fut.into_future()),
 
         Mode::Server(server_fut) => 
-            Box::new(server_fut) as Box<Future<Item=i32, Error=std::io::Error>>,  
+            Box::new(server_fut.into_future()),  
     };
 
-    match reactor.run({
-            app_fut
-            .map(|_|return EX_OK)
-            .map_err(|err| {
-                match err.kind(){
-                    std::io::ErrorKind::Interrupted => {
-                        warn!("exiting on SIGINT");
-                        return EX_OK;
-                    }std::io::ErrorKind::NotConnected => {
-                        return EX_UNAVAILABLE;
-                    }std::io::ErrorKind::TimedOut => {
-                        return EX_TEMPFAIL;
-                    }_=>{
-                        return EX_SOFTWARE;
-                    }
-                }
-            })
-    }){
-        Ok(code)=>code,
-        Err(code)=>code   
-    };
-    Ok(())
+    reactor.run(app_fut)
 }
 
 fn main() {
