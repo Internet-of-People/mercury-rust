@@ -8,6 +8,7 @@ use mercury_connect::sdk::Call;
 use mercury_home_protocol::AppMessageFrame;
 
 use futures::Sink;
+use futures::*;
 
 pub struct Server{
     del: Option<Interval>,
@@ -15,9 +16,6 @@ pub struct Server{
     sent : u32,
     uds : Option<Incoming>,
     pub cfg : ServerConfig,
-    sig : SigStream,
-    usr1 : SigStream,
-    usr2 : SigStream,
     connect: DAppConnect,
     calls : Vec<AppMsgSink>,
     callstream: HomeStream< Box < IncomingCall >, String>,
@@ -33,17 +31,16 @@ impl Server{
             uds : None,
             event_stock : 0,
             cfg : ServerConfig::new(),
-            sig : signal_recv(SIGINT),
-            usr1 : signal_recv(SIGUSR1),
-            usr2 : signal_recv(SIGUSR2),
+            //sig : signal_recv(SIGINT),
+            //usr1 : signal_recv(SIGUSR1),
+            //usr2 : signal_recv(SIGUSR2),
             connect: connect,
             calls: Vec::new(),
             callstream: callstream,
         }   
     }
 
-    pub fn new(cfg: ServerConfig, connect: DAppConnect)->
-    Self{
+    pub fn new(cfg: ServerConfig, connect: DAppConnect) -> Self {
         let mut intval = None;
         let mut uds = None;
         if let Some(delay) = cfg.event_timer{
@@ -71,19 +68,22 @@ impl Server{
             uds : uds,
             del : intval,
             event_stock : 0,
-            sig : signal_recv(SIGINT),
-            usr1 : signal_recv(SIGUSR1),
-            usr2 : signal_recv(SIGUSR2),
+            //sig : signal_recv(SIGINT),
+            //usr1 : signal_recv(SIGUSR1),
+            //usr2 : signal_recv(SIGUSR2),
             connect: connect,
             calls: Vec::new(),
             callstream: callstream,//TODO inconvinient 
         }
     }
 
-    pub fn generate_event(&mut self, call: &AppMsgSink)->i32{
-        info!("Generating event {} {}", self.event_stock, self.sent);
-        call.send(Ok(AppMessageFrame("event".into())));
-        42
+    pub fn generate_event(&mut self)->bool{
+        info!("generating event {} {}", self.event_stock, self.sent);
+        self.sent += 1;
+        match self.cfg.event_count {
+            Some(limit) => limit == self.sent,
+            _ => false    
+        }
     }
 
     // fn handle_event_file(file_name: String)->u32{
@@ -121,6 +121,7 @@ impl Server{
         info!("Stopped event auto-generation");
     }   
 
+/*
     fn handle_sigint(&mut self) -> Option<futures::Poll<i32, std::io::Error>>{
         match self.sig.poll(){
             Ok(Async::Ready(Some(_)))=>{
@@ -152,9 +153,9 @@ impl Server{
                     }
                     None=>{();}
                 }
-                for call in self.calls{
-                    self.generate_event(&call);
-                }
+                // for call in self.calls{
+                //     self.generate_event(&call);
+                // }
                 return None;    
             }
             Ok(Async::NotReady)=>{
@@ -189,11 +190,55 @@ impl Server{
             }   
         }
     }
+    */
+}
+
+impl IntoFuture for Server {
+    type Item = ();
+    type Error = std::io::Error;
+    type Future = Box<Future<Item=Self::Item, Error=Self::Error>>;
+
+    fn into_future(self) -> Self::Future {
+        // SIGINT is terminating the server
+        let sigint_fut = signal_recv(SIGINT).into_future()
+            .map(|_| {
+                info!("received SIGINT, terminating server");
+                ()
+            })
+            .map_err(|(err, _)| err);
+
+        // SIGUSR1 is generating an event
+        let sigusr1_fut = signal_recv(SIGUSR1).for_each(|_| {
+            info!("received SIGUSR1, generating event");            
+                        
+            /// This is freaking out the borrow-checker            
+            ///if self.generate_event() {
+            ///    return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "event limit reached"));
+            ///} 
+                       
+            Ok(())
+        });
+
+        let fut = sigint_fut.select(sigusr1_fut).map(|(item, _)| item).map_err(|(err, _)| err);
+
+        let sigusr2_fut = signal_recv(SIGUSR2).for_each(|_| {
+            info!("received SIGUSR2, stopping event timer");
+
+            /// The action here would also freak out the borrow checker :)
+            Ok(())
+        });
+
+        // TODO: interval future
+        // TODO: uds future
+        
+        Box::new(fut)
+    }
 }
 
 
+/*
 impl Future for Server{
-    type Item = i32;
+    type Item = ();
     type Error = std::io::Error;
     fn poll(&mut self) -> futures::Poll<Self::Item, Self::Error>{
         match self.handle_sigint(){
@@ -320,3 +365,4 @@ impl Future for Server{
         
     }
 }
+*/
