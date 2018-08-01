@@ -4,6 +4,11 @@ use std::error::Error;
 
 use futures::Stream;
 
+use mercury_connect::sdk::Call;
+use mercury_home_protocol::AppMessageFrame;
+
+use futures::Sink;
+
 pub struct Server{
     del: Option<Interval>,
     event_stock : u16,
@@ -13,10 +18,13 @@ pub struct Server{
     sig : SigStream,
     usr1 : SigStream,
     usr2 : SigStream,
+    connect: DAppConnect,
+    calls : Vec<Box<Call>>,
+    callstream: HomeStream< Box < IncomingCall >, String>,
 }
 
 impl Server{
-    pub fn default()->Self{
+    pub fn default(connect: DAppConnect)->Self{
         Self{
             sent : 0,
             del : None,
@@ -25,11 +33,14 @@ impl Server{
             cfg : ServerConfig::new(),
             sig : signal_recv(SIGINT),
             usr1 : signal_recv(SIGUSR1),
-            usr2 : signal_recv(SIGUSR2)
+            usr2 : signal_recv(SIGUSR2),
+            connect: connect,
+            calls: Vec::new(),
+            callstream: connect.checkin(),
         }
     }
 
-    pub fn new(cfg: ServerConfig)->
+    pub fn new(cfg: ServerConfig, connect: DAppConnect)->
     Self{
         let mut intval = None;
         let mut uds = None;
@@ -59,12 +70,16 @@ impl Server{
             event_stock : 0,
             sig : signal_recv(SIGINT),
             usr1 : signal_recv(SIGUSR1),
-            usr2 : signal_recv(SIGUSR2)
+            usr2 : signal_recv(SIGUSR2),
+            connect: connect,
+            calls: Vec::new(),
+            callstream: connect.checkin(),//TODO inconvinient 
         }
     }
 
-    pub fn generate_event(&mut self)->i32{
+    pub fn generate_event(&mut self, call: &AppMsgSink)->i32{
         info!("Generating event {} {}", self.event_stock, self.sent);
+        call.send(Ok(AppMessageFrame("event".into())));
         42
     }
 
@@ -134,7 +149,9 @@ impl Server{
                     }
                     None=>{();}
                 }
-                self.generate_event();
+                for call in self.calls{
+                    self.generate_event(call.sender());
+                }
                 return None;    
             }
             Ok(Async::NotReady)=>{
@@ -189,6 +206,30 @@ impl Future for Server{
             None => ()
         }
 
+        match self.callstream.poll(){
+            Ok(Async::Ready(Some(call)))=>{
+                debug!("generate_event");
+                match call {
+                    Ok(c) =>{ self.calls.push(call);},//handling of incoming calls is problematic
+                    Err(e) =>{ return Ok(Async::NotReady);},
+                }
+                
+                // Ok(Async::NotReady)    
+            }
+            Ok(Async::NotReady)=>{
+                debug!("not ready");
+                return Ok(Async::NotReady);                    
+            }
+            Ok(Async::Ready(None))=>{
+                debug!("stream close");
+                return Err(std::io::Error::new(std::io::ErrorKind::Other,"timer failed"));
+            }
+            Err(e)=>{
+                debug!("error");
+                return Err(std::io::Error::new(std::io::ErrorKind::Other,"TODOe.description()"));
+            }
+        }
+
         match self.cfg.event_count{
             Some(c)=>{
                 while self.event_stock > 0 {
@@ -197,7 +238,9 @@ impl Future for Server{
                     }   
                     self.event_stock-=1;
                     self.sent+=1;
-                    self.generate_event();
+                    for call in self.calls{
+                        self.generate_event(call.sender());
+                    }
                 }
                 ();
             },
