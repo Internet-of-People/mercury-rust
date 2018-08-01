@@ -1,14 +1,22 @@
 use super::*;
+use mercury_connect::sdk::*;
 
 pub struct Client{
-    cfg: ClientConfig
+    appctx : AppContext,
+    cfg: ClientConfig,
+    mercury: Box<DAppApi>
 }
 
 impl Client{
-    pub fn new(cfg: ClientConfig) -> Self{
+    pub fn new(cfg: ClientConfig, appctx: AppContext) -> Self{
+        unimplemented!();
+        /*
         Self{
+            appctx: appctx,
             cfg: cfg,
+            // mercury: Box::new(DappConnect::new(appctx.priv_key))
         }
+        */
     }
 
     pub fn run(&self)->i32{

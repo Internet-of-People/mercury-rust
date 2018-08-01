@@ -24,7 +24,6 @@ pub mod server;
 pub mod logging;
 pub mod function;
 pub mod application;
-pub mod mercury_wire;
 // pub mod signal_handling;
 
 use mercury_home_protocol::{PrivateKey, ProfileId, PublicKey};
@@ -48,52 +47,17 @@ use tokio_core::reactor::Core;
 use tokio_timer::*;
 use tokio_signal::unix::{SIGINT, SIGUSR1, SIGUSR2};
 
-use mercury_connect::sdk::{DAppApi, Call};
-use mercury_connect::{Relation};
-use mercury_home_protocol::*;
-use mercury_storage::{async::KeyValueStore};
-
-struct Connect;
-impl DAppApi for Connect{
-    fn connect(profile : Option<ProfileId>)
-        -> Box< Future<Item=Box<Self>, Error=ErrorToBeSpecified> >
-    {
-        unimplemented!();
-    }
-
-    fn selected_profile(&self) -> &ProfileId{
-        unimplemented!();
-    }
-
-    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >{
-        unimplemented!();
-    }
-
-    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=ErrorToBeSpecified> >{
-        unimplemented!();
-    }
-
-    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=ErrorToBeSpecified> >{
-        unimplemented!();
-    }
-
-    fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
-        -> Box< Future<Item=Box<Call>, Error=ErrorToBeSpecified> >{
-        unimplemented!();
-    }
-}
-
-struct AppContext{
+pub struct AppContext{
     priv_key: PrivateKey,
     home_node: ProfileId,
     home_address: SocketAddr,
 }
 
 impl AppContext{
-    pub fn new(priv_key: Option<&str>, node_id: Option<&str>, node_addr: Option<&str>)->Result<Self, std::io::Error>{
-        let key = PrivateKey(priv_key.unwrap().into());
-        let prof = ProfileId(node_id.unwrap().into());
-        let addr = node_addr.unwrap().parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
+    pub fn new(priv_key: &str, node_id: &str, node_addr: &str)->Result<Self, std::io::Error>{
+        let key = PrivateKey(priv_key.into());
+        let prof = ProfileId(node_id.into());
+        let addr = node_addr.parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
         Ok(Self{
             priv_key: key,
             home_node: prof,
@@ -153,14 +117,11 @@ fn application_code_internal() -> Result<(), std::io::Error> {
             debug!("verbose 3 or more: debug")
         },
     }
-    //GET APPLICATION CONTEXT
-    let appcx;
-    match AppContext::new(  matches.value_of("private-key"), 
-                            matches.value_of("home-node-public"), 
-                            matches.value_of("home-node-address")){
-        Ok(cx) => {appcx = cx;},
-        Err(e) => return Err(e)
-    };
+    //GET APPLICATION CONTEXT    
+    let appcx = AppContext::new(
+        matches.value_of("private-key").unwrap(), 
+        matches.value_of("home-node-public").unwrap(), 
+        matches.value_of("home-node-address").unwrap())?;
 
     //SERVER MODE HANDLING
     let (sub_name, sub_args) = matches.subcommand();
@@ -177,7 +138,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
                 "client"=>{
                     ClientConfig::new_from_args(args.to_owned())
                         .map( |cfg| 
-                            Mode::Client(Client::new(cfg))
+                            Mode::Client(Client::new(cfg, appcx))
                         )
                 },
                 _=>{

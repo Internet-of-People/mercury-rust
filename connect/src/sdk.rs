@@ -14,12 +14,15 @@ pub trait Call
     fn receiver(&self) -> &AppMsgStream;
 }
 
-pub trait DAppApi
+pub trait DAppInit
 {
     // Implies asking the user interface to manually pick a profile the app is used with
-    fn connect(proposed_profile_id: Option<ProfileId>)
-        -> Box< Future<Item=Box<Self>, Error=ErrorToBeSpecified> >;
+    fn initialize(&self, app: &ApplicationId)
+        -> Box< Future<Item=Rc<DAppApi>, Error=ErrorToBeSpecified> >;
+}
 
+pub trait DAppApi
+{
     // Once initialized, the profile is selected and can be queried any time
     fn selected_profile(&self) -> &ProfileId;
 
@@ -29,6 +32,7 @@ pub trait DAppApi
 
     fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=ErrorToBeSpecified> >;
 
+    // This includes initiating a pair request with the profile if not a relation yet
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
         -> Box< Future<Item=Box<Call>, Error=ErrorToBeSpecified> >;
 }
