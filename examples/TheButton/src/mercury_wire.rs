@@ -18,7 +18,7 @@ use mercury_storage::{async::KeyValueStore, filesys::AsyncFileHandler};
 //4. make call from client towards server to declare "active state"
 //5. send event(s) from server to client(s) in active state
 
-struct DappConnect{
+pub struct DappConnect{
     contacts: Vec<Relation>,
     gateway: ProfileGatewayImpl, 
     storage: AsyncFileHandler,
@@ -27,7 +27,7 @@ struct DappConnect{
 
 impl DappConnect {
 
-                /// Need to provide:
+    /// Need to provide:
     ///  - ProfileId
     ///  - ProfileRepo
     ///  - HomeConnector
@@ -52,8 +52,8 @@ impl DAppApi for DappConnect{
 
     // Implies asking the user interface to manually pick a profile the app is used with
 
-    fn connect(profile : Option<ProfileId>)
-        -> Box< Future<Item=Box<Self>, Error=ErrorToBeSpecified> >
+    fn connect(&self, profile : Option<ProfileId>)
+        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         /*
         pg.login().and_then(|homesession|{

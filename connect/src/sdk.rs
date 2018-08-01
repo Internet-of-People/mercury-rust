@@ -17,8 +17,8 @@ pub trait Call
 pub trait DAppApi
 {
     // Implies asking the user interface to manually pick a profile the app is used with
-    fn connect(proposed_profile_id: Option<ProfileId>)
-        -> Box< Future<Item=Box<Self>, Error=ErrorToBeSpecified> >;
+    fn connect(&self, proposed_profile_id: Option<ProfileId>)
+        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     // Once initialized, the profile is selected and can be queried any time
     fn selected_profile(&self) -> &ProfileId;
