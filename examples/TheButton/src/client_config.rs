@@ -8,7 +8,8 @@ pub const DEFAULT_ADDR : &str = "127.0.0.1:7070";
 pub struct ClientConfig{
     pub private_key: PrivateKey,            // private key of the client
     pub server_id: ProfileId,               // public key of the server
-    pub server_address: SocketAddr,         // 
+    pub server_address: SocketAddr,         // ip address of the server
+    pub callee_profile_id : ProfileId,      // profile id of the server app
     pub on_fail: OnFail
 }
 
@@ -20,7 +21,7 @@ impl ClientConfig{
         let server_key_file = args.value_of("server-key-file").unwrap();                  // since the option is required, unwrap() is valid here
         let server_id = ProfileId(std::fs::read(server_key_file)?);
     
-        let connect_address = match args.value_of("home-address").map(|s| s.into()).unwrap_or(DEFAULT_ADDR).parse() {
+        let server_address = match args.value_of("home-address").map(|s| s.into()).unwrap_or(DEFAULT_ADDR).parse() {
             Ok(addr) => addr,
             _err => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse --connect value"))
         };
@@ -41,13 +42,16 @@ impl ClientConfig{
             }
         };
 
-        info!("Connect address: {:?}", connect_address);
+        let callee_profile_id = ProfileId(args.value_of("connect").unwrap().as_bytes().to_vec()); // option is required
+
+        info!("Server address: {:?}", server_address);
         info!("On fail: {:?}",on_fail);
 
         Ok(Self{
             private_key: private_key,
-            server_address: connect_address,
+            server_address: server_address,
             server_id: server_id,
+            callee_profile_id: callee_profile_id,
             on_fail: on_fail
         })
     }

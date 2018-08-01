@@ -61,7 +61,7 @@ impl DAppApi for DAppConnect
 
 
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
-        -> Box< Future<Item=Box<Call>, Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=Call, Error=ErrorToBeSpecified> >
     {
         unimplemented!();
     }
