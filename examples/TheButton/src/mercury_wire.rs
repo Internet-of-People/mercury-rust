@@ -6,8 +6,8 @@ use std::rc::Rc;
 use mercury_connect::net::SimpleTcpHomeConnector;
 use mercury_connect::simple_profile_repo::SimpleProfileRepo;
 use mercury_connect::sdk::{DAppApi, Call};
-use mercury_connect::{Relation, ProfileGatewayImpl, ProfileGateway, ProfileRepo};
-use mercury_home_protocol::{ProfileId, AppMessageFrame, HomeStream, HomeSession, IncomingCall, ErrorToBeSpecified};
+use mercury_connect::{Relation, ProfileGatewayImpl, ProfileGateway};
+use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::Ed25519Signer;
 use mercury_storage::{async::KeyValueStore, filesys::AsyncFileHandler};
 
@@ -33,7 +33,7 @@ impl DappConnect {
     ///  - HomeConnector
     ///  - 
 
-    fn new(private_key: PrivateKey, profile_repo : Box<ProfileRepo>, )
+    fn new(private_key: PrivateKey, profile_repo : Box<ProfileRepo> )
         -> Self {
 
         /*
