@@ -19,7 +19,8 @@ pub struct Server{
     usr1 : SigStream,
     usr2 : SigStream,
     connect: DAppConnect,
-    calls : Vec<Box<Call>>
+    calls : Vec<Box<Call>>,
+    callstream: HomeStream< Box < IncomingCall >, String>,
 }
 
 impl Server{
@@ -35,6 +36,7 @@ impl Server{
             usr2 : signal_recv(SIGUSR2),
             connect: connect,
             calls: Vec::new(),
+            callstream: connect.checkin(),
         }
     }
 
@@ -71,6 +73,7 @@ impl Server{
             usr2 : signal_recv(SIGUSR2),
             connect: connect,
             calls: Vec::new(),
+            callstream: connect.checkin(),//TODO inconvinient 
         }
     }
 
@@ -203,25 +206,29 @@ impl Future for Server{
             None => ()
         }
 
-        match self.connect.checkin().poll(){
-                        Ok(Async::Ready(Some(call)))=>{
-                            debug!("generate_event");
-                            self.calls.app(call);
-                            // Ok(Async::NotReady)    
-                        }
-                        Ok(Async::NotReady)=>{
-                            debug!("not ready");
-                            return Ok(Async::NotReady);                    
-                        }
-                        Ok(Async::Ready(None))=>{
-                            debug!("stream close");
-                            return Err(std::io::Error::new(std::io::ErrorKind::Other,"timer failed"));
-                        }
-                        Err(e)=>{
-                            debug!("error");
-                            return Err(std::io::Error::new(std::io::ErrorKind::Other,e.description()));
-                        }
-                    }
+        match self.callstream.poll(){
+            Ok(Async::Ready(Some(call)))=>{
+                debug!("generate_event");
+                match call {
+                    Ok(c) =>{ self.calls.push(call);},//handling of incoming calls is problematic
+                    Err(e) =>{ return Ok(Async::NotReady);},
+                }
+                
+                // Ok(Async::NotReady)    
+            }
+            Ok(Async::NotReady)=>{
+                debug!("not ready");
+                return Ok(Async::NotReady);                    
+            }
+            Ok(Async::Ready(None))=>{
+                debug!("stream close");
+                return Err(std::io::Error::new(std::io::ErrorKind::Other,"timer failed"));
+            }
+            Err(e)=>{
+                debug!("error");
+                return Err(std::io::Error::new(std::io::ErrorKind::Other,"TODOe.description()"));
+            }
+        }
 
         match self.cfg.event_count{
             Some(c)=>{
