@@ -1,6 +1,14 @@
 use super::*;
 
-//use mercury_connect::sdk::DAppApi;
+use std::collections::HashSet;
+
+use mercury_connect::net::SimpleTcpHomeConnector;
+use mercury_connect::simple_profile_repo::SimpleProfileRepo;
+use mercury_connect::sdk::{DAppApi, Call};
+use mercury_connect::{Relation, ProfileGatewayImpl, ProfileGateway};
+use mercury_home_protocol::{ProfileId, AppMessageFrame, HomeStream, IncomingCall, ErrorToBeSpecified};
+use mercury_home_protocol::crypto::Ed25519Signer;
+use mercury_storage::{async::KeyValueStore, filesys::AsyncFileHandler};
 
 //TODO 0.2
 //1. make profile
@@ -9,46 +17,52 @@ use super::*;
 //4. make call from client towards server to declare "active state"
 //5. send event(s) from server to client(s) in active state
 
-enum AppState{
-    ServerInit(Box<Future<Item = Server, Error = AppError>>),
-    ServerOpen(Box<Future<Item = ServerConnection, Error = AppError>>),
-    ClientConnecting(Box<Future<Item = Client, Error = AppError>>),
-    ClientConnected(Client),
+struct DappConnect{
+    contacts: Vec<Relation>,
+    gateway: ProfileGatewayImpl, 
+    storage: AsyncFileHandler,
+    homesession : HomeSession //no client side implementation
 }
 
-fn state_change(state: AppState)->AppState{
-    match state{
-        AppState::ServerInit(fut)=>{
-            fut.and_then(|_|{future::ok(())})
-        },
-        AppState::ServerOpen(fut)=>{
-            fut.and_then(|_|{})
-        },
-        AppState::ClientConnecting(fut)=>{
-            fut.and_then(|_|{})
-        },
-        AppState::ClientConnected(fut)=>{
-            fut.and_then(|_|{})
-        },
+impl DAppApi for DappConnect{
+    // Implies asking the user interface to manually pick a profile the app is used with
+    fn new(proposed_profile_id: Option<ProfileId>)
+        -> Box< Future<Item=Box<Self>, Error=ErrorToBeSpecified> >{
+        
+        let pg = ProfileGatewayImpl::new(
+            Rc::new(Ed25519Signer::new(/*needs priv key*/)),
+            Rc::new(SimpleProfileRepo::new()),
+            Rc::new(SimpleTcpHomeConnector::new(/*needs handle*/))
+        );
+        pg.login().and_then(|homesession|{
+            Self{
+                contacts: Vec::new(),
+                gateway: pg, 
+                storage: AsyncFileHandler::new(),
+                homesession : HomeSession //no client side implementation
+            }
+        })
     }
-}
 
-
-
-struct AppError;
-struct DAppApiImp;
-impl DAppApiImp{
-    pub fn new()-> Box< Future<Item=Self, Error=AppError> >{
-        Box::new(future::ok(Self{}))
+    // Once initialized, the profile is selected and can be queried any time
+    fn selected_profile(&self) -> &ProfileId{
+        unimplemented!();
     }
-}
 
-struct ClientConnector;
-impl Future for ClientConnector{
-    type Item = DAppApiImp;
-    type Error = AppError;
+    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >{
+        unimplemented!();
+    }
 
-    fn poll(&mut self, cx: &mut Context) -> futures::Poll<Self::Item, Self::Error> {
-        Ok(futures::Async::Ready(Self::Item::new()))
+    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=ErrorToBeSpecified> >{
+        unimplemented!();
+    }
+
+    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=ErrorToBeSpecified> >{
+        unimplemented!();
+    }
+
+    fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
+        -> Box< Future<Item=Box<Call>, Error=ErrorToBeSpecified> >{
+        unimplemented!();
     }
 }

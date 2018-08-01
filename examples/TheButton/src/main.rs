@@ -12,7 +12,9 @@ extern crate tokio_core;
 extern crate tokio_timer;
 extern crate tokio_signal;
 extern crate tokio_executor;
+
 extern crate mercury_connect;
+extern crate mercury_storage;
 extern crate mercury_home_protocol;
 
 pub mod client_config;
@@ -22,7 +24,7 @@ pub mod server;
 pub mod logging;
 pub mod function;
 pub mod application;
-// pub mod mercury_wire;
+pub mod mercury_wire;
 // pub mod signal_handling;
 
 use mercury_home_protocol::{PrivateKey, ProfileId, PublicKey};
