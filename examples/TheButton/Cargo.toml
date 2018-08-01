@@ -17,4 +17,5 @@ tokio-core = "*"
 tokio-uds = "*"
 tokio-io = "*"
 mercury-home-protocol = { path="../../home-protocol" }
+mercury-storage = {path="../../storage"}
 mercury-connect = {path="../../connect"}
