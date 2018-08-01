@@ -48,6 +48,41 @@ use tokio_core::reactor::Core;
 use tokio_timer::*;
 use tokio_signal::unix::{SIGINT, SIGUSR1, SIGUSR2};
 
+use mercury_connect::sdk::{DAppApi, Call};
+use mercury_connect::{Relation};
+use mercury_home_protocol::*;
+use mercury_storage::{async::KeyValueStore};
+
+struct Connect;
+impl DAppApi for Connect{
+    fn connect(profile : Option<ProfileId>)
+        -> Box< Future<Item=Box<Self>, Error=ErrorToBeSpecified> >
+    {
+        unimplemented!();
+    }
+
+    fn selected_profile(&self) -> &ProfileId{
+        unimplemented!();
+    }
+
+    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >{
+        unimplemented!();
+    }
+
+    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=ErrorToBeSpecified> >{
+        unimplemented!();
+    }
+
+    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=ErrorToBeSpecified> >{
+        unimplemented!();
+    }
+
+    fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
+        -> Box< Future<Item=Box<Call>, Error=ErrorToBeSpecified> >{
+        unimplemented!();
+    }
+}
+
 struct AppContext{
     priv_key: PrivateKey,
     home_node: ProfileId,
@@ -136,7 +171,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
                 "server"=>{
                     ServerConfig::new_from_args(args.to_owned())
                         .map( |cfg| 
-                            Mode::Server(Server::new(cfg))
+                            Mode::Server(Server::new(cfg, Connect))
                         )
                 },
                 "client"=>{
@@ -152,7 +187,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
         },
         None=>{
             warn!("No subcommand given, starting in server mode");
-            Ok(Mode::Server(Server::default()))
+            Ok(Mode::Server(Server::default(Connect)))
         }
     };
 
