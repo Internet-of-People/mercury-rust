@@ -1,6 +1,5 @@
 use super::*;
-use mercury_connect::sdk::DAppApi;
-use mercury_wire::DappConnect;
+use mercury_connect::sdk::*;
 
 pub struct Client{
     appctx : AppContext,

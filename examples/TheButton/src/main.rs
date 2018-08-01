@@ -24,7 +24,6 @@ pub mod server;
 pub mod logging;
 pub mod function;
 pub mod application;
-pub mod mercury_wire;
 // pub mod signal_handling;
 
 use mercury_home_protocol::{PrivateKey, ProfileId, PublicKey};
