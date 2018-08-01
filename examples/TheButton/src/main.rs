@@ -37,6 +37,7 @@ use server::Server;
 use client::Client;
 use logging::start_logging;
 use std::net::SocketAddr;
+use futures::IntoFuture;
 use application::{Application, EX_OK, EX_SOFTWARE, EX_UNAVAILABLE, EX_TEMPFAIL};
 
 use clap::{App, ArgMatches};
@@ -166,7 +167,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
 
     let app_fut = match app_mode? {
         Mode::Client(client_fut) => 
-            Box::new(client_fut) as Box<Future<Item=i32, Error=std::io::Error>>,
+            Box::new(client_fut.into_future().map(|_| 0)) as Box<Future<Item=i32, Error=std::io::Error>>,
 
         Mode::Server(server_fut) => 
             Box::new(server_fut) as Box<Future<Item=i32, Error=std::io::Error>>,  

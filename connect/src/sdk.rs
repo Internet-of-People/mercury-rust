@@ -8,10 +8,10 @@ use super::*;
 
 
 
-pub trait Call
+pub struct Call
 {
-    fn sender(&self) -> &AppMsgSink;
-    fn receiver(&self) -> &AppMsgStream;
+    pub sender : Box<AppMsgSink>,
+    pub receiver : Box<AppMsgStream>
 }
 
 pub trait DAppInit
@@ -34,7 +34,7 @@ pub trait DAppApi
 
     // This includes initiating a pair request with the profile if not a relation yet
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
-        -> Box< Future<Item=Box<Call>, Error=ErrorToBeSpecified> >;
+        -> Box< Future<Item=Call, Error=ErrorToBeSpecified> >;
 }
 
 
