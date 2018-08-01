@@ -26,6 +26,8 @@ pub mod function;
 pub mod application;
 // pub mod signal_handling;
 
+use mercury_connect::sdk::DAppApi;
+use mercury_connect::sdk_impl::DAppConnect;
 use mercury_home_protocol::{PrivateKey, ProfileId, PublicKey};
 
 use client_config::*;

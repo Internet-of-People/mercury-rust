@@ -18,12 +18,12 @@ pub struct Server{
     sig : SigStream,
     usr1 : SigStream,
     usr2 : SigStream,
-    connect: Connect,
+    connect: DAppConnect,
     calls : Vec<Box<Call>>
 }
 
 impl Server{
-    pub fn default(connect: Connect)->Self{
+    pub fn default(connect: DAppConnect)->Self{
         Self{
             sent : 0,
             del : None,
@@ -33,12 +33,12 @@ impl Server{
             sig : signal_recv(SIGINT),
             usr1 : signal_recv(SIGUSR1),
             usr2 : signal_recv(SIGUSR2),
-            connect: Connect,
+            connect: connect,
             calls: Vec::new(),
         }
     }
 
-    pub fn new(cfg: ServerConfig, connect: Connect)->
+    pub fn new(cfg: ServerConfig, connect: DAppConnect)->
     Self{
         let mut intval = None;
         let mut uds = None;
@@ -69,7 +69,7 @@ impl Server{
             sig : signal_recv(SIGINT),
             usr1 : signal_recv(SIGUSR1),
             usr2 : signal_recv(SIGUSR2),
-            connect: Connect,
+            connect: connect,
             calls: Vec::new(),
         }
     }
