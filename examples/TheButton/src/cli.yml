@@ -76,6 +76,7 @@ subcommands:
                         retry - 
                             do an exponential reconnection from 1 sec up to 32 secs 
             - connect:
-                value_name: ADDR
+                long: connect                
+                value_name: PROFILE_ID
                 required: true
-                help: address of the button app server
+                help: profile id of the button app server
