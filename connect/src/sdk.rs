@@ -1,9 +1,11 @@
 use std::rc::Rc;
 
-use futures::Future;
+use futures::{Future, IntoFuture};
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
+
+use sdk_impl::DAppConnect;
 use super::*;
 
 
@@ -37,6 +39,18 @@ pub trait DAppApi
         -> Box< Future<Item=Call, Error=ErrorToBeSpecified> >;
 }
 
+
+
+impl DAppInit for Rc<ProfileGateway>
+{
+    fn initialize(&self, app: &ApplicationId)
+        -> Box< Future<Item=Rc<DAppApi>, Error=ErrorToBeSpecified> >
+    {
+        Box::new( Ok(
+            Rc::new( DAppConnect{ gateway: self.clone(), app: app.clone() } ) as Rc<DAppApi>
+        ).into_future() )
+    }
+}
 
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]

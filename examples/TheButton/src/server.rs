@@ -1,6 +1,6 @@
 use super::*;
-use std;
 use std::error::Error;
+use std::rc::Rc;
 
 use futures::Stream;
 
@@ -16,13 +16,13 @@ pub struct Server{
     sent : u32,
     uds : Option<Incoming>,
     pub cfg : ServerConfig,
-    connect: DAppConnect,
+    connect: Rc<DAppApi>,
     calls : Vec<AppMsgSink>,
     callstream: HomeStream< Box < IncomingCall >, String>,
 }
 
 impl Server{
-    pub fn default(connect: DAppConnect)->Self{
+    pub fn default(connect: Rc<DAppApi>)->Self{
         let mut reactor = tokio_core::reactor::Core::new().unwrap();
         let callstream = reactor.run(connect.checkin()).unwrap();
         Self{
@@ -40,7 +40,7 @@ impl Server{
         }   
     }
 
-    pub fn new(cfg: ServerConfig, connect: DAppConnect) -> Self {
+    pub fn new(cfg: ServerConfig, connect: Rc<DAppApi>) -> Self {
         let mut intval = None;
         let mut uds = None;
         if let Some(delay) = cfg.event_timer{
