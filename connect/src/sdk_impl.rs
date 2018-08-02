@@ -3,7 +3,6 @@ use super::*;
 use std::rc::Rc;
 
 use sdk::*;
-use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
 
 
@@ -32,8 +31,14 @@ impl DAppApi for DAppConnect
     }
 
 
-    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=ErrorToBeSpecified> >{
-        unimplemented!();
+    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=ErrorToBeSpecified> >
+    {
+        let checkin_fut = self.gateway.login()
+            .and_then( {
+                let app = self.app.clone();
+                move |session| Ok( session.checkin_app(&app) )
+            } );
+        Box::new(checkin_fut)
     }
 
 

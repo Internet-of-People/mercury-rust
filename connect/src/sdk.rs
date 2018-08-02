@@ -47,7 +47,7 @@ impl DAppInit for Rc<ProfileGateway>
         -> Box< Future<Item=Rc<DAppApi>, Error=ErrorToBeSpecified> >
     {
         Box::new( Ok(
-            Rc::new( DAppConnect{ gateway: self.clone(), app: app.clone() } ) as Rc<DAppApi>
+            Rc::new( DAppConnect{ gateway: self.clone(), app: app.to_owned() } ) as Rc<DAppApi>
         ).into_future() )
     }
 }
