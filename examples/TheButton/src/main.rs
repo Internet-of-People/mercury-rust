@@ -138,7 +138,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
                 "server"=>{
                     ServerConfig::new_from_args(args.to_owned())
                         .map( |cfg|
-                            unimplemented!()
+                            Mode::Server(Server::new(cfg))
                             //Mode::Server(Server::new(cfg, DAppConnect::new(unimplemented!())))
                         )
                 },
