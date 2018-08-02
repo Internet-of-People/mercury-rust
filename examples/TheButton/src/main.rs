@@ -26,10 +26,6 @@ pub mod function;
 pub mod application;
 // pub mod signal_handling;
 
-use mercury_connect::sdk::DAppApi;
-use mercury_connect::sdk_impl::DAppConnect;
-use mercury_home_protocol::{PrivateKey, ProfileId, PublicKey, AppMsgSink, HomeStream, IncomingCall};
-
 use client_config::*;
 use server_config::*;
 use function::*;
@@ -51,6 +47,7 @@ use tokio_timer::*;
 use tokio_signal::unix::{SIGINT, SIGUSR1, SIGUSR2};
 
 use mercury_connect::sdk::{DAppApi, Call};
+use mercury_connect::sdk_impl::DAppConnect;
 use mercury_connect::{Relation};
 use mercury_home_protocol::*;
 use mercury_storage::{async::KeyValueStore};
