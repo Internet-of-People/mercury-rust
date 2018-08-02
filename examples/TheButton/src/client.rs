@@ -60,7 +60,6 @@ impl IntoFuture for Client {
                 })
                 .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "encountered error"));
         Box::new(f)
-
     }
 }
 

@@ -15,12 +15,13 @@ pub struct ClientConfig{
 
 impl ClientConfig{
     pub fn new_from_args(args: ArgMatches)->Result<Self, std::io::Error> {
-        let private_key_file = args.value_of("client-key-file").unwrap();                  // since the option is required, unwrap() is valid here
-        let private_key = PrivateKey(std::fs::read(private_key_file)?);
-            
         let server_key_file = args.value_of("server-key-file").unwrap();                  // since the option is required, unwrap() is valid here
         let server_id = ProfileId(std::fs::read(server_key_file)?);
-    
+
+        let private_key_file = args.value_of("client-key-file").unwrap();                  // since the option is required, unwrap() is valid here
+        let private_key = PrivateKey(std::fs::read(private_key_file)?);
+
+
         let server_address = match args.value_of("home-address").map(|s| s.into()).unwrap_or(DEFAULT_ADDR).parse() {
             Ok(addr) => addr,
             _err => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse --connect value"))

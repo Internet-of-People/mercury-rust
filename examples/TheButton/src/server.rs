@@ -8,7 +8,10 @@ use mercury_connect::sdk::Call;
 use mercury_home_protocol::AppMessageFrame;
 
 use futures::Sink;
+use futures::sync::mpsc::channel;
 use futures::*;
+
+use ::either::Either;
 
 pub struct Server{
     del: Option<Interval>,
@@ -77,8 +80,11 @@ impl Server{
         }
     }
 
-    pub fn generate_event(&mut self)->bool{
+    pub fn generate_event(&mut self)-> bool {
         info!("generating event {} {}", self.event_stock, self.sent);
+
+        // iterate connected clients and send them a message
+
         self.sent += 1;
         match self.cfg.event_count {
             Some(limit) => limit == self.sent,
@@ -199,6 +205,20 @@ impl IntoFuture for Server {
     type Future = Box<Future<Item=Self::Item, Error=Self::Error>>;
 
     fn into_future(self) -> Self::Future {
+        let (tx_call, rx_call) = channel::<Call>(1);
+        let (tx_event, rx_event) = channel::<()>(1);
+
+        let rx = rx_call.map(|c| Either::Left(c)).select(rx_event.map(|e| Either::Right(e)));
+
+        rx.for_each(|v : Either<Call, ()>| {
+            /*
+            match v {
+                Either::Left(call) =
+            }
+            */
+            Ok(())
+        });
+        
         // SIGINT is terminating the server
         let sigint_fut = signal_recv(SIGINT).into_future()
             .map(|_| {
@@ -208,15 +228,11 @@ impl IntoFuture for Server {
             .map_err(|(err, _)| err);
 
         // SIGUSR1 is generating an event
-        let sigusr1_fut = signal_recv(SIGUSR1).for_each(|_| {
+        let sigusr1_fut = signal_recv(SIGUSR1).for_each(move |_| {
             info!("received SIGUSR1, generating event");            
                         
-            /// This is freaking out the borrow-checker            
-            ///if self.generate_event() {
-            ///    return Err(std::io::Error::new(std::io::ErrorKind::BrokenPipe, "event limit reached"));
-            ///} 
-                       
-            Ok(())
+            // This is freaking out the borrow-checker            
+            tx_event.clone().send(()).map(|_| ()).map_err(|err |std::io::Error::new(std::io::ErrorKind::Other, err))
         });
 
         let fut = sigint_fut.select(sigusr1_fut).map(|(item, _)| item).map_err(|(err, _)| err);

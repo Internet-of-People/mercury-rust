@@ -5,6 +5,7 @@ authors = ["Deusz <lovaszoltanr@gmail.com>"]
 
 [dependencies]
 clap ={version = "*", features = ["yaml"]}
+either = "*"
 log = "*"
 log4rs = "*"
 tempdir = "*"

@@ -12,6 +12,7 @@ extern crate tokio_core;
 extern crate tokio_timer;
 extern crate tokio_signal;
 extern crate tokio_executor;
+extern crate either;
 
 extern crate mercury_connect;
 extern crate mercury_storage;
@@ -124,9 +125,9 @@ fn application_code_internal() -> Result<(), std::io::Error> {
     }
     //GET APPLICATION CONTEXT    
     let appcx = AppContext::new(
-        matches.value_of("private-key").unwrap(), 
-        matches.value_of("home-node-public").unwrap(), 
-        matches.value_of("home-node-address").unwrap())?;
+        matches.value_of("client-key-file").unwrap(), 
+        matches.value_of("server-key-file").unwrap(), 
+        matches.value_of("server-addr").unwrap())?;
     let prof_rep = mercury_connect::SimpleProfileRepo::new();
 
     //SERVER MODE HANDLING
