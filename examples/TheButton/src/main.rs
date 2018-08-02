@@ -48,7 +48,6 @@ use tokio_timer::*;
 use tokio_signal::unix::{SIGINT, SIGUSR1, SIGUSR2};
 
 use mercury_connect::sdk::{DAppApi, Call};
-use mercury_connect::sdk_impl::DAppConnect;
 use mercury_connect::{Relation};
 use mercury_home_protocol::*;
 use mercury_storage::{async::KeyValueStore};
@@ -138,8 +137,9 @@ fn application_code_internal() -> Result<(), std::io::Error> {
             match sub_name{
                 "server"=>{
                     ServerConfig::new_from_args(args.to_owned())
-                        .map( |cfg| 
-                            Mode::Server(Server::new(cfg, DAppConnect::new(unimplemented!())))
+                        .map( |cfg|
+                            unimplemented!()
+                            //Mode::Server(Server::new(cfg, DAppConnect::new(unimplemented!())))
                         )
                 },
                 "client"=>{
@@ -155,7 +155,8 @@ fn application_code_internal() -> Result<(), std::io::Error> {
         },
         None=>{
             warn!("No subcommand given, starting in server mode");
-            Ok(Mode::Server(Server::default(DAppConnect::new(unimplemented!()))))
+            //Ok(Mode::Server(Server::default(DAppConnect::new(unimplemented!()))))
+            unimplemented!()
         }
     };
 
