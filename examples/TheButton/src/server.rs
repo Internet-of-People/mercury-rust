@@ -39,7 +39,6 @@ impl IntoFuture for Server {
         let (tx_event, rx_event) = channel::<()>(1);
 
         let rx = rx_call.map(|c| Either::Left(c)).select(rx_event.map(|e| Either::Right(e)));
-
         let calls_fut = self.mercury_app.checkin()
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err)))
             .and_then(move |call_stream| {
@@ -51,7 +50,7 @@ impl IntoFuture for Server {
                                 let (msgchan_tx, _) = channel(1);
                                 let msgtx = c.answer(Some(msgchan_tx)).to_caller;
                                 Box::new(tx_call.clone().send(msgtx).map(|_| ()).map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "failed to send to mpsc"))) as Box<Future<Item=(), Error=std::io::Error>> 
-                                },
+                            },
 
                             Err(_errmsg) => 
                                 Box::new(Ok(()).into_future()) as Box<Future<Item=(), Error=std::io::Error>>

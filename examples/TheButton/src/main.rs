@@ -102,7 +102,6 @@ const CLIENT_SUBCOMMAND : &str = "client";
 
 fn application_code_internal() -> Result<(), std::io::Error> {
     //ARGUMENT HANDLING START
-    let yaml = load_yaml!("cli.yml");
     let matches = cli().get_matches();
 
     // Print version

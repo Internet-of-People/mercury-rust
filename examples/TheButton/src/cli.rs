@@ -14,9 +14,7 @@ pub fn cli<'a, 'b>()->App<'a, 'b>{
                 (controlled by a command line switch). 
 
                 Server - Able to provide notifications to connected clients in case of events. 
-                Events can be raised via a timer, 
-                on a specific byte arriving on a uds, 
-                or via signal (SIGUSR2).")
+                Events can be raised via a timer, or via signal (SIGUSR1).")
         .arg(Arg::with_name("verbose")
             .short("v")
             .long("verbose")
