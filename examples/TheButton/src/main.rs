@@ -103,25 +103,27 @@ fn application_code_internal() -> Result<(), std::io::Error> {
     let yaml = load_yaml!("cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
 
-    //VERSION
+    // Print version
     if matches.is_present("version"){
-        println!("The Button Dapp >>> version: 0.1 pre-alpha");
+        println!("The Button dApp 0.1 pre-alpha");
+        return Ok(())
     }
-    //VERBOSITY HANDLING
+
+    // Initialize logging
     match matches.occurrences_of("verbose") {
         1 => start_logging("d"),
         2 => start_logging("t"),
         0|_ => start_logging("i"),                
     }
-    //GET APPLICATION CONTEXT    
+
+    // Constructing application context from command line args
     let appcx = AppContext::new(
         matches.value_of("client-key-file").unwrap(), 
         matches.value_of("server-key-file").unwrap(), 
         matches.value_of("server-addr").unwrap())?;
 
-    //SERVER MODE HANDLING
+    // Creating application object
     let (sub_name, sub_args) = matches.subcommand();
-    
     let app_mode = match sub_args {
         Some(args)=>{
             match sub_name{
@@ -145,8 +147,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "subcommand missing"))
     };
 
-    //TOKIO RUN
-    //TODO expand errors if needed
+    // Creating a reactor and running the application
     let mut reactor = Core::new().unwrap();
 
     let app_fut = match app_mode? {

@@ -1,4 +1,5 @@
 use super::*;
+use std::rc::Rc;
 use std::cell::RefCell;
 use std::time::Duration;
 
@@ -13,62 +14,19 @@ use ::either::Either;
 
 pub struct Server{
     cfg : ServerConfig,
+    mercury_app : Rc<DAppApi>,
 }
 
 impl Server{
-    pub fn default()->Self{
-        Self{
-            cfg : ServerConfig::new(),
-        }   
-    }
-
     pub fn new(cfg: ServerConfig) -> Self {
         /*
-        let mut intval = None;
-        let mut uds = None;
-        if let Some(delay) = cfg.event_timer{
-            intval = Some(Interval::new(std::time::Instant::now(), std::time::Duration::new(delay,0)));
-        };
-
-        if let Some(file) = cfg.event_file.clone(){
-            let mut path = String::from("\0");
-            path.push_str(&file);
-            path.push_str(".sock");
-            let sock_path = std::path::PathBuf::from(path);
-            let server = UnixListener::bind(&sock_path);
-            match server {
-                Ok(serv) => {
-                    uds = Some(serv.incoming());
-                },
-                Err(_e) => {/*TODO*/}
-            }
-        };
-        let mut reactor = tokio_core::reactor::Core::new().unwrap();
-        let callstream = reactor.run(connect.checkin()).unwrap();
-        */
         Server{
             cfg : cfg,
+            mercury_app: // TODO: initialize me
         }
+        */
+        unimplemented!()
     }
-    // fn handle_event_file(file_name: String)->u32{
-    //     let mut path = String::from("\0");
-    //     path.push_str(&file_name);
-    //     path.push_str(".sock");
-    //     let sock_path = std::path::PathBuf::from(path);
-    //     let server = t!(UnixListener::bind(&sock_path));
-    //     let uds_incoming = server.incoming()
-    //         .for_each(move | sock| {
-    //             let mut s : Vec<u8> = Vec::new();
-    //             s.resize(10, 1);
-    //             read(sock, s)
-    //                 .map(|(stream, buf, byte)|{
-    //                     Self::generate_x(byte as u32);
-    //                     //Self::read_some(stream, buf);
-    //                 })
-    //                 .then(move |_|future::ok(()))
-    //         }).then(|_| Ok(()));
-    //     tokio::run(uds_incoming);
-    // }
 }
 
 impl IntoFuture for Server {
@@ -82,7 +40,16 @@ impl IntoFuture for Server {
 
         let rx = rx_call.map(|c| Either::Left(c)).select(rx_event.map(|e| Either::Right(e)));
 
-        // let calls = Rc::new(RefCell::new(Vec::new()));
+        let calls_fut = self.mercury_app.checkin()
+            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err)))
+            .and_then(|call_stream: HomeStream<Box<IncomingCall>, String>| {
+                call_stream.for_each(|call| {
+                    // tx_call.clone().send(call)
+                    Ok(())
+                }).map_err(|()| std::io::Error::new(std::io::ErrorKind::Other, "call stream failed"))
+            });
+
+        // Handling call and event management
         let calls = RefCell::new(Vec::new());
         let rx_fut = rx.for_each(move |v : Either<Call, ()>| {   
             let tx_call_clone = tx_call.clone();
@@ -101,7 +68,7 @@ impl IntoFuture for Server {
             Ok(())
         }).map_err(|()| std::io::Error::new(std::io::ErrorKind::Other, "mpsc channel failed"));
 
-        // Interval future
+        // Interval future is generating an event periodcally
         let interval_fut = self.cfg.event_timer.map(|interval| {
             let tx_interval = tx_event.clone();
             Interval::new(std::time::Instant::now() + Duration::from_secs(interval), Duration::from_secs(interval)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
@@ -128,7 +95,9 @@ impl IntoFuture for Server {
         
         let mut fut : Box<Future<Item=(), Error=std::io::Error>>= Box::new(sigint_fut
             .select(sigusr1_fut).map(|(item, _)| item).map_err(|(err, _)| err)
-            .select(rx_fut).map(|(item, _)| item).map_err(|(err, _)| err));
+            .select(rx_fut).map(|(item, _)| item).map_err(|(err, _)| err)
+            .select(calls_fut).map(|(item, _)| item).map_err(|(err, _)| err)
+        );
         
         if interval_fut.is_some() {
             fut = Box::new(fut

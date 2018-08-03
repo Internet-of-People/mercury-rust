@@ -8,7 +8,7 @@ use std::rc::Rc;
 pub struct Client {
     appctx : AppContext,
     cfg: ClientConfig,
-    mercury_app: Rc<DAppApi>,
+    mercury_app: Rc<DAppApi>
 }
 
 impl Client{
