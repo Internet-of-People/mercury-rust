@@ -39,13 +39,10 @@ use application::{Application, EX_OK, EX_SOFTWARE, EX_USAGE};
 
 use clap::{App, ArgMatches};
 
-use futures::{Async, Future};
+use futures::Future;
 
-use tokio_uds::*;
-use tokio_io::io::read;
 use tokio_core::reactor::Core;
 use tokio_timer::*;
-use tokio_signal::unix::{SIGINT, SIGUSR1, SIGUSR2};
 
 use mercury_connect::sdk::{DAppApi, Call};
 use mercury_connect::{Relation};

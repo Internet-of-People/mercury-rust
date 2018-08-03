@@ -1,5 +1,4 @@
 use super::*;
-use std::rc::Rc;
 use std::cell::RefCell;
 use std::time::Duration;
 
@@ -8,6 +7,7 @@ use futures::sync::mpsc::channel;
 
 use mercury_connect::sdk::Call;
 use mercury_home_protocol::AppMessageFrame;
+use tokio_signal::unix::{SIGINT, SIGUSR1};
 
 use ::either::Either;
 
@@ -99,7 +99,7 @@ impl IntoFuture for Server {
             }
             
             Ok(())
-        }).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, "mpsc channel failed"));
+        }).map_err(|()| std::io::Error::new(std::io::ErrorKind::Other, "mpsc channel failed"));
 
         // Interval future
         let interval_fut = self.cfg.event_timer.map(|interval| {
@@ -122,14 +122,13 @@ impl IntoFuture for Server {
         // SIGUSR1 is generating an event
         let tx_sigint1 = tx_event.clone();
         let sigusr1_fut = signal_recv(SIGUSR1).for_each(move |_| {
-            info!("received SIGUSR1, generating event");            
-                        
+            info!("received SIGUSR1, generating event");                                    
             tx_sigint1.clone().send(()).map(|_| ()).map_err(|err |std::io::Error::new(std::io::ErrorKind::Other, err))
         });
         
         let mut fut : Box<Future<Item=(), Error=std::io::Error>>= Box::new(sigint_fut
-                    .select(sigusr1_fut).map(|(item, _)| item).map_err(|(err, _)| err)
-                    .select(rx_fut).map(|(item, _)| item).map_err(|(err, _)| err));
+            .select(sigusr1_fut).map(|(item, _)| item).map_err(|(err, _)| err)
+            .select(rx_fut).map(|(item, _)| item).map_err(|(err, _)| err));
         
         if interval_fut.is_some() {
             fut = Box::new(fut
