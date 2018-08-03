@@ -63,12 +63,12 @@ impl Relation
     pub fn new(peer: &Profile, proof: &RelationProof) -> Self
         { Self { peer: peer.clone(), proof: proof.clone() } }
 
-    pub fn call(&self, init_payload: AppMessageFrame,
-                to_caller: Option<AppMsgSink>) ->
-        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
-    {
-        unimplemented!();
-    }
+//    pub fn call(&self, init_payload: AppMessageFrame,
+//                to_caller: Option<AppMsgSink>) ->
+//        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
+//    {
+//        unimplemented!();
+//    }
 }
 
 
