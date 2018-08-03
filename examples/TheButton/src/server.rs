@@ -35,37 +35,52 @@ impl IntoFuture for Server {
     type Future = Box<Future<Item=Self::Item, Error=Self::Error>>;
 
     fn into_future(self) -> Self::Future {
-        let (tx_call, rx_call) = channel::<Call>(1);
+        let (tx_call, rx_call) = channel::<Option<AppMsgSink>>(1);
         let (tx_event, rx_event) = channel::<()>(1);
 
         let rx = rx_call.map(|c| Either::Left(c)).select(rx_event.map(|e| Either::Right(e)));
 
         let calls_fut = self.mercury_app.checkin()
             .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err)))
-            .and_then(|call_stream: HomeStream<Box<IncomingCall>, String>| {
-                call_stream.for_each(|call| {
-                    // tx_call.clone().send(call)
-                    Ok(())
-                }).map_err(|()| std::io::Error::new(std::io::ErrorKind::Other, "call stream failed"))
+            .and_then(move |call_stream| {
+                call_stream
+                    .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "call stream failed"))
+                    .for_each( move |call_result| {
+                        match call_result {
+                            Ok(c) => {
+                                let (msgchan_tx, _) = channel(1);
+                                let msgtx = c.answer(Some(msgchan_tx)).to_caller;
+                                Box::new(tx_call.clone().send(msgtx).map(|_| ()).map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "failed to send to mpsc"))) as Box<Future<Item=(), Error=std::io::Error>> 
+                                },
+
+                            Err(_errmsg) => 
+                                Box::new(Ok(()).into_future()) as Box<Future<Item=(), Error=std::io::Error>>
+                        }
+                    }) 
             });
 
         // Handling call and event management
         let calls = RefCell::new(Vec::new());
-        let rx_fut = rx.for_each(move |v : Either<Call, ()>| {   
-            let tx_call_clone = tx_call.clone();
+        let rx_fut = rx.for_each(move |v : Either<Option<AppMsgSink>, ()>| {   
             match v {
-                Either::Left(call) => 
-                    calls./*as_ref().*/borrow_mut().push(call),
+                Either::Left(call) => {
+                    if let Some(c) = call {
+                        calls.borrow_mut().push(c);
+                    }
+                    
+                    Ok(())
+                },
                 Either::Right(()) => {
                     debug!("notifying connected clients");
-                    for c in calls/*.as_ref()*/.borrow().iter() {
-                        // TODO: send message to c
-
+                    for c in calls.borrow().iter() {
+                        let cc = c.clone();
+                        tokio::spawn(cc.send(Ok(AppMessageFrame(b"".to_vec()))).map(|_| ()).map_err(|_|()));
                     }
+                    Ok(())
                 }
             }
             
-            Ok(())
+            
         }).map_err(|()| std::io::Error::new(std::io::ErrorKind::Other, "mpsc channel failed"));
 
         // Interval future is generating an event periodcally
