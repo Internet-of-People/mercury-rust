@@ -8,7 +8,7 @@ use std::rc::Rc;
 pub struct Client {
     appctx : AppContext,
     cfg: ClientConfig,
-    mercury_app: Box<DAppInit>,
+    mercury_app: Rc<DAppApi>,
 }
 
 impl Client{
@@ -33,11 +33,13 @@ impl IntoFuture for Client {
     fn into_future(self) -> Self::Future {
         let callee_profile_id = self.cfg.callee_profile_id.clone();
 
-        let f = self.mercury_app.initialize(&ApplicationId("the button".to_string()))
-                .and_then(move |api: Rc<DAppApi>| {
-                    info!("application initialized, calling {:?}", callee_profile_id);
-                    api.call(&self.cfg.callee_profile_id, AppMessageFrame(vec![]))                    
-                })
+        info!("application initialized, calling {:?}", callee_profile_id);
+        let f = self.mercury_app.call(&callee_profile_id, AppMessageFrame(vec![]))
+//            self.mercury_app.initialize(&ApplicationId("the button".to_string()))
+//                .and_then(move |api: Rc<DAppApi>| {
+//                    info!("application initialized, calling {:?}", callee_profile_id);
+//                    api.call(&callee_profile_id, AppMessageFrame(vec![]))
+//                })
                 .map_err(|err| {
                     error!("call failed: {:?}", err);
                     ()

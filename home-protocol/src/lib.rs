@@ -34,6 +34,8 @@ pub mod mercury_capnp;
 
 
 
+pub const CHANNEL_CAPACITY: usize = 1;
+
 
 // TODO
 #[derive(PartialEq, Eq, Clone, Debug)]
