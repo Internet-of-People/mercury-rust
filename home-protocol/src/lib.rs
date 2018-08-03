@@ -523,7 +523,8 @@ impl<'a> From<&'a RelationHalfProof> for RelationSignablePart {
 
 impl RelationProof
 {
-    pub const RELATION_TYPE_HOSTED_ON_HOME: &'static str = "hosted_on_home";
+    pub const RELATION_TYPE_HOSTED_ON_HOME:         &'static str = "hosted_on_home";
+    pub const RELATION_TYPE_ENABLE_CALLS_BETWEEN:   &'static str = "enable_call_between";
 
     pub fn new(rel_type: &str, a_id: &ProfileId, a_signature: &Signature, b_id: &ProfileId, b_signature: &Signature) -> Self {
         if a_id < b_id {

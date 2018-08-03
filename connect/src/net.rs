@@ -111,7 +111,6 @@ impl HomeConnector for SimpleTcpHomeConnector
         let handle_clone = self.handle.clone();
         let tcp_conns = addrs.iter().map( move |addr| SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone) );
 
-        let home_profile_clone = home_profile.clone();
         let handle_clone = self.handle.clone();
         let capnp_home = future::select_ok(tcp_conns)
             .and_then( move |(tcp_stream, _pending_futs)|

@@ -2,10 +2,10 @@ use super::*;
 
 use std::rc::Rc;
 
-use futures::sync::mpsc;
+use futures::{Future, IntoFuture, sync::mpsc};
 
 use sdk::*;
-use mercury_home_protocol::*;
+//use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
 
 
@@ -14,6 +14,36 @@ pub struct DAppConnect
 {
     pub gateway: Rc<ProfileGateway>,
     pub app:     ApplicationId
+}
+
+
+impl DAppConnect
+{
+    // Try fetching RelationProof from existing contacts. If no appropriate contact found,
+    // initiate a pairing procedure and return when it's successful
+    fn get_relation_proof(&self, profile_id: &ProfileId)
+        -> Box< Future<Item=Relation, Error=ErrorToBeSpecified>>
+    {
+        let my_id = self.gateway.signer().profile_id().to_owned();
+        let profile_id = profile_id.to_owned();
+//        let gateway = self.gateway.clone();
+        let res_fut = self.contacts()
+            .and_then( move |contacts|
+            {
+                let first_match = contacts.iter()
+                    .filter( move |relation| relation.proof.peer_id(&my_id).map(|id| id.to_owned()) == Ok(profile_id.clone()) )
+                    .nth(0);
+                match first_match {
+                    Some(relation) => Ok( relation.to_owned() ).into_future(),
+                    None => Err( ErrorToBeSpecified::TODO( "get_relation_proof: no appropriate relation found".to_string()) ).into_future()
+// TODO how to provide URL or use profileId directly?
+// TODO how to receive notification on incoming pairing response without keeping a session alive and consuming the whole event stream?
+//                        gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, profile_id)
+//                            .then( |_| unimplemented!() )
+                }
+            } );
+        Box::new(res_fut)
+    }
 }
 
 
@@ -47,20 +77,7 @@ impl DAppApi for DAppConnect
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
         -> Box< Future<Item=Call, Error=ErrorToBeSpecified> >
     {
-        let my_id = self.gateway.signer().profile_id().to_owned();
-        let profile_id = profile_id.to_owned();
-        let call_fut = self.contacts()
-            .and_then( |contacts|
-            {
-                let first_match = contacts.iter()
-                    .filter( move |relation| relation.proof.peer_id(&my_id).map(|id| id.to_owned()) == Ok(profile_id.clone()) )
-                    .nth(0);
-                match first_match {
-                    // TODO If no appropriate contact found, we should initiate a pairing request instead
-                    None => Err( ErrorToBeSpecified::TODO( "call(): no matching contact was found".to_string() ) ),
-                    Some(relation) => Ok(relation.to_owned())
-                }
-            } )
+        let call_fut = self.get_relation_proof(profile_id)
             .and_then(
             {
                 let gateway = self.gateway.clone();
@@ -74,7 +91,7 @@ impl DAppApi for DAppConnect
                         }
                     )
             } );
-        
+
         Box::new(call_fut)
     }
 }

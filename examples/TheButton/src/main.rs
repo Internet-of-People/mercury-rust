@@ -22,11 +22,13 @@ pub mod client_config;
 pub mod client;
 pub mod server_config;
 pub mod server;
+pub mod cli;
 pub mod logging;
 pub mod function;
 pub mod application;
 // pub mod signal_handling;
 
+use cli::cli;
 use client_config::*;
 use server_config::*;
 use function::*;
@@ -101,7 +103,7 @@ const CLIENT_SUBCOMMAND : &str = "client";
 fn application_code_internal() -> Result<(), std::io::Error> {
     //ARGUMENT HANDLING START
     let yaml = load_yaml!("cli.yml");
-    let matches = App::from_yaml(yaml).get_matches();
+    let matches = cli().get_matches();
 
     // Print version
     if matches.is_present("version"){
