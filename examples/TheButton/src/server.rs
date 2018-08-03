@@ -84,32 +84,32 @@ impl IntoFuture for Server {
 
         // let calls = Rc::new(RefCell::new(Vec::new()));
         let calls = RefCell::new(Vec::new());
-        rx.for_each(move |v : Either<Call, ()>| {            
+        let rx_fut = rx.for_each(move |v : Either<Call, ()>| {   
+            let tx_call_clone = tx_call.clone();
             match v {
                 Either::Left(call) => 
                     calls./*as_ref().*/borrow_mut().push(call),
                 Either::Right(()) => {
+                    debug!("notifying connected clients");
                     for c in calls/*.as_ref()*/.borrow().iter() {
                         // TODO: send message to c
+
                     }
                 }
             }
             
             Ok(())
-        });
+        }).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, "mpsc channel failed"));
 
         // Interval future
         let interval_fut = self.cfg.event_timer.map(|interval| {
             let tx_interval = tx_event.clone();
-            Interval::new(std::time::Instant::now(), Duration::from_secs(interval)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
+            Interval::new(std::time::Instant::now() + Duration::from_secs(interval), Duration::from_secs(interval)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
                 .for_each(move |_| {
                     info!("interval timer fired, generating event");
-                    // tx_interval.clone().send(()).map(|_| ()).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
                     tx_interval.clone().send(()).map(|_| ()).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
                 })
         });
-
-
 
         // SIGINT is terminating the server
         let sigint_fut = signal_recv(SIGINT).into_future()
@@ -126,16 +126,10 @@ impl IntoFuture for Server {
                         
             tx_sigint1.clone().send(()).map(|_| ()).map_err(|err |std::io::Error::new(std::io::ErrorKind::Other, err))
         });
-
-        // SIGUSR1 is generating an event
-        let sigusr2_fut = signal_recv(SIGUSR2).for_each(move |_| {
-            info!("received SIGUSR2, toggling automatic event generation");            
-            Ok(())
-        });
         
         let mut fut : Box<Future<Item=(), Error=std::io::Error>>= Box::new(sigint_fut
                     .select(sigusr1_fut).map(|(item, _)| item).map_err(|(err, _)| err)
-                    .select(sigusr2_fut).map(|(item, _)| item).map_err(|(err, _)| err));
+                    .select(rx_fut).map(|(item, _)| item).map_err(|(err, _)| err));
         
         if interval_fut.is_some() {
             fut = Box::new(fut

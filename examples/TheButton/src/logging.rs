@@ -24,8 +24,8 @@ pub fn start_logging(levelstr : &str) {
     let config = Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
         .appender(Appender::builder().build("logfile", Box::new(logfile)))
-        .logger(Logger::builder().build("tokio_core::reactor", LevelFilter::Info))
-        .logger(Logger::builder().build("tokio_reactor", LevelFilter::Info))
+        .logger(Logger::builder().build("tokio_core::reactor", LevelFilter::Warn))
+        .logger(Logger::builder().build("tokio_reactor", LevelFilter::Warn))
         .build(Root::builder().appender("stdout").appender("logfile").build(level))
         .unwrap();
 

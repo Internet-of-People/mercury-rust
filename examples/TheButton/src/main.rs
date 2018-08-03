@@ -35,7 +35,7 @@ use client::Client;
 use logging::start_logging;
 use std::net::SocketAddr;
 use futures::IntoFuture;
-use application::{Application, EX_OK, EX_SOFTWARE, EX_UNAVAILABLE, EX_TEMPFAIL};
+use application::{Application, EX_OK, EX_SOFTWARE, EX_USAGE};
 
 use clap::{App, ArgMatches};
 
@@ -87,12 +87,19 @@ fn application_code() -> i32 {
     match application_code_internal() {
         Ok(_) => 
             EX_OK,
-        Err(err) => 
+        Err(err) => {       
+            error!("application failed: {}", err);
             match err.kind() {
+                std::io::ErrorKind::InvalidInput => EX_USAGE,
                 _ => EX_SOFTWARE
             }
+        }
     }
 }
+
+const SERVER_SUBCOMMAND : &str = "server";
+const CLIENT_SUBCOMMAND : &str = "client";
+
 
 fn application_code_internal() -> Result<(), std::io::Error> {
     //ARGUMENT HANDLING START
@@ -105,29 +112,15 @@ fn application_code_internal() -> Result<(), std::io::Error> {
     }
     //VERBOSITY HANDLING
     match matches.occurrences_of("verbose") {
-        0 => {
-            start_logging("o");
-            println!("verbose 0: logging off")
-        },
-        1 => {
-            start_logging("w");
-            warn!("verbose 1: logging warn")
-        },
-        2 => {
-            start_logging("i");
-            info!("verbose 2: logging info")
-        },
-        3 | _ => {
-            start_logging("d");
-            debug!("verbose 3 or more: debug")
-        },
+        1 => start_logging("d"),
+        2 => start_logging("t"),
+        0|_ => start_logging("i"),                
     }
     //GET APPLICATION CONTEXT    
     let appcx = AppContext::new(
         matches.value_of("client-key-file").unwrap(), 
         matches.value_of("server-key-file").unwrap(), 
         matches.value_of("server-addr").unwrap())?;
-    let prof_rep = mercury_connect::SimpleProfileRepo::new();
 
     //SERVER MODE HANDLING
     let (sub_name, sub_args) = matches.subcommand();
@@ -135,29 +128,24 @@ fn application_code_internal() -> Result<(), std::io::Error> {
     let app_mode = match sub_args {
         Some(args)=>{
             match sub_name{
-                "server"=>{
+                SERVER_SUBCOMMAND => 
                     ServerConfig::new_from_args(args.to_owned())
                         .map( |cfg|
                             Mode::Server(Server::new(cfg))
-                            //Mode::Server(Server::new(cfg, DAppConnect::new(unimplemented!())))
-                        )
-                },
-                "client"=>{
+                        ),
+                CLIENT_SUBCOMMAND => 
                     ClientConfig::new_from_args(args.to_owned())
                         .map( |cfg| 
                             Mode::Client(Client::new(cfg, appcx))
-                        )
-                },
-                _=>{
-                    Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse subcommand"))
-                }
+                        ),
+                _=> 
+                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("unknown subcommand '{}'", sub_name)))
+                
+                
             }
         },
-        None=>{
-            warn!("No subcommand given, starting in server mode");
-            //Ok(Mode::Server(Server::default(DAppConnect::new(unimplemented!()))))
-            unimplemented!()
-        }
+        _=> 
+            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "subcommand missing"))
     };
 
     //TOKIO RUN
@@ -167,7 +155,6 @@ fn application_code_internal() -> Result<(), std::io::Error> {
     let app_fut = match app_mode? {
         Mode::Client(client_fut) => 
             Box::new(client_fut.into_future()),
-
         Mode::Server(server_fut) => 
             Box::new(server_fut.into_future()),  
     };
