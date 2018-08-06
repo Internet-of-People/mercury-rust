@@ -29,20 +29,22 @@ pub mod application;
 // pub mod signal_handling;
 
 use cli::cli;
-use client_config::*;
-use server_config::*;
 use function::*;
 use server::Server;
 use client::Client;
+use client_config::*;
+use server_config::*;
 use logging::start_logging;
-use std::net::SocketAddr;
-use futures::IntoFuture;
 use application::{Application, EX_OK, EX_SOFTWARE, EX_USAGE};
+
+use std::net::SocketAddr;
 
 use clap::{App, ArgMatches};
 
 use futures::Future;
+use futures::{IntoFuture, Stream};
 
+use tokio_signal::unix::SIGINT;
 use tokio_core::reactor::Core;
 use tokio_timer::*;
 
@@ -158,7 +160,15 @@ fn application_code_internal() -> Result<(), std::io::Error> {
             Box::new(server_fut.into_future()),  
     };
 
-    reactor.run(app_fut)
+    // SIGINT is terminating the server
+    let sigint_fut = signal_recv(SIGINT).into_future()
+        .map(|_| {
+            info!("received SIGINT, terminating application");
+            ()
+        })
+        .map_err(|(err, _)| err);
+
+    reactor.run(app_fut.select(sigint_fut).map(|(item, _)| item).map_err(|(err, _)| err))
 }
 
 fn main() {

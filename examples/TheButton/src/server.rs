@@ -8,7 +8,7 @@ use futures::sync::mpsc::channel;
 
 use mercury_connect::sdk::Call;
 use mercury_home_protocol::AppMessageFrame;
-use tokio_signal::unix::{SIGINT, SIGUSR1};
+use tokio_signal::unix::{SIGUSR1};
 
 use ::either::Either;
 
@@ -92,14 +92,6 @@ impl IntoFuture for Server {
                 })
         });
 
-        // SIGINT is terminating the server
-        let sigint_fut = signal_recv(SIGINT).into_future()
-            .map(|_| {
-                info!("received SIGINT, terminating server");
-                ()
-            })
-            .map_err(|(err, _)| err);
-
         // SIGUSR1 is generating an event
         let tx_sigint1 = tx_event.clone();
         let sigusr1_fut = signal_recv(SIGUSR1).for_each(move |_| {
@@ -107,10 +99,12 @@ impl IntoFuture for Server {
             tx_sigint1.clone().send(()).map(|_| ()).map_err(|err |std::io::Error::new(std::io::ErrorKind::Other, err))
         });
         
-        let mut fut : Box<Future<Item=(), Error=std::io::Error>>= Box::new(sigint_fut
-            .select(sigusr1_fut).map(|(item, _)| item).map_err(|(err, _)| err)
-            .select(rx_fut).map(|(item, _)| item).map_err(|(err, _)| err)
-            .select(calls_fut).map(|(item, _)| item).map_err(|(err, _)| err)
+        let mut fut : Box<Future<Item=(), Error=std::io::Error>> = 
+            // Box::new(sigint_fut
+                //.select(sigusr1_fut).map(|(item, _)| item).map_err(|(err, _)| err)
+            Box::new(sigusr1_fut
+                .select(rx_fut).map(|(item, _)| item).map_err(|(err, _)| err)
+                .select(calls_fut).map(|(item, _)| item).map_err(|(err, _)| err)
         );
         
         if interval_fut.is_some() {
