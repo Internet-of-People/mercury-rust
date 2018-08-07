@@ -199,17 +199,17 @@ fn test_call(){
 //    assert!(res.is_ok());
 //}
 
-#[test]
-#[ignore]
-fn test_pair_res(){
-    //TODO could be tested by sending pair response and asserting the events relation_proof that the peer receives to what is should be
-    let mut setup = dummy::TestSetup::setup();
-    let zero = setup.profilegate.pair_response(
-            dummy::dummy_relation("test_relation"));
-
-    let res = setup.reactor.run(zero);
-    assert!(res.is_ok());
-}
+//#[test]
+//#[ignore]
+//fn test_pair_res(){
+//    //TODO could be tested by sending pair response and asserting the events relation_proof that the peer receives to what is should be
+//    let mut setup = dummy::TestSetup::setup();
+//    let zero = setup.profilegate.pair_response(
+//            dummy::dummy_relation("test_relation"));
+//
+//    let res = setup.reactor.run(zero);
+//    assert!(res.is_ok());
+//}
 
 #[ignore]
 #[test]
@@ -367,8 +367,7 @@ fn and_then_story(){
                     {
                         Err(_e) => panic!("ProfileEvent assert fail"),
                         Ok(ref proof) => //TODO should look something like gateway.accept(half_proof)
-                            other_gateway.pair_response(
-                                Relation::new(&other_profile, proof) )
+                            other_gateway.pair_response( proof.to_owned() )
                     }
                 },
                 _=>panic!("ProfileEvent assert fail")

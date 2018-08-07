@@ -15,7 +15,7 @@ extern crate tokio_io;
 
 use std::rc::Rc;
 
-use futures::{future, Future};
+use futures::{future, Future, IntoFuture};
 
 use mercury_home_protocol::*;
 
@@ -96,7 +96,7 @@ pub trait ProfileGateway
     fn pair_request(&self, relation_type: &str, with_profile_id: &ProfileId, pairing_url: Option<&str>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    fn pair_response(&self, rel: Relation) ->
+    fn pair_response(&self, proof: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame,
@@ -313,11 +313,22 @@ impl ProfileGateway for ProfileGatewayImpl
     }
 
 
-    fn pair_response(&self, rel: Relation) ->
+    fn pair_response(&self, proof: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
-        let pair_fut = self.any_home_of(&rel.peer)
-            .and_then( move |(_home_proof, home)| home.pair_response(rel.proof) );
+        let peer_id = match proof.peer_id( self.signer.profile_id() ) {
+            Ok(peer_id) => peer_id.to_owned(),
+            Err(e) => return Box::new( Err(e).into_future() ),
+        };
+
+        let pair_fut = self.profile_repo.load(&peer_id)
+            .and_then( {
+                let profile_repo = self.profile_repo.clone();
+                let connector = self.home_connector.clone();
+                let signer = self.signer.clone();
+                move |profile| Self::any_home_of2(&profile, profile_repo, connector, signer)
+            } )
+            .and_then( move |(_home_proof, home)| home.pair_response(proof) );
         Box::new(pair_fut)
     }
 

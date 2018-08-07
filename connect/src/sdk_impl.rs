@@ -26,7 +26,7 @@ impl DAppConnect
     {
         let my_id = self.gateway.signer().profile_id().to_owned();
         let profile_id = profile_id.to_owned();
-//        let gateway = self.gateway.clone();
+        let gateway = self.gateway.clone();
         let res_fut = self.contacts()
             .and_then( move |contacts|
             {
@@ -35,10 +35,10 @@ impl DAppConnect
                     .nth(0);
                 match first_match {
                     Some(relation) => Ok( relation.to_owned() ).into_future(),
-                    None => Err( ErrorToBeSpecified::TODO( "get_relation_proof: no appropriate relation found".to_string()) ).into_future()
-// TODO how to provide URL or use profileId directly?
+                    None =>
 // TODO how to receive notification on incoming pairing response without keeping a session alive and consuming the whole event stream?
-//                        gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, profile_id)
+                        Err( ErrorToBeSpecified::TODO( "get_relation_proof: no appropriate relation found".to_string()) ).into_future()
+//                        gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &profile_id, None)
 //                            .then( |_| unimplemented!() )
                 }
             } );
