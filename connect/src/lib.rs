@@ -93,7 +93,7 @@ pub trait ProfileGateway
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
 
-    fn pair_request(&self, relation_type: &str, with_profile_url: &str) ->
+    fn pair_request(&self, relation_type: &str, with_profile_id: &ProfileId, pairing_url: Option<&str>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
     fn pair_response(&self, rel: Relation) ->
@@ -287,7 +287,7 @@ impl ProfileGateway for ProfileGatewayImpl
     }
 
 
-    fn pair_request(&self, relation_type: &str, with_profile_url: &str) ->
+    fn pair_request(&self, relation_type: &str, with_profile_id: &ProfileId, pairing_url: Option<&str>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let profile_repo_clone = self.profile_repo.clone();
@@ -295,8 +295,12 @@ impl ProfileGateway for ProfileGatewayImpl
         let signer_clone = self.signer.clone();
         let rel_type_clone = relation_type.to_owned();
 
-        let pair_fut = self.profile_repo
-            .resolve(with_profile_url)
+        let profile_fut = match pairing_url {
+            Some(url) => self.profile_repo.resolve(url),
+            None      => self.profile_repo.load(with_profile_id),
+        };
+
+        let pair_fut = profile_fut
             .and_then( move |profile|
             {
                 //let half_proof = ProfileGatewayImpl::new_half_proof(rel_type_clone.as_str(), &profile.id, signer_clone.clone() );

@@ -186,18 +186,18 @@ fn test_call(){
     assert!(res.is_ok());
 }
 
-#[test]
-#[ignore]
-fn test_pair_req(){
-    //TODO could be tested by sending pair request and asserting the events half_proof that the peer receives to what is should be
-    //let signo = Rc::new( dummy::Signo::new( "TestKey" ) );
-    let mut setup = dummy::TestSetup::setup();
-
-    let zero = setup.profilegate.pair_request( "test_relation", "test_url" );
-
-    let res = setup.reactor.run(zero);
-    assert!(res.is_ok());
-}
+//#[test]
+//#[ignore]
+//fn test_pair_req(){
+//    //TODO could be tested by sending pair request and asserting the events half_proof that the peer receives to what is should be
+//    //let signo = Rc::new( dummy::Signo::new( "TestKey" ) );
+//    let mut setup = dummy::TestSetup::setup();
+//
+//    let zero = setup.profilegate.pair_request( "test_relation", "test_url" );
+//
+//    let res = setup.reactor.run(zero);
+//    assert!(res.is_ok());
+//}
 
 #[test]
 #[ignore]
@@ -269,9 +269,7 @@ fn and_then_story(){
     .join( reg_receiver.take(1).collect().map_err(|_e|ErrorToBeSpecified::TODO(String::from("cannot join on receive"))) )
     .and_then(|_reg_string|{
         println!("user_one_requests");
-        let f = other_signo.profile_id().0.clone();
-        let problem = unsafe{String::from_utf8_unchecked(f)};
-        own_gateway.pair_request( "relation_dummy_type", &problem )
+        own_gateway.pair_request( "relation_dummy_type", &other_signo.profile_id(), None )
     })
     .and_then(| _ |{
         request_sender.send(String::from("Other user registered")).map_err(|_e|ErrorToBeSpecified::TODO(String::from("cannot join on receive")))

@@ -92,7 +92,7 @@ fn main(){
     
             // }
             "3" =>{
-                profilegateway.pair_request("relation_dummy_type", "url");
+                profilegateway.pair_request("relation_dummy_type", &ProfileId(b"profile_id".to_vec()), None);
     
             }
             "4" =>{

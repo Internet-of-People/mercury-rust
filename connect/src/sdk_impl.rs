@@ -20,7 +20,7 @@ pub struct DAppConnect
 impl DAppConnect
 {
     // Try fetching RelationProof from existing contacts. If no appropriate contact found,
-    // initiate a pairing procedure and return when it's successful
+    // initiate a pairing procedure and return when it's completed, failed or timed out
     fn get_relation_proof(&self, profile_id: &ProfileId)
         -> Box< Future<Item=Relation, Error=ErrorToBeSpecified>>
     {
@@ -47,6 +47,8 @@ impl DAppConnect
 }
 
 
+// TODO this aims only feature-completeness initially for a HelloWorld dApp,
+//      but we also have to include security with authorization and UI-plugins later
 impl DAppApi for DAppConnect
 {
     fn selected_profile(&self) -> &ProfileId
@@ -78,8 +80,7 @@ impl DAppApi for DAppConnect
         -> Box< Future<Item=Call, Error=ErrorToBeSpecified> >
     {
         let call_fut = self.get_relation_proof(profile_id)
-            .and_then(
-            {
+            .and_then( {
                 let gateway = self.gateway.clone();
                 let app_id = self.app.clone();
                 let (to_caller, from_callee) = mpsc::channel(CHANNEL_CAPACITY);
