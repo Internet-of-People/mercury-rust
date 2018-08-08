@@ -1,5 +1,6 @@
 use super::*;
 
+use std::cell::RefCell;
 use std::rc::Rc;
 
 use futures::{Future, IntoFuture, sync::mpsc};
@@ -12,13 +13,35 @@ use mercury_storage::async::KeyValueStore;
 
 pub struct DAppConnect
 {
-    pub gateway: Rc<ProfileGateway>,
-    pub app:     ApplicationId
+    gateway: Rc<ProfileGateway>,
+    app:     ApplicationId,
+    session: Rc<RefCell< Option<Rc<HomeSession>> >>,
 }
 
 
 impl DAppConnect
 {
+    pub fn new(gateway: Rc<ProfileGateway>, app: &ApplicationId) -> Self
+        { Self{ gateway, app: app.to_owned(), session: Rc::new( RefCell::new(None) ) } }
+
+
+    fn login(&self) -> Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
+    {
+        if let Some(ref session_rc) = *self.session.borrow()
+            { return Box::new( Ok( session_rc.clone() ).into_future() ) }
+
+        let login_fut = self.gateway.login()
+            .map( {
+                let session_cache = self.session.clone();
+                move |session| {
+                    *session_cache.borrow_mut() = Some( session.clone() );
+                    session
+                }
+            } );
+        Box::new(login_fut)
+    }
+
+
     // Try fetching RelationProof from existing contacts. If no appropriate contact found,
     // initiate a pairing procedure and return when it's completed, failed or timed out
     fn get_relation_proof(&self, profile_id: &ProfileId)
@@ -67,7 +90,7 @@ impl DAppApi for DAppConnect
 
     fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=ErrorToBeSpecified> >
     {
-        let checkin_fut = self.gateway.login()
+        let checkin_fut = self.login()
             .and_then( {
                 let app = self.app.clone();
                 move |session| Ok( session.checkin_app(&app) )
