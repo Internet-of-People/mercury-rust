@@ -4,19 +4,24 @@ pub struct ServerConfig{
     pub event_file : Option<String>,
     pub event_timer : Option<u64>,
     pub event_count : Option<u32>,
+    // pub private_key: PrivateKey,            // private key of the client
 }
 
 impl ServerConfig{
-    pub fn new() -> Self {
-        Self {
-            event_file : None,
-            event_timer : None,
-            event_count : None
-        }
-    }
+    // pub fn new() -> Self {
+    //     Self {
+    //         event_file : None,
+    //         event_timer : None,
+    //         event_count : None,
+    //         private_key :       // private key of the client
+    //     }
+    // }
 
 
     pub fn new_from_args(args: ArgMatches)-> Result<Self, std::io::Error> {
+        // let private_key_file = args.value_of("client-key-file").unwrap();                  // since the option is required, unwrap() is valid here
+        // let private_key = PrivateKey(std::fs::read(private_key_file)?);
+
         let file_name = args.value_of("event-file").map(|s| s.into());
 
         let timer = match args.value_of("event-timer") {
@@ -51,7 +56,8 @@ impl ServerConfig{
         Ok(Self{
             event_file: file_name,
             event_timer: timer,
-            event_count: count
+            event_count: count,
+            // private_key: private_key,
         })
     }
 }

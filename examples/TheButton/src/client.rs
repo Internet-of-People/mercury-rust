@@ -6,22 +6,25 @@ use futures::Stream;
 use std::rc::Rc;
 
 pub struct Client {
-    appctx : AppContext,
+    appcx : AppContext,
     cfg: ClientConfig,
     mercury_app: Rc<DAppApi>
 }
 
 impl Client{
-    pub fn new(cfg: ClientConfig, appctx: AppContext) -> Self{
-        unimplemented!();
-        /*
+    pub fn new(cfg: ClientConfig, appcx: AppContext, reactor: &mut Core) -> Self{
+        //TODO privatekey things
+        let privk = PrivateKey( b"\x83\x3F\xE6\x24\x09\x23\x7B\x9D\x62\xEC\x77\x58\x75\x20\x91\x1E\x9A\x75\x9C\xEC\x1D\x19\x75\x5B\x7D\xA9\x01\xB9\x6D\xCA\x3D\x42".to_vec() );
+        let client_signer = Rc::new( Ed25519Signer::new(&privk).unwrap() );
+        let mut profile_store = SimpleProfileRepo::new();
+        let home_connector = SimpleTcpHomeConnector::new(reactor.handle());
+        let profile_gw = Rc::new(ProfileGatewayImpl::new(client_signer, Rc::new(profile_store),  Rc::new(home_connector)));
+        let dapi = reactor.run((profile_gw as Rc<ProfileGateway>).initialize(&ApplicationId("buttondapp".into()))).unwrap();
         Self{
-            appctx: appctx,
+            appcx: appcx,
             cfg: cfg,
-            fut: None,
-            // mercury: Box::new(DappConnect::new(appctx.priv_key))
+            mercury_app: dapi,
         }
-        */
     }
 }
 

@@ -48,8 +48,12 @@ use tokio_signal::unix::SIGINT;
 use tokio_core::reactor::Core;
 use tokio_timer::*;
 
-use mercury_connect::sdk::{DAppApi, Call};
-use mercury_connect::{Relation};
+
+use mercury_connect::net::SimpleTcpHomeConnector;
+use mercury_connect::sdk::{DAppInit, DAppApi, Call};
+use mercury_connect::{SimpleProfileRepo, ProfileGatewayImpl, ProfileGateway, Relation};
+use mercury_home_protocol::AppMessageFrame;
+use mercury_home_protocol::crypto::Ed25519Signer;
 use mercury_home_protocol::*;
 use mercury_storage::{async::KeyValueStore};
 
@@ -62,12 +66,13 @@ pub struct AppContext{
 
 impl AppContext{
     pub fn new(priv_key: &str, node_id: &str, node_addr: &str)->Result<Self, std::io::Error>{
-        let key = PrivateKey(priv_key.into());
-        let prof = ProfileId(node_id.into());
+        let server_id = ProfileId(std::fs::read(node_id)?);
+        let private_key = PrivateKey(std::fs::read(priv_key)?);
+
         let addr = node_addr.parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
         Ok(Self{
-            priv_key: key,
-            home_node: prof,
+            priv_key: private_key,
+            home_node: server_id,
             home_address: addr,
         })
     }
@@ -121,10 +126,12 @@ fn application_code_internal() -> Result<(), std::io::Error> {
 
     // Constructing application context from command line args
     let appcx = AppContext::new(
-        matches.value_of("client-key-file").unwrap(), 
-        matches.value_of("server-key-file").unwrap(), 
+        matches.value_of("private-key-file").unwrap(), 
+        matches.value_of("home-node-key-file").unwrap(), 
         matches.value_of("server-addr").unwrap())?;
 
+    // Creating a reactor
+    let mut reactor = Core::new().unwrap();
     // Creating application object
     let (sub_name, sub_args) = matches.subcommand();
     let app_mode = match sub_args {
@@ -133,12 +140,12 @@ fn application_code_internal() -> Result<(), std::io::Error> {
                 SERVER_SUBCOMMAND => 
                     ServerConfig::new_from_args(args.to_owned())
                         .map( |cfg|
-                            Mode::Server(Server::new(cfg))
+                            Mode::Server(Server::new(cfg, appcx, &mut reactor))
                         ),
                 CLIENT_SUBCOMMAND => 
                     ClientConfig::new_from_args(args.to_owned())
                         .map( |cfg| 
-                            Mode::Client(Client::new(cfg, appcx))
+                            Mode::Client(Client::new(cfg, appcx, &mut reactor))
                         ),
                 _=> 
                     return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("unknown subcommand '{}'", sub_name)))
@@ -150,8 +157,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
             return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "subcommand missing"))
     };
 
-    // Creating a reactor and running the application
-    let mut reactor = Core::new().unwrap();
+    // Running the application
 
     let app_fut = match app_mode? {
         Mode::Client(client_fut) => 
