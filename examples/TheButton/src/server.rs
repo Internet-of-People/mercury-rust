@@ -18,11 +18,19 @@ pub struct Server{
 
 impl Server{
     pub fn new(cfg: ServerConfig, appcx : AppContext, reactor: &mut Core) -> Self {
-        //TODO privatekey things
-        let privk = PrivateKey( b"\x83\x3F\xE6\x24\x09\x23\x7B\x9D\x62\xEC\x77\x58\x75\x20\x91\x1E\x9A\x75\x9C\xEC\x1D\x19\x75\x5B\x7D\xA9\x01\xB9\x6D\xCA\x3D\x42".to_vec() );
+        let privk = appcx.priv_key.clone();
         let client_signer = Rc::new( Ed25519Signer::new(&privk).unwrap() );
         let mut profile_store = SimpleProfileRepo::new();
         let home_connector = SimpleTcpHomeConnector::new(reactor.handle());
+        let server_key = appcx.home_pub.clone();
+        let server_id = ProfileId::from(&server_key);
+        let home_profile = Profile::new_home(
+            server_id, 
+            server_key, 
+            appcx.home_address.clone().to_multiaddr().expect("Failed to parse server address")
+        );
+        profile_store.insert(home_profile);
+        
         let profile_gw = Rc::new(ProfileGatewayImpl::new(client_signer, Rc::new(profile_store),  Rc::new(home_connector)));
         let dapi = reactor.run((profile_gw as Rc<ProfileGateway>).initialize(&ApplicationId("buttondapp".into()))).unwrap();
         Server{

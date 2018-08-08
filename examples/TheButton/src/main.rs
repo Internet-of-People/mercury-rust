@@ -13,6 +13,7 @@ extern crate tokio_timer;
 extern crate tokio_signal;
 extern crate tokio_executor;
 extern crate either;
+extern crate multiaddr;
 
 extern crate mercury_connect;
 extern crate mercury_storage;
@@ -48,31 +49,33 @@ use tokio_signal::unix::SIGINT;
 use tokio_core::reactor::Core;
 use tokio_timer::*;
 
+use multiaddr::ToMultiaddr;
 
+use mercury_connect::*;
 use mercury_connect::net::SimpleTcpHomeConnector;
 use mercury_connect::sdk::{DAppInit, DAppApi, Call};
 use mercury_connect::{SimpleProfileRepo, ProfileGatewayImpl, ProfileGateway, Relation};
+use mercury_home_protocol::*;
 use mercury_home_protocol::AppMessageFrame;
 use mercury_home_protocol::crypto::Ed25519Signer;
-use mercury_home_protocol::*;
 use mercury_storage::{async::KeyValueStore};
 
 
 pub struct AppContext{
     priv_key: PrivateKey,
-    home_node: ProfileId,
+    home_pub: PublicKey,
     home_address: SocketAddr,
 }
 
 impl AppContext{
     pub fn new(priv_key: &str, node_id: &str, node_addr: &str)->Result<Self, std::io::Error>{
-        let server_id = ProfileId(std::fs::read(node_id)?);
+        let server_id = PublicKey(std::fs::read(node_id)?);
         let private_key = PrivateKey(std::fs::read(priv_key)?);
 
         let addr = node_addr.parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
         Ok(Self{
             priv_key: private_key,
-            home_node: server_id,
+            home_pub: server_id,
             home_address: addr,
         })
     }

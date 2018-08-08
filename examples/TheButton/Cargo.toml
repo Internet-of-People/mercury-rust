@@ -17,6 +17,7 @@ tokio-timer = "*"
 tokio-core = "*"
 tokio-uds = "*"
 tokio-io = "*"
+multiaddr = "*"
 mercury-home-protocol = { path="../../home-protocol" }
 mercury-storage = {path="../../storage"}
 mercury-connect = {path="../../connect"}
