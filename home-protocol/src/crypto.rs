@@ -4,8 +4,6 @@ use signatory::{ed25519::FromSeed, providers::dalek};
 use signatory::ed25519::Signer as SignatoryEdSigner;
 
 use ::*;
-use ::Error;
-use ::ErrorKind;
 
 
 

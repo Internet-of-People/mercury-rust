@@ -210,8 +210,8 @@ pub struct PeerContext
 
 
 
-pub type HomeStream<Elem, RemoteErr> = mpsc::Receiver< Result<Elem, RemoteErr> >;
-pub type HomeSink<Elem, RemoteErr>   = mpsc::Sender< Result<Elem, RemoteErr> >;
+pub type HomeStream<Elem, RemoteErr> = mpsc::Receiver< std::result::Result<Elem, RemoteErr> >;
+pub type HomeSink<Elem, RemoteErr>   = mpsc::Sender< std::result::Result<Elem, RemoteErr> >;
 
 /// Potentially a whole network of nodes with internal routing and sharding
 pub trait ProfileRepo
@@ -489,10 +489,10 @@ impl<'a> From<ProfileId> for Vec<u8>
 
 
 
-fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> Result<S::Ok>
+fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> std::result::Result<S::Ok, S::Error>
     where S: Serializer,
 {
-    let mut seq = s.serialize_seq(Some(x.len())).chain_err(|| ErrorKind::MultiaddrSerializationFailed("sequence serialization failed".to_string()))?;
+    let mut seq = s.serialize_seq(Some(x.len()))?;
     for mr in x{
         match seq.serialize_element(&mr.to_string()){
             Ok(_)=>{();},
@@ -502,11 +502,10 @@ fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> Result<S::Ok>
     seq.end()
 }
 
-fn deserialize_multiaddr_vec<'de, D>(deserializer: D) -> Result<Vec<Multiaddr>>
+fn deserialize_multiaddr_vec<'de, D>(deserializer: D) -> std::result::Result<Vec<Multiaddr>, D::Error>
     where D: Deserializer<'de>,
 {
-    let mapped: Vec<String> = Deserialize::deserialize(deserializer)
-        .chain_err(|| ErrorKind::MultiaddrDeserializationFailed("failed to deserialize multiaddress sequence".to_string()))?;
+    let mapped: Vec<String> = Deserialize::deserialize(deserializer)?;
     let mut res = Vec::new();
     for str_ma in mapped.iter(){;
         match str_ma.to_multiaddr(){
