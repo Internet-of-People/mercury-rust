@@ -38,6 +38,7 @@ use server_config::*;
 use logging::start_logging;
 use application::{Application, EX_OK, EX_SOFTWARE, EX_USAGE};
 
+use std::rc::Rc;
 use std::net::SocketAddr;
 
 use clap::{App, ArgMatches};
@@ -46,37 +47,53 @@ use futures::Future;
 use futures::{IntoFuture, Stream};
 
 use tokio_signal::unix::SIGINT;
-use tokio_core::reactor::Core;
+use tokio_core::reactor::{Core, Handle};
 use tokio_timer::*;
 
-use multiaddr::ToMultiaddr;
+use multiaddr::{Multiaddr, ToMultiaddr};
 
 use mercury_connect::*;
 use mercury_connect::net::SimpleTcpHomeConnector;
-use mercury_connect::sdk::{DAppInit, DAppApi, Call};
-use mercury_connect::{SimpleProfileRepo, ProfileGatewayImpl, ProfileGateway, Relation};
+use mercury_connect::sdk::{DAppInit, DAppApi};
+use mercury_connect::{SimpleProfileRepo, ProfileGatewayImpl, ProfileGateway};
 use mercury_home_protocol::*;
 use mercury_home_protocol::AppMessageFrame;
 use mercury_home_protocol::crypto::Ed25519Signer;
-use mercury_storage::{async::KeyValueStore};
 
 
 pub struct AppContext{
     priv_key: PrivateKey,
     home_pub: PublicKey,
     home_address: SocketAddr,
+    gateway: Rc<ProfileGateway>
 }
 
 impl AppContext{
-    pub fn new(priv_key: &str, node_id: &str, node_addr: &str)->Result<Self, std::io::Error>{
-        let server_id = PublicKey(std::fs::read(node_id)?);
+    pub fn new(priv_key: &str, node_id: &str, node_addr: &str, handle: Handle)->Result<Self, std::io::Error>{
+        let server_pub = PublicKey(std::fs::read(node_id)?);
         let private_key = PrivateKey(std::fs::read(priv_key)?);
+        let server_id = ProfileId::from(&server_pub);
 
-        let addr = node_addr.parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
+        let addr :SocketAddr = node_addr.parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
+        let multaddr : Multiaddr = addr.clone().to_multiaddr().expect("Failed to parse server address");
+        
+        let client_signer = Rc::new( Ed25519Signer::new(&private_key).unwrap() );
+        let mut profile_store = SimpleProfileRepo::new();
+        let home_connector = SimpleTcpHomeConnector::new(handle);
+        let home_profile = Profile::new_home(
+            server_id, 
+            server_pub.clone(), 
+            multaddr
+        );
+        profile_store.insert(home_profile);
+        
+        let profile_gw = Rc::new(ProfileGatewayImpl::new(client_signer, Rc::new(profile_store),  Rc::new(home_connector)));
+
         Ok(Self{
             priv_key: private_key,
-            home_pub: server_id,
+            home_pub: server_pub,
             home_address: addr,
+            gateway: profile_gw
         })
     }
 }
@@ -127,14 +144,16 @@ fn application_code_internal() -> Result<(), std::io::Error> {
         0|_ => start_logging("i"),                
     }
 
+    // Creating a reactor
+    let mut reactor = Core::new().unwrap();
+
     // Constructing application context from command line args
     let appcx = AppContext::new(
         matches.value_of("private-key-file").unwrap(), 
         matches.value_of("home-node-key-file").unwrap(), 
-        matches.value_of("server-addr").unwrap())?;
+        matches.value_of("server-addr").unwrap(),
+        reactor.handle())?;
 
-    // Creating a reactor
-    let mut reactor = Core::new().unwrap();
     // Creating application object
     let (sub_name, sub_args) = matches.subcommand();
     let app_mode = match sub_args {
@@ -143,12 +162,12 @@ fn application_code_internal() -> Result<(), std::io::Error> {
                 SERVER_SUBCOMMAND => 
                     ServerConfig::new_from_args(args.to_owned())
                         .map( |cfg|
-                            Mode::Server(Server::new(cfg, appcx, &mut reactor))
+                            Mode::Server(Server::new(cfg, appcx))
                         ),
                 CLIENT_SUBCOMMAND => 
                     ClientConfig::new_from_args(args.to_owned())
                         .map( |cfg| 
-                            Mode::Client(Client::new(cfg, appcx, &mut reactor))
+                            Mode::Client(Client::new(cfg, appcx))
                         ),
                 _=> 
                     return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("unknown subcommand '{}'", sub_name)))
