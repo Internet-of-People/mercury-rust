@@ -27,7 +27,7 @@ impl IntoFuture for Client {
     fn into_future(self) -> Self::Future {
         let callee_profile_id = self.cfg.callee_profile_id.clone();
 
-        let f = (self.appcx.gateway as Rc<ProfileGateway>).initialize(&ApplicationId("buttondapp".into()))
+        let f = (self.appcx.gateway as Rc<ProfileGateway>).initialize(&ApplicationId("buttondapp".into() ), &self.appcx.handle)
         .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "encountered error"))
         .and_then(move |mercury_app|{
             info!("application initialized, calling {:?}", callee_profile_id);

@@ -176,7 +176,7 @@ fn test_call(){
     let mut setup = dummy::TestSetup::setup();
 
     let call_messages = setup.profilegate.call(
-        dummy::dummy_relation("test_relation"),
+        dummy::dummy_relation("test_relation").proof,
         ApplicationId( String::from( "Undertale" ) ),
         AppMessageFrame( Vec::from( "Megalovania" ) ),
         None
@@ -300,7 +300,7 @@ fn and_then_story(){
         println!( "***call(RelationWithCallee, InWhatApp, InitMessage) -> CallMessages" );
         let relation = Relation::new(&profile,&relation_proof);
         own_gateway.call(
-            relation,
+            relation.proof,
             ApplicationId( String::from( "SampleApp" ) ),
             AppMessageFrame( Vec::from( "whatever" ) ),
             Some(msg_sender)
