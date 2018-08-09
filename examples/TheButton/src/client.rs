@@ -28,7 +28,7 @@ impl IntoFuture for Client {
         let callee_profile_id = self.cfg.callee_profile_id.clone();
 
         let f = (self.appcx.gateway as Rc<ProfileGateway>).initialize(&ApplicationId("buttondapp".into()))
-        .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "encountered error"))
+        .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect"))
         .and_then(move |mercury_app|{
             info!("application initialized, calling {:?}", callee_profile_id);
             mercury_app.call(&callee_profile_id, AppMessageFrame(vec![]))
@@ -58,7 +58,7 @@ impl IntoFuture for Client {
                             })                        
                     })
                     .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "encountered error"))
-        }).map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "encountered error"));
+        });
         Box::new(f)
     }
 }
