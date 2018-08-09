@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use futures::{Future, IntoFuture};
+use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
@@ -19,7 +20,7 @@ pub struct Call
 pub trait DAppInit
 {
     // Implies asking the user interface to manually pick a profile the app is used with
-    fn initialize(&self, app: &ApplicationId)
+    fn initialize(&self, app: &ApplicationId, handle: &reactor::Handle)
         -> Box< Future<Item=Rc<DAppApi>, Error=ErrorToBeSpecified> >;
 }
 
@@ -43,11 +44,11 @@ pub trait DAppApi
 
 impl DAppInit for Rc<ProfileGateway>
 {
-    fn initialize(&self, app: &ApplicationId)
+    fn initialize(&self, app: &ApplicationId, handle: &reactor::Handle)
         -> Box< Future<Item=Rc<DAppApi>, Error=ErrorToBeSpecified> >
     {
         Box::new( Ok(
-            Rc::new( DAppConnect::new( self.clone(), app) ) as Rc<DAppApi>
+            Rc::new( DAppConnect::new( self.clone(), app, handle) ) as Rc<DAppApi>
         ).into_future() )
     }
 }

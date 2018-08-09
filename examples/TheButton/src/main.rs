@@ -65,7 +65,8 @@ pub struct AppContext{
     priv_key: PrivateKey,
     home_pub: PublicKey,
     home_address: SocketAddr,
-    gateway: Rc<ProfileGateway>
+    gateway: Rc<ProfileGateway>,
+    handle: Handle,
 }
 
 impl AppContext{
@@ -79,7 +80,7 @@ impl AppContext{
         
         let client_signer = Rc::new( Ed25519Signer::new(&private_key).unwrap() );
         let mut profile_store = SimpleProfileRepo::new();
-        let home_connector = SimpleTcpHomeConnector::new(handle);
+        let home_connector = SimpleTcpHomeConnector::new( handle.clone() );
         let home_profile = Profile::new_home(
             server_id, 
             server_pub.clone(), 
@@ -93,7 +94,8 @@ impl AppContext{
             priv_key: private_key,
             home_pub: server_pub,
             home_address: addr,
-            gateway: profile_gw
+            gateway: profile_gw,
+            handle
         })
     }
 }

@@ -35,7 +35,7 @@ impl IntoFuture for Server {
 
         let rx = rx_call.map(|c| Either::Left(c)).select(rx_event.map(|e| Either::Right(e)));
 
-        let calls_fut = (self.appcx.gateway as Rc<ProfileGateway>).initialize(&ApplicationId("buttondapp".into()))
+        let calls_fut = (self.appcx.gateway as Rc<ProfileGateway>).initialize(&ApplicationId("buttondapp".into()), &self.appcx.handle)
         .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect"))
         .and_then(|mercury_app|{
             mercury_app.checkin()

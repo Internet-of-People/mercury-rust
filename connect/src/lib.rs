@@ -99,7 +99,7 @@ pub trait ProfileGateway
     fn pair_response(&self, proof: RelationProof) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
-    fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame,
+    fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
             to_caller: Option<AppMsgSink>) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >;
 
@@ -333,13 +333,22 @@ impl ProfileGateway for ProfileGatewayImpl
     }
 
 
-    fn call(&self, rel: Relation, app: ApplicationId, init_payload: AppMessageFrame,
+    fn call(&self, proof: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
             to_caller: Option<AppMsgSink>) ->
         Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
     {
-        let call_fut = self.any_home_of(&rel.peer)
+        let peer_id = match proof.peer_id( self.signer.profile_id() ) {
+            Ok(id) => id.to_owned(),
+            Err(e) => return Box::new( Err(e).into_future() ),
+        };
+
+        let profile_repo = self.profile_repo.clone();
+        let home_connector = self.home_connector.clone();
+        let signer = self.signer.clone();
+        let call_fut = self.profile_repo.load(&peer_id)
+            .and_then( |profile| Self::any_home_of2(&profile, profile_repo, home_connector, signer) )
             .and_then( move |(_home_proof, home)|
-                home.call(app, CallRequestDetails { relation: rel.proof,
+                home.call(app, CallRequestDetails { relation: proof,
                     init_payload: init_payload, to_caller: to_caller } ) ) ;
         Box::new(call_fut)
     }
