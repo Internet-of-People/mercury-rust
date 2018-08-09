@@ -32,11 +32,6 @@ impl IntoFuture for Client {
         .and_then(move |mercury_app|{
             info!("application initialized, calling {:?}", callee_profile_id);
             mercury_app.call(&callee_profile_id, AppMessageFrame(vec![]))
-    //            mercury_app.initialize(&ApplicationId("the button".to_string()))
-    //                .and_then(move |api: Rc<DAppApi>| {
-    //                    info!("application initialized, calling {:?}", callee_profile_id);
-    //                    api.call(&callee_profile_id, AppMessageFrame(vec![]))
-    //                })
                     .map_err(|err| {
                         error!("call failed: {:?}", err);
                         ()
