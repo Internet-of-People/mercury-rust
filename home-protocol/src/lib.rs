@@ -23,6 +23,7 @@ extern crate tokio_core;
 extern crate tokio_io;
 
 use std::{rc::Rc, str};
+use std::error;
 
 use bincode::serialize;
 use futures::{Future, sync::mpsc};
@@ -73,7 +74,54 @@ error_chain! {
         SignatureValidationFailed(msg: String) {
             display("signature validation failed: {}", msg)
         }
+
+        TlsHandshakeFailed(msg: String) {
+            display("handshake failed: {}", msg)
+        }
         
+        RelationSigningFailed(msg: String) {
+            display("relation signing failed: {}", msg)
+        }
+
+        RelationValidationFailed(msg: String) {
+            display("relation validation failed: {}", msg)
+        }
+
+        ProfileValidationFailed(msg: String) {
+            display("profile validation failed: {}", msg)
+        }
+
+        MultiaddrSerializationFailed(msg: String) {
+            display("multiaddress serialization failed: {}", msg)
+        }
+
+        MultiaddrDeserializationFailed(msg: String) {
+            display("multiaddress deserialization failed: {}", msg)
+        }
+
+        PeerIdRetreivalFailed(msg: String) {
+            display("failed to fetch peer id: {}", msg)
+        }
+    }
+}
+
+pub type SFuture<T> = Box<Future<Item = T, Error = Error>>;
+
+pub trait FutureChainErr<T> {
+    fn chain_err<F, E>(self, callback: F) -> SFuture<T>
+        where F: FnOnce() -> E + 'static,
+              E: Into<ErrorKind>;
+}
+
+impl<F> FutureChainErr<F::Item> for F
+    where F: Future + 'static,
+          F::Error: error::Error + Send + 'static,
+{
+    fn chain_err<C, E>(self, callback: C) -> SFuture<F::Item>
+        where C: FnOnce() -> E + 'static,
+              E: Into<ErrorKind>,
+    {
+        Box::new(self.then(|r| r.chain_err(callback)))
     }
 }
 
@@ -175,7 +223,7 @@ pub trait ProfileRepo
     /// Look for specified `id` and return. This might involve searching for the latest version
     /// of the profile in the dht, but if it's the profile's home server, could come from memory, too.
     fn load(&self, id: &ProfileId) ->
-        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Profile, Error=Error> >;
 
     /// Same as load(), but also contains hints for resolution, therefore it's more efficient than load(id)
     ///
@@ -185,7 +233,7 @@ pub trait ProfileRepo
     /// * ProfileID of its home server
     /// * last known multiaddress(es) of its home server
     fn resolve(&self, url: &str) ->
-        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Profile, Error=Error> >;
 
     // TODO notifications on profile updates should be possible
 }
@@ -319,31 +367,31 @@ pub trait Home: ProfileRepo
 {
     // NOTE because we support multihash, the id cannot be guessed from the public key
     fn claim(&self, profile: ProfileId) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=OwnProfile, Error=Error> >;
 
     // TODO consider how to enforce overwriting the original ownprofile with the modified one
     //      with the pairing proof, especially the error case
     fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
+        Box< Future<Item=OwnProfile, Error=(OwnProfile,Error)> >;
 
     /// By calling this method, any active session of the same profile is closed.
     fn login(&self, proof_of_home: &RelationProof) ->
-        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Rc<HomeSession>, Error=Error> >;
 
     /// The peer in `half_proof` must be hosted on this home server.
     /// Returns Error if the peer is not hosted on this home server or an empty result if it is.
     /// Note that the peer will directly invoke `pair_response` on the initiator's home server and call pair_response to send PairingResponse event
     fn pair_request(&self, half_proof: RelationHalfProof) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+        Box< Future<Item=(), Error=Error> >;
 
     fn pair_response(&self, rel: RelationProof) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+        Box< Future<Item=(), Error=Error> >;
 
     // NOTE initiating a real P2P connection (vs a single frame push notification),
     //      the caller must fill in some message channel to itself.
     //      A successful call returns a channel to callee.
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
-        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Option<AppMsgSink>, Error=Error> >;
 
 // TODO consider how to do this in a later milestone
 //    fn presence(&self, rel: Relation, app: ApplicationId) ->
@@ -385,12 +433,12 @@ pub trait IncomingCall
 pub trait HomeSession
 {
     fn update(&self, own_prof: OwnProfile) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+        Box< Future<Item=(), Error=Error> >;
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home
     // TODO should we return a modified OwnProfile here with this home removed from the homes of persona facet in profile?
     fn unregister(&self, newhome: Option<Profile>) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+        Box< Future<Item=(), Error=Error> >;
 
 
     fn events(&self) -> HomeStream<ProfileEvent, String>;
@@ -400,7 +448,7 @@ pub trait HomeSession
 
     // TODO remove this after testing
     fn ping(&self, txt: &str) ->
-        Box< Future<Item=String, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=String, Error=Error> >;
 
 
 // TODO ban features are delayed to a later milestone
@@ -441,10 +489,10 @@ impl<'a> From<ProfileId> for Vec<u8>
 
 
 
-fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> Result<S::Ok, S::Error>
+fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> Result<S::Ok>
     where S: Serializer,
 {
-    let mut seq = s.serialize_seq(Some(x.len()))?;
+    let mut seq = s.serialize_seq(Some(x.len())).chain_err(|| ErrorKind::MultiaddrSerializationFailed("sequence serialization failed".to_string()))?;
     for mr in x{
         match seq.serialize_element(&mr.to_string()){
             Ok(_)=>{();},
@@ -454,10 +502,11 @@ fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> Result<S::Ok, S::Erro
     seq.end()
 }
 
-fn deserialize_multiaddr_vec<'de, D>(deserializer: D) -> Result<Vec<Multiaddr>, D::Error>
+fn deserialize_multiaddr_vec<'de, D>(deserializer: D) -> Result<Vec<Multiaddr>>
     where D: Deserializer<'de>,
 {
-    let mapped: Vec<String> = Deserialize::deserialize(deserializer)?;
+    let mapped: Vec<String> = Deserialize::deserialize(deserializer)
+        .chain_err(|| ErrorKind::MultiaddrDeserializationFailed("failed to deserialize multiaddress sequence".to_string()))?;
     let mut res = Vec::new();
     for str_ma in mapped.iter(){;
         match str_ma.to_multiaddr(){
@@ -499,12 +548,12 @@ impl PeerContext
     pub fn peer_pubkey(&self) -> &PublicKey { &self.peer_pubkey }
     pub fn peer_id(&self) -> &ProfileId { &self.peer_id }
 
-    pub fn validate(&self, validator: &Validator) -> Result<(),ErrorToBeSpecified>
+    pub fn validate(&self, validator: &Validator) -> Result<()>
     {
         validator.validate_profile( self.peer_pubkey(), self.peer_id() )
             .and_then( |valid|
                 if valid { Ok( () ) }
-                else { Err( ErrorToBeSpecified::TODO( "Peer context is invalid".to_owned() ) ) } )
+                else { Err( ErrorKind::ProfileValidationFailed("Peer context is invalid".to_string() ).into() ) } )
     }
 }
 
@@ -568,11 +617,11 @@ impl RelationProof
     }
 
     pub fn sign_remaining_half(half_proof: &RelationHalfProof, signer: &Signer)
-        -> Result<Self, ErrorToBeSpecified>
+        -> Result<Self>
     {
         let my_profile_id = signer.profile_id().to_owned();
         if half_proof.peer_id != my_profile_id
-            { return Err(ErrorToBeSpecified::TODO( "RelationHalfProof peer_id is not my ProfileId, refused to sign".to_owned() ) ); }
+            { return Err(ErrorKind::RelationSigningFailed("RelationHalfProof peer_id is not my ProfileId, refused to sign".to_string() ).into() ); }
 
         let signable = RelationSignablePart::new(
             &half_proof.relation_type,
@@ -583,23 +632,23 @@ impl RelationProof
                        &my_profile_id, &signable.sign(signer) ) )
     }
 
-    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, ErrorToBeSpecified> {
+    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId> {
         if self.a_id == *my_id {
             Ok(&self.b_id)
         } else if self.b_id == *my_id {
             Ok(&self.a_id)
         } else {
-            Err(ErrorToBeSpecified::TODO(format!("{:?} is not present in relation {:?}", my_id, self)))
+            Err(ErrorKind::PeerIdRetreivalFailed(format!("{:?} is not present in relation {:?}", my_id, self)).into())
         }
     }
 
-    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, ErrorToBeSpecified> {
+    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature> {
         if self.a_id == *my_id {
             Ok(&self.b_signature)
         } else if self.b_id == *my_id {
             Ok(&self.a_signature)
         } else {
-            Err(ErrorToBeSpecified::TODO(format!("{:?} is not present in relation {:?}", my_id, self)))
+            Err(ErrorKind::PeerIdRetreivalFailed(format!("{:?} is not present in relation {:?}", my_id, self)).into())
         }
     }
 }
@@ -608,7 +657,7 @@ impl RelationProof
 
 pub trait Validator: ProfileValidator + SignatureValidator
 {
-    fn validate_half_proof(&self, half_proof: &RelationHalfProof, signer_public_key: &PublicKey) -> Result<(), ErrorToBeSpecified> {
+    fn validate_half_proof(&self, half_proof: &RelationHalfProof, signer_public_key: &PublicKey) -> Result<()> {
         self.validate_signature(signer_public_key,
             &RelationSignablePart::from(half_proof).serialized(), &half_proof.signature)?;
         Ok(())
@@ -621,7 +670,7 @@ pub trait Validator: ProfileValidator + SignatureValidator
         public_key_1: &PublicKey,
         id_2: &ProfileId,
         public_key_2: &PublicKey
-    ) -> Result<(), ErrorToBeSpecified> {
+    ) -> Result<()> {
         // TODO consider inverting relation_type for different directions
         let signable_a = RelationSignablePart::new(
             &relation_proof.relation_type,
@@ -636,7 +685,9 @@ pub trait Validator: ProfileValidator + SignatureValidator
         ).serialized();
 
         let peer_of_id_1 = relation_proof.peer_id(&id_1)?;
-        if peer_of_id_1 != id_2 {return Err(ErrorToBeSpecified::TODO("The relation does not contain both id_1 and id_2".to_owned()));}
+        if peer_of_id_1 != id_2 {
+            return Err(ErrorKind::RelationValidationFailed("The relation does not contain both id_1 and id_2".to_string()).into());
+        }
 
         if *peer_of_id_1 == relation_proof.b_id {
             // id_1 is 'proof.id_a'

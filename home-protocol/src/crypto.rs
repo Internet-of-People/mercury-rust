@@ -166,14 +166,14 @@ impl CompositeValidator
 impl ProfileValidator for CompositeValidator
 {
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
-        -> Result<bool, ErrorToBeSpecified>
+        -> Result<bool>
     { self.profile_validator.validate_profile(public_key, profile_id) }
 }
 
 impl SignatureValidator for CompositeValidator
 {
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
-        -> Result<bool, ErrorToBeSpecified>
+        -> Result<bool>
     { self.signature_validator.validate_signature(public_key, data, signature) }
 }
 
