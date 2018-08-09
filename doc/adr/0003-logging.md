@@ -1,4 +1,4 @@
-# 0001. Logging in mercury stack
+# 0003. Logging in mercury stack
 
 Date: 2018-07-19
 
