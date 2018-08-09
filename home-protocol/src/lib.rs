@@ -1,3 +1,5 @@
+#![recursion_limit = "1024"]
+
 extern crate bincode;
 extern crate bytes;
 extern crate capnp;
@@ -10,6 +12,10 @@ extern crate log;
 extern crate multiaddr;
 extern crate multihash;
 extern crate serde;
+
+#[macro_use]
+extern crate error_chain;
+
 #[macro_use]
 extern crate serde_derive;
 extern crate signatory;
@@ -37,11 +43,6 @@ pub mod mercury_capnp;
 pub const CHANNEL_CAPACITY: usize = 1;
 
 
-// TODO
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub enum ErrorToBeSpecified { TODO(String) }
-
-
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ProfileId(pub Vec<u8>); // NOTE multihash::encode() output
 
@@ -54,7 +55,27 @@ pub struct PrivateKey(pub Vec<u8>);
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Signature(pub Vec<u8>);
 
+error_chain! {
+    errors {
+        
+        HashDecodeFailed(msg: String) {
+            display("hash decode failed: {}", msg)
+        }
+        
+        HashEncodeFailed(msg: String) {
+            display("hash encode failed: {}", msg)
+        }
+        
+        SignerCreationFailed(msg: String) {
+            display("signer creation failed: {}", msg)
+        }
 
+        SignatureValidationFailed(msg: String) {
+            display("signature validation failed: {}", msg)
+        }
+        
+    }
+}
 
 /// Something that can sign data, but cannot give out the private key.
 /// Usually implemented using a private key internally, but also enables hardware wallets.

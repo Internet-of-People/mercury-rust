@@ -1,17 +1,18 @@
-use std::error::Error;
 
 use multihash;
 use signatory::{ed25519::FromSeed, providers::dalek};
 use signatory::ed25519::Signer as SignatoryEdSigner;
 
 use ::*;
+use ::Error;
+use ::ErrorKind;
 
 
 
 pub trait ProfileValidator
 {
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
-        -> Result<bool, ErrorToBeSpecified>;
+        -> Result<bool>;
 }
 
 impl Default for Box<ProfileValidator> {
@@ -32,13 +33,12 @@ impl Default for MultiHashProfileValidator
 impl ProfileValidator for MultiHashProfileValidator
 {
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
-        -> Result<bool, ErrorToBeSpecified>
+        -> Result<bool>
     {
         let id_hashalgo = multihash::decode(profile_id.0.as_slice())
-            .map_err(|e| ErrorToBeSpecified::TODO(e.description().to_owned()))
-            ?.alg;
+            .chain_err(|| ErrorKind::HashDecodeFailed("MultiHashProfileValidator::validate_profile()".to_string()))?.alg;
         let key_hash = multihash::encode(id_hashalgo, public_key.0.as_slice())
-            .map_err(|e| ErrorToBeSpecified::TODO(e.description().to_owned()))?;
+            .chain_err(|| ErrorKind::HashEncodeFailed("MultiHashProfileValidator::validate_profile()".to_string()))?;
         Ok(key_hash == profile_id.0)
     }
 }
@@ -48,7 +48,7 @@ impl ProfileValidator for MultiHashProfileValidator
 pub trait SignatureValidator
 {
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
-        -> Result<bool, ErrorToBeSpecified>;
+        -> Result<bool>;
 }
 
 impl Default for Box<SignatureValidator> {
@@ -68,12 +68,12 @@ pub struct Ed25519Signer
 
 impl Ed25519Signer
 {
-    pub fn new(private_key: &PrivateKey) -> Result<Self, ErrorToBeSpecified>
+    pub fn new(private_key: &PrivateKey) -> Result<Self>
     {
         let signer = dalek::Ed25519Signer::from_seed( private_key.0.as_slice() )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
+            .chain_err(|| ErrorKind::SignerCreationFailed("from_seed()".to_string()))?;
         let ed_public_key = signer.public_key()
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
+            .chain_err(|| ErrorKind::SignerCreationFailed("public_key()".to_string()))?;
         let public_key = PublicKey( ed_public_key.as_ref().to_vec() );
         //let profile_hash = multihash::encode( multihash::Hash::Keccak256, public_key.0.as_slice() )
         //    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
@@ -111,17 +111,17 @@ impl Default for Ed25519Validator
 impl SignatureValidator for Ed25519Validator
 {
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
-        -> Result<bool, ErrorToBeSpecified>
+        -> Result<bool>
     {
         use signatory::ed25519::{DefaultVerifier, Verifier};
-        let pubkey = ::signatory::ed25519::PublicKey::from_bytes( public_key.0.as_slice() )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
+        let pubkey = ::signatory::ed25519::PublicKey::from_bytes(public_key.0.as_slice())
+            .chain_err(|| ErrorKind::SignatureValidationFailed("failed to convert public key".to_string()))?;
         let signature = ::signatory::ed25519::Signature::from_bytes( signature.0.as_slice() )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
+            .chain_err(|| ErrorKind::SignatureValidationFailed("failed to convert signature".to_string()))?;
         DefaultVerifier::verify(&pubkey, data, &signature)
             // TODO hwo to determine when to return Ok(false) here, i.e. signature does not match but validation was otherwise successful
             .map( |()| true )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+            .chain_err( || ErrorKind::SignatureValidationFailed("signature verification failed".to_string()))
     }
 }
 
