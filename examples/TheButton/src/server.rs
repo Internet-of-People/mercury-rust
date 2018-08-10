@@ -1,5 +1,5 @@
 use super::*;
-use std::rc::Rc;
+
 use std::cell::RefCell;
 use std::time::Duration;
 
@@ -13,30 +13,13 @@ use ::either::Either;
 pub struct Server{
     cfg : ServerConfig,
     appcx : AppContext,
-    mercury_app : Rc<DAppApi>,
 }
 
 impl Server{
-    pub fn new(cfg: ServerConfig, appcx : AppContext, reactor: &mut Core) -> Self {
-        let privk = appcx.priv_key.clone();
-        let client_signer = Rc::new( Ed25519Signer::new(&privk).unwrap() );
-        let mut profile_store = SimpleProfileRepo::new();
-        let home_connector = SimpleTcpHomeConnector::new(reactor.handle());
-        let server_key = appcx.home_pub.clone();
-        let server_id = ProfileId::from(&server_key);
-        let home_profile = Profile::new_home(
-            server_id, 
-            server_key, 
-            appcx.home_address.clone().to_multiaddr().expect("Failed to parse server address")
-        );
-        profile_store.insert(home_profile);
-        
-        let profile_gw = Rc::new(ProfileGatewayImpl::new(client_signer, Rc::new(profile_store),  Rc::new(home_connector)));
-        let dapi = reactor.run((profile_gw as Rc<ProfileGateway>).initialize(&ApplicationId("buttondapp".into()))).unwrap();
+    pub fn new(cfg: ServerConfig, appcx : AppContext) -> Self {
         Server{
             cfg : cfg,
             appcx : appcx,
-            mercury_app: dapi
         }
     }
 }
@@ -51,24 +34,29 @@ impl IntoFuture for Server {
         let (tx_event, rx_event) = channel::<()>(1);
 
         let rx = rx_call.map(|c| Either::Left(c)).select(rx_event.map(|e| Either::Right(e)));
-        let calls_fut = self.mercury_app.checkin()
-            .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err)))
-            .and_then(move |call_stream| {
-                call_stream
-                    .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "call stream failed"))
-                    .for_each( move |call_result| {
-                        match call_result {
-                            Ok(c) => {
-                                let (msgchan_tx, _) = channel(1);
-                                let msgtx = c.answer(Some(msgchan_tx)).to_caller;
-                                Box::new(tx_call.clone().send(msgtx).map(|_| ()).map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "failed to send to mpsc"))) as Box<Future<Item=(), Error=std::io::Error>> 
-                            },
 
-                            Err(_errmsg) => 
-                                Box::new(Ok(()).into_future()) as Box<Future<Item=(), Error=std::io::Error>>
-                        }
-                    }) 
-            });
+        let calls_fut = (self.appcx.gateway as Rc<ProfileGateway>).initialize(&ApplicationId("buttondapp".into()), &self.appcx.handle)
+        .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect"))
+        .and_then(|mercury_app|{
+            mercury_app.checkin()
+                .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err)))
+                .and_then(move |call_stream| {
+                    call_stream
+                        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "call stream failed"))
+                        .for_each( move |call_result| {
+                            match call_result {
+                                Ok(c) => {
+                                    let (msgchan_tx, _) = channel(1);
+                                    let msgtx = c.answer(Some(msgchan_tx)).to_caller;
+                                    Box::new(tx_call.clone().send(msgtx).map(|_| ()).map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "failed to send to mpsc"))) as Box<Future<Item=(), Error=std::io::Error>> 
+                                },
+
+                                Err(_errmsg) => 
+                                    Box::new(Ok(()).into_future()) as Box<Future<Item=(), Error=std::io::Error>>
+                            }
+                        }) 
+                })
+        });
 
         // Handling call and event management
         let calls = RefCell::new(Vec::new());
