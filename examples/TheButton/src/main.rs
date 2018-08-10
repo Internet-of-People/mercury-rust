@@ -125,8 +125,8 @@ fn application_code() -> i32 {
     }
 }
 
-const SERVER_SUBCOMMAND : &str = "server";
-const CLIENT_SUBCOMMAND : &str = "client";
+const SERVER_SUBCOMMAND : &str = cli::CLI_SERVER;
+const CLIENT_SUBCOMMAND : &str = cli::CLI_CLIENT;
 
 
 fn application_code_internal() -> Result<(), std::io::Error> {
@@ -134,13 +134,13 @@ fn application_code_internal() -> Result<(), std::io::Error> {
     let matches = cli().get_matches();
 
     // Print version
-    if matches.is_present("version"){
+    if matches.is_present(cli::CLI_VERSION){
         println!("The Button dApp 0.1 pre-alpha");
         return Ok(())
     }
 
     // Initialize logging
-    match matches.occurrences_of("verbose") {
+    match matches.occurrences_of(cli::CLI_VERSION) {
         1 => start_logging("d"),
         2 => start_logging("t"),
         0|_ => start_logging("i"),                
@@ -151,9 +151,9 @@ fn application_code_internal() -> Result<(), std::io::Error> {
 
     // Constructing application context from command line args
     let appcx = AppContext::new(
-        matches.value_of("private-key-file").unwrap(), 
-        matches.value_of("home-node-key-file").unwrap(), 
-        matches.value_of("server-addr").unwrap(),
+        matches.value_of(cli::CLI_PRIVATE_KEY_FILE).unwrap(), 
+        matches.value_of(cli::CLI_HOME_NODE_KEY_FILE).unwrap(), 
+        matches.value_of(cli::CLI_SERVER_ADDRESS).unwrap(),
         reactor.handle())?;
 
     // Creating application object

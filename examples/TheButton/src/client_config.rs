@@ -28,7 +28,7 @@ impl ClientConfig{
             }
         };
 
-        let callee_profile_id = ProfileId(args.value_of("connect").unwrap().as_bytes().to_vec()); // option is required
+        let callee_profile_id = ProfileId(args.value_of(cli::CLI_CONNECT).unwrap().as_bytes().to_vec()); // option is required
 
         info!("On fail: {:?}",on_fail);
 
