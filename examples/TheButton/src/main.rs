@@ -125,10 +125,6 @@ fn application_code() -> i32 {
     }
 }
 
-const SERVER_SUBCOMMAND : &str = cli::CLI_SERVER;
-const CLIENT_SUBCOMMAND : &str = cli::CLI_CLIENT;
-
-
 fn application_code_internal() -> Result<(), std::io::Error> {
     //ARGUMENT HANDLING START
     let matches = cli().get_matches();
@@ -161,12 +157,12 @@ fn application_code_internal() -> Result<(), std::io::Error> {
     let app_mode = match sub_args {
         Some(args)=>{
             match sub_name{
-                SERVER_SUBCOMMAND => 
+                cli::CLI_SERVER => 
                     ServerConfig::new_from_args(args.to_owned())
                         .map( |cfg|
                             Mode::Server(Server::new(cfg, appcx))
                         ),
-                CLIENT_SUBCOMMAND => 
+                cli::CLI_CLIENT => 
                     ClientConfig::new_from_args(args.to_owned())
                         .map( |cfg| 
                             Mode::Client(Client::new(cfg, appcx))
