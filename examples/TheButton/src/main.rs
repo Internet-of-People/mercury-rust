@@ -136,7 +136,7 @@ fn application_code_internal() -> Result<(), std::io::Error> {
     }
 
     // Initialize logging
-    match matches.occurrences_of(cli::CLI_VERSION) {
+    match matches.occurrences_of(cli::CLI_VERBOSE) {
         1 => start_logging("d"),
         2 => start_logging("t"),
         0|_ => start_logging("i"),                
