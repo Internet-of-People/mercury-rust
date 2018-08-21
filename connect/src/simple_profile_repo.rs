@@ -24,8 +24,9 @@ impl ProfileRepo for SimpleProfileRepo {
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         HomeStream<Profile,String>
     {
-        let (send, recv) = futures::sync::mpsc::channel(0);
-        recv
+        unimplemented!()
+//        let (send, recv) = futures::sync::mpsc::channel(0);
+//        recv
     }
 
     /// Look for specified `id` and return. This might involve searching for the latest version

@@ -66,8 +66,9 @@ impl ProfileRepo for HomeClientCapnProto
         HomeStream<Profile, String>
     {
         // TODO properly implement this
-        let (send, recv) = mpsc::channel(CHANNEL_CAPACITY);
-        recv
+        unimplemented!()
+//        let (send, recv) = mpsc::channel(CHANNEL_CAPACITY);
+//        recv
     }
 
 
