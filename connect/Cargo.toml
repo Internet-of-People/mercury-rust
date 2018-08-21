@@ -3,9 +3,6 @@ name = "mercury-connect"
 version = "0.1.0"
 authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 
-[[bin]]
-name = "mercury-connect"
-
 [dependencies]
 clap ={version = "*", features = ["yaml"]}
 capnp = "0.8"
