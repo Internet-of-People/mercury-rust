@@ -57,8 +57,9 @@ impl Drop for HomeDispatcherCapnProto
 
 impl profile_repo::Server for HomeDispatcherCapnProto
 {
-    fn list(&mut self, params: profile_repo::ListParams,
-            mut results: profile_repo::ListResults)
+//    fn list(&mut self, params: profile_repo::ListParams,
+//            mut results: profile_repo::ListResults)
+    fn list(&mut self, _params: profile_repo::ListParams, _results: profile_repo::ListResults)
         -> Promise<(), ::capnp::Error>
     {
         // TODO properly implement this
@@ -320,7 +321,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
 
 
     fn checkin_app(&mut self, params: home_session::CheckinAppParams,
-                   results: home_session::CheckinAppResults)
+                   _results: home_session::CheckinAppResults)
         -> Promise<(), ::capnp::Error>
     {
         // Receive a proxy from client to which the server will send notifications on incoming calls

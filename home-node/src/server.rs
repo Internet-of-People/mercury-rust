@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use std::error::Error;
 use std::time::Duration;
 
-use futures::{future, stream, sync, Future, Sink};
+use futures::{future, stream, Future, Sink};
 use futures::sync::{mpsc, oneshot};
 use tokio_core::reactor::{self, Timeout};
 
@@ -129,8 +129,9 @@ impl ProfileRepo for HomeConnectionServer
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         HomeStream<Profile, String>
     {
-        let (send, receive) = mpsc::channel(CHANNEL_CAPACITY);
-        receive
+        unimplemented!()
+//        let (send, receive) = mpsc::channel(CHANNEL_CAPACITY);
+//        receive
     }
 
     fn load(&self, id: &ProfileId) ->
@@ -141,11 +142,12 @@ impl ProfileRepo for HomeConnectionServer
         Box::new(profile_fut)
     }
 
-    fn resolve(&self, url: &str) ->
+    fn resolve(&self, _url: &str) ->
         Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
     {
         // TODO parse URL and fetch profile accordingly
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeServer/ProfileRepo.resolve"))) )
+        unimplemented!()
+//        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeServer/ProfileRepo.resolve"))) )
     }
 }
 
@@ -235,7 +237,7 @@ impl Home for HomeConnectionServer
         Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
     {
         if *proof_of_home.relation_type != *RelationProof::RELATION_TYPE_HOSTED_ON_HOME
-            { return return Box::new(future::err(ErrorToBeSpecified::TODO("login: access denied: wrong relation type".to_owned()) ) ); }
+            { return Box::new(future::err(ErrorToBeSpecified::TODO("login: access denied: wrong relation type".to_owned()) ) ); }
 
         let profile_id = match proof_of_home.peer_id( self.context.my_signer().profile_id() )
         {
@@ -315,7 +317,7 @@ impl Home for HomeConnectionServer
         let to_profile = match call_req.relation.peer_id( self.context.peer_id() )
         {
             Ok(profile_id) => profile_id.to_owned(),
-            Err(e) => return Box::new( future::err(ErrorToBeSpecified::TODO(
+            Err(_e) => return Box::new( future::err(ErrorToBeSpecified::TODO(
                 "pair_response: access denied: the profile id that you authenticated with does not show up in the call_req.relation".to_owned())) )
         };
 
@@ -499,7 +501,8 @@ impl HomeSession for HomeSessionServer
 
 
     // TODO is the ID of the new home enough here or do we need the whole profile?
-    fn unregister(&self, newhome: Option<Profile>) ->
+    // TODO newhome should be stored and some special redirect to new home should be sent when someone looking for the profile
+    fn unregister(&self, _newhome: Option<Profile>) ->
         Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let profile_id = self.context.peer_id();
@@ -521,7 +524,7 @@ impl HomeSession for HomeSessionServer
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
     {
-        let (sender, receiver) = sync::mpsc::channel(CHANNEL_CAPACITY);
+        let (sender, receiver) = mpsc::channel(CHANNEL_CAPACITY);
 
         match self.apps.borrow_mut().insert( app.to_owned(), ServerSink::Sender( sender.clone() ) )
         {
@@ -557,7 +560,7 @@ impl HomeSession for HomeSessionServer
     //      has been processed via the old_sender?
     fn events(&self) -> HomeStream<ProfileEvent, String>
     {
-        let (sender, receiver) = sync::mpsc::channel(CHANNEL_CAPACITY);
+        let (sender, receiver) = mpsc::channel(CHANNEL_CAPACITY);
 
         // Set up events with the new channel and check the old event sink
         match self.events.replace( ServerSink::Sender( sender.clone() ) )
