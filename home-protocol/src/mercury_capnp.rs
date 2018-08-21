@@ -149,7 +149,7 @@ impl<'a> TryFrom<home_invitation::Reader<'a>> for ::HomeInvitation
 {
     type Error = capnp::Error;
 
-    fn try_from(src: home_invitation::Reader) -> Result<Self, Self::Error>
+    fn try_from(_src: home_invitation::Reader) -> Result<Self, Self::Error>
     {
         // TODO
         Ok( ::HomeInvitation::new( &::ProfileId("TODO".as_bytes().to_owned()),
@@ -159,7 +159,8 @@ impl<'a> TryFrom<home_invitation::Reader<'a>> for ::HomeInvitation
 
 impl<'a> FillFrom<::HomeInvitation> for home_invitation::Builder<'a>
 {
-    fn fill_from(mut self, src: &::HomeInvitation)
+    // fn fill_from(mut self, src: &::HomeInvitation)
+    fn fill_from(self, _src: &::HomeInvitation)
     {
         // TODO
     }
