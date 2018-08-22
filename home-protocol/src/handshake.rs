@@ -3,8 +3,9 @@ use std::error::Error;
 use std::mem;
 use std::rc::Rc;
 
-use bincode::{deserialize, serialize};
 use futures::{future, Future};
+use serde_json::{from_slice, to_vec};
+//bincode::{deserialize, serialize};
 use tokio_core::net::TcpStream;
 use tokio_io::io;
 
@@ -28,7 +29,7 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
     let auth_info = AuthenticationInfo{
         profile_id: signer.profile_id().to_owned(), public_key: signer.public_key().to_owned() };
 
-    let out_bytes = match serialize(&auth_info) {
+    let out_bytes = match to_vec(&auth_info) {
         Ok(data) => data,
         Err(e) => return Box::new( future::err( ErrorToBeSpecified::TODO( e.description().to_owned() ) ) ),
     };
@@ -61,7 +62,7 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
         .and_then( |(reader, writer, buf)|
         {
             debug!("Processing peer info received");
-            let peer_auth: AuthenticationInfo = deserialize(&buf)
+            let peer_auth: AuthenticationInfo = from_slice(&buf)
                 .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
             debug!("Received peer identity: {:?}", peer_auth);
             let peer_ctx = PeerContext::new( signer, peer_auth.public_key, peer_auth.profile_id );
