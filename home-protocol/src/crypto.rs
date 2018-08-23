@@ -1,8 +1,9 @@
 use std::error::Error;
 
 use multihash;
-use signatory::{ed25519::FromSeed, providers::dalek};
+use signatory::ed25519::{FromSeed, Seed, Verifier};
 use signatory::ed25519::Signer as SignatoryEdSigner;
+use signatory_dalek::Ed25519Signer as SignatoryEdDalekSigner;
 
 use ::*;
 
@@ -63,15 +64,16 @@ pub struct Ed25519Signer
 {
     profile_id: ProfileId,
     public_key: PublicKey,
-    signer:     dalek::Ed25519Signer,
+    signer:     SignatoryEdDalekSigner,
 }
 
 impl Ed25519Signer
 {
     pub fn new(private_key: &PrivateKey) -> Result<Self, ErrorToBeSpecified>
     {
-        let signer = dalek::Ed25519Signer::from_seed( private_key.0.as_slice() )
+        let seed = Seed::from_slice( private_key.0.as_slice() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
+        let signer = SignatoryEdDalekSigner::from_seed(seed);
         let ed_public_key = signer.public_key()
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
         let public_key = PublicKey( ed_public_key.as_ref().to_vec() );
@@ -113,12 +115,13 @@ impl SignatureValidator for Ed25519Validator
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
         -> Result<bool, ErrorToBeSpecified>
     {
-        use signatory::ed25519::{DefaultVerifier, Verifier};
+        //use signatory::Ed25519Verifier;
+        use signatory_dalek::Ed25519Verifier;
         let pubkey = ::signatory::ed25519::PublicKey::from_bytes( public_key.0.as_slice() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
         let signature = ::signatory::ed25519::Signature::from_bytes( signature.0.as_slice() )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
-        DefaultVerifier::verify(&pubkey, data, &signature)
+        Ed25519Verifier::verify(&pubkey, data, &signature)
             // TODO hwo to determine when to return Ok(false) here, i.e. signature does not match but validation was otherwise successful
             .map( |()| true )
             .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )

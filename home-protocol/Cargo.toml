@@ -17,7 +17,8 @@ futures = "0.1"
 log = "0.4"
 multiaddr = "*"
 multihash = "*"
-signatory = { version="0.5", features=["std"] }
+signatory = { version="*", features=["std"] }
+signatory-dalek = "*"
 tokio-core = "0.1"
 tokio-io = "0.1"
 serde = "*"
