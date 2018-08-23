@@ -384,7 +384,8 @@ impl IncomingCall for Call
         // NOTE needed to dereference Box because otherwise the whole self is moved at its first dereference
         let this = *self;
         if let Err(e) = this.sender.send(to_callee)
-            { } // TODO we should at least log the error here
+            { } // TODO We should at least log the error here.
+                //      To solve this better, the function probably should return a Result<T,E> instead of T.
         this.request
     }
 }
