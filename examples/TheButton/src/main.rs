@@ -1,4 +1,4 @@
-#[macro_use]
+//#[macro_use]
 extern crate clap;
 #[macro_use]
 extern crate log;
@@ -41,7 +41,7 @@ use application::{Application, EX_OK, EX_SOFTWARE, EX_USAGE};
 use std::rc::Rc;
 use std::net::SocketAddr;
 
-use clap::{App, ArgMatches};
+use clap::{ArgMatches};
 
 use futures::Future;
 use futures::{IntoFuture, Stream};
@@ -54,17 +54,14 @@ use multiaddr::{Multiaddr, ToMultiaddr};
 
 use mercury_connect::*;
 use mercury_connect::net::SimpleTcpHomeConnector;
-use mercury_connect::sdk::{DAppInit, DAppApi};
-use mercury_connect::{SimpleProfileRepo, ProfileGatewayImpl, ProfileGateway};
 use mercury_home_protocol::*;
-use mercury_home_protocol::AppMessageFrame;
 use mercury_home_protocol::crypto::Ed25519Signer;
 
 
 pub struct AppContext{
-    priv_key: PrivateKey,
-    home_pub: PublicKey,
-    home_address: SocketAddr,
+//    priv_key: PrivateKey,
+//    home_pub: PublicKey,
+//    home_address: SocketAddr,
     gateway: Rc<ProfileGateway>,
     handle: Handle,
 }
@@ -91,9 +88,9 @@ impl AppContext{
         let profile_gw = Rc::new(ProfileGatewayImpl::new(client_signer, Rc::new(profile_store),  Rc::new(home_connector)));
 
         Ok(Self{
-            priv_key: private_key,
-            home_pub: server_pub,
-            home_address: addr,
+//            priv_key: private_key,
+//            home_pub: server_pub,
+//            home_address: addr,
             gateway: profile_gw,
             handle
         })
