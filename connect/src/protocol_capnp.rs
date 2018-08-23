@@ -16,7 +16,6 @@ use super::*;
 
 pub struct HomeClientCapnProto
 {
-//    context: PeerContext,
     repo:    profile_repo::Client,
     home:    home::Client,
     handle:  reactor::Handle,
@@ -25,12 +24,11 @@ pub struct HomeClientCapnProto
 
 impl HomeClientCapnProto
 {
-    pub fn new<R,W>(reader: R, writer: W,
-               context: PeerContext, handle: reactor::Handle) -> Self
+    pub fn new<R,W>(reader: R, writer: W, handle: reactor::Handle) -> Self
         where R: std::io::Read + 'static,
               W: std::io::Write + 'static
     {
-        debug!("Initializing Cap'n'Proto");
+        debug!("Initializing Cap'n'Proto Home client");
 
         let rpc_network = Box::new( capnp_rpc::twoparty::VatNetwork::new( reader, writer,
             capnp_rpc::rpc_twoparty_capnp::Side::Client, Default::default() ) );
@@ -43,18 +41,18 @@ impl HomeClientCapnProto
 
         handle.spawn( rpc_system.map_err( |e| warn!("Capnp RPC failed: {}", e) ) );
 
-        Self{ home, repo, handle } //, context }
+        Self{ home, repo, handle }
     }
 
 
-    pub fn new_tcp(tcp_stream: TcpStream, context: PeerContext, handle: reactor::Handle) -> Self
+    pub fn new_tcp(tcp_stream: TcpStream, handle: reactor::Handle) -> Self
     {
         use tokio_io::AsyncRead;
 
         // TODO consider if this unwrap() is acceptable here
         tcp_stream.set_nodelay(true).unwrap();
         let (reader, writer) = tcp_stream.split();
-        HomeClientCapnProto::new(reader, writer, context, handle)
+        HomeClientCapnProto::new(reader, writer, handle)
     }
 }
 

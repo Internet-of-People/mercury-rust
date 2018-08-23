@@ -80,7 +80,7 @@ impl TestClient
         let client_capnp = HomeClientCapnProto::new(
             receiver_from_server,
             sender_from_client,
-            home_context.clone(),
+            //home_context.clone(),
             handle.clone()
         );
 
