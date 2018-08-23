@@ -20,4 +20,5 @@ serde = "*"
 serde_derive = "*"
 tokio-core = "0.1"
 tokio-io = "*"
+error-chain = "*"
 

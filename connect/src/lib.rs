@@ -12,6 +12,9 @@ extern crate serde;
 extern crate serde_derive;
 extern crate tokio_core;
 extern crate tokio_io;
+#[macro_use]
+extern crate error_chain;
+
 
 use std::rc::Rc;
 
@@ -19,6 +22,21 @@ use futures::{future, Future, IntoFuture};
 
 use mercury_home_protocol::*;
 
+
+error_chain! {
+    errors {
+        ConnectionToHomeFailed(msg: String) {
+            display("connection to home failed: {}", msg)
+        }
+
+        PeerIdRetreivalFailed(msg: String) {
+            display("PeerId retreival failed: {}", msg)
+        }
+
+        Not
+
+    }
+}
 
 
 pub mod net;
@@ -40,7 +58,7 @@ pub trait HomeConnector
     /// `home_profile` must have a HomeFacet with at least an address filled in.
     /// `signer` belongs to me.
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Rc<Home>, Error=Error> >;
 }
 
 
@@ -76,36 +94,36 @@ impl Relation
 pub trait ProfileGateway
 {
     fn signer(&self) -> &Signer;
-    fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >;
+    fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >;
 
     fn claim(&self, home: ProfileId, profile: ProfileId) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=OwnProfile, Error=Error> >;
 
     /// `invite` is needed only if the home has a restrictive registration policy.
     fn register(&self, home: ProfileId, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >;
+        Box< Future<Item=OwnProfile, Error=(OwnProfile,Error)> >;
 
     fn update(&self, home: ProfileId, own_prof: &OwnProfile) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+        Box< Future<Item=(), Error=Error> >;
 
     // NOTE newhome is a profile that contains at least one HomeSchema different than this home
     fn unregister(&self, home: ProfileId, own_prof: ProfileId, newhome: Option<Profile>) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+        Box< Future<Item=(), Error=Error> >;
 
 
     fn pair_request(&self, relation_type: &str, with_profile_id: &ProfileId, pairing_url: Option<&str>) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+        Box< Future<Item=(), Error=Error> >;
 
     fn pair_response(&self, proof: RelationProof) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+        Box< Future<Item=(), Error=Error> >;
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
             to_caller: Option<AppMsgSink>) ->
-        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Option<AppMsgSink>, Error=Error> >;
 
 
     fn login(&self) ->
-        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Rc<HomeSession>, Error=Error> >;
 }
 
 
@@ -137,7 +155,7 @@ impl ProfileGatewayImpl
     }
 
     pub fn connect_home(&self, home_profile_id: &ProfileId)
-        -> Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=Rc<Home>, Error=Error> >
     {
         Self::connect_home2( home_profile_id, self.profile_repo.clone(),
                              self.home_connector.clone(), self.signer.clone() )
@@ -145,16 +163,18 @@ impl ProfileGatewayImpl
 
     fn connect_home2(home_profile_id: &ProfileId, prof_repo: Rc<ProfileRepo>,
                      connector: Rc<HomeConnector>, signer: Rc<Signer>)
-        -> Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=Rc<Home>, Error=Error> >
     {
         let home_conn_fut = prof_repo.load(home_profile_id)
-            .and_then( move |home_profile| connector.connect(&home_profile, signer) );
+            .and_then( move |home_profile| connector.connect(&home_profile, signer) )
+            .chain_err(|| ErrorKind::ConnectionToHomeFailed("failed to look up profile id in the profile repo".to_string()));
+            
         Box::new(home_conn_fut)
     }
 
 
     pub fn login_home(&self, home_profile_id: ProfileId) ->
-        Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<HomeSession>, Error=Error> >
     {
         let home_id = home_profile_id.clone();
         let my_profile_id = self.signer.profile_id().to_owned();
@@ -166,7 +186,9 @@ impl ProfileGatewayImpl
                     ProfileFacet::Persona(persona) => persona.homes.iter()
                         .filter(move |home_proof|
                             home_proof.peer_id(&my_profile_id)
-                                .and_then(|peer_id| if *peer_id == home_id { Ok(true) } else { Err(ErrorToBeSpecified::TODO(String::new())) })
+                                .and_then(|peer_id| Ok(*peer_id == home_id)
+                                    if *peer_id == home_id { Ok(true) } else { Err()) })
+                                )
                                 .is_ok()
                         )
                         .map( |home_proof| home_proof.to_owned() )
@@ -189,7 +211,7 @@ impl ProfileGatewayImpl
 
 
     pub fn any_home_of(&self, profile: &Profile) ->
-        Box< Future<Item=(RelationProof, Rc<Home>), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(RelationProof, Rc<Home>), Error=Error> >
     {
         ProfileGatewayImpl::any_home_of2( profile, self.profile_repo.clone(),
                                           self.home_connector.clone(), self.signer.clone() )
@@ -198,7 +220,7 @@ impl ProfileGatewayImpl
 
     fn any_home_of2(profile: &Profile, prof_repo: Rc<ProfileRepo>,
                     connector: Rc<HomeConnector>, signer: Rc<Signer>) ->
-        Box< Future<Item=(RelationProof, Rc<Home>), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(RelationProof, Rc<Home>), Error=Error> >
     {
         let homes = match profile.facet {
             // TODO consider how to get homes/addresses for apps and smartfridges
@@ -240,14 +262,14 @@ impl ProfileGateway for ProfileGatewayImpl
     fn signer(&self) -> &Signer { &*self.signer }
 
 
-    fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >
+    fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >
     {
         Box::new( futures::future::err(ErrorToBeSpecified::TODO(String::from("ProfileGateway.relations "))) )
     }
 
 
     fn claim(&self, home_id: ProfileId, profile: ProfileId) ->
-        Box< Future<Item=OwnProfile, Error=ErrorToBeSpecified> >
+        Box< Future<Item=OwnProfile, Error=Error> >
     {
         let claim_fut = self.connect_home(&home_id)
             .and_then( move |home| home.claim(profile) );
@@ -257,7 +279,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
     fn register(&self, home_id: ProfileId, own_prof: OwnProfile,
                 invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=(OwnProfile,ErrorToBeSpecified)> >
+        Box< Future<Item=OwnProfile, Error=(OwnProfile,Error)> >
     {
         let own_prof_clone = own_prof.clone();
         let half_proof = RelationHalfProof::new("home", &home_id, &*self.signer);
@@ -269,7 +291,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
 
     fn update(&self, home_id: ProfileId, own_prof: &OwnProfile) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(), Error=Error> >
     {
         let own_profile_clone = own_prof.clone();
         let upd_fut = self.login_home(home_id)
@@ -279,7 +301,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
 
     fn unregister(&self, home_id: ProfileId, own_prof: ProfileId, newhome_id: Option<Profile>) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(), Error=Error> >
     {
         let unreg_fut = self.login_home(home_id)
             .and_then( move |session| session.unregister(newhome_id) );
@@ -288,7 +310,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
 
     fn pair_request(&self, relation_type: &str, with_profile_id: &ProfileId, pairing_url: Option<&str>) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(), Error=Error> >
     {
         let profile_repo_clone = self.profile_repo.clone();
         let home_connector_clone = self.home_connector.clone();
@@ -314,7 +336,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
 
     fn pair_response(&self, proof: RelationProof) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(), Error=Error> >
     {
         let peer_id = match proof.peer_id( self.signer.profile_id() ) {
             Ok(peer_id) => peer_id.to_owned(),
@@ -335,7 +357,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
     fn call(&self, proof: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
             to_caller: Option<AppMsgSink>) ->
-        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Option<AppMsgSink>, Error=Error> >
     {
         let peer_id = match proof.peer_id( self.signer.profile_id() ) {
             Ok(id) => id.to_owned(),
@@ -355,7 +377,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
 
     // TODO this should try connecting to ALL of our homes
-    fn login(&self) -> Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
+    fn login(&self) -> Box< Future<Item=Rc<HomeSession>, Error=Error> >
     {
         let log_fut = self.profile_repo.load( self.signer.profile_id() )
             .and_then( {

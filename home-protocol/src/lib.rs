@@ -10,6 +10,7 @@ extern crate futures;
 #[macro_use]
 extern crate log;
 extern crate multiaddr;
+extern crate multibase;
 extern crate multihash;
 extern crate serde;
 
@@ -21,6 +22,7 @@ extern crate serde_derive;
 extern crate signatory;
 extern crate tokio_core;
 extern crate tokio_io;
+
 
 use std::{rc::Rc, str};
 use std::error;
@@ -702,7 +704,12 @@ pub trait Validator: ProfileValidator + SignatureValidator
     }
 }
 
-
+impl std::fmt::Display for ProfileId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let enc = multibase::encode(multibase::Base::Base16, &self.0);
+        write!(f, "{}", &enc[..10])
+    }
+}
 
 #[cfg(test)]
 mod tests
