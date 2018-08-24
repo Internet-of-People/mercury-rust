@@ -9,7 +9,7 @@ pub struct ServerConfig{
 impl ServerConfig{
     pub fn new_from_args(args: ArgMatches)-> Result<Self, std::io::Error> {
         let file_name = args.value_of("event-file").map(|s| s.into());
-        let timer = match args.value_of("event-timer") {
+        let timer = match args.value_of(cli::CLI_EVENT_TIMER) {
             Some(s) => 
                 s.parse::<u64>()
                     .map(|i| Some(i))
@@ -19,7 +19,7 @@ impl ServerConfig{
                 Result::Ok(Option::None)
         }?;
                
-        let count = match args.value_of("stop-after"){
+        let count = match args.value_of(cli::CLI_STOP_AFTER){
             Some(s) => {
                 s.parse::<u32>()
                     .map(|i| 

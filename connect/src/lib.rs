@@ -108,7 +108,7 @@ pub trait ProfileGateway
 
     // NOTE newhome is a profile that contains at least one HomeSchema different than this home
     fn unregister(&self, home: ProfileId, own_prof: ProfileId, newhome: Option<Profile>) ->
-        Box< Future<Item=(), Error=Error> >;
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
 
 
     fn pair_request(&self, relation_type: &str, with_profile_id: &ProfileId, pairing_url: Option<&str>) ->
@@ -301,7 +301,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
 
     fn unregister(&self, home_id: ProfileId, own_prof: ProfileId, newhome_id: Option<Profile>) ->
-        Box< Future<Item=(), Error=Error> >
+        Box< Future<Item=(), Error=ErrorToBeSpecified> >
     {
         let unreg_fut = self.login_home(home_id)
             .and_then( move |session| session.unregister(newhome_id) );

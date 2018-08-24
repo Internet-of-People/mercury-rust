@@ -125,22 +125,18 @@ fn application_code() -> i32 {
     }
 }
 
-const SERVER_SUBCOMMAND : &str = "server";
-const CLIENT_SUBCOMMAND : &str = "client";
-
-
 fn application_code_internal() -> Result<(), std::io::Error> {
     //ARGUMENT HANDLING START
     let matches = cli().get_matches();
 
     // Print version
-    if matches.is_present("version"){
+    if matches.is_present(cli::CLI_VERSION){
         println!("The Button dApp 0.1 pre-alpha");
         return Ok(())
     }
 
     // Initialize logging
-    match matches.occurrences_of("verbose") {
+    match matches.occurrences_of(cli::CLI_VERBOSE) {
         1 => start_logging("d"),
         2 => start_logging("t"),
         0|_ => start_logging("i"),                
@@ -151,9 +147,9 @@ fn application_code_internal() -> Result<(), std::io::Error> {
 
     // Constructing application context from command line args
     let appcx = AppContext::new(
-        matches.value_of("private-key-file").unwrap(), 
-        matches.value_of("home-node-key-file").unwrap(), 
-        matches.value_of("server-addr").unwrap(),
+        matches.value_of(cli::CLI_PRIVATE_KEY_FILE).unwrap(), 
+        matches.value_of(cli::CLI_HOME_NODE_KEY_FILE).unwrap(), 
+        matches.value_of(cli::CLI_SERVER_ADDRESS).unwrap(),
         reactor.handle())?;
 
     // Creating application object
@@ -161,12 +157,12 @@ fn application_code_internal() -> Result<(), std::io::Error> {
     let app_mode = match sub_args {
         Some(args)=>{
             match sub_name{
-                SERVER_SUBCOMMAND => 
+                cli::CLI_SERVER => 
                     ServerConfig::new_from_args(args.to_owned())
                         .map( |cfg|
                             Mode::Server(Server::new(cfg, appcx))
                         ),
-                CLIENT_SUBCOMMAND => 
+                cli::CLI_CLIENT => 
                     ClientConfig::new_from_args(args.to_owned())
                         .map( |cfg| 
                             Mode::Client(Client::new(cfg, appcx))

@@ -20,6 +20,7 @@ extern crate failure;
 
 #[macro_use]
 extern crate serde_derive;
+extern crate serde_json;
 extern crate signatory;
 extern crate tokio_core;
 extern crate tokio_io;

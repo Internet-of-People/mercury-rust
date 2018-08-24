@@ -2,8 +2,9 @@ use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use std::mem;
 use std::rc::Rc;
 
-use bincode::{deserialize, serialize};
 use futures::{future, Future};
+use serde_json::{from_slice, to_vec};
+//bincode::{deserialize, serialize};
 use tokio_core::net::TcpStream;
 use tokio_io::io;
 
@@ -28,10 +29,9 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
     let auth_info = AuthenticationInfo{
         profile_id: signer.profile_id().to_owned(), public_key: signer.public_key().to_owned() };
 
-
-    let out_bytes = match serialize(&auth_info).context(HomeProtocolErrorKind::TlsHandshakeFailed) {
+    let out_bytes = match serialize(&auth_info) {
         Ok(data) => data,
-        Err(e) => return Box::new(future::err(HomeProtocolError::from(e))),
+        Err(e) => return Box::new( future::err( HomeProtocolError::from(e.context(HomeProtocolErrorKind::TlsHandshakeFailed)) ) ),
     };
     let bufsize = out_bytes.len() as u32;
 
@@ -61,7 +61,8 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
         .and_then( |(reader, writer, buf)|
         {
             debug!("Processing peer info received");
-            let peer_auth: AuthenticationInfo = deserialize(&buf).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
+            let peer_auth: AuthenticationInfo = from_slice(&buf)
+                .map_err( |e| std::io::Error::new( std::io::ErrorKind::Other, e) )?;
             debug!("Received peer identity: {:?}", peer_auth);
             let peer_ctx = PeerContext::new( signer, peer_auth.public_key, peer_auth.profile_id );
             Ok( (reader, writer, peer_ctx) )
