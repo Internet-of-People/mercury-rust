@@ -187,7 +187,7 @@ impl ProfileGatewayImpl
                         .filter(move |home_proof|
                             home_proof.peer_id(&my_profile_id)
                                 .and_then(|peer_id| Ok(*peer_id == home_id)
-                                    if *peer_id == home_id { Ok(true) } else { Err()) })
+                                    if *peer_id == home_id { Ok(true) } else { Err() }
                                 )
                                 .is_ok()
                         )

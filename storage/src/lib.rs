@@ -16,7 +16,6 @@ extern crate tokio_postgres;
 extern crate tokio_fs;
 extern crate tokio_threadpool;
 
-#[macro_use]
 extern crate log;
 
 

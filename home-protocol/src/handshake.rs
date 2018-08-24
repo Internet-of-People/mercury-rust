@@ -8,6 +8,7 @@ use tokio_core::net::TcpStream;
 use tokio_io::io;
 
 use ::*;
+use failure::*;
 
 
 #[derive(Deserialize, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize)]
@@ -19,7 +20,7 @@ struct AuthenticationInfo
 
 
 pub fn temp_handshake_until_tls_is_implemented<R,W>(reader: R, writer: W, signer: Rc<Signer>)
-    -> Box< Future<Item=(R, W, PeerContext), Error=Error> >
+    -> Box< Future<Item=(R, W, PeerContext), Error=HomeProtocolError> >
 where R: std::io::Read + tokio_io::AsyncRead + 'static,
       W: std::io::Write + tokio_io::AsyncWrite + 'static
 {
@@ -28,9 +29,9 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
         profile_id: signer.profile_id().to_owned(), public_key: signer.public_key().to_owned() };
 
 
-    let out_bytes = match serialize(&auth_info).chain_err(|| ErrorKind::TlsHandshakeFailed("failed to serialize authentication info".to_string())) {
+    let out_bytes = match serialize(&auth_info).context(HomeProtocolErrorKind::TlsHandshakeFailed) {
         Ok(data) => data,
-        Err(e) => return Box::new(future::err(e)),
+        Err(e) => return Box::new(future::err(HomeProtocolError::from(e))),
     };
     let bufsize = out_bytes.len() as u32;
 
@@ -56,30 +57,29 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
             in_bytes.resize(size_in_bytes as usize, 0);
             io::read_exact(reader, in_bytes)
                 .map( |(reader, buf)| (reader, writer, buf) )
-        } )
-        .chain_err(|| ErrorKind::TlsHandshakeFailed("failed to read peer info".to_string()))
+        } )        
         .and_then( |(reader, writer, buf)|
         {
             debug!("Processing peer info received");
-            let peer_auth: AuthenticationInfo = deserialize(&buf)
-                .chain_err( || ErrorKind::TlsHandshakeFailed("failed to deserialize peer info".to_string()))?;
+            let peer_auth: AuthenticationInfo = deserialize(&buf).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))?;
             debug!("Received peer identity: {:?}", peer_auth);
             let peer_ctx = PeerContext::new( signer, peer_auth.public_key, peer_auth.profile_id );
             Ok( (reader, writer, peer_ctx) )
-        } );
+        } )
+        .map_err(|err| HomeProtocolError::from(err.context(HomeProtocolErrorKind::TlsHandshakeFailed))); 
     Box::new(handshake_fut)
 }
 
 
 
 pub fn temp_tcp_handshake_until_tls_is_implemented(socket: TcpStream, signer: Rc<Signer>)
-    -> Box< Future<Item=(impl std::io::Read, impl std::io::Write, PeerContext), Error=Error> >
+    -> Box< Future<Item=(impl std::io::Read, impl std::io::Write, PeerContext), Error=HomeProtocolError> >
 {
     use tokio_io::AsyncRead;
 
-    match socket.set_nodelay(true).chain_err(|| ErrorKind::TlsHandshakeFailed("failed to set socket to nodelay mode".to_string())) {
+    match socket.set_nodelay(true) {
         Ok(_) => {},
-        Err(e) => return Box::new( future::err(e) ),
+        Err(e) => return Box::new( future::err(HomeProtocolError::from(e.context(HomeProtocolErrorKind::TlsHandshakeFailed)))),
     };
 
     let (reader, writer) = socket.split();

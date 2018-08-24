@@ -14,8 +14,9 @@ extern crate multibase;
 extern crate multihash;
 extern crate serde;
 
-#[macro_use]
-extern crate error_chain;
+#[macro_use] 
+extern crate failure;
+
 
 #[macro_use]
 extern crate serde_derive;
@@ -25,7 +26,7 @@ extern crate tokio_io;
 
 
 use std::{rc::Rc, str};
-use std::error;
+use std::fmt::Display;
 
 use bincode::serialize;
 use futures::{Future, sync::mpsc};
@@ -34,6 +35,10 @@ use serde::{Deserialize, Deserializer, Serializer};
 use serde::{de::Error as DeSerError, ser::SerializeSeq};
 
 use crypto::{ProfileValidator, SignatureValidator};
+use failure::Error;
+use failure::Backtrace;
+use failure::Fail;
+use failure::Context;
 
 
 
@@ -58,55 +63,73 @@ pub struct PrivateKey(pub Vec<u8>);
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Signature(pub Vec<u8>);
 
-error_chain! {
-    errors {
-        
-        HashDecodeFailed(msg: String) {
-            display("hash decode failed: {}", msg)
-        }
-        
-        HashEncodeFailed(msg: String) {
-            display("hash encode failed: {}", msg)
-        }
-        
-        SignerCreationFailed(msg: String) {
-            display("signer creation failed: {}", msg)
-        }
+#[derive(Debug)]
+pub struct HomeProtocolError {
+    inner: Context<HomeProtocolErrorKind>
+}
 
-        SignatureValidationFailed(msg: String) {
-            display("signature validation failed: {}", msg)
-        }
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
+pub enum HomeProtocolErrorKind {
+    #[fail(display= "hash decode failed")]
+    HashDecodeFailed,
+    #[fail(display= "hash encode failed")]
+    HashEncodeFailed,
+    #[fail(display= "signer creation failed")]
+    SignerCreationFailed,
+    #[fail(display= "signature validation failed")]
+    SignatureValidationFailed,
+    #[fail(display= "handshake failed")]
+    TlsHandshakeFailed,    
+    #[fail(display= "relation signing failed")]
+    RelationSigningFailed,
+    #[fail(display= "relation validation failed")]
+    RelationValidationFailed,
+    #[fail(display= "profile validation failed")]
+    ProfileValidationFailed,
+    #[fail(display= "multiaddress serialization failed")]
+    MultiaddrSerializationFailed,
+    #[fail(display= "multiaddress deserialization failed")]
+    MultiaddrDeserializationFailed,
+    #[fail(display= "failed to fetch peer id")]
+    PeerIdRetreivalFailed
+}
 
-        TlsHandshakeFailed(msg: String) {
-            display("handshake failed: {}", msg)
-        }
-        
-        RelationSigningFailed(msg: String) {
-            display("relation signing failed: {}", msg)
-        }
+impl Fail for HomeProtocolError {
+    fn cause(&self) -> Option<&Fail> {
+        self.inner.cause()
+    }
 
-        RelationValidationFailed(msg: String) {
-            display("relation validation failed: {}", msg)
-        }
-
-        ProfileValidationFailed(msg: String) {
-            display("profile validation failed: {}", msg)
-        }
-
-        MultiaddrSerializationFailed(msg: String) {
-            display("multiaddress serialization failed: {}", msg)
-        }
-
-        MultiaddrDeserializationFailed(msg: String) {
-            display("multiaddress deserialization failed: {}", msg)
-        }
-
-        PeerIdRetreivalFailed(msg: String) {
-            display("failed to fetch peer id: {}", msg)
-        }
+    fn backtrace(&self) -> Option<&Backtrace> {
+        self.inner.backtrace()
     }
 }
 
+impl Display for HomeProtocolError {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        Display::fmt(&self.inner, f)
+    }
+}
+
+impl HomeProtocolError {
+    pub fn kind(&self) -> HomeProtocolErrorKind {
+        *self.inner.get_context()
+    }
+}
+
+impl From<HomeProtocolErrorKind> for HomeProtocolError {
+    fn from(kind: HomeProtocolErrorKind) -> HomeProtocolError {
+        HomeProtocolError { inner: Context::new(kind) }
+    }
+}
+
+impl From<Context<HomeProtocolErrorKind>> for HomeProtocolError {
+    fn from(inner: Context<HomeProtocolErrorKind>) -> HomeProtocolError {
+        HomeProtocolError { inner: inner }
+    }
+}
+
+
+/*
 pub type SFuture<T> = Box<Future<Item = T, Error = Error>>;
 
 pub trait FutureChainErr<T> {
@@ -126,6 +149,7 @@ impl<F> FutureChainErr<F::Item> for F
         Box::new(self.then(|r| r.chain_err(callback)))
     }
 }
+*/
 
 /// Something that can sign data, but cannot give out the private key.
 /// Usually implemented using a private key internally, but also enables hardware wallets.
@@ -549,12 +573,12 @@ impl PeerContext
     pub fn peer_pubkey(&self) -> &PublicKey { &self.peer_pubkey }
     pub fn peer_id(&self) -> &ProfileId { &self.peer_id }
 
-    pub fn validate(&self, validator: &Validator) -> Result<()>
+    pub fn validate(&self, validator: &Validator) -> Result<(), HomeProtocolError>
     {
         validator.validate_profile( self.peer_pubkey(), self.peer_id() )
             .and_then( |valid|
                 if valid { Ok( () ) }
-                else { Err( ErrorKind::ProfileValidationFailed("Peer context is invalid".to_string() ).into() ) } )
+                else { Err( HomeProtocolErrorKind::ProfileValidationFailed )? } )
     }
 }
 
@@ -618,11 +642,11 @@ impl RelationProof
     }
 
     pub fn sign_remaining_half(half_proof: &RelationHalfProof, signer: &Signer)
-        -> Result<Self>
+        -> Result<Self, HomeProtocolError>
     {
         let my_profile_id = signer.profile_id().to_owned();
         if half_proof.peer_id != my_profile_id
-            { return Err(ErrorKind::RelationSigningFailed("RelationHalfProof peer_id is not my ProfileId, refused to sign".to_string() ).into() ); }
+            { Err(HomeProtocolErrorKind::RelationSigningFailed)? }
 
         let signable = RelationSignablePart::new(
             &half_proof.relation_type,
@@ -633,23 +657,23 @@ impl RelationProof
                        &my_profile_id, &signable.sign(signer) ) )
     }
 
-    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId> {
+    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, HomeProtocolError> {
         if self.a_id == *my_id {
             Ok(&self.b_id)
         } else if self.b_id == *my_id {
             Ok(&self.a_id)
         } else {
-            Err(ErrorKind::PeerIdRetreivalFailed(format!("{:?} is not present in relation {:?}", my_id, self)).into())
+            Err(HomeProtocolErrorKind::PeerIdRetreivalFailed)?
         }
     }
 
-    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature> {
+    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, HomeProtocolError> {
         if self.a_id == *my_id {
             Ok(&self.b_signature)
         } else if self.b_id == *my_id {
             Ok(&self.a_signature)
         } else {
-            Err(ErrorKind::PeerIdRetreivalFailed(format!("{:?} is not present in relation {:?}", my_id, self)).into())
+            Err(HomeProtocolErrorKind::PeerIdRetreivalFailed)?
         }
     }
 }
@@ -658,7 +682,7 @@ impl RelationProof
 
 pub trait Validator: ProfileValidator + SignatureValidator
 {
-    fn validate_half_proof(&self, half_proof: &RelationHalfProof, signer_public_key: &PublicKey) -> Result<()> {
+    fn validate_half_proof(&self, half_proof: &RelationHalfProof, signer_public_key: &PublicKey) -> Result<(), HomeProtocolError> {
         self.validate_signature(signer_public_key,
             &RelationSignablePart::from(half_proof).serialized(), &half_proof.signature)?;
         Ok(())
@@ -671,7 +695,7 @@ pub trait Validator: ProfileValidator + SignatureValidator
         public_key_1: &PublicKey,
         id_2: &ProfileId,
         public_key_2: &PublicKey
-    ) -> Result<()> {
+    ) -> Result<(), HomeProtocolError> {
         // TODO consider inverting relation_type for different directions
         let signable_a = RelationSignablePart::new(
             &relation_proof.relation_type,
@@ -687,7 +711,7 @@ pub trait Validator: ProfileValidator + SignatureValidator
 
         let peer_of_id_1 = relation_proof.peer_id(&id_1)?;
         if peer_of_id_1 != id_2 {
-            return Err(ErrorKind::RelationValidationFailed("The relation does not contain both id_1 and id_2".to_string()).into());
+            Err(HomeProtocolErrorKind::RelationValidationFailed)?
         }
 
         if *peer_of_id_1 == relation_proof.b_id {
