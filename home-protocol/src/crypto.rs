@@ -1,7 +1,9 @@
 
 use multihash;
-use signatory::{ed25519::FromSeed, providers::dalek};
+use signatory::ed25519::{FromSeed, Seed, Verifier};
 use signatory::ed25519::Signer as SignatoryEdSigner;
+use signatory_dalek::Ed25519Signer as SignatoryEdDalekSigner;
+
 use ::*;
 use failure::*;
 
@@ -57,15 +59,16 @@ pub struct Ed25519Signer
 {
     profile_id: ProfileId,
     public_key: PublicKey,
-    signer:     dalek::Ed25519Signer,
+    signer:     SignatoryEdDalekSigner,
 }
 
 impl Ed25519Signer
 {
     pub fn new(private_key: &PrivateKey) -> Result<Self, HomeProtocolError>
     {
-        let signer = dalek::Ed25519Signer::from_seed( private_key.0.as_slice()).context(HomeProtocolErrorKind::SignerCreationFailed)?;
-        let ed_public_key = signer.public_key().context(HomeProtocolErrorKind::SignerCreationFailed)?;
+        let seed = Seed::from_slice( private_key.0.as_slice() ).context(HomeProtocolErrorKind::SignerCreationFailed)?;            
+        let signer = SignatoryEdDalekSigner::from_seed(seed);
+        let ed_public_key = signer.public_key().context(HomeProtocolErrorKind::SignerCreationFailed)?;            
         let public_key = PublicKey( ed_public_key.as_ref().to_vec() );
         //let profile_hash = multihash::encode( multihash::Hash::Keccak256, public_key.0.as_slice() )
         //    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
@@ -105,10 +108,10 @@ impl SignatureValidator for Ed25519Validator
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
         -> Result<bool, HomeProtocolError>
     {
-        use signatory::ed25519::{DefaultVerifier, Verifier};
-        let pubkey = ::signatory::ed25519::PublicKey::from_bytes(public_key.0.as_slice()).context(HomeProtocolErrorKind::SignatureValidationFailed)?;
+        use signatory_dalek::Ed25519Verifier;
+        let pubkey = ::signatory::ed25519::PublicKey::from_bytes( public_key.0.as_slice() ).context(HomeProtocolErrorKind::SignatureValidationFailed)?;
         let signature = ::signatory::ed25519::Signature::from_bytes( signature.0.as_slice()).context(HomeProtocolErrorKind::SignatureValidationFailed)?;
-        DefaultVerifier::verify(&pubkey, data, &signature).context(HomeProtocolErrorKind::SignatureValidationFailed)?;
+        Ed25519Verifier::verify(&pubkey, data, &signature);
             // TODO hwo to determine when to return Ok(false) here, i.e. signature does not match but validation was otherwise successful
         Ok(true)
             

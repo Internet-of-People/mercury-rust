@@ -143,10 +143,10 @@ impl DAppConnect
                     None => {
                         let proof_fut = gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &profile_id2, None)
                             .and_then( |_| login_fut )
-                            .and_then( |session| session.events()
-                                .filter_map( move |event|
+                            .and_then( move |_session|
+                                event_stream.filter_map( move |event|
                                 {
-                                    if let Ok( ProfileEvent::PairingResponse(proof) ) = event {
+                                    if let ProfileEvent::PairingResponse(proof) = event {
                                         if proof.peer_id( gateway.signer().profile_id() ).is_ok()
                                             { return Some(proof) }
                                     }

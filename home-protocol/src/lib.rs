@@ -22,6 +22,7 @@ extern crate failure;
 extern crate serde_derive;
 extern crate serde_json;
 extern crate signatory;
+extern crate signatory_dalek;
 extern crate tokio_core;
 extern crate tokio_io;
 

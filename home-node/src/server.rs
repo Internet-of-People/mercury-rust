@@ -9,8 +9,8 @@ use tokio_core::reactor::{self, Timeout};
 
 use mercury_home_protocol::*;
 use mercury_storage::{async::KeyValueStore, error::StorageError};
-
-
+use failure::*;
+use ::*;
 
 // TODO this should come from user configuration with a reasonable default value close to this
 const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
@@ -57,13 +57,12 @@ impl HomeConnectionServer
     /// Returns Error if the profile is not hosted on this home server
     /// Returns None if the profile is not online
     fn get_live_session(server: Rc<HomeServer>, to_profile: ProfileId)
-        -> Box< Future<Item=Option<Rc<HomeSessionServer>>, Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=Option<Rc<HomeSessionServer>>, Error=Error> >
     {
         let sessions_clone = server.sessions.clone();
 
         // Check if this profile is hosted on this server
         let session_fut = server.hosted_profile_db.borrow().get( to_profile.clone().into() )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
             .and_then( move |_profile_data|
             {
                 // Seperate variable needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
@@ -72,7 +71,7 @@ impl HomeConnectionServer
                 let session_rc = sessions.get(&to_profile)
                     .and_then( |weak| weak.upgrade() );
                 future::ok(session_rc)
-            } );
+            } ).context(ErrorKind::FailedToGetSession);
 
         Box::new(session_fut)
     }
@@ -384,7 +383,8 @@ impl IncomingCall for Call
         // NOTE needed to dereference Box because otherwise the whole self is moved at its first dereference
         let this = *self;
         if let Err(e) = this.sender.send(to_callee)
-            { } // TODO we should at least log the error here
+            { } // TODO We should at least log the error here.
+                //      To solve this better, the function probably should return a Result<T,E> instead of T.
         this.request
     }
 }

@@ -13,7 +13,7 @@ extern crate serde_derive;
 extern crate tokio_core;
 extern crate tokio_io;
 #[macro_use]
-extern crate error_chain;
+extern crate failure;
 
 
 use std::rc::Rc;
@@ -21,23 +21,7 @@ use std::rc::Rc;
 use futures::{future, Future, IntoFuture};
 
 use mercury_home_protocol::*;
-
-
-error_chain! {
-    errors {
-        ConnectionToHomeFailed(msg: String) {
-            display("connection to home failed: {}", msg)
-        }
-
-        PeerIdRetreivalFailed(msg: String) {
-            display("PeerId retreival failed: {}", msg)
-        }
-
-        Not
-
-    }
-}
-
+use failure::*;
 
 pub mod net;
 pub use net::SimpleTcpHomeConnector;
@@ -48,6 +32,56 @@ pub mod sdk_impl;
 
 pub mod simple_profile_repo;
 pub use simple_profile_repo::SimpleProfileRepo;
+
+#[derive(Debug)]
+pub struct Error {
+    inner: Context<ErrorKind>
+}
+
+pub enum ErrorKind {
+    #[fail(display= "connection to home failed")]
+    ConnectionToHomeFailed,
+
+    #[fail(display= "peer id retreival failed")]
+    PeerIdRetreivalFailed,
+
+    #[fail(display="failed to get session")]
+    FailedToGetSession
+}
+
+impl Fail for Error {
+    fn cause(&self) -> Option<&Fail> {
+        self.inner.cause()
+    }
+
+    fn backtrace(&self) -> Option<&Backtrace> {
+        self.inner.backtrace()
+    }
+}
+
+impl Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        Display::fmt(&self.inner, f)
+    }
+}
+
+impl Error {
+    pub fn kind(&self) -> ErrorKind {
+        *self.inner.get_context()
+    }
+}
+
+impl From<ErrorKind> for HomeProtocolError {
+    fn from(kind: ErrorKind) -> Error {
+        Error { inner: Context::new(kind) }
+    }
+}
+
+impl From<Context<ErrorKind>> for Error {
+    fn from(inner: Context<HomeProtocolErrorKind>) -> HomeProtocolError {
+        HomeProtocolError { inner: inner }
+    }
+}
 
 
 
@@ -186,7 +220,7 @@ impl ProfileGatewayImpl
                     ProfileFacet::Persona(persona) => persona.homes.iter()
                         .filter(move |home_proof|
                             home_proof.peer_id(&my_profile_id)
-                                .and_then(|peer_id| Ok(*peer_id == home_id)
+                                .and_then(|peer_id| 
                                     if *peer_id == home_id { Ok(true) } else { Err() }
                                 )
                                 .is_ok()

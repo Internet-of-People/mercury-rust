@@ -118,11 +118,10 @@ impl HomeConnector for SimpleTcpHomeConnector
             .and_then( move |(tcp_stream, _pending_futs)|
             {
                 use mercury_home_protocol::handshake::temp_tcp_handshake_until_tls_is_implemented;
-
                 temp_tcp_handshake_until_tls_is_implemented(tcp_stream, signer)
-            }).map( |(reader, writer, peer_ctx)| {
+            }).map( |(reader, writer, _peer_ctx)| {
                 use protocol_capnp::HomeClientCapnProto;
-                Rc::new( HomeClientCapnProto::new(reader, writer, peer_ctx, handle_clone) ) as Rc<Home>
+                Rc::new( HomeClientCapnProto::new(reader, writer, handle_clone) ) as Rc<Home>
             });
         Box::new(capnp_home)
     }

@@ -16,5 +16,5 @@ mercury-storage = { path="../storage" }
 multiaddr = "*"
 tokio-core = "0.1"
 toml = "*"
-
+failure = "*"
 tokio-io = "*"
