@@ -18,7 +18,7 @@ pub struct StunTurnTcpConnector
 impl StunTurnTcpConnector
 {
     pub fn connect(&self, _addr: &SocketAddr) ->
-        Box< Future<Item=TcpStream, Error=ErrorToBeSpecified> >
+        Box< Future<Item=TcpStream, Error=Error> >
     {
         // TODO
         unimplemented!()
@@ -49,7 +49,7 @@ impl HomeConnector for TcpHomeConnector
 
 
 /// Convert a TCP/IP multiaddr to a SocketAddr. For multiaddr instances that are not TCP or IP, error is returned.
-pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Result<SocketAddr, ErrorToBeSpecified>
+pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Result<SocketAddr, Error>
 {
     let mut components = multiaddr.iter();
 
@@ -57,14 +57,14 @@ pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Result<SocketAddr, Erro
         {
             Some( AddrComponent::IP4(address) ) => IpAddr::from(address),
             Some( AddrComponent::IP6(address) ) => IpAddr::from(address),
-            _ => return Err(ErrorToBeSpecified::TODO(String::from("multiaddr_to_socketaddr fails at ip "))),
+            _ => Err(ErrorKind::AddressConversionFailed)?,
         };
 
     let ip_port = match components.next()
         {
             Some( AddrComponent::TCP(port) ) => port,
             Some( AddrComponent::UDP(port) ) => port,
-            _ => return Err(ErrorToBeSpecified::TODO(String::from("multiaddr_to_socketaddr fails at port "))),
+            _ => return Err(ErrorKind::AddressConversionFailed)?,
         };
 
     Ok( SocketAddr::new(ip_address, ip_port) )
@@ -84,17 +84,16 @@ impl SimpleTcpHomeConnector
         { Self{ handle: handle} }
 
     pub fn connect_addr(addr: &Multiaddr, handle: &reactor::Handle) ->
-        Box< Future<Item=TcpStream, Error=ErrorToBeSpecified> >
+        Box< Future<Item=TcpStream, Error=Error> >
     {
         // TODO handle other multiaddresses, not only TCP
         let tcp_addr = match multiaddr_to_socketaddr(addr)
         {
             Ok(res) => res,
-            Err(_) => return Box::new( future::err(ErrorToBeSpecified::TODO(String::from("SimpleTcpHomeConnector.connect_addr fails at multiaddr_to_socketaddr "))) )
+            Err(err) => return Box::new( future::err(err))
         };
 
-        let tcp_str = TcpStream::connect(&tcp_addr, handle)
-            .map_err( |_| ErrorToBeSpecified::TODO(String::from("SimpleTcpHomeConnector.connect_addr fails at TcpStream::connect")) );
+        let tcp_str = TcpStream::connect(&tcp_addr, handle).map_err( |err| err.context(ErrorKind::ConnectionFailed));
         Box::new(tcp_str)
     }
 }
@@ -103,11 +102,11 @@ impl SimpleTcpHomeConnector
 impl HomeConnector for SimpleTcpHomeConnector
 {
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<Home>, Error=Error> >
     {
         let addrs = match home_profile.facet {
             ProfileFacet::Home(ref home_facet) => home_facet.addrs.clone(),
-            _ => return Box::new(future::err(ErrorToBeSpecified::TODO("connect: not a home profile".to_owned()))),
+            _ => return Box::new(future::err(Error::new(ErrorKind::HomeProfileExpected))),
         };
 
         let handle_clone = self.handle.clone();
@@ -145,6 +144,7 @@ mod tests
 
         let multiaddr = "/ip4/127.0.0.1/utp".parse::<Multiaddr>().unwrap();
         let socketaddr = multiaddr_to_socketaddr(&multiaddr);
-        assert_eq!(socketaddr, Result::Err(ErrorToBeSpecified::TODO(String::from("multiaddr_to_socketaddr fails at port "))));
+        
+        assert_eq!(socketaddr, Result::Err(ErrorKind::AddressConversionFailed));
     }
 }

@@ -46,7 +46,46 @@ pub enum ErrorKind {
     PeerIdRetreivalFailed,
 
     #[fail(display="failed to get session")]
-    FailedToGetSession
+    FailedToGetSession,
+
+    #[fail(display="address conversion failed")]
+    AddressConversionFailed,
+
+    #[fail(display="failed to connect tcp stream")]
+    ConnectionFailed,
+
+    #[fail(display="failed to load profile")]
+    FailedToLoadProfile,
+
+    #[fail(display="home profile expected")]
+    HomeProfileExpected,
+
+    #[fail(display="failed to resolve URL")]
+    FailedToResolveUrl,
+
+    #[fail(display="failed to claim profile")]
+    FailedToClaimProfile,
+
+    #[fail(display="registration failed")]
+    RegistrationFailed,
+
+    #[fail(display="login failed")]
+    LoginFailed,
+
+    #[fail(display="peer request failed")]
+    PeerRequestFailed,
+
+    #[fail(display="peer response failed")]
+    PeerResponseFailed,
+
+    #[fail(display="profile update failed")]
+    ProfileUpdateFailed,
+
+    #[fail(display="profile deregistration failed")]
+    UnregisterFailed,
+
+    #[fail(display="ping failed")]
+    PingFailed
 }
 
 impl Fail for Error {

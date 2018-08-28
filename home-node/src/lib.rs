@@ -32,7 +32,55 @@ pub enum ErrorKind {
     ConnectionToHomeFailed,
 
     #[fail(display= "peer id retreival failed")]
-    PeerIdRetreivalFailed
+    PeerIdRetreivalFailed,
+
+    #[fail(display= "profile load failed")]
+    FailedToLoadProfile,
+
+    #[fail(display= "profile claim failed")]
+    FailedToClaimProfile,
+
+    #[fail(display= "profile mismatch")]
+    ProfileMismatch,
+
+    #[fail(display="public key mismatch")]
+    PublicKeyMismatch,
+
+    #[fail(display="signer mismatch")]
+    SignerMismatch,
+
+    #[fail(display="home id mismatch")]
+    HomeIdMismatch,
+
+    #[fail(display="relation type mismatch")]
+    RelationTypeMismatch,
+    
+    #[fail(display="invalid signature")]
+    InvalidSignature,
+
+    #[fail(display="storage failed")]
+    StorageFailed,
+
+    #[fail(display="persona expected")]
+    PersonaExpected,
+
+    #[fail(display="already registered")]
+    AlreadyRegistered,
+
+    #[fail(display="peer not hosted here")]
+    PeerNotHostedHere,
+
+    #[fail(display="invalid relation proof")]
+    InvalidRelationProof,
+
+    #[fail(display="timeout failed")]
+    TimeoutFailed,
+
+    #[fail(display="failed to read response")]
+    FailedToReadResponse,
+
+    #[fail(display="failed to send")]
+    FailedToSend
 }
 
 impl Fail for Error {
