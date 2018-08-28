@@ -402,6 +402,14 @@ pub trait HomeSession
 //      in this module to work in Rust but otherwise not strictly part of the protocol
 // ----------------------------------------------------------------------------------
 
+// NOTE this is identical to the currently experimental std::convert::TryFrom.
+//      Hopefully this will not be needed soon when it stabilizes.
+pub trait TryFrom<T> : Sized {
+    type Error;
+    fn try_from(value: T) -> Result<Self, Self::Error>;
+}
+
+
 impl<'a> From<&'a [u8]> for ProfileId
 {
     fn from(src: &'a [u8]) -> Self
@@ -418,6 +426,27 @@ impl<'a> From<ProfileId> for Vec<u8>
 {
     fn from(src: ProfileId) -> Self
         { src.0 }
+}
+
+
+impl<'a> From<&'a str> for ProfileId
+{
+    fn from(src: &'a str) -> Self
+        { ProfileId( src.as_bytes().to_owned() ) }
+}
+
+impl<'a> TryFrom<&'a ProfileId> for &'a str
+{
+    type Error = ::std::str::Utf8Error;
+    fn try_from(src: &'a ProfileId) -> Result<Self, Self::Error>
+        { ::std::str::from_utf8(&src.0) }
+}
+
+impl<'a> TryFrom<ProfileId> for String
+{
+    type Error = ::std::string::FromUtf8Error;
+    fn try_from(src: ProfileId) -> Result<Self, Self::Error>
+        { String::from_utf8(src.0) }
 }
 
 
