@@ -37,7 +37,7 @@ pub struct TcpHomeConnector
 impl HomeConnector for TcpHomeConnector
 {
     fn connect(&self, _home_profile: &Profile, _signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Rc<Home>, Error=Error> >
     {
         unimplemented!()
         // TODO in case of TCP addresses, use StunTurnTcpConnector to build an async TcpStream

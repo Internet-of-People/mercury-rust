@@ -21,7 +21,7 @@ pub trait DAppInit
 {
     // Implies asking the user interface to manually pick a profile the app is used with
     fn initialize(&self, app: &ApplicationId, handle: &reactor::Handle)
-        -> Box< Future<Item=Rc<DAppApi>, Error=ErrorToBeSpecified> >;
+        -> Box< Future<Item=Rc<DAppApi>, Error=Error> >;
 }
 
 pub trait DAppApi
@@ -29,15 +29,15 @@ pub trait DAppApi
     // Once initialized, the profile is selected and can be queried any time
     fn selected_profile(&self) -> &ProfileId;
 
-    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >;
+    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >;
 
-    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=ErrorToBeSpecified> >;
+    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=Error> >;
 
-    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=ErrorToBeSpecified> >;
+    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=Error> >;
 
     // This includes initiating a pair request with the profile if not a relation yet
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
-        -> Box< Future<Item=Call, Error=ErrorToBeSpecified> >;
+        -> Box< Future<Item=Call, Error=Error> >;
 }
 
 
@@ -45,7 +45,7 @@ pub trait DAppApi
 impl DAppInit for Rc<ProfileGateway>
 {
     fn initialize(&self, app: &ApplicationId, handle: &reactor::Handle)
-        -> Box< Future<Item=Rc<DAppApi>, Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=Rc<DAppApi>, Error=Error> >
     {
         Box::new( Ok(
             Rc::new( DAppConnect::new( self.clone(), app, handle) ) as Rc<DAppApi>
@@ -97,10 +97,10 @@ pub trait Bip32PathMapper
 pub trait AccessManager
 {
     fn ask_read_access(&self, resource: &Bip32Path) ->
-        Box< Future<Item=PublicKey, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=PublicKey, Error=Error> >;
 
     fn ask_write_access(&self, resource: &Bip32Path) ->
-        Box< Future<Item=Rc<Signer>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Rc<Signer>, Error=Error> >;
 }
 
 
@@ -111,20 +111,20 @@ pub trait UserInterface
 {
     // Initialize system components and configuration where user interaction is needed,
     // e.g. HD wallets need manually saving generated new seed or entering old one
-    fn initialize(&self) -> Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+    fn initialize(&self) -> Box< Future<Item=(), Error=Error> >;
 
     // An action requested by a distributed application needs
     // explicit user confirmation.
     // TODO how to show a human-readable summary of the action (i.e. binary to be signed)
     //      making sure it's not a fake/misinterpreted description?
     fn confirm(&self, action: &DAppAction)
-        -> Box< Future<Item=Signature, Error=ErrorToBeSpecified> >;
+        -> Box< Future<Item=Signature, Error=Error> >;
 
     // Select a profile to be used by a dApp. It can be either an existing one
     // or the user can create a new one (using a HdSeed) to be selected.
     // TODO this should open something nearly identical to manage_profiles()
     fn select_profile(&self)
-        -> Box< Future<Item=Profile, Error=ErrorToBeSpecified> >;
+        -> Box< Future<Item=Profile, Error=Error> >;
 
     // Open profiles with new, delete and edit (e.g. homes, contacts, apps, etc) options.
     // Specific profiles can also be set online/offline.
@@ -135,7 +135,7 @@ pub trait UserInterface
     //      [x]ON  hobby    (edit) (delete)
     //      (new profile)
     fn manage_profiles(&self)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+        -> Box< Future<Item=(), Error=Error> >;
 }
 
 

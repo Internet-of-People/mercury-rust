@@ -17,11 +17,12 @@ extern crate failure;
 
 
 use std::rc::Rc;
+use std::fmt::Display;
 
 use futures::{future, Future, IntoFuture};
 
 use mercury_home_protocol::*;
-use failure::*;
+use failure::{Context, Fail, Backtrace};
 
 pub mod net;
 pub use net::SimpleTcpHomeConnector;
@@ -38,6 +39,7 @@ pub struct Error {
     inner: Context<ErrorKind>
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
 pub enum ErrorKind {
     #[fail(display= "connection to home failed")]
     ConnectionToHomeFailed,
@@ -85,7 +87,25 @@ pub enum ErrorKind {
     UnregisterFailed,
 
     #[fail(display="ping failed")]
-    PingFailed
+    PingFailed,
+
+    #[fail(display="call failed")]
+    CallFailed,
+
+    #[fail(display="lookup failed")]
+    LookupFailed,
+
+    #[fail(display="no proof found for home")]
+    HomeProofNotFound,
+
+    #[fail(display="persona profile expected")]
+    PersonaProfileExpected,
+
+    #[fail(display="no homes found")]
+    NoHomesFound,
+
+    #[fail(display="unknown")]
+    Unknown,
 }
 
 impl Fail for Error {
@@ -110,15 +130,15 @@ impl Error {
     }
 }
 
-impl From<ErrorKind> for HomeProtocolError {
+impl From<ErrorKind> for Error {
     fn from(kind: ErrorKind) -> Error {
         Error { inner: Context::new(kind) }
     }
 }
 
 impl From<Context<ErrorKind>> for Error {
-    fn from(inner: Context<HomeProtocolErrorKind>) -> HomeProtocolError {
-        HomeProtocolError { inner: inner }
+    fn from(inner: Context<ErrorKind>) -> Error {
+        Error { inner: inner }
     }
 }
 
@@ -181,7 +201,7 @@ pub trait ProfileGateway
 
     // NOTE newhome is a profile that contains at least one HomeSchema different than this home
     fn unregister(&self, home: ProfileId, own_prof: ProfileId, newhome: Option<Profile>) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+        Box< Future<Item=(), Error=Error> >;
 
 
     fn pair_request(&self, relation_type: &str, with_profile_id: &ProfileId, pairing_url: Option<&str>) ->
@@ -240,7 +260,7 @@ impl ProfileGatewayImpl
     {
         let home_conn_fut = prof_repo.load(home_profile_id)
             .and_then( move |home_profile| connector.connect(&home_profile, signer) )
-            .chain_err(|| ErrorKind::ConnectionToHomeFailed("failed to look up profile id in the profile repo".to_string()));
+            .map_err(|err| err.context(ErrorKind::ConnectionToHomeFailed));
             
         Box::new(home_conn_fut)
     }
@@ -266,9 +286,9 @@ impl ProfileGatewayImpl
                         )
                         .map( |home_proof| home_proof.to_owned() )
                         .nth(0)
-                        .ok_or(ErrorToBeSpecified::TODO("login_home(): no proof found for specified home".to_string())),
+                        .ok_or(Error::new(ErrorKind::HomeProofNotFound)),
 
-                    _ => Err(ErrorToBeSpecified::TODO("login_home(): only persona profiles can log in".to_string()))
+                    _ => Err(Error::new(ErrorKind::PersonaProfileExpected))
                 }
             } )
             .and_then(
@@ -298,7 +318,7 @@ impl ProfileGatewayImpl
         let homes = match profile.facet {
             // TODO consider how to get homes/addresses for apps and smartfridges
             ProfileFacet::Persona(ref facet) => facet.homes.clone(),
-            _ => return Box::new(future::err(ErrorToBeSpecified::TODO("any_home_of: not a home profile".to_owned()))),
+            _ => return Box::new(future::err(Error::new(ErrorKind::HomeProfileExpected))),
         };
 
         let home_conn_futs = homes.iter()
@@ -312,7 +332,7 @@ impl ProfileGatewayImpl
                     Ok(ref home_id) => Box::new(
                         Self::connect_home2(home_id.to_owned(), prof_repo, connector, signer)
                             .map( move |home| (proof, home) )
-                        ) as Box< Future<Item=(RelationProof, Rc<Home>), Error=ErrorToBeSpecified> >,
+                        ) as Box< Future<Item=(RelationProof, Rc<Home>), Error=Error> >,
                     Err(e) => Box::new( future::err(e) ),
                 }
             } )
@@ -320,7 +340,7 @@ impl ProfileGatewayImpl
 
         // NOTE needed because select_ok() panics for empty lists instead of simply returning an error
         if home_conn_futs.len() == 0
-            { return Box::new( future::err(ErrorToBeSpecified::TODO(String::from("ProfileGateway.any_home_of2 found no homes"))) ) }
+            { return Box::new( future::err(Error::new(ErrorKind::NoHomesFound)) ) }
 
         // Pick first successful home connection
         let result = future::select_ok(home_conn_futs)
@@ -337,7 +357,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
     fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >
     {
-        Box::new( futures::future::err(ErrorToBeSpecified::TODO(String::from("ProfileGateway.relations "))) )
+        Box::new( futures::future::err(Error::new(ErrorKind::Unknown)) )
     }
 
 
@@ -374,7 +394,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
 
     fn unregister(&self, home_id: ProfileId, own_prof: ProfileId, newhome_id: Option<Profile>) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(), Error=Error> >
     {
         let unreg_fut = self.login_home(home_id)
             .and_then( move |session| session.unregister(newhome_id) );

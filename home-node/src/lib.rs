@@ -20,7 +20,7 @@ pub mod protocol_capnp;
 pub mod server;
 
 
-use failure::*;
+use failure::{Context, Fail, Backtrace};
 use std::fmt::Display;
 
 #[derive(Debug)]

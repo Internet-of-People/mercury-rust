@@ -8,8 +8,8 @@ use serde_json::{from_slice, to_vec};
 use tokio_core::net::TcpStream;
 use tokio_io::io;
 
-use ::*;
-use failure::*;
+use super::*;
+
 
 
 #[derive(Deserialize, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize)]
@@ -21,7 +21,7 @@ struct AuthenticationInfo
 
 
 pub fn temp_handshake_until_tls_is_implemented<R,W>(reader: R, writer: W, signer: Rc<Signer>)
-    -> Box< Future<Item=(R, W, PeerContext), Error=HomeProtocolError> >
+    -> Box< Future<Item=(R, W, PeerContext), Error=Error> >
 where R: std::io::Read + tokio_io::AsyncRead + 'static,
       W: std::io::Write + tokio_io::AsyncWrite + 'static
 {
@@ -31,7 +31,7 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
 
     let out_bytes = match serialize(&auth_info) {
         Ok(data) => data,
-        Err(e) => return Box::new( future::err( HomeProtocolError::from(e.context(HomeProtocolErrorKind::TlsHandshakeFailed)) ) ),
+        Err(e) => return Box::new( future::err( Error::from(e.context(ErrorKind::TlsHandshakeFailed)) ) ),
     };
     let bufsize = out_bytes.len() as u32;
 
@@ -67,20 +67,20 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
             let peer_ctx = PeerContext::new( signer, peer_auth.public_key, peer_auth.profile_id );
             Ok( (reader, writer, peer_ctx) )
         } )
-        .map_err(|err| HomeProtocolError::from(err.context(HomeProtocolErrorKind::TlsHandshakeFailed))); 
+        .map_err(|err| Error::from(err.context(ErrorKind::TlsHandshakeFailed))); 
     Box::new(handshake_fut)
 }
 
 
 
 pub fn temp_tcp_handshake_until_tls_is_implemented(socket: TcpStream, signer: Rc<Signer>)
-    -> Box< Future<Item=(impl std::io::Read, impl std::io::Write, PeerContext), Error=HomeProtocolError> >
+    -> Box< Future<Item=(impl std::io::Read, impl std::io::Write, PeerContext), Error=Error> >
 {
     use tokio_io::AsyncRead;
 
     match socket.set_nodelay(true) {
         Ok(_) => {},
-        Err(e) => return Box::new( future::err(HomeProtocolError::from(e.context(HomeProtocolErrorKind::TlsHandshakeFailed)))),
+        Err(e) => return Box::new( future::err(Error::from(e.context(ErrorKind::TlsHandshakeFailed)))),
     };
 
     let (reader, writer) = socket.split();

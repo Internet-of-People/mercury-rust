@@ -4,13 +4,13 @@ use signatory::ed25519::{FromSeed, Seed, Verifier};
 use signatory::ed25519::Signer as SignatoryEdSigner;
 use signatory_dalek::Ed25519Signer as SignatoryEdDalekSigner;
 
-use ::*;
-use failure::*;
+use failure::ResultExt;
+use super::*;
 
 pub trait ProfileValidator
 {
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
-        -> Result<bool, HomeProtocolError>;
+        -> Result<bool, Error>;
 }
 
 impl Default for Box<ProfileValidator> {
@@ -31,10 +31,10 @@ impl Default for MultiHashProfileValidator
 impl ProfileValidator for MultiHashProfileValidator
 {
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
-        -> Result<bool, HomeProtocolError>
+        -> Result<bool, Error>
     {
-        let id_hashalgo = multihash::decode(profile_id.0.as_slice()).context(HomeProtocolErrorKind::HashDecodeFailed)?.alg;
-        let key_hash = multihash::encode(id_hashalgo, public_key.0.as_slice()).context(HomeProtocolErrorKind::HashEncodeFailed)?;
+        let id_hashalgo = multihash::decode(profile_id.0.as_slice()).context(ErrorKind::HashDecodeFailed)?.alg;
+        let key_hash = multihash::encode(id_hashalgo, public_key.0.as_slice()).context(ErrorKind::HashEncodeFailed)?;
         Ok(key_hash == profile_id.0)
     }
 }
@@ -44,7 +44,7 @@ impl ProfileValidator for MultiHashProfileValidator
 pub trait SignatureValidator
 {
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
-        -> Result<bool, HomeProtocolError>;
+        -> Result<bool, Error>;
 }
 
 impl Default for Box<SignatureValidator> {
@@ -64,11 +64,11 @@ pub struct Ed25519Signer
 
 impl Ed25519Signer
 {
-    pub fn new(private_key: &PrivateKey) -> Result<Self, HomeProtocolError>
+    pub fn new(private_key: &PrivateKey) -> Result<Self, Error>
     {
-        let seed = Seed::from_slice( private_key.0.as_slice() ).context(HomeProtocolErrorKind::SignerCreationFailed)?;            
+        let seed = Seed::from_slice( private_key.0.as_slice() ).context(ErrorKind::SignerCreationFailed)?;            
         let signer = SignatoryEdDalekSigner::from_seed(seed);
-        let ed_public_key = signer.public_key().context(HomeProtocolErrorKind::SignerCreationFailed)?;            
+        let ed_public_key = signer.public_key().context(ErrorKind::SignerCreationFailed)?;            
         let public_key = PublicKey( ed_public_key.as_ref().to_vec() );
         //let profile_hash = multihash::encode( multihash::Hash::Keccak256, public_key.0.as_slice() )
         //    .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )?;
@@ -106,11 +106,11 @@ impl Default for Ed25519Validator
 impl SignatureValidator for Ed25519Validator
 {
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
-        -> Result<bool, HomeProtocolError>
+        -> Result<bool, Error>
     {
         use signatory_dalek::Ed25519Verifier;
-        let pubkey = ::signatory::ed25519::PublicKey::from_bytes( public_key.0.as_slice() ).context(HomeProtocolErrorKind::SignatureValidationFailed)?;
-        let signature = ::signatory::ed25519::Signature::from_bytes( signature.0.as_slice()).context(HomeProtocolErrorKind::SignatureValidationFailed)?;
+        let pubkey = ::signatory::ed25519::PublicKey::from_bytes( public_key.0.as_slice() ).context(ErrorKind::SignatureValidationFailed)?;
+        let signature = ::signatory::ed25519::Signature::from_bytes( signature.0.as_slice()).context(ErrorKind::SignatureValidationFailed)?;
         Ed25519Verifier::verify(&pubkey, data, &signature);
             // TODO hwo to determine when to return Ok(false) here, i.e. signature does not match but validation was otherwise successful
         Ok(true)
@@ -159,14 +159,14 @@ impl CompositeValidator
 impl ProfileValidator for CompositeValidator
 {
     fn validate_profile(&self, public_key: &PublicKey, profile_id: &ProfileId)
-        -> Result<bool, HomeProtocolError>
+        -> Result<bool, Error>
     { self.profile_validator.validate_profile(public_key, profile_id) }
 }
 
 impl SignatureValidator for CompositeValidator
 {
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
-        -> Result<bool, HomeProtocolError>
+        -> Result<bool, Error>
     { self.signature_validator.validate_signature(public_key, data, signature) }
 }
 

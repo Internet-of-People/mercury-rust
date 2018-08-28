@@ -92,7 +92,7 @@ impl DAppConnect
     }
 
 
-    fn login_and_forward_events(&self) -> Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >
+    fn login_and_forward_events(&self) -> Box< Future<Item=Rc<HomeSession>, Error=Error> >
     {
         if let Some(ref session_rc) = *self.session_cache.borrow()
             { return Box::new( Ok( session_rc.clone() ).into_future() ) }
@@ -116,7 +116,7 @@ impl DAppConnect
     // Try fetching RelationProof from existing contacts. If no appropriate contact found,
     // initiate a pairing procedure and return when it's completed, failed or timed out
     fn get_relation_proof(&self, profile_id: &ProfileId)
-        -> Box< Future<Item=RelationProof, Error=ErrorToBeSpecified>>
+        -> Box< Future<Item=RelationProof, Error=Error>>
     {
         let (event_sink, event_stream) = mpsc::channel(CHANNEL_CAPACITY);
         self.add_listener(event_sink);
@@ -138,7 +138,7 @@ impl DAppConnect
 
                 match first_match
                 {
-                    Some(proof) => Box::new( Ok(proof).into_future() ) as Box<Future<Item=RelationProof, Error=ErrorToBeSpecified>>,
+                    Some(proof) => Box::new( Ok(proof).into_future() ) as Box<Future<Item=RelationProof, Error=Error>>,
 
                     None => {
                         let proof_fut = gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &profile_id2, None)
@@ -154,9 +154,9 @@ impl DAppConnect
                                 } )
                                 .take(1)
                                 .collect()
-                                .map_err( |_| ( ErrorToBeSpecified::TODO( format!("TODO how can this fail?") ) ) )
+                                .map_err( |_| Error::new(ErrorKind::PeerRequestFailed))
                             )
-                            .and_then( |mut proofs| proofs.pop().ok_or( ErrorToBeSpecified::TODO( "Did not receive response".to_string() ) ) );
+                            .and_then( |mut proofs| proofs.pop().ok_or( Error::new(ErrorKind::PeerRequestFailed)));
                         Box::new(proof_fut)
                     }
 //                        Err( ErrorToBeSpecified::TODO( "get_relation_proof: no appropriate relation found".to_string()) ).into_future()
@@ -175,17 +175,17 @@ impl DAppApi for DAppConnect
         { self.gateway.signer().profile_id() }
 
 
-    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >{
+    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >{
         unimplemented!();
     }
 
 
-    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=ErrorToBeSpecified> >{
+    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=Error> >{
         unimplemented!();
     }
 
 
-    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=ErrorToBeSpecified> >
+    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=Error> >
     {
         let checkin_fut = self.login_and_forward_events()
             .and_then( {
@@ -197,7 +197,7 @@ impl DAppApi for DAppConnect
 
 
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
-        -> Box< Future<Item=Call, Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=Call, Error=Error> >
     {
         let call_fut = self.get_relation_proof(profile_id)
             .and_then( {
@@ -207,7 +207,7 @@ impl DAppApi for DAppConnect
                 move |relation| gateway.call(relation.to_owned(), app_id, init_payload, Some(to_caller))
                     .and_then( |to_callee_opt|
                         match to_callee_opt {
-                            None => Err( ErrorToBeSpecified::TODO( "call was refused be the callee".to_string() ) ),
+                            None => Err( Error::new(ErrorKind::CallRefused) ),
                             Some(to_callee) => Ok( Call{ sender: to_callee, receiver: from_callee } )
                         }
                     )

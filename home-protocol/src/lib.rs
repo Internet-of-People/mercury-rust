@@ -37,12 +37,7 @@ use serde::{Deserialize, Deserializer, Serializer};
 use serde::{de::Error as DeSerError, ser::SerializeSeq};
 
 use crypto::{ProfileValidator, SignatureValidator};
-use failure::Error;
-use failure::Backtrace;
-use failure::Fail;
-use failure::Context;
-
-
+use failure::{Fail, Backtrace, Context};
 
 pub mod crypto;
 pub mod handshake;
@@ -66,12 +61,12 @@ pub struct PrivateKey(pub Vec<u8>);
 pub struct Signature(pub Vec<u8>);
 
 #[derive(Debug)]
-pub struct HomeProtocolError {
-    inner: Context<HomeProtocolErrorKind>
+pub struct Error {
+    inner: Context<ErrorKind>
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
-pub enum HomeProtocolErrorKind {
+pub enum ErrorKind {
     #[fail(display= "hash decode failed")]
     HashDecodeFailed,
     #[fail(display= "hash encode failed")]
@@ -96,7 +91,7 @@ pub enum HomeProtocolErrorKind {
     PeerIdRetreivalFailed
 }
 
-impl Fail for HomeProtocolError {
+impl Fail for Error {
     fn cause(&self) -> Option<&Fail> {
         self.inner.cause()
     }
@@ -106,27 +101,27 @@ impl Fail for HomeProtocolError {
     }
 }
 
-impl Display for HomeProtocolError {
+impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         Display::fmt(&self.inner, f)
     }
 }
 
-impl HomeProtocolError {
-    pub fn kind(&self) -> HomeProtocolErrorKind {
+impl Error {
+    pub fn kind(&self) -> ErrorKind {
         *self.inner.get_context()
     }
 }
 
-impl From<HomeProtocolErrorKind> for HomeProtocolError {
-    fn from(kind: HomeProtocolErrorKind) -> HomeProtocolError {
-        HomeProtocolError { inner: Context::new(kind) }
+impl From<ErrorKind> for Error {
+    fn from(kind: ErrorKind) -> Error {
+        Error { inner: Context::new(kind) }
     }
 }
 
-impl From<Context<HomeProtocolErrorKind>> for HomeProtocolError {
-    fn from(inner: Context<HomeProtocolErrorKind>) -> HomeProtocolError {
-        HomeProtocolError { inner: inner }
+impl From<Context<ErrorKind>> for Error {
+    fn from(inner: Context<ErrorKind>) -> Error {
+        Error { inner: inner }
     }
 }
 
@@ -575,12 +570,12 @@ impl PeerContext
     pub fn peer_pubkey(&self) -> &PublicKey { &self.peer_pubkey }
     pub fn peer_id(&self) -> &ProfileId { &self.peer_id }
 
-    pub fn validate(&self, validator: &Validator) -> Result<(), HomeProtocolError>
+    pub fn validate(&self, validator: &Validator) -> Result<(), Error>
     {
         validator.validate_profile( self.peer_pubkey(), self.peer_id() )
             .and_then( |valid|
                 if valid { Ok( () ) }
-                else { Err( HomeProtocolErrorKind::ProfileValidationFailed )? } )
+                else { Err( ErrorKind::ProfileValidationFailed )? } )
     }
 }
 
@@ -644,11 +639,11 @@ impl RelationProof
     }
 
     pub fn sign_remaining_half(half_proof: &RelationHalfProof, signer: &Signer)
-        -> Result<Self, HomeProtocolError>
+        -> Result<Self, Error>
     {
         let my_profile_id = signer.profile_id().to_owned();
         if half_proof.peer_id != my_profile_id
-            { Err(HomeProtocolErrorKind::RelationSigningFailed)? }
+            { Err(ErrorKind::RelationSigningFailed)? }
 
         let signable = RelationSignablePart::new(
             &half_proof.relation_type,
@@ -659,23 +654,23 @@ impl RelationProof
                        &my_profile_id, &signable.sign(signer) ) )
     }
 
-    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, HomeProtocolError> {
+    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, Error> {
         if self.a_id == *my_id {
             Ok(&self.b_id)
         } else if self.b_id == *my_id {
             Ok(&self.a_id)
         } else {
-            Err(HomeProtocolErrorKind::PeerIdRetreivalFailed)?
+            Err(ErrorKind::PeerIdRetreivalFailed)?
         }
     }
 
-    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, HomeProtocolError> {
+    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, Error> {
         if self.a_id == *my_id {
             Ok(&self.b_signature)
         } else if self.b_id == *my_id {
             Ok(&self.a_signature)
         } else {
-            Err(HomeProtocolErrorKind::PeerIdRetreivalFailed)?
+            Err(ErrorKind::PeerIdRetreivalFailed)?
         }
     }
 }
@@ -684,7 +679,7 @@ impl RelationProof
 
 pub trait Validator: ProfileValidator + SignatureValidator
 {
-    fn validate_half_proof(&self, half_proof: &RelationHalfProof, signer_public_key: &PublicKey) -> Result<(), HomeProtocolError> {
+    fn validate_half_proof(&self, half_proof: &RelationHalfProof, signer_public_key: &PublicKey) -> Result<(), Error> {
         self.validate_signature(signer_public_key,
             &RelationSignablePart::from(half_proof).serialized(), &half_proof.signature)?;
         Ok(())
@@ -697,7 +692,7 @@ pub trait Validator: ProfileValidator + SignatureValidator
         public_key_1: &PublicKey,
         id_2: &ProfileId,
         public_key_2: &PublicKey
-    ) -> Result<(), HomeProtocolError> {
+    ) -> Result<(), Error> {
         // TODO consider inverting relation_type for different directions
         let signable_a = RelationSignablePart::new(
             &relation_proof.relation_type,
@@ -713,7 +708,7 @@ pub trait Validator: ProfileValidator + SignatureValidator
 
         let peer_of_id_1 = relation_proof.peer_id(&id_1)?;
         if peer_of_id_1 != id_2 {
-            Err(HomeProtocolErrorKind::RelationValidationFailed)?
+            Err(ErrorKind::RelationValidationFailed)?
         }
 
         if *peer_of_id_1 == relation_proof.b_id {

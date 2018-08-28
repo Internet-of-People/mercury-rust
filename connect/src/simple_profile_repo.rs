@@ -4,6 +4,7 @@ use std::collections::HashMap;
 use mercury_home_protocol::*;
 use futures::{Future, future};
 
+
 pub struct SimpleProfileRepo {
     profiles : HashMap<ProfileId, Profile>
 }
@@ -32,11 +33,11 @@ impl ProfileRepo for SimpleProfileRepo {
     /// Look for specified `id` and return. This might involve searching for the latest version
     /// of the profile in the dht, but if it's the profile's home server, could come from memory, too.
     fn load(&self, id: &ProfileId) ->
-        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Profile, Error=Error> >
     {
         match self.profiles.get(id) {
             Some(profile) => Box::new(future::ok(profile.to_owned())),
-            None => Box::new(future::err(ErrorToBeSpecified::TODO(String::from("lookup failed"))))
+            None => Box::new(future::err(Error::new(ErrorKind::LookupFailed)))
         }
     }
 
@@ -49,7 +50,7 @@ impl ProfileRepo for SimpleProfileRepo {
     /// * ProfileID of its home server
     /// * last known multiaddress(es) of its home server
     fn resolve(&self, url: &str) ->
-        Box< Future<Item=Profile, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Profile, Error=Error> >
     {
         self.load(&ProfileId(Vec::from(url)))
     }

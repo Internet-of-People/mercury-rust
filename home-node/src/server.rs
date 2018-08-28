@@ -1,6 +1,5 @@
 use std::{cell::RefCell, rc::Rc, rc::Weak};
 use std::collections::HashMap;
-use std::error::Error;
 use std::time::Duration;
 
 use futures::{future, stream, Future, Sink};
@@ -9,8 +8,9 @@ use tokio_core::reactor::{self, Timeout};
 
 use mercury_home_protocol::*;
 use mercury_storage::{async::KeyValueStore, error::StorageError};
-use failure::*;
-use ::*;
+use super::{Error, ErrorKind};
+use super::*;
+
 
 // TODO this should come from user configuration with a reasonable default value close to this
 const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
