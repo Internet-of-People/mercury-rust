@@ -48,7 +48,7 @@ pub struct HomeConnectionServer
 
 impl HomeConnectionServer
 {
-    pub fn new(context: Rc<PeerContext>, server: Rc<HomeServer>) -> Result<Self, ErrorToBeSpecified>
+    pub fn new(context: Rc<PeerContext>, server: Rc<HomeServer>) -> Result<Self, Error>
     {
         context.validate(&*server.validator)?;
         Ok( Self{ context: context, server: server } )
@@ -78,7 +78,7 @@ impl HomeConnectionServer
 
 
     fn push_event(server: Rc<HomeServer>, to_profile: ProfileId, event: ProfileEvent)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=(), Error=Error> >
     {
         let push_fut = Self::get_live_session(server, to_profile)
             .and_then( |session_rc_opt|
@@ -98,7 +98,7 @@ impl HomeConnectionServer
 
 
     fn push_call(server: Rc<HomeServer>, to_profile: ProfileId, to_app: ApplicationId, call: Box<IncomingCall>)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=(), Error=Error> >
     {
         let push_fut = Self::get_live_session(server, to_profile)
             .and_then( |session_rc_opt|
@@ -110,7 +110,7 @@ impl HomeConnectionServer
                         // TODO if push to session fails, consider just dropping the session
                         //      (is anything manual needed using weak pointers?) and requiring a reconnect
                         let push_fut = session.push_call(to_app, call);
-                        Box::new(push_fut) as Box< Future<Item=(), Error=ErrorToBeSpecified> >
+                        Box::new(push_fut) as Box< Future<Item=(), Error=Error> >
                     },
                     // TODO save event into persistent storage and delegate it when profile is online again
                     None => { Box::new( future::ok( () ) ) },
@@ -321,7 +321,7 @@ impl Home for HomeConnectionServer
         let to_profile = match call_req.relation.peer_id( self.context.peer_id() )
         {
             Ok(profile_id) => profile_id.to_owned(),
-            Err(e) => return Box::new( future::err(e.context(ErrorKind.ProfileMismatch)))
+            Err(e) => return Box::new( future::err(e.context(ErrorKind::ProfileMismatch)))
                 
         };
 
@@ -338,7 +338,7 @@ impl Home for HomeConnectionServer
             Ok(timeout_fut) => timeout_fut
                 .map( |_| None)
                 .map_err( |e| e.context(ErrorKind::TimeoutFailed) ),
-            Err(err) => return Box::new(future::err(e.context(ErrorKind::TimeoutFailed))),
+            Err(err) => return Box::new(future::err(err.context(ErrorKind::TimeoutFailed))),
         };
 
         let answer_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone().into() )
@@ -425,7 +425,7 @@ impl HomeSessionServer
     }
 
 
-    fn push_event(&self, event: ProfileEvent) -> Box< Future<Item=(),Error=ErrorToBeSpecified> >
+    fn push_event(&self, event: ProfileEvent) -> Box< Future<Item=(),Error=Error> >
     {
         match *self.events.borrow_mut()
         {
@@ -477,12 +477,15 @@ impl Drop for HomeSessionServer {
 
 impl HomeSession for HomeSessionServer
 {
-    fn update(&self, own_prof: OwnProfile) -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+    fn update(&self, own_prof: OwnProfile) -> Box< Future<Item=(), Error=Error> >
     {
-        if own_prof.profile.id != *self.context.peer_id()
-            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Update() access denied: you authenticated with a different profile".to_owned() ) ) ) }
-        if own_prof.profile.public_key != *self.context.peer_pubkey()
-            { return Box::new( future::err( ErrorToBeSpecified::TODO( "Update() access denied: you authenticated with a different public key".to_owned() )) ) }
+        if own_prof.profile.id != *self.context.peer_id() { 
+            return Box::new( future::err( Error::new(ErrorKind::ProfileMismatch))) 
+        }
+
+        if own_prof.profile.public_key != *self.context.peer_pubkey() { 
+            return Box::new( future::err( Error::new(ErrorKind::PublicKeyMismatch))) 
+        }
 
         let upd_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone().into() )
             // NOTE Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
@@ -499,7 +502,7 @@ impl HomeSession for HomeSessionServer
                     return local_store.borrow_mut().set( own_prof.profile.id.clone().into(), own_prof );
                 }
             } )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) );
+            .map_err( |e| e.context(ErrorKind::ProfileUpdateFailed) );
 
         Box::new(upd_fut)
     }
@@ -508,7 +511,7 @@ impl HomeSession for HomeSessionServer
     // TODO is the ID of the new home enough here or do we need the whole profile?
     // TODO newhome should be stored and some special redirect to new home should be sent when someone looking for the profile
     fn unregister(&self, _newhome: Option<Profile>) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(), Error=Error> >
     {
         let profile_id = self.context.peer_id();
 
@@ -522,7 +525,7 @@ impl HomeSession for HomeSessionServer
         // TODO force close/drop session connection after successful unregister().
         //      Ideally self would be consumed here, but that'd require binding to self: Box<Self> or Rc<Self> to compile within a trait.
 
-        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeSessionServer.unregister "))) )
+        Box::new( future::err(Error::new(ErrorKind::ProfileDeregistered)) )
     }
 
 
@@ -599,7 +602,7 @@ impl HomeSession for HomeSessionServer
 
     // TODO remove this after testing
     fn ping(&self, txt: &str) ->
-        Box< Future<Item=String, Error=ErrorToBeSpecified> >
+        Box< Future<Item=String, Error=Error> >
     {
         debug!("Ping received `{}`, sending it back", txt);
         Box::new( future::ok( txt.to_owned() ) )

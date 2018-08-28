@@ -21,12 +21,14 @@ pub mod server;
 
 
 use failure::*;
+use std::fmt::Display;
 
 #[derive(Debug)]
 pub struct Error {
     inner: Context<ErrorKind>
 }
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
 pub enum ErrorKind {
     #[fail(display= "connection to home failed")]
     ConnectionToHomeFailed,
@@ -61,6 +63,10 @@ pub enum ErrorKind {
     #[fail(display="storage failed")]
     StorageFailed,
 
+    #[fail(display="profile update failed")]
+    ProfileUpdateFailed,
+
+
     #[fail(display="persona expected")]
     PersonaExpected,
 
@@ -80,7 +86,10 @@ pub enum ErrorKind {
     FailedToReadResponse,
 
     #[fail(display="failed to send")]
-    FailedToSend
+    FailedToSend,
+
+    #[fail(display="deregistered")]
+    ProfileDeregistered
 }
 
 impl Fail for Error {
@@ -105,15 +114,15 @@ impl Error {
     }
 }
 
-impl From<ErrorKind> for HomeProtocolError {
+impl From<ErrorKind> for Error {
     fn from(kind: ErrorKind) -> Error {
         Error { inner: Context::new(kind) }
     }
 }
 
 impl From<Context<ErrorKind>> for Error {
-    fn from(inner: Context<HomeProtocolErrorKind>) -> HomeProtocolError {
-        HomeProtocolError { inner: inner }
+    fn from(inner: Context<ErrorKind>) -> Error {
+        Error { inner: inner }
     }
 }
 
