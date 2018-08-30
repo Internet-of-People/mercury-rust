@@ -67,6 +67,10 @@ pub struct Error {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
 pub enum ErrorKind {
+    #[fail(display= "profile lookup failed")]
+    ProfileLookupFailed,
+    #[fail(display="profile update failed")]
+    ProfileUpdateFailed,
     #[fail(display= "hash decode failed")]
     HashDecodeFailed,
     #[fail(display= "hash encode failed")]
@@ -88,7 +92,61 @@ pub enum ErrorKind {
     #[fail(display= "multiaddress deserialization failed")]
     MultiaddrDeserializationFailed,
     #[fail(display= "failed to fetch peer id")]
-    PeerIdRetreivalFailed
+    PeerIdRetreivalFailed,
+    #[fail(display= "profile claim failed")]
+    FailedToClaimProfile,
+    #[fail(display="persona expected")]
+    PersonaExpected,
+    #[fail(display="already registered")]
+    AlreadyRegistered,
+    #[fail(display="home id mismatch")]
+    HomeIdMismatch,
+    #[fail(display="relation type mismatch")]
+    RelationTypeMismatch,
+    #[fail(display="invalid signature")]
+    InvalidSignature,
+    #[fail(display="storage failed")]
+    StorageFailed,
+    #[fail(display= "profile mismatch")]
+    ProfileMismatch,
+    #[fail(display="public key mismatch")]
+    PublicKeyMismatch,
+    #[fail(display="signer mismatch")]
+    SignerMismatch,
+    #[fail(display="peer not hosted here")]
+    PeerNotHostedHere,
+    #[fail(display="invalid relation proof")]
+    InvalidRelationProof,
+    #[fail(display="timeout failed")]
+    TimeoutFailed,
+    #[fail(display="failed to read response")]
+    FailedToReadResponse,
+    #[fail(display="deregistered")]
+    ProfileDeregistered,
+    #[fail(display= "profile load failed")]
+    FailedToLoadProfile,
+    #[fail(display="peer request failed")]
+    CallFailed,
+    #[fail(display="failed to push event")]
+    FailedToPushEvent,
+    #[fail(display= "connection to home failed")]
+    ConnectionToHomeFailed,
+    #[fail(display="failed to send")]
+    FailedToSend,
+    #[fail(display="context validation failed")]
+    ContextValidationFailed,
+    #[fail(display="failed to get session")]
+    FailedToGetSession,
+    #[fail(display="failed to resolve URL")]
+    FailedToResolveUrl,
+    #[fail(display="pair request failed")]
+    PairRequestFailed,
+    #[fail(display="profile deregistration failed")]
+    UnregisterFailed,
+    #[fail(display="failed to create session")]
+    FailedToCreateSession,
+    #[fail(display="response failed")]
+    ResponseFailed,
 }
 
 impl Fail for Error {

@@ -5,6 +5,7 @@ use multiaddr::{Multiaddr, AddrComponent};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 
+use super::{Error, ErrorKind};
 use super::*;
 
 
@@ -37,7 +38,7 @@ pub struct TcpHomeConnector
 impl HomeConnector for TcpHomeConnector
 {
     fn connect(&self, _home_profile: &Profile, _signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=Error> >
+        Box< Future<Item=Rc<Home>, Error=::Error> >
     {
         unimplemented!()
         // TODO in case of TCP addresses, use StunTurnTcpConnector to build an async TcpStream
@@ -93,7 +94,7 @@ impl SimpleTcpHomeConnector
             Err(err) => return Box::new( future::err(err))
         };
 
-        let tcp_str = TcpStream::connect(&tcp_addr, handle).map_err( |err| err.context(ErrorKind::ConnectionFailed));
+        let tcp_str = TcpStream::connect(&tcp_addr, handle).map_err( |err| err.context(ErrorKind::ConnectionFailed).into());
         Box::new(tcp_str)
     }
 }
@@ -103,14 +104,17 @@ impl HomeConnector for SimpleTcpHomeConnector
 {
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
         Box< Future<Item=Rc<Home>, Error=Error> >
-    {
+    {        
         let addrs = match home_profile.facet {
             ProfileFacet::Home(ref home_facet) => home_facet.addrs.clone(),
-            _ => return Box::new(future::err(Error::new(ErrorKind::HomeProfileExpected))),
+            _ => return Box::new(future::err(Error::from(ErrorKind::HomeProfileExpected))),
         };
 
         let handle_clone = self.handle.clone();
-        let tcp_conns = addrs.iter().map( move |addr| SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone) );
+        let tcp_conns = addrs.iter().map( move |addr| {
+            SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone)
+            .map_err(|err| err.context(ErrorKind::ConnectionFailed).into()) 
+        });
 
         let handle_clone = self.handle.clone();
         let capnp_home = future::select_ok(tcp_conns)
@@ -118,10 +122,13 @@ impl HomeConnector for SimpleTcpHomeConnector
             {
                 use mercury_home_protocol::handshake::temp_tcp_handshake_until_tls_is_implemented;
                 temp_tcp_handshake_until_tls_is_implemented(tcp_stream, signer)
+                .map_err(|err| err.context(ErrorKind::HandshakeFailed).into())
             }).map( |(reader, writer, _peer_ctx)| {
                 use protocol_capnp::HomeClientCapnProto;
                 Rc::new( HomeClientCapnProto::new(reader, writer, handle_clone) ) as Rc<Home>
             });
+
+        
         Box::new(capnp_home)
     }
 }
@@ -145,6 +152,6 @@ mod tests
         let multiaddr = "/ip4/127.0.0.1/utp".parse::<Multiaddr>().unwrap();
         let socketaddr = multiaddr_to_socketaddr(&multiaddr);
         
-        assert_eq!(socketaddr, Result::Err(ErrorKind::AddressConversionFailed));
+        assert_eq!(socketaddr, Result::Err(Error::from(ErrorKind::AddressConversionFailed)));
     }
 }

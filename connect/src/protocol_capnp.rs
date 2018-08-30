@@ -71,8 +71,9 @@ impl ProfileRepo for HomeClientCapnProto
 
 
     fn load(&self, id: &ProfileId) ->
-        Box< Future<Item=Profile, Error=Error> >
+        Box< Future<Item=Profile, Error=mercury_home_protocol::Error> >
     {
+        use mercury_home_protocol::ErrorKind;
         let mut request = self.repo.load_request();
         request.get().set_profile_id( id.into() );
 
@@ -83,15 +84,16 @@ impl ProfileRepo for HomeClientCapnProto
                 let profile = Profile::try_from(profile_capnp);
                 Promise::result(profile)
             } )
-            .map_err( |e| e.context(ErrorKind::FailedToLoadProfile) );
+            .map_err( |e| e.context(ErrorKind::FailedToLoadProfile).into() );
 
         Box::new(resp_fut)
     }
 
     // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
     fn resolve(&self, url: &str) ->
-        Box< Future<Item=Profile, Error=Error> >
+        Box< Future<Item=Profile, Error=mercury_home_protocol::Error> >
     {
+        use mercury_home_protocol::ErrorKind;
         let mut request = self.repo.resolve_request();
         request.get().set_profile_url(url);
 
@@ -102,7 +104,7 @@ impl ProfileRepo for HomeClientCapnProto
                 let profile = Profile::try_from(profile_capnp);
                 Promise::result(profile)
             } )
-            .map_err( |e| e.context(ErrorKind::FailedToResolveUrl) );
+            .map_err( |e| e.context(ErrorKind::FailedToResolveUrl).into() );
 
         Box::new(resp_fut)
     }
@@ -113,8 +115,9 @@ impl ProfileRepo for HomeClientCapnProto
 impl Home for HomeClientCapnProto
 {
     fn claim(&self, profile_id: ProfileId) ->
-        Box< Future<Item=OwnProfile, Error=Error> >
+        Box< Future<Item=OwnProfile, Error=mercury_home_protocol::Error> >
     {
+        use mercury_home_protocol::ErrorKind;
         let mut request = self.home.claim_request();
         request.get().set_profile_id( (&profile_id).into() );
 
@@ -123,14 +126,14 @@ impl Home for HomeClientCapnProto
                 resp.get()
                     .and_then( |res| res.get_own_profile() )
                     .and_then( |own_prof_capnp| OwnProfile::try_from(own_prof_capnp) ) )
-            .map_err( |e| e.context(ErrorKind::FailedToClaimProfile) );
+            .map_err( |e| e.context(ErrorKind::FailedToClaimProfile).into() );
 
         Box::new(resp_fut)
     }
 
 
     fn register(&self, own_profile: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=(OwnProfile,Error)> >
+        Box< Future<Item=OwnProfile, Error=(OwnProfile,mercury_home_protocol::Error)> >
     {
         let mut request = self.home.register_request();
         request.get().init_own_profile().fill_from(&own_profile);
@@ -143,14 +146,14 @@ impl Home for HomeClientCapnProto
                 resp.get()
                     .and_then( |res| res.get_own_profile() )
                     .and_then( |own_prof_capnp| OwnProfile::try_from(own_prof_capnp) ) )
-            .map_err( move |e| (own_profile, e.context(ErrorKind::RegistrationFailed) ) );
+            .map_err( move |e| (own_profile, e.context(mercury_home_protocol::ErrorKind::ResponseFailed).into() ) );
 
         Box::new(resp_fut)
     }
 
 
     fn login(&self, proof_of_home: &RelationProof) ->
-        Box< Future<Item=Rc<HomeSession>, Error=Error> >
+        Box< Future<Item=Rc<HomeSession>, Error=mercury_home_protocol::Error> >
     {
         let mut request = self.home.login_request();
         request.get().init_proof_of_home().fill_from(proof_of_home);
@@ -164,7 +167,7 @@ impl Home for HomeClientCapnProto
                     .map( |session_client| Rc::new(
                         HomeSessionClientCapnProto::new(session_client, handle_clone) ) as Rc<HomeSession> )
             } )
-            .map_err( |e| e.context(ErrorKind::LoginFailed) );
+            .map_err( |e| e.context(mercury_home_protocol::ErrorKind::FailedToCreateSession).into() );
 
         Box::new(resp_fut)
     }
@@ -172,14 +175,14 @@ impl Home for HomeClientCapnProto
 
     // NOTE acceptor must have this server as its home
     fn pair_request(&self, half_proof: RelationHalfProof) ->
-        Box< Future<Item=(), Error=Error> >
+        Box< Future<Item=(), Error=mercury_home_protocol::Error> >
     {
         let mut request = self.home.pair_request_request();
         request.get().init_half_proof().fill_from(&half_proof);
 
         let resp_fut = request.send().promise
             .map( |_resp| () )
-            .map_err( |e| e.context(ErrorKind::PairRequestFailed) );
+            .map_err( |e| e.context(mercury_home_protocol::ErrorKind::PairRequestFailed).into() );
 
         Box::new(resp_fut)
     }
@@ -187,14 +190,14 @@ impl Home for HomeClientCapnProto
 
     // NOTE acceptor must have this server as its home
     fn pair_response(&self, relation_proof: RelationProof) ->
-        Box< Future<Item=(), Error=Error> >
+        Box< Future<Item=(), Error=mercury_home_protocol::Error> >
     {
         let mut request = self.home.pair_response_request();
         request.get().init_relation().fill_from(&relation_proof);
 
         let resp_fut = request.send().promise
             .map( |_resp| () )
-            .map_err( |e| e.context(ErrorKind::PeerResponsFailed) );
+            .map_err( |e| e.context(mercury_home_protocol::ErrorKind::FailedToReadResponse).into() );
 
         Box::new(resp_fut)
     }
@@ -224,7 +227,7 @@ impl Home for HomeClientCapnProto
                     .ok()
                 )
             )
-            .map_err( |e| e.context(ErrorKind::CallFailed) );
+            .map_err( |e| e.context(ErrorKind::CallFailed).into() );
 
         Box::new(resp_fut)
     }
@@ -298,7 +301,7 @@ impl HomeSession for HomeSessionClientCapnProto
 
         let resp_fut = request.send().promise
             .map( |_resp| () )
-            .map_err(  |e| e.context(ErrorKind::ProfileUpdateFailed));
+            .map_err(  |e| e.context(ErrorKind::ProfileUpdateFailed).into());
 
         Box::new(resp_fut)
     }
@@ -314,7 +317,7 @@ impl HomeSession for HomeSessionClientCapnProto
 
         let resp_fut = request.send().promise
             .map( |_resp| () )
-            .map_err( |e| e.context(ErrorKind::UnregisterFailed) );
+            .map_err( |e| e.context(ErrorKind::UnregisterFailed).into() );
 
         Box::new(resp_fut)
     }
@@ -387,7 +390,7 @@ impl HomeSession for HomeSessionClientCapnProto
                     .and_then( |res| res.get_pong() )
                     .map( |pong| pong.to_owned() )
             } )
-            .map_err( |e| e.context(ErrorKind::PingFailed) );
+            .map_err( |e| e.context(ErrorKind::PingFailed).into() );
 
         Box::new(resp_fut)
     }

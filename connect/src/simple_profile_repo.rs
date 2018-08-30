@@ -37,7 +37,7 @@ impl ProfileRepo for SimpleProfileRepo {
     {
         match self.profiles.get(id) {
             Some(profile) => Box::new(future::ok(profile.to_owned())),
-            None => Box::new(future::err(Error::new(ErrorKind::LookupFailed)))
+            None => Box::new(future::err(Error::from(ErrorKind::ProfileLookupFailed)))
         }
     }
 
