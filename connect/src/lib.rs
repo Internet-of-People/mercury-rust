@@ -30,6 +30,7 @@ pub use net::SimpleTcpHomeConnector;
 pub mod protocol_capnp;
 pub mod sdk;
 pub mod sdk_impl;
+pub mod service;
 
 pub mod simple_profile_repo;
 pub use simple_profile_repo::SimpleProfileRepo;
