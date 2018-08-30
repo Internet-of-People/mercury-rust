@@ -513,6 +513,7 @@ pub trait HomeSession
 
     fn events(&self) -> HomeStream<ProfileEvent, String>;
 
+    // TODO some kind of proof might be needed that the AppId given really belongs to the caller
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
     fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>;
 

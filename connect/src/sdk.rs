@@ -60,24 +60,3 @@ impl DAppInit for Rc<ProfileGateway>
 //    fn claim(&self, profile_path: Option<Bip32Path>, auth: Option<DeviceAuthorization>) ->
 //        Box< Future<Item=Rc<SdkProfile>, Error=ErrorToBeSpecified> >;
 //}
-//
-//
-//
-//pub trait SdkProfile
-//{
-//    fn relations(&self) ->
-//        Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >;
-//
-//    fn initiate_relation(&self, with_profile: &ProfileId) ->
-//        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
-//
-//    fn accept_relation(&self, half_proof: &RelationHalfProof) ->
-//        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
-//
-//    fn revoke_relation(&self, relation: &RelationProof) ->
-//        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
-//
-//
-//    fn login(&self) ->
-//        Vec<Box< Future<Item=Rc<HomeSession>, Error=ErrorToBeSpecified> >>;
-//}
