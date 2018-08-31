@@ -3,12 +3,10 @@ use std::rc::Rc;
 use futures::{Future, IntoFuture};
 use tokio_core::reactor;
 
-use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
 
 use sdk_impl::DAppConnect;
-use super::*;
-
+use ::*;
 
 
 pub struct Call
@@ -29,15 +27,15 @@ pub trait DAppApi
     // Once initialized, the profile is selected and can be queried any time
     fn selected_profile(&self) -> &ProfileId;
 
-    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >;
+    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=::Error> >;
 
-    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=Error> >;
+    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=::Error> >;
 
-    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=Error> >;
+    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=::Error> >;
 
     // This includes initiating a pair request with the profile if not a relation yet
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
-        -> Box< Future<Item=Call, Error=Error> >;
+        -> Box< Future<Item=Call, Error=::Error> >;
 }
 
 

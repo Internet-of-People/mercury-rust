@@ -151,6 +151,8 @@ pub enum ErrorKind {
     DhtLookupFailed,
     #[fail(display="ping failed")]
     PingFailed,
+    #[fail(display="login failed")]
+    LoginFailed,
 }
 
 impl Fail for Error {

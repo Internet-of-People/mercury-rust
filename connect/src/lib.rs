@@ -92,6 +92,9 @@ pub enum ErrorKind {
     #[fail(display="call failed")]
     CallFailed,
 
+    #[fail(display="call refused")]
+    CallRefused,
+
     #[fail(display="lookup failed")]
     LookupFailed,
 
@@ -273,7 +276,7 @@ impl ProfileGatewayImpl
 
 
     pub fn login_home(&self, home_profile_id: ProfileId) ->
-        Box< Future<Item=Rc<HomeSession>, Error=Error> >
+        Box< Future<Item=Rc<HomeSession>, Error=::Error> >
     {
         let home_id = home_profile_id.clone();
         let my_profile_id = self.signer.profile_id().to_owned();
@@ -287,7 +290,7 @@ impl ProfileGatewayImpl
                         .filter(move |home_proof|
                             home_proof.peer_id(&my_profile_id)
                                 .and_then(|peer_id| 
-                                    if *peer_id == home_id { Ok(true) } else { Err() }
+                                    if *peer_id == home_id { Ok(true) } else { Err(mercury_home_protocol::Error::from(mercury_home_protocol::ErrorKind::PeerIdRetreivalFailed)) }
                                 )
                                 .is_ok()
                         )

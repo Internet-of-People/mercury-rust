@@ -134,7 +134,10 @@ impl DAppConnect
             {
                 let first_match = contacts.iter()
                     .map( |relation| relation.proof.to_owned() )
-                    .filter( move |proof| proof.peer_id(&my_id).map( |id| id.to_owned() ).map_err(|err| err.context(::ErrorKind::PeerIdRetreivalFailed).into()) == Ok( profile_id.clone() ) )
+                    .filter( move |proof| {
+                        let res = proof.peer_id(&my_id).map( |id| id.to_owned() );
+                        res.is_ok() && res.unwrap() == profile_id.clone()
+                    })
                     .nth(0);
 
                 match first_match
@@ -177,12 +180,12 @@ impl DAppApi for DAppConnect
         { self.gateway.signer().profile_id() }
 
 
-    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >{
+    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=::Error> >{
         unimplemented!();
     }
 
 
-    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=Error> >{
+    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=::Error> >{
         unimplemented!();
     }
 
@@ -199,7 +202,7 @@ impl DAppApi for DAppConnect
 
 
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
-        -> Box< Future<Item=Call, Error=Error> >
+        -> Box< Future<Item=Call, Error=::Error> >
     {
         let call_fut = self.get_relation_proof(profile_id)
             .and_then( {
@@ -209,7 +212,7 @@ impl DAppApi for DAppConnect
                 move |relation| gateway.call(relation.to_owned(), app_id, init_payload, Some(to_caller))
                     .and_then( |to_callee_opt|
                         match to_callee_opt {
-                            None => Err( Error::from(ErrorKind::CallRefused) ),
+                            None => Err( ::Error::from(::ErrorKind::CallRefused).into() ),
                             Some(to_callee) => Ok( Call{ sender: to_callee, receiver: from_callee } )
                         }
                     )
