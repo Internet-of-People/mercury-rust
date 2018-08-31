@@ -19,10 +19,10 @@ pub trait DAppInit
 {
     // Implies asking the user interface to manually pick a profile the app is used with
     fn initialize(&self, app: &ApplicationId, handle: &reactor::Handle)
-        -> Box< Future<Item=Rc<DAppApi>, Error=Error> >;
+        -> Box< Future<Item=Rc<DAppEndpoint>, Error=Error> >;
 }
 
-pub trait DAppApi
+pub trait DAppEndpoint
 {
     // Once initialized, the profile is selected and can be queried any time
     fn selected_profile(&self) -> &ProfileId;
@@ -43,9 +43,9 @@ pub trait DAppApi
 impl DAppInit for Rc<ProfileGateway>
 {
     fn initialize(&self, app: &ApplicationId, handle: &reactor::Handle)
-        -> Box< Future<Item=Rc<DAppApi>, Error=Error> >
+        -> Box< Future<Item=Rc<DAppEndpoint>, Error=Error> >
     {
-        let instance = Rc::new( DAppConnect::new( self.clone(), app, handle) ) as Rc<DAppApi>;
+        let instance = Rc::new( DAppConnect::new( self.clone(), app, handle) ) as Rc<DAppEndpoint>;
         Box::new( Ok(instance).into_future() )
     }
 }
