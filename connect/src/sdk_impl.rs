@@ -1,5 +1,3 @@
-use super::*;
-
 use std::cell::RefCell;
 use std::rc::{Rc, Weak};
 
@@ -8,6 +6,7 @@ use tokio_core::reactor;
 
 use mercury_storage::async::KeyValueStore;
 use sdk::*;
+use super::*;
 
 
 
@@ -92,7 +91,7 @@ impl DAppConnect
     }
 
 
-    fn login_and_forward_events(&self) -> Box< Future<Item=Rc<HomeSession>, Error=Error> >
+    fn login_and_forward_events(&self) -> Box< Future<Item=Rc<HomeSession>, Error=::Error> >
     {
         if let Some(ref session_rc) = *self.session_cache.borrow()
             { return Box::new( Ok( session_rc.clone() ).into_future() ) }
@@ -109,7 +108,7 @@ impl DAppConnect
                     session
                 }
             } )
-            .map_err(|err| err.context(ErrorKind::LoginFailed));
+            .map_err(|err| err.context(::ErrorKind::LoginFailed).into());
         Box::new(login_fut)
     }
 
@@ -117,7 +116,7 @@ impl DAppConnect
     // Try fetching RelationProof from existing contacts. If no appropriate contact found,
     // initiate a pairing procedure and return when it's completed, failed or timed out
     fn get_relation_proof(&self, profile_id: &ProfileId)
-        -> Box< Future<Item=RelationProof, Error=Error>>
+        -> Box< Future<Item=RelationProof, Error=::Error>>
     {
         let (event_sink, event_stream) = mpsc::channel(CHANNEL_CAPACITY);
         self.add_listener(event_sink);
@@ -130,19 +129,21 @@ impl DAppConnect
         let gateway = self.gateway.clone();
 
         let proof_fut = self.contacts()
+            .map_err(|err| err.context(::ErrorKind::FailedToGetContacts).into())
             .and_then( move |contacts|
             {
                 let first_match = contacts.iter()
                     .map( |relation| relation.proof.to_owned() )
-                    .filter( move |proof| proof.peer_id(&my_id).map( |id| id.to_owned() ) == Ok( profile_id.clone() ) )
+                    .filter( move |proof| proof.peer_id(&my_id).map( |id| id.to_owned() ).map_err(|err| err.context(::ErrorKind::PeerIdRetreivalFailed).into()) == Ok( profile_id.clone() ) )
                     .nth(0);
 
                 match first_match
                 {
-                    Some(proof) => Box::new( Ok(proof).into_future() ) as Box<Future<Item=RelationProof, Error=Error>>,
+                    Some(proof) => Box::new( Ok(proof).into_future() ) as Box<Future<Item=RelationProof, Error=::Error>>,
 
                     None => {
                         let proof_fut = gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &profile_id2, None)
+                            .map_err(|err| err.context(::ErrorKind::PairRequestFailed).into())
                             .and_then( |_| login_fut )
                             .and_then( move |_session|
                                 event_stream.filter_map( move |event|
@@ -155,9 +156,9 @@ impl DAppConnect
                                 } )
                                 .take(1)
                                 .collect()
-                                .map_err( |_| Error::from(ErrorKind::PeerRequestFailed))
+                                .map_err( |_| ::Error::from(::ErrorKind::PairRequestFailed).into())
                             )
-                            .and_then( |mut proofs| proofs.pop().ok_or( Error::from(ErrorKind::PeerRequestFailed)));
+                            .and_then( |mut proofs| proofs.pop().ok_or( ::Error::from(::ErrorKind::PairRequestFailed).into()));
                         Box::new(proof_fut)
                     }
 //                        Err( ErrorToBeSpecified::TODO( "get_relation_proof: no appropriate relation found".to_string()) ).into_future()
@@ -186,7 +187,7 @@ impl DAppApi for DAppConnect
     }
 
 
-    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=Error> >
+    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=::Error> >
     {
         let checkin_fut = self.login_and_forward_events()
             .and_then( {

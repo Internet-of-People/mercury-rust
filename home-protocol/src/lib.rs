@@ -147,6 +147,10 @@ pub enum ErrorKind {
     FailedToCreateSession,
     #[fail(display="response failed")]
     ResponseFailed,
+    #[fail(display="DHT lookup failed")]
+    DhtLookupFailed,
+    #[fail(display="ping failed")]
+    PingFailed,
 }
 
 impl Fail for Error {

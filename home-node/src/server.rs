@@ -139,7 +139,7 @@ impl ProfileRepo for HomeConnectionServer
     {
 
         let profile_fut = self.server.public_profile_dht.borrow().get( id.to_owned() )
-            .map_err( |e| e.context(ErrorKind::ProfileLoadFailed).into() );
+            .map_err( |e| e.context(ErrorKind::DhtLookupFailed).into() );
         Box::new(profile_fut)
     }
 

@@ -50,6 +50,9 @@ pub enum ErrorKind {
     #[fail(display= "peer id retreival failed")]
     PeerIdRetreivalFailed,
 
+    #[fail(display= "failed to get contacts")]
+    FailedToGetContacts,
+
     #[fail(display="failed to get session")]
     FailedToGetSession,
 
@@ -85,9 +88,6 @@ pub enum ErrorKind {
 
     #[fail(display="profile update failed")]
     ProfileUpdateFailed,
-
-    #[fail(display="ping failed")]
-    PingFailed,
 
     #[fail(display="call failed")]
     CallFailed,
