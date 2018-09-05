@@ -1,3 +1,5 @@
+/*
+
 //use std::net::ToSocketAddrs;
 use std::rc::Rc;
 
@@ -431,3 +433,4 @@ fn profile_serialize_async_key_value_test() {
     assert_eq!(res, profile);
     assert_eq!(reshome, homeprofile);
 }
+*/

@@ -2,6 +2,7 @@ extern crate futures;
 #[macro_use]
 extern crate log;
 extern crate log4rs;
+extern crate failure;
 
 #[macro_use]
 extern crate clap;
@@ -21,12 +22,13 @@ use std::time::Duration;
 
 use multiaddr::ToMultiaddr;
 
-use futures::Future;
+use futures::{Future, IntoFuture};
 use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::*;
 use mercury_connect::*;
+use failure::*;
 
 
 fn main()
@@ -67,6 +69,7 @@ fn main()
     let home_connector = SimpleTcpHomeConnector::new(reactor.handle());
     let profile_gw = ProfileGatewayImpl::new(client_signer_clone, Rc::new(profile_store),  Rc::new(home_connector));
     let test_fut = profile_gw.connect_home(&server_id.clone())
+        .map_err(|err| err.context(mercury_home_protocol::ErrorKind::ConnectionToHomeFailed).into())
         .and_then(|home| {
             info!("connected, registering");
             let halfproof = RelationHalfProof::new(
@@ -83,7 +86,7 @@ fn main()
             };
             match home_proof {
                 Some(proof) => home.login(&proof),
-                None => Box::new( futures::future::err(ErrorToBeSpecified::TODO("home is still not part of the profile after registration".to_string())))
+                None => Box::new( Err(mercury_home_protocol::Error::from(mercury_home_protocol::ErrorKind::LoginFailed)).into_future())
             }
         })
         .and_then(|session| {
@@ -93,10 +96,6 @@ fn main()
         .map(|pong| {
             info!("received pong");
             pong
-        })
-        .map_err(|err| {
-            warn!("error: {:?}", err);
-            ErrorToBeSpecified::TODO(String::from("profile gateway failed to login()"))
         });
 
     let pong = reactor.run(test_fut);

@@ -1,3 +1,4 @@
+/*
 #![allow(unused)]
 
 extern crate mercury_connect;
@@ -31,7 +32,6 @@ use tokio_core::net::TcpStream;
 use tokio_io::{AsyncRead, AsyncWrite};
 
 use futures::{future, Future, Stream};
-
 
 
 fn main(){
@@ -133,3 +133,11 @@ fn main(){
         let receive_fut = rec.take(1).collect();
         let received_msg = reactor.run(receive_fut);
         println!("\n {:?}", received_msg);*/
+
+
+*/
+
+
+pub fn main() {
+    
+}
