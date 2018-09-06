@@ -29,7 +29,7 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
     let auth_info = AuthenticationInfo{
         profile_id: signer.profile_id().to_owned(), public_key: signer.public_key().to_owned() };
 
-    let out_bytes = match serialize(&auth_info) {
+    let out_bytes = match to_vec(&auth_info) {
         Ok(data) => data,
         Err(e) => return Box::new( future::err( e.context(ErrorKind::TlsHandshakeFailed).into()) ),
     };
