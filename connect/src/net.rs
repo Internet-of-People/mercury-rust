@@ -107,7 +107,7 @@ impl HomeConnector for SimpleTcpHomeConnector
     {        
         let addrs = match home_profile.facet {
             ProfileFacet::Home(ref home_facet) => home_facet.addrs.clone(),
-            _ => return Box::new(future::err(Error::from(ErrorKind::HomeProfileExpected))),
+            _ => return Box::new(future::err(ErrorKind::HomeProfileExpected.into())),
         };
 
         let handle_clone = self.handle.clone();
@@ -152,6 +152,6 @@ mod tests
         let multiaddr = "/ip4/127.0.0.1/utp".parse::<Multiaddr>().unwrap();
         let socketaddr = multiaddr_to_socketaddr(&multiaddr);
         
-        assert_eq!(socketaddr, Result::Err(Error::from(ErrorKind::AddressConversionFailed)));
+        assert_eq!(socketaddr, Result::Err(ErrorKind::AddressConversionFailed.into()));
     }
 }

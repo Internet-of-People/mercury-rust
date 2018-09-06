@@ -290,15 +290,15 @@ impl ProfileGatewayImpl
                         .filter(move |home_proof|
                             home_proof.peer_id(&my_profile_id)
                                 .and_then(|peer_id| 
-                                    if *peer_id == home_id { Ok(true) } else { Err(mercury_home_protocol::Error::from(mercury_home_protocol::ErrorKind::PeerIdRetreivalFailed)) }
+                                    if *peer_id == home_id { Ok(true) } else { Err(mercury_home_protocol::ErrorKind::PeerIdRetreivalFailed.into()) }
                                 )
                                 .is_ok()
                         )
                         .map( |home_proof| home_proof.to_owned() )
                         .nth(0)
-                        .ok_or(Error::from(ErrorKind::HomeProofNotFound)),
+                        .ok_or(ErrorKind::HomeProofNotFound.into()),
 
-                    _ => Err(Error::from(ErrorKind::PersonaProfileExpected))
+                    _ => Err(ErrorKind::PersonaProfileExpected.into())
                 }
             } )
             .and_then(
@@ -334,7 +334,7 @@ impl ProfileGatewayImpl
         let homes = match profile.facet {
             // TODO consider how to get homes/addresses for apps and smartfridges
             ProfileFacet::Persona(ref facet) => facet.homes.clone(),
-            _ => return Box::new(future::err(Error::from(ErrorKind::HomeProfileExpected))),
+            _ => return Box::new(future::err(ErrorKind::HomeProfileExpected.into())),
         };
 
         let home_conn_futs = homes.iter()
@@ -356,7 +356,7 @@ impl ProfileGatewayImpl
 
         // NOTE needed because select_ok() panics for empty lists instead of simply returning an error
         if home_conn_futs.len() == 0
-            { return Box::new( future::err(Error::from(ErrorKind::NoHomesFound)) ) }
+            { return Box::new( future::err(ErrorKind::NoHomesFound.into())) }
 
         // Pick first successful home connection
         let result = future::select_ok(home_conn_futs)
@@ -373,7 +373,7 @@ impl ProfileGateway for ProfileGatewayImpl
 
     fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >
     {
-        Box::new( futures::future::err(Error::from(ErrorKind::Unknown)) )
+        Box::new( futures::future::err(ErrorKind::Unknown.into()) )
     }
 
 

@@ -8,8 +8,7 @@ use tokio_core::reactor::{self, Timeout};
 
 use mercury_home_protocol::*;
 use mercury_storage::{async::KeyValueStore, error::StorageError};
-use failure::{Fail, ResultExt};
-use super::*;
+use failure::Fail;
 
 
 // TODO this should come from user configuration with a reasonable default value close to this
@@ -160,10 +159,10 @@ impl Home for HomeConnectionServer
         Box< Future<Item=OwnProfile, Error=Error> >
     {
         if profile != *self.context.peer_id()
-            { return Box::new( future::err(Error::from(ErrorKind::FailedToClaimProfile))) }
+            { return Box::new( future::err(ErrorKind::FailedToClaimProfile.into())) }
 
         let claim_fut = self.server.hosted_profile_db.borrow().get( profile.into() )
-            .map_err( |e| Error::from(ErrorKind::FailedToClaimProfile) );
+            .map_err( |e| e.context(ErrorKind::FailedToClaimProfile).into() );
         Box::new(claim_fut)
     }
 
@@ -172,32 +171,32 @@ impl Home for HomeConnectionServer
         Box< Future<Item=OwnProfile, Error=(OwnProfile,Error)> >
     {
         if own_prof.profile.id != *self.context.peer_id() { 
-            return Box::new( future::err( (own_prof, Error::from(ErrorKind::ProfileMismatch)))) 
+            return Box::new( future::err( (own_prof, ErrorKind::ProfileMismatch.into()))) 
         }
 
         if own_prof.profile.public_key != *self.context.peer_pubkey() { 
-            return Box::new( future::err( (own_prof,Error::from(ErrorKind::PublicKeyMismatch))))        
+            return Box::new( future::err( (own_prof,ErrorKind::PublicKeyMismatch.into())))        
         }
 
         if half_proof.signer_id != *self.context.peer_id() { 
-            return Box::new( future::err( (own_prof,Error::from(ErrorKind::SignerMismatch))))
+            return Box::new( future::err( (own_prof,ErrorKind::SignerMismatch.into())))
         }
 
         info!("expected peer id: {:?} my id: {:?}", half_proof.peer_id, *self.context.my_signer().profile_id());
         if half_proof.peer_id != *self.context.my_signer().profile_id() { 
-            return Box::new( future::err( (own_prof, Error::from(ErrorKind::HomeIdMismatch))))
+            return Box::new( future::err( (own_prof, ErrorKind::HomeIdMismatch.into())))
         }
 
         if half_proof.relation_type != RelationProof::RELATION_TYPE_HOSTED_ON_HOME { 
-            return Box::new( future::err( (own_prof,Error::from(ErrorKind::RelationTypeMismatch))))
+            return Box::new( future::err( (own_prof,ErrorKind::RelationTypeMismatch.into())))
         }
 
         if self.server.validator.validate_half_proof(&half_proof, &self.context.peer_pubkey()).is_err() { 
-            return Box::new( future::err( (own_prof, Error::from(ErrorKind::InvalidSignature))))
+            return Box::new( future::err( (own_prof, ErrorKind::InvalidSignature.into())))
         }
 
         let own_prof_original = own_prof.clone();
-        let error_mapper = |e: StorageError| ( own_prof_original, Error::from(ErrorKind::StorageFailed) );
+        let error_mapper = |e: StorageError| ( own_prof_original, ErrorKind::StorageFailed.into() );
         let error_mapper_clone = error_mapper.clone();
 
         let home_proof = match RelationProof::sign_remaining_half( &half_proof, self.context.my_signer() )
@@ -210,7 +209,7 @@ impl Home for HomeConnectionServer
         if let ProfileFacet::Persona(ref mut profile_facet) = own_prof_modified.profile.facet {
             profile_facet.homes.push(home_proof)
         } else {
-            return Box::new( future::err( (own_prof, Error::from(ErrorKind::PersonaExpected))))
+            return Box::new( future::err( (own_prof, ErrorKind::PersonaExpected.into())))
         }
 
         let pub_prof_modified = own_prof_modified.profile.clone();
@@ -220,7 +219,7 @@ impl Home for HomeConnectionServer
             .then( |get_res|
             {
                 match get_res {
-                    Ok(_stored_prof) => Err( ( own_prof, Error::from(ErrorKind::AlreadyRegistered) )),
+                    Ok(_stored_prof) => Err( ( own_prof, ErrorKind::AlreadyRegistered.into() )),
                     // TODO only errors like NotFound should be accepted here but other (e.g. I/O) errors should be delegated
                     Err(_e) => Ok( () ),
                 }
@@ -242,7 +241,7 @@ impl Home for HomeConnectionServer
         Box< Future<Item=Rc<HomeSession>, Error=Error> >
     {
         if *proof_of_home.relation_type != *RelationProof::RELATION_TYPE_HOSTED_ON_HOME { 
-            return Box::new(future::err(Error::from(ErrorKind::RelationTypeMismatch))); 
+            return Box::new(future::err(ErrorKind::RelationTypeMismatch.into())); 
         }
 
         let profile_id = match proof_of_home.peer_id( self.context.my_signer().profile_id() )
@@ -272,11 +271,11 @@ impl Home for HomeConnectionServer
         Box< Future<Item=(), Error=Error> >
     {
         if half_proof.signer_id != *self.context.peer_id() { 
-            return Box::new( future::err( Error::from(ErrorKind::ProfileMismatch))) 
+            return Box::new( future::err( ErrorKind::ProfileMismatch.into())) 
         }
 
         if self.server.validator.validate_half_proof(&half_proof, &self.context.peer_pubkey()).is_err() { 
-            return Box::new( future::err( Error::from(ErrorKind::PublicKeyMismatch)))
+            return Box::new( future::err( ErrorKind::PublicKeyMismatch.into()))
         }
 
         let to_profile = half_proof.peer_id.clone();
@@ -466,7 +465,7 @@ impl HomeSessionServer
                 sender.clone().send( Ok(call) )
                     .map( |_sender| () )
                     // TODO if call dispatch fails we probably should remove the checked in app from the session
-                    .map_err( |e| Error::from(ErrorKind::FailedToSend) )
+                    .map_err( |e| ErrorKind::FailedToSend.into() )
             ),
         }
     }
@@ -485,11 +484,11 @@ impl HomeSession for HomeSessionServer
     fn update(&self, own_prof: OwnProfile) -> Box< Future<Item=(), Error=Error> >
     {
         if own_prof.profile.id != *self.context.peer_id() { 
-            return Box::new( future::err( Error::from(ErrorKind::ProfileMismatch))) 
+            return Box::new( future::err( ErrorKind::ProfileMismatch.into())) 
         }
 
         if own_prof.profile.public_key != *self.context.peer_pubkey() { 
-            return Box::new( future::err( Error::from(ErrorKind::PublicKeyMismatch))) 
+            return Box::new( future::err( ErrorKind::PublicKeyMismatch.into())) 
         }
 
         let upd_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone().into() )
@@ -508,7 +507,7 @@ impl HomeSession for HomeSessionServer
                 }
             } )
             // TODO: fix it after storage error refactorings
-            .map_err( |e| Error::from(ErrorKind::ProfileUpdateFailed) );
+            .map_err( |e| ErrorKind::ProfileUpdateFailed.into() );
 
         Box::new(upd_fut)
     }
@@ -531,7 +530,7 @@ impl HomeSession for HomeSessionServer
         // TODO force close/drop session connection after successful unregister().
         //      Ideally self would be consumed here, but that'd require binding to self: Box<Self> or Rc<Self> to compile within a trait.
 
-        Box::new( future::err(Error::from(ErrorKind::ProfileDeregistered)) )
+        Box::new( future::err(ErrorKind::ProfileDeregistered.into()) )
     }
 
 

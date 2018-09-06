@@ -86,7 +86,7 @@ fn main()
             };
             match home_proof {
                 Some(proof) => home.login(&proof),
-                None => Box::new( Err(mercury_home_protocol::Error::from(mercury_home_protocol::ErrorKind::LoginFailed)).into_future())
+                None => Box::new( Err(mercury_home_protocol::ErrorKind::LoginFailed.into()).into_future())
             }
         })
         .and_then(|session| {

@@ -159,9 +159,9 @@ impl DAppConnect
                                 } )
                                 .take(1)
                                 .collect()
-                                .map_err( |_| ::Error::from(::ErrorKind::PairRequestFailed).into())
+                                .map_err( |_| ::ErrorKind::PairRequestFailed.into())
                             )
-                            .and_then( |mut proofs| proofs.pop().ok_or( ::Error::from(::ErrorKind::PairRequestFailed).into()));
+                            .and_then( |mut proofs| proofs.pop().ok_or( ::ErrorKind::PairRequestFailed.into()));
                         Box::new(proof_fut)
                     }
 //                        Err( ErrorToBeSpecified::TODO( "get_relation_proof: no appropriate relation found".to_string()) ).into_future()
@@ -212,7 +212,7 @@ impl DAppApi for DAppConnect
                 move |relation| gateway.call(relation.to_owned(), app_id, init_payload, Some(to_caller))
                     .and_then( |to_callee_opt|
                         match to_callee_opt {
-                            None => Err( ::Error::from(::ErrorKind::CallRefused).into() ),
+                            None => Err( ::ErrorKind::CallRefused.into() ),
                             Some(to_callee) => Ok( Call{ sender: to_callee, receiver: from_callee } )
                         }
                     )

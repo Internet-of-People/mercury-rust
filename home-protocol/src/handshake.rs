@@ -31,7 +31,7 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
 
     let out_bytes = match serialize(&auth_info) {
         Ok(data) => data,
-        Err(e) => return Box::new( future::err( Error::from(e.context(ErrorKind::TlsHandshakeFailed)) ) ),
+        Err(e) => return Box::new( future::err( e.context(ErrorKind::TlsHandshakeFailed).into()) ),
     };
     let bufsize = out_bytes.len() as u32;
 
@@ -67,7 +67,7 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
             let peer_ctx = PeerContext::new( signer, peer_auth.public_key, peer_auth.profile_id );
             Ok( (reader, writer, peer_ctx) )
         } )
-        .map_err(|err| Error::from(err.context(ErrorKind::TlsHandshakeFailed))); 
+        .map_err(|err| err.context(ErrorKind::TlsHandshakeFailed).into()); 
     Box::new(handshake_fut)
 }
 
@@ -80,7 +80,7 @@ pub fn temp_tcp_handshake_until_tls_is_implemented(socket: TcpStream, signer: Rc
 
     match socket.set_nodelay(true) {
         Ok(_) => {},
-        Err(e) => return Box::new( future::err(Error::from(e.context(ErrorKind::TlsHandshakeFailed)))),
+        Err(e) => return Box::new( future::err(e.context(ErrorKind::TlsHandshakeFailed).into())),
     };
 
     let (reader, writer) = socket.split();
