@@ -4,13 +4,13 @@ use std::rc::Rc;
 
 //bincode::{deserialize, serialize};
 use failure::Fail;
-use futures::{future, prelude::*};
+use futures::prelude::*;
 use serde_json::{from_slice, to_vec};
 use tokio_core::net::TcpStream;
 use tokio_io::io;
 //use x25519_dalek::diffie_hellman;
 
-use super::*;
+use ::*;
 
 
 
@@ -33,7 +33,7 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
 
     let out_bytes = match to_vec(&auth_info) {
         Ok(data) => data,
-        Err(e) => return Box::new( future::err( e.context(ErrorKind::TlsHandshakeFailed).into()) ),
+        Err(e) => return Box::new( Err( e.context( ErrorKind::TlsHandshakeFailed).into() ).into_future() ),
     };
     let bufsize = out_bytes.len() as u32;
 
@@ -65,7 +65,6 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
                 .map( |(reader, buf)| (reader, writer, buf) );
             Box::new(res_fut)
         } )
-        .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
         .and_then( |(reader, writer, buf)|
         {
             trace!("Processing peer info received");
@@ -73,7 +72,8 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
                 .map_err( |e| std::io::Error::new( std::io::ErrorKind::Other, e) )?;
             trace!("Received peer identity: {:?}", peer_auth);
             Ok( (reader, writer, peer_auth) )
-        } );
+        } )
+        .map_err( |e| e.context(ErrorKind::TlsHandshakeFailed).into() );
     Box::new(exch_fut)
 }
 
@@ -91,7 +91,7 @@ pub fn tcpstream_to_reader_writer(socket: TcpStream)
 
 
 pub fn ecdh_handshake<R,W>(reader: R, writer: W, signer: Rc<Signer>)
-    -> Box< Future<Item=(R, W, PeerContext), Error=ErrorToBeSpecified> >
+    -> Box< Future<Item=(R, W, PeerContext), Error=Error> >
 where R: std::io::Read + tokio_io::AsyncRead + 'static,
       W: std::io::Write + tokio_io::AsyncWrite + 'static
 {
@@ -101,15 +101,15 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
             let my_secret_key : [u8; 32] = Default::default(); // TODO how to get secret key as bytes, especially when HW wallet support is planned?
 
             if peer_auth.public_key.0.len() != 32 {
-                return Err( ErrorToBeSpecified::TODO("Wrong Ed25519 key format".to_owned() ) );
+                return Err( ErrorKind::TlsHandshakeFailed.into() );
             }
             let mut peer_ed25519_pubkey : [u8; 32] = Default::default();
             peer_ed25519_pubkey.copy_from_slice( peer_auth.public_key.0.as_slice() );
 
-            let shared_secret = diffie_hellman(&my_secret_key, &peer_ed25519_pubkey);
-
             // TODO shadow reader and writer with ones using the shared secret to do symmetric en/decryption
             //      and return them with a proper peercontext
+            // let shared_secret = diffie_hellman(&my_secret_key, &peer_ed25519_pubkey);
+
             let peer_ctx = PeerContext::new( signer, peer_auth.public_key, peer_auth.profile_id );
             Ok( (reader, writer, peer_ctx) )
         } );
@@ -117,23 +117,13 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
 }
 
 
-pub fn tcp_ecdh_handshake(socket: TcpStream, signer: Rc<Signer>)
-    -> Box< Future<Item=(impl std::io::Read, impl std::io::Write, PeerContext), Error=ErrorToBeSpecified> >
-{
-    let res_fut = tcpstream_to_reader_writer(socket).into_future()
-        .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
-        .and_then( |(reader,writer)| ecdh_handshake(reader, writer, signer) );
-    Box::new(res_fut)
-}
-
-
-
 pub fn temp_handshake_until_tls_is_implemented<R,W>(reader: R, writer: W, signer: Rc<Signer>)
-    -> Box< Future<Item=(R, W, PeerContext), Error=ErrorToBeSpecified> >
+    -> Box< Future<Item=(R, W, PeerContext), Error=Error> >
 where R: std::io::Read + tokio_io::AsyncRead + 'static,
       W: std::io::Write + tokio_io::AsyncWrite + 'static
 {
     let handshake_fut = exchange_identities( reader, writer, signer.clone() )
+        .map_err( |err| err.context(ErrorKind::TlsHandshakeFailed).into() )
         .and_then( |(reader, writer, peer_auth)|
         {
             warn!("No proper peer validation was performed, safety is ignored");
@@ -141,13 +131,26 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
             debug!("Handshake succeeded");
             Ok( (reader, writer, peer_ctx) )
         } )
-        .map_err(|err| err.context(ErrorKind::TlsHandshakeFailed).into()); 
+        ;
     Box::new(handshake_fut)
 }
 
 
+
+pub fn tcp_ecdh_handshake(socket: TcpStream, signer: Rc<Signer>)
+    -> Box< Future<Item=(impl std::io::Read + tokio_io::AsyncRead,
+           impl std::io::Write + tokio_io::AsyncWrite, PeerContext), Error=Error> >
+{
+    let res_fut = tcpstream_to_reader_writer(socket).into_future()
+        .map_err( |e| e.context(ErrorKind::TlsHandshakeFailed).into() )
+        .and_then( |(reader,writer)| ecdh_handshake(reader, writer, signer) );
+    Box::new(res_fut)
+}
+
+
 pub fn temp_tcp_handshake_until_tls_is_implemented(socket: TcpStream, signer: Rc<Signer>)
-    -> AsyncResult<(impl std::io::Read, impl std::io::Write, PeerContext), Error>
+    -> Box< Future<Item=(impl std::io::Read + tokio_io::AsyncRead,
+           impl std::io::Write + tokio_io::AsyncWrite, PeerContext), Error=Error> >
 {
     let res_fut = tcpstream_to_reader_writer(socket).into_future()
         .map_err( |e| e.context(ErrorKind::TlsHandshakeFailed).into() )
