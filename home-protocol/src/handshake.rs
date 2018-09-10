@@ -2,12 +2,13 @@ use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use std::mem;
 use std::rc::Rc;
 
-use failure::Fail;
-use futures::{future, Future};
-use serde_json::{from_slice, to_vec};
 //bincode::{deserialize, serialize};
+use failure::Fail;
+use futures::{future, prelude::*};
+use serde_json::{from_slice, to_vec};
 use tokio_core::net::TcpStream;
 use tokio_io::io;
+//use x25519_dalek::diffie_hellman;
 
 use super::*;
 
@@ -21,8 +22,8 @@ struct AuthenticationInfo
 }
 
 
-pub fn temp_handshake_until_tls_is_implemented<R,W>(reader: R, writer: W, signer: Rc<Signer>)
-    -> AsyncResult<(R, W, PeerContext), Error>
+fn exchange_identities<R,W>(reader: R, writer: W, signer: Rc<Signer>)
+    -> Box< Future<Item=(R, W, AuthenticationInfo), Error=Error> >
 where R: std::io::Read + tokio_io::AsyncRead + 'static,
       W: std::io::Write + tokio_io::AsyncWrite + 'static
 {
@@ -40,7 +41,7 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
     size_out_bytes.put_u32_le(bufsize);
     trace!("Sending auth info of myself: {:?}", auth_info);
 
-    let handshake_fut = io::write_all(writer, size_out_bytes)
+    let exch_fut = io::write_all(writer, size_out_bytes)
         .and_then( move |(writer, _buf)| { io::write_all(writer, out_bytes) } )
         .and_then( move |(writer, _buf)|
         {
@@ -54,17 +55,39 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
         {
             trace!("Reading peer info, size: {:?}", buf);
             let size_in_bytes = buf.into_buf().get_u32_le();
+            if size_in_bytes > 8096 {
+                let err = Err( std::io::Error::from(std::io::ErrorKind::ConnectionAborted) );
+                return Box::new( err.into_future() ) as Box<Future<Item=_,Error=_>>
+            }
             let mut in_bytes = BytesMut::new();
             in_bytes.resize(size_in_bytes as usize, 0);
-            io::read_exact(reader, in_bytes)
-                .map( |(reader, buf)| (reader, writer, buf) )
-        } )        
+            let res_fut = io::read_exact(reader, in_bytes)
+                .map( |(reader, buf)| (reader, writer, buf) );
+            Box::new(res_fut)
+        } )
+        .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
         .and_then( |(reader, writer, buf)|
         {
             trace!("Processing peer info received");
             let peer_auth: AuthenticationInfo = from_slice(&buf)
                 .map_err( |e| std::io::Error::new( std::io::ErrorKind::Other, e) )?;
             trace!("Received peer identity: {:?}", peer_auth);
+            Ok( (reader, writer, peer_auth) )
+        } );
+    Box::new(exch_fut)
+}
+
+
+
+pub fn temp_handshake_until_tls_is_implemented<R,W>(reader: R, writer: W, signer: Rc<Signer>)
+    -> Box< Future<Item=(R, W, PeerContext), Error=ErrorToBeSpecified> >
+where R: std::io::Read + tokio_io::AsyncRead + 'static,
+      W: std::io::Write + tokio_io::AsyncWrite + 'static
+{
+    let handshake_fut = exchange_identities( reader, writer, signer.clone() )
+        .and_then( |(reader, writer, peer_auth)|
+        {
+            warn!("No proper peer validation was performed, safety is ignored");
             let peer_ctx = PeerContext::new( signer, peer_auth.public_key, peer_auth.profile_id );
             debug!("Handshake succeeded");
             Ok( (reader, writer, peer_ctx) )
@@ -72,7 +95,6 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
         .map_err(|err| err.context(ErrorKind::TlsHandshakeFailed).into()); 
     Box::new(handshake_fut)
 }
-
 
 
 pub fn temp_tcp_handshake_until_tls_is_implemented(socket: TcpStream, signer: Rc<Signer>)
