@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-use std::error::Error;
+//use std::error::Error;
 use std::rc::Rc;
 
 use futures::prelude::*;
@@ -9,7 +9,7 @@ use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::{HomeConnector, ProfileGateway, ProfileGatewayImpl, Relation, sdk::DAppEndpoint};
+use ::{Error, HomeConnector, ProfileGateway, ProfileGatewayImpl, Relation, sdk::DAppEndpoint};
 use ::sdk::DAppInit;
 
 
@@ -57,10 +57,10 @@ pub trait Bip32PathMapper
 pub trait AccessManager
 {
     fn ask_read_access(&self, resource: &Bip32Path) ->
-        Box< Future<Item=PublicKey, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=PublicKey, Error=Error> >;
 
     fn ask_write_access(&self, resource: &Bip32Path) ->
-        Box< Future<Item=Rc<Signer>, Error=ErrorToBeSpecified> >;
+        Box< Future<Item=Rc<Signer>, Error=Error> >;
 }
 
 
@@ -71,20 +71,20 @@ pub trait UserInterface
 {
     // Initialize system components and configuration where user interaction is needed,
     // e.g. HD wallets need manually saving generated new seed or entering old one
-    fn initialize(&self) -> Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+    fn initialize(&self) -> Box< Future<Item=(), Error=Error> >;
 
     // An action requested by a distributed application needs
     // explicit user confirmation.
     // TODO how to show a human-readable summary of the action (i.e. binary to be signed)
     //      making sure it's not a fake/misinterpreted description?
     fn confirm(&self, action: &DAppAction)
-        -> Box< Future<Item=Signature, Error=ErrorToBeSpecified> >;
+        -> Box< Future<Item=Signature, Error=Error> >;
 
     // Select a profile to be used by a dApp. It can be either an existing one
     // or the user can create a new one (using a KeyVault) to be selected.
     // TODO this should open something nearly identical to manage_profiles()
     fn select_profile(&self)
-        -> Box< Future<Item=ProfileId, Error=ErrorToBeSpecified> >;
+        -> Box< Future<Item=ProfileId, Error=Error> >;
 
     // Open profiles with new, delete and edit (e.g. homes, contacts, apps, etc) options.
     // Specific profiles can also be set online/offline.
@@ -95,7 +95,7 @@ pub trait UserInterface
     //      [x]ON  hobby    (edit) (delete)
     //      (new profile)
     fn manage_profiles(&self)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+        -> Box< Future<Item=(), Error=Error> >;
 }
 
 
@@ -105,50 +105,29 @@ pub trait ConnectService
     // TODO some kind of proof might be needed that the AppId given really belongs to the caller
     // NOTE this implicitly asks for user interaction (through UI) selecting a profile to be used with the app
     fn dapp_endpoint(&self, app: &ApplicationId)
-        -> Box< Future<Item=Rc<DAppEndpoint>, Error=ErrorToBeSpecified> >;
+        -> Box< Future<Item=Rc<DAppEndpoint>, Error=String> >; // TODO Proper error type
 
     // TODO The Settings app is not really a dApp but a privilegized system app, might use different authorization
     fn admin_endpoint(&self, authorization: &DAppPermission)
-        -> Box< Future<Item=Rc<AdminEndpoint>, Error=ErrorToBeSpecified> >;
+        -> Box< Future<Item=Rc<AdminEndpoint>, Error=String> >; // TODO Proper error type
 }
 
 
 pub trait AdminEndpoint
 {
-    fn profiles(&self)
-        -> Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >;
+    fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=String> >; // TODO Proper error type
+    fn create_profile(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
+    fn update_profile(&self, profile: &OwnProfile) -> Box< Future<Item=(), Error=Error> >;
+    fn remove_profile(&self, profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
 
-    fn create_profile(&self)
-        -> Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >;
+    fn homes(&self, profile: &ProfileId) -> Box< Future<Item=Vec<RelationProof>, Error=String> >; // TODO Proper error type
+    fn join_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=(), Error=String> >; // TODO Proper error type
+    fn leave_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
 
-    fn update_profile(&self, profile: &OwnProfile)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >;
-
-    fn remove_profile(&self, profile: &ProfileId)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >;
-
-
-    fn homes(&self, profile: &ProfileId)
-        -> Box< Future<Item=Vec<RelationProof>, Error=ErrorToBeSpecified> >;
-
-    fn join_home(&self, profile: &ProfileId, home: &ProfileId)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >;
-
-    fn leave_home(&self, profile: &ProfileId, home: &ProfileId)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >;
-
-
-    fn relations(&self) ->
-        Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >;
-
-    fn initiate_relation(&self, with_profile: &ProfileId) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
-
-    fn accept_relation(&self, half_proof: &RelationHalfProof) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
-
-    fn revoke_relation(&self, relation: &RelationProof) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+    fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >;
+    fn initiate_relation(&self, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
+    fn accept_relation(&self, half_proof: &RelationHalfProof) -> Box< Future<Item=(), Error=Error> >;
+    fn revoke_relation(&self, relation: &RelationProof) -> Box< Future<Item=(), Error=Error> >;
 }
 
 
@@ -204,97 +183,97 @@ pub struct SettingsImpl
 impl AdminEndpoint for SettingsImpl
 {
     fn profiles(&self)
-        -> Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=Vec<OwnProfile>, Error=String> >
     {
         let store = self.profile_store.clone();
         let profile_futs = self.my_profiles.iter()
             .map( move |x| store.borrow().get( x.to_owned() )
-                .map_err( |e| ErrorToBeSpecified::TODO("profile not found".to_owned()) ) )
+                .map_err( |e| format!("profile not found: {}", e) ) )
             .collect::<Vec<_>>();
         let profiles_fut = future::join_all(profile_futs);
         Box::new(profiles_fut)
     }
 
     fn create_profile(&self)
-        -> Box< Future<Item=Vec<OwnProfile>, Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >
     {
         unimplemented!()
     }
 
     fn update_profile(&self, profile: &OwnProfile)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=(), Error=Error> >
     {
         unimplemented!()
     }
 
     fn remove_profile(&self, profile: &ProfileId)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=(), Error=Error> >
     {
         unimplemented!()
     }
 
 
     fn homes(&self, profile_id: &ProfileId)
-        -> Box< Future<Item=Vec<RelationProof>, Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=Vec<RelationProof>, Error=String> >
     {
         let fut = self.profile_store.borrow().get( profile_id.to_owned() )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+            .map_err( |e| format!("{}", e) )
             .and_then( |ownprofile| match ownprofile.profile.facet {
                 ProfileFacet::Persona(persona) => Ok(persona.homes),
-                _ => Err( ErrorToBeSpecified::TODO( "not a persona profile".to_owned() ) )
+                _ => Err( "not a persona profile".to_owned() )
             }.into_future() );
         Box::new(fut)
     }
 
     fn join_home(&self, profile: &ProfileId, home: &ProfileId)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=(), Error=String> >
     {
         let profileid_clone = profile.to_owned();
         let profileid_clone2 = profile.to_owned();
         let profiles = self.profile_store.clone();
         let gateways = self.gateways.clone();
         let fut = self.profile_store.borrow().get( profile.to_owned() )
-            .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+            .map_err( |e| format!("{}", e) )
             .and_then( move |own_profile| match gateways.gateway(&profileid_clone) {
                 Some(gateway) => Box::new( gateway.register(profileid_clone, own_profile, None)
-                    .map_err( |(_ownprof, e)| e ) ) as Box<Future<Item=_,Error=_>>,
-                None => Box::new( Err( ErrorToBeSpecified::TODO("Failed to initialize client for profile".to_owned() ) ).into_future() ),
+                    .map_err( |(_ownprof, e)| format!("{}", e) ) ) as Box<Future<Item=_,Error=_>>,
+                None => Box::new( Err( "Failed to initialize client for profile".to_owned() ).into_future() ),
             } )
             .and_then( move |own_profile| {
                 let mut profiles = profiles.borrow_mut();
                 profiles.set(profileid_clone2, own_profile)
-                    .map_err(|e| ErrorToBeSpecified::TODO(e.description().to_owned()))
+                    .map_err( |e| format!("{}", e) )
             } );
         Box::new(fut)
     }
 
     fn leave_home(&self, profile: &ProfileId, home: &ProfileId)
-        -> Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=(), Error=Error> >
     {
         unimplemented!()
     }
 
 
     fn relations(&self) ->
-        Box< Future<Item=Vec<Relation>, Error=ErrorToBeSpecified> >
+        Box< Future<Item=Vec<Relation>, Error=Error> >
     {
         unimplemented!()
     }
 
     fn initiate_relation(&self, with_profile: &ProfileId) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(), Error=Error> >
     {
         unimplemented!()
     }
 
     fn accept_relation(&self, half_proof: &RelationHalfProof) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(), Error=Error> >
     {
         unimplemented!()
     }
 
     fn revoke_relation(&self, relation: &RelationProof) ->
-        Box< Future<Item=(), Error=ErrorToBeSpecified> >
+        Box< Future<Item=(), Error=Error> >
     {
         unimplemented!()
     }
@@ -318,20 +297,22 @@ pub struct ServiceImpl
 impl ConnectService for ServiceImpl
 {
     fn dapp_endpoint(&self, app: &ApplicationId)
-        -> Box< Future<Item=Rc<DAppEndpoint>, Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=Rc<DAppEndpoint>, Error=String> >
     {
         let app = app.to_owned();
         let handle = self.handle.clone();
         let gateways = self.gateways.clone();
         let fut = self.ui.select_profile()
+            .map_err( |e| format!("{}", e) )
             .and_then( move |profile_id| gateways.gateway(&profile_id)
-                .ok_or( ErrorToBeSpecified::TODO( "Invalid profile specified".to_owned() ) ) )
-            .and_then( move |gateway| gateway.initialize(&app, &handle) );
+                .ok_or( "Invalid profile specified".to_owned() ) )
+            .and_then( move |gateway| gateway.initialize(&app, &handle)
+                .map_err( |e| format!("{}", e) ) );
         Box::new(fut)
     }
 
     fn admin_endpoint(&self, authorization: &DAppPermission)
-        -> Box< Future<Item=Rc<AdminEndpoint>, Error=ErrorToBeSpecified> >
+        -> Box< Future<Item=Rc<AdminEndpoint>, Error=String> >
     {
         let settings = SettingsImpl{
             my_profiles: self.my_profiles.clone(),
