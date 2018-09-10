@@ -66,7 +66,7 @@ impl Ed25519Signer
 {
     pub fn new(private_key: &PrivateKey) -> Result<Self, Error>
     {
-        let seed = Seed::from_slice( private_key.0.as_slice() ).context(ErrorKind::SignerCreationFailed)?;            
+        let seed = Seed::from_slice( private_key.0.as_slice() ).context(ErrorKind::SignerCreationFailed)?;
         let signer = SignatoryEdDalekSigner::from_seed(seed);
         let ed_public_key = signer.public_key().context(ErrorKind::SignerCreationFailed)?;            
         let public_key = PublicKey( ed_public_key.as_ref().to_vec() );
@@ -111,10 +111,9 @@ impl SignatureValidator for Ed25519Validator
         use signatory_dalek::Ed25519Verifier;
         let pubkey = ::signatory::ed25519::PublicKey::from_bytes( public_key.0.as_slice() ).context(ErrorKind::SignatureValidationFailed)?;
         let signature = ::signatory::ed25519::Signature::from_bytes( signature.0.as_slice()).context(ErrorKind::SignatureValidationFailed)?;
-        Ed25519Verifier::verify(&pubkey, data, &signature);
-            // TODO hwo to determine when to return Ok(false) here, i.e. signature does not match but validation was otherwise successful
+        Ed25519Verifier::verify(&pubkey, data, &signature).context(ErrorKind::SignatureValidationFailed)?;
+        // TODO hwo to determine when to return Ok(false) here, i.e. signature does not match but validation was otherwise successful
         Ok(true)
-            
     }
 }
 
