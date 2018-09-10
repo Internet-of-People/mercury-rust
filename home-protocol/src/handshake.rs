@@ -79,6 +79,55 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
 
 
 
+pub fn tcpstream_to_reader_writer(socket: TcpStream)
+    -> Result<(impl std::io::Read + tokio_io::AsyncRead,
+               impl std::io::Write + tokio_io::AsyncWrite), std::io::Error>
+{
+    use tokio_io::AsyncRead;
+    socket.set_nodelay(true)?;
+    Ok( socket.split() )
+}
+
+
+
+pub fn ecdh_handshake<R,W>(reader: R, writer: W, signer: Rc<Signer>)
+    -> Box< Future<Item=(R, W, PeerContext), Error=ErrorToBeSpecified> >
+where R: std::io::Read + tokio_io::AsyncRead + 'static,
+      W: std::io::Write + tokio_io::AsyncWrite + 'static
+{
+    let ecdh_fut = exchange_identities( reader, writer, signer.clone() )
+        .and_then( |(reader, writer, peer_auth)|
+        {
+            let my_secret_key : [u8; 32] = Default::default(); // TODO how to get secret key as bytes, especially when HW wallet support is planned?
+
+            if peer_auth.public_key.0.len() != 32 {
+                return Err( ErrorToBeSpecified::TODO("Wrong Ed25519 key format".to_owned() ) );
+            }
+            let mut peer_ed25519_pubkey : [u8; 32] = Default::default();
+            peer_ed25519_pubkey.copy_from_slice( peer_auth.public_key.0.as_slice() );
+
+            let shared_secret = diffie_hellman(&my_secret_key, &peer_ed25519_pubkey);
+
+            // TODO shadow reader and writer with ones using the shared secret to do symmetric en/decryption
+            //      and return them with a proper peercontext
+            let peer_ctx = PeerContext::new( signer, peer_auth.public_key, peer_auth.profile_id );
+            Ok( (reader, writer, peer_ctx) )
+        } );
+    Box::new(ecdh_fut)
+}
+
+
+pub fn tcp_ecdh_handshake(socket: TcpStream, signer: Rc<Signer>)
+    -> Box< Future<Item=(impl std::io::Read, impl std::io::Write, PeerContext), Error=ErrorToBeSpecified> >
+{
+    let res_fut = tcpstream_to_reader_writer(socket).into_future()
+        .map_err( |e| ErrorToBeSpecified::TODO( e.description().to_owned() ) )
+        .and_then( |(reader,writer)| ecdh_handshake(reader, writer, signer) );
+    Box::new(res_fut)
+}
+
+
+
 pub fn temp_handshake_until_tls_is_implemented<R,W>(reader: R, writer: W, signer: Rc<Signer>)
     -> Box< Future<Item=(R, W, PeerContext), Error=ErrorToBeSpecified> >
 where R: std::io::Read + tokio_io::AsyncRead + 'static,
@@ -100,13 +149,8 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
 pub fn temp_tcp_handshake_until_tls_is_implemented(socket: TcpStream, signer: Rc<Signer>)
     -> AsyncResult<(impl std::io::Read, impl std::io::Write, PeerContext), Error>
 {
-    use tokio_io::AsyncRead;
-
-    match socket.set_nodelay(true) {
-        Ok(_) => {},
-        Err(e) => return Box::new( future::err(e.context(ErrorKind::TlsHandshakeFailed).into())),
-    };
-
-    let (reader, writer) = socket.split();
-    temp_handshake_until_tls_is_implemented(reader, writer, signer)
+    let res_fut = tcpstream_to_reader_writer(socket).into_future()
+        .map_err( |e| e.context(ErrorKind::TlsHandshakeFailed).into() )
+        .and_then( |(reader,writer)| temp_handshake_until_tls_is_implemented(reader, writer, signer) );
+    Box::new(res_fut)
 }
