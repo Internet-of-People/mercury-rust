@@ -1,5 +1,3 @@
-#![recursion_limit = "1024"]
-
 extern crate bincode;
 extern crate bytes;
 extern crate capnp;
