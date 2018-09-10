@@ -1,6 +1,3 @@
-extern crate capnp;
-#[macro_use]
-extern crate capnp_rpc;
 extern crate futures;
 #[macro_use]
 extern crate log;
@@ -27,7 +24,6 @@ use failure::{Context, Fail, Backtrace};
 pub mod net;
 pub use net::SimpleTcpHomeConnector;
 
-pub mod protocol_capnp;
 pub mod sdk;
 pub mod sdk_impl;
 pub mod service;

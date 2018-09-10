@@ -124,7 +124,7 @@ impl HomeConnector for SimpleTcpHomeConnector
                 temp_tcp_handshake_until_tls_is_implemented(tcp_stream, signer)
                 .map_err(|err| err.context(ErrorKind::HandshakeFailed).into())
             }).map( |(reader, writer, _peer_ctx)| {
-                use protocol_capnp::HomeClientCapnProto;
+                use mercury_home_protocol::mercury_capnp::client_proxy::HomeClientCapnProto;
                 Rc::new( HomeClientCapnProto::new(reader, writer, handle_clone) ) as Rc<Home>
             });
 

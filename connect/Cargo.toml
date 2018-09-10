@@ -5,8 +5,6 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 
 [dependencies]
 clap = {version = "*", features = ["yaml"]}
-capnp = "0.8"
-capnp-rpc = "0.8"
 futures = "0.1"
 log = "0.4"
 log4rs = "*"

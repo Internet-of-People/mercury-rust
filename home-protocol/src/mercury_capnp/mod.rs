@@ -6,8 +6,14 @@ use tokio_core::reactor;
 
 use ::{AppMessageFrame, AppMsgSink, TryFrom};
 
+
+
 include!( concat!( env!("OUT_DIR"), "/protocol/mercury_capnp.rs" ) );
 
+
+
+pub mod client_proxy;
+pub mod server_dispatcher;
 
 
 pub trait PromiseUtil<T,E>

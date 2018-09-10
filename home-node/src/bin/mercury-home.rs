@@ -1,5 +1,5 @@
-extern crate capnp;
-extern crate capnp_rpc;
+//extern crate capnp;
+//extern crate capnp_rpc;
 extern crate futures;
 #[macro_use]
 extern crate log;
@@ -18,8 +18,8 @@ use std::rc::Rc;
 use futures::{Future, Stream};
 use tokio_core::{reactor, net::TcpListener};
 
-use mercury_home_protocol::{crypto::*, handshake};
-use mercury_home_node::{config::*, server::*, protocol_capnp};
+use mercury_home_protocol::{crypto::*, handshake, mercury_capnp::server_dispatcher::HomeDispatcherCapnProto};
+use mercury_home_node::{config::*, server::*};
 use mercury_storage::{async::imp::InMemoryStore, filesys::AsyncFileHandler};
 
 
@@ -67,7 +67,7 @@ fn main()
                         warn!("Failed to create server instance: {:?}", e);
                         ()
                     } )?;
-                protocol_capnp::HomeDispatcherCapnProto::dispatch( Rc::new(home), reader, writer, handle_clone.clone() );
+                HomeDispatcherCapnProto::dispatch( Rc::new(home), reader, writer, handle_clone.clone() );
                 Ok( () )
             } );
 

@@ -5,9 +5,8 @@ use futures::{Future, Stream};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
-use super::*;
-use mercury_home_protocol::*;
-use mercury_home_protocol::mercury_capnp::*;
+use ::*;
+use ::mercury_capnp::*;
 
 
 
@@ -23,17 +22,17 @@ impl HomeDispatcherCapnProto
 {
     // TODO how to access PeerContext in the Home implementation?
     pub fn dispatch<R,W>(home: Rc<Home>, reader: R, writer: W, handle: reactor::Handle)
-        where R: std::io::Read  + 'static,
-              W: std::io::Write + 'static
+        where R: ::std::io::Read  + 'static,
+              W: ::std::io::Write + 'static
     {
         let dispatcher = Self{ home: home, handle: handle.clone() };
 
-        let home_capnp = mercury_capnp::home::ToClient::new(dispatcher)
+        let home_capnp = ::mercury_capnp::home::ToClient::new(dispatcher)
             .from_server::<::capnp_rpc::Server>();
-        let network = capnp_rpc::twoparty::VatNetwork::new( reader, writer,
+        let network = ::capnp_rpc::twoparty::VatNetwork::new( reader, writer,
             capnp_rpc::rpc_twoparty_capnp::Side::Server, Default::default() );
 
-        let rpc_system = capnp_rpc::RpcSystem::new( Box::new(network), Some( home_capnp.clone().client ) );
+        let rpc_system = ::capnp_rpc::RpcSystem::new( Box::new(network), Some( home_capnp.clone().client ) );
 
         handle.spawn( rpc_system.map_err( |e| warn!("Capnp RPC failed: {}", e) ) );
     }
