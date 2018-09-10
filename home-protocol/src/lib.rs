@@ -195,29 +195,6 @@ impl From<Context<ErrorKind>> for Error {
     }
 }
 
-
-/*
-pub type SFuture<T> = Box<Future<Item = T, Error = Error>>;
-
-pub trait FutureChainErr<T> {
-    fn chain_err<F, E>(self, callback: F) -> SFuture<T>
-        where F: FnOnce() -> E + 'static,
-              E: Into<ErrorKind>;
-}
-
-impl<F> FutureChainErr<F::Item> for F
-    where F: Future + 'static,
-          F::Error: error::Error + Send + 'static,
-{
-    fn chain_err<C, E>(self, callback: C) -> SFuture<F::Item>
-        where C: FnOnce() -> E + 'static,
-              E: Into<ErrorKind>,
-    {
-        Box::new(self.then(|r| r.chain_err(callback)))
-    }
-}
-*/
-
 /// Something that can sign data, but cannot give out the private key.
 /// Usually implemented using a private key internally, but also enables hardware wallets.
 pub trait Signer
