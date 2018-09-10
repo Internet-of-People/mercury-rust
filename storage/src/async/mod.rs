@@ -23,13 +23,21 @@ pub trait HashSpace<ObjectType, ReadableHashType>
 }
 
 
+// TODO probably we should have references (e.g. maybe use AsRef) to keys whenever possible
+// NOTE this interface can be potentially implemented using a simple local in-memory storage
+//      or something as complex as a distributed hashtable (DHT).
+//      If the storage is distributed, removing an entry might not be possible,
+//      consider e.g. bittorrent. Consequently we do not provide an operation which removes
+//      an entry completely from the whole (distributed) store.
+//      Instead, we clear all *local* data and let remaining nodes expire the data if unused.
 pub trait KeyValueStore<KeyType, ValueType>
 {
-    // TODO maybe it would be enough to use references instead of consuming params
     fn set(&mut self, key: KeyType, value: ValueType)
         -> Box< Future<Item=(), Error=StorageError> >;
     fn get(&self, key: KeyType)
         -> Box< Future<Item=ValueType, Error=StorageError> >;
+    fn clear_local(&mut self, key: KeyType)
+        -> Box< Future<Item=(), Error=StorageError> >;
 }
 
 

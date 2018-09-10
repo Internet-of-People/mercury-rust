@@ -518,7 +518,7 @@ impl HomeSession for HomeSessionServer
     fn unregister(&self, _newhome: Option<Profile>) ->
         Box< Future<Item=(), Error=Error> >
     {
-        let profile_id = self.context.peer_id();
+        let profile_id = self.context.peer_id().to_owned();
 
         // TODO is it the caller's responsibility to remove this home from the persona facet's homelist
         //      or should we do it here and save the results into the distributed public db?
@@ -530,7 +530,12 @@ impl HomeSession for HomeSessionServer
         // TODO force close/drop session connection after successful unregister().
         //      Ideally self would be consumed here, but that'd require binding to self: Box<Self> or Rc<Self> to compile within a trait.
 
-        Box::new( future::err(ErrorKind::ProfileDeregistered.into()) )
+        let local_fut = self.server.hosted_profile_db.borrow_mut().clear_local( profile_id.clone().into() );
+        let unreg_fut = self.server.public_profile_dht.borrow_mut().clear_local(profile_id)
+            .and_then( |_| local_fut )
+            .map_err( |e| e.context(ErrorKind::UnregisterFailed).into());
+
+        Box::new(unreg_fut)
     }
 
 

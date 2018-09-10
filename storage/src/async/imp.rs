@@ -481,17 +481,26 @@ for InMemoryStore<KeyType, ValueType>
         -> Box< Future<Item=(), Error=StorageError> >
     {
         self.map.insert(key, object );
-        Box::new( future::ok(() ) )
+        Box::new( Ok( () ).into_future() )
     }
 
     fn get(&self, key: KeyType)
         -> Box< Future<Item=ValueType, Error=StorageError> >
     {
         let result = match self.map.get(&key) {
-            Some(val) => future::ok( val.to_owned() ),
-            None      => future::err(StorageError::InvalidKey),
+            Some(val) => Ok( val.to_owned() ),
+            None      => Err(StorageError::InvalidKey),
         };
-        Box::new(result)
+        Box::new( result.into_future() )
+    }
+
+    fn clear_local(&mut self, key: KeyType)
+        -> Box< Future<Item=(), Error=StorageError> >
+    {
+        let result = self.map.remove(&key)
+            .map( |_| () )
+            .ok_or(StorageError::InvalidKey);
+        Box::new( result.into_future() )
     }
 }
 
@@ -548,6 +557,7 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
         Box::new(result)
     }
 
+
     fn get(&self, key: Vec<u8>)
         -> Box< Future<Item=Vec<u8>, Error=StorageError> >
     {
@@ -569,6 +579,14 @@ impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
             .map_err( |(e, conn)| StorageError::StringError( e.description().to_owned() ) );
 
         Box::new(result)
+    }
+
+
+    fn clear_local(&mut self, key: Vec<u8>)
+        -> Box< Future<Item=(), Error=StorageError> >
+    {
+        // TODO will PostGres storage be needed?
+        unimplemented!()
     }
 }
 

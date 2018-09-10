@@ -15,6 +15,9 @@ use tokio_threadpool::{ThreadPool, Builder};
 use serde_json;
 
 
+
+// TODO Reevaulate this implementation after a lot of enhancements in tokio-fs 0.1.3,
+//      especially doing blocking calls like create_dir_all() from std used at multiple places
 pub struct AsyncFileHandler{
     path : PathBuf,
     pool : Rc<ThreadPool>,
@@ -134,6 +137,12 @@ impl AsyncFileHandler{
         path.push(file_path);
         path.into_boxed_path()
     }
+
+    pub fn remove_file(&self, _file_path: &str) -> Box< Future<Item=(), Error=StorageError> >
+    {
+        // TODO implement this if file storage will be used
+        unimplemented!()
+    }
 }
 
 
@@ -159,6 +168,12 @@ impl<V> KeyValueStore<String, V> for AsyncFileHandler
             );
         Box::new(get_fut)
     }
+
+    fn clear_local(&mut self, key: String)
+        -> Box< Future<Item=(), Error=StorageError> >
+    {
+        self.remove_file(&key)
+    }
 }
 
 
@@ -171,6 +186,9 @@ impl<V> KeyValueStore<Vec<u8>, V> for AsyncFileHandler
 
     fn get(&self, key: Vec<u8>) -> Box< Future<Item=V, Error=StorageError> >
         { self.get( encode(Base::Base64, key) ) }
+
+    fn clear_local(&mut self, key: Vec<u8>) -> Box< Future<Item=(), Error=StorageError> >
+        { (self as &mut KeyValueStore<String, V>).clear_local( encode(Base::Base64, key) ) }
 }
 
 

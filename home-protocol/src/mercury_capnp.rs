@@ -4,7 +4,7 @@ use futures::prelude::*;
 use futures::{future, Sink, sync::mpsc};
 use tokio_core::reactor;
 
-use ::{AppMessageFrame, AppMsgSink};
+use ::{AppMessageFrame, AppMsgSink, TryFrom};
 
 include!( concat!( env!("OUT_DIR"), "/protocol/mercury_capnp.rs" ) );
 
@@ -17,14 +17,6 @@ pub trait PromiseUtil<T,E>
 }
 
 impl<T,E> PromiseUtil<T,E> for Promise<T,E> {}
-
-
-// NOTE this is identical to the currently experimental std::convert::TryFrom.
-//      Hopefully this will not be needed soon when it stabilizes.
-pub trait TryFrom<T> : Sized {
-    type Error;
-    fn try_from(value: T) -> Result<Self, Self::Error>;
-}
 
 
 
@@ -365,7 +357,6 @@ mod tests
 {
     use ::*;
     use mercury_capnp::FillFrom;
-    use mercury_capnp::TryFrom;
     use capnp::serialize;
 
     #[test]
