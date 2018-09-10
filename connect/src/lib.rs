@@ -117,6 +117,12 @@ pub enum ErrorKind {
     Unknown,
 }
 
+impl PartialEq for Error {
+    fn eq(&self, other: &Error) -> bool {
+        self.inner.get_context() == other.inner.get_context()
+    }
+}
+
 impl Fail for Error {
     fn cause(&self) -> Option<&Fail> {
         self.inner.cause()
