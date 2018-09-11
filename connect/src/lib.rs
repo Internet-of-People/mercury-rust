@@ -175,7 +175,7 @@ pub trait HomeConnector
 pub struct Relation
 {
     pub proof:      RelationProof,
-// TODO consider transforming Profile to Option<RefCell<Profile>> with an operation like
+// TODO consider transforming Profile to Option<WeakRef<Profile>> with an operation like
 //      fn peer(&self) -> Box<Future<Item=Profile,Error=SomeError>>
 //      which could return a cache profile value immediately or load it if not present yet
     pub peer:       Profile,

@@ -174,7 +174,7 @@ impl DAppConnect
 
 // TODO this aims only feature-completeness initially for a HelloWorld dApp,
 //      but we also have to include security with authorization and UI-plugins later
-impl DAppEndpoint for DAppConnect
+impl DAppSession for DAppConnect
 {
     fn selected_profile(&self) -> &ProfileId
         { self.gateway.signer().profile_id() }

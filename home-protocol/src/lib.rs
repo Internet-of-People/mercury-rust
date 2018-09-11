@@ -123,7 +123,7 @@ pub enum ErrorKind {
     ProfileDeregistered,
     #[fail(display= "profile load failed")]
     FailedToLoadProfile,
-    #[fail(display="peer request failed")]
+    #[fail(display="call failed")]
     CallFailed,
     #[fail(display="failed to push event")]
     FailedToPushEvent,
@@ -139,12 +139,14 @@ pub enum ErrorKind {
     FailedToResolveUrl,
     #[fail(display="pair request failed")]
     PairRequestFailed,
+    #[fail(display="pair response failed")]
+    PairResponseFailed,
+    #[fail(display="profile registration failed")]
+    RegisterFailed,
     #[fail(display="profile deregistration failed")]
     UnregisterFailed,
     #[fail(display="failed to create session")]
     FailedToCreateSession,
-    #[fail(display="response failed")]
-    ResponseFailed,
     #[fail(display="DHT lookup failed")]
     DhtLookupFailed,
     #[fail(display="ping failed")]

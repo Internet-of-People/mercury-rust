@@ -2,13 +2,14 @@ use std::{cell::RefCell, rc::Rc, rc::Weak};
 use std::collections::HashMap;
 use std::time::Duration;
 
+use failure::{Fail, ResultExt};
 use futures::{future, stream, Future, Sink};
 use futures::sync::{mpsc, oneshot};
 use tokio_core::reactor::{self, Timeout};
 
 use mercury_home_protocol::*;
 use mercury_storage::{async::KeyValueStore, error::StorageError};
-use failure::Fail;
+
 
 
 // TODO this should come from user configuration with a reasonable default value close to this

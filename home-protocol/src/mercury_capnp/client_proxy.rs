@@ -138,7 +138,7 @@ impl Home for HomeClientCapnProto
                 resp.get()
                     .and_then( |res| res.get_own_profile() )
                     .and_then( |own_prof_capnp| OwnProfile::try_from(own_prof_capnp) ) )
-            .map_err( move |e| (own_profile, e.context(ErrorKind::ResponseFailed).into() ) );
+            .map_err( move |e| (own_profile, e.context(ErrorKind::RegisterFailed).into() ) );
 
         Box::new(resp_fut)
     }
@@ -189,7 +189,7 @@ impl Home for HomeClientCapnProto
 
         let resp_fut = request.send().promise
             .map( |_resp| () )
-            .map_err( |e| e.context(ErrorKind::FailedToReadResponse).into() );
+            .map_err( |e| e.context(ErrorKind::PairResponseFailed).into() );
 
         Box::new(resp_fut)
     }

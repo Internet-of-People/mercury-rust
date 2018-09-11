@@ -56,13 +56,11 @@ impl Drop for HomeDispatcherCapnProto
 
 impl profile_repo::Server for HomeDispatcherCapnProto
 {
-//    fn list(&mut self, params: profile_repo::ListParams,
-//            mut results: profile_repo::ListResults)
     fn list(&mut self, _params: profile_repo::ListParams, _results: profile_repo::ListResults)
         -> Promise<(), ::capnp::Error>
     {
         // TODO properly implement this
-        Promise::result( Ok( () ) )
+        unimplemented!()
     }
 
 
@@ -73,7 +71,7 @@ impl profile_repo::Server for HomeDispatcherCapnProto
         let profile_id_capnp = pry!( pry!( params.get() ).get_profile_id() );
         let load_fut = self.home.load( &profile_id_capnp.into() )
             .map( move |profile| results.get().init_profile().fill_from(&profile) )
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to load profile id: {:?}",e) ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to load profile id: {:?}",e) ) );
 
         Promise::from_future(load_fut)
     }
@@ -86,7 +84,7 @@ impl profile_repo::Server for HomeDispatcherCapnProto
         let profile_url = pry!( pry!( params.get() ).get_profile_url() );
         let res_fut = self.home.resolve(profile_url)
             .map( move |profile| results.get().init_profile().fill_from(&profile) )
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to resolve url: {:?}",e ) ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to resolve url: {:?}",e ) ) );
 
         Promise::from_future(res_fut)
     }
@@ -102,7 +100,7 @@ impl home::Server for HomeDispatcherCapnProto
     {
         let profile_id_capnp = pry!( pry!( params.get() ).get_profile_id() );
         let claim_fut = self.home.claim( profile_id_capnp.into() )
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to claim: {:?}", e) ) ) // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to claim profile: {:?}", e) ) )
             .map( move |own_profile|
                 results.get().init_own_profile().fill_from(&own_profile) );
 
@@ -126,7 +124,7 @@ impl home::Server for HomeDispatcherCapnProto
             .ok();
 
         let reg_fut = self.home.register(own_prof, half_proof, invite_opt)
-            .map_err( |e| ::capnp::Error::failed( format!("Failed to register: {:?}", e) ) ) // TODO proper error handling
+            .map_err( |e| ::capnp::Error::failed( format!("Failed to register profile: {:?}", e) ) )
             .map( move |own_profile|
                 results.get().init_own_profile().fill_from(&own_profile) );
 
@@ -151,7 +149,7 @@ impl home::Server for HomeDispatcherCapnProto
                 results.get().set_session(session);
                 ()
             } )
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to login: {:?}", e) ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to login: {:?}", e) ) );
 
         Promise::from_future(session_fut)
     }
@@ -165,7 +163,7 @@ impl home::Server for HomeDispatcherCapnProto
         let half_proof = pry!( RelationHalfProof::try_from(half_proof_capnp) );
 
         let pair_req_fut = self.home.pair_request(half_proof)
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to pair {:?}", e) ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to request pairing {:?}", e) ) );
 
         Promise::from_future(pair_req_fut)
     }
@@ -179,7 +177,7 @@ impl home::Server for HomeDispatcherCapnProto
         let proof = pry!( RelationProof::try_from(proof_capnp) );
 
         let pair_resp_fut = self.home.pair_response(proof)
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to handle pair response: {:?}", e) ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to send pairing response: {:?}", e) ) );
 
         Promise::from_future(pair_resp_fut)
     }
@@ -215,7 +213,7 @@ impl home::Server for HomeDispatcherCapnProto
                     results.get().set_to_callee(to_callee_capnp);
                 } );
             } )
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to call: {:?}", e) ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to call profile: {:?}", e) ) );
 
         Promise::from_future(call_fut)
     }
@@ -249,7 +247,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
         let own_profile = pry!( OwnProfile::try_from(own_profile_capnp) );
 
         let upd_fut = self.session.update(own_profile)
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to update: {:?}", e) ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to update profile: {:?}", e) ) );
 
         Promise::from_future(upd_fut)
     }
@@ -265,7 +263,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
             .ok();
 
         let upd_fut = self.session.unregister(new_home_opt)
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to unregister: {:?}", e) ) ); // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to unregister profile: {:?}", e) ) );
 
         Promise::from_future(upd_fut)
     }
@@ -277,7 +275,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
     {
         let txt = pry!( pry!( params.get() ).get_txt() );
         let ping_fut = self.session.ping(txt)
-            .map_err( | e| ::capnp::Error::failed( format!("Failed ping: {:?}", e) ) ) // TODO proper error handling
+            .map_err( | e| ::capnp::Error::failed( format!("Failed ping: {:?}", e) ) )
             .map( move |pong| results.get().set_pong(&pong) );
         Promise::from_future(ping_fut)
     }
@@ -289,7 +287,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
     {
         let callback = pry!( pry!( params.get() ).get_event_listener() );
         let events_fut = self.session.events()
-            .map_err( | e| ::capnp::Error::failed( format!("Failed events: {:?}", e) ) ) // TODO proper error handling;
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to get profile events: {:?}", e) ) )
             .for_each( move |item|
             {
                 match item
@@ -331,7 +329,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
         // Forward incoming calls from business logic into capnp proxy stub of client
         let handle_clone = self.handle.clone();
         let calls_fut = self.session.checkin_app( &app_id.into() )
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to checkin app: {:?}", e) ) ) // TODO proper error handling;
+            .map_err( | e| ::capnp::Error::failed( format!("Failed to checkin app: {:?}", e) ) )
             .for_each( move |item|
             {
                 let handle_clone = handle_clone.clone();
@@ -349,7 +347,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                             // TODO consider how to drop/unregister this object from capnp if the stream is dropped
                             let listener_capnp = mercury_capnp::app_message_listener::ToClient::new(listener)
                                 .from_server::<::capnp_rpc::Server>();
-                            request.get().get_call().expect("Implementation erorr: call was just initialized above, should be there")
+                            request.get().get_call().expect("Implementation error: call was just initialized above, should be there")
                                 .set_to_caller(listener_capnp);
                         }
 

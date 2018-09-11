@@ -9,7 +9,7 @@ use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::{Error, HomeConnector, ProfileGateway, ProfileGatewayImpl, Relation, sdk::DAppEndpoint};
+use ::{Error, HomeConnector, ProfileGateway, ProfileGatewayImpl, Relation, sdk::DAppSession};
 use ::sdk::DAppInit;
 
 
@@ -23,6 +23,7 @@ pub struct DeviceAuthorization(Vec<u8>);
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct DAppPermission(Vec<u8>);
 
+// TODO should be used in parsed version as something like Vec<(bool,uint16)>
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Bip32Path(String);
 
@@ -102,13 +103,12 @@ pub trait UserInterface
 
 pub trait ConnectService
 {
-    // TODO some kind of proof might be needed that the AppId given really belongs to the caller
     // NOTE this implicitly asks for user interaction (through UI) selecting a profile to be used with the app
-    fn dapp_endpoint(&self, app: &ApplicationId)
-        -> Box< Future<Item=Rc<DAppEndpoint>, Error=String> >; // TODO Proper error type
+    fn dapp_session(&self, app: &ApplicationId, authorization: Option<DAppPermission>)
+        -> Box< Future<Item=Rc<DAppSession>, Error=String> >; // TODO Proper error type
 
     // TODO The Settings app is not really a dApp but a privilegized system app, might use different authorization
-    fn admin_endpoint(&self, authorization: &DAppPermission)
+    fn admin_endpoint(&self, ui: Rc<UserInterface>, authorization: Option<DAppPermission>)
         -> Box< Future<Item=Rc<AdminEndpoint>, Error=String> >; // TODO Proper error type
 }
 
@@ -296,8 +296,8 @@ pub struct ServiceImpl
 
 impl ConnectService for ServiceImpl
 {
-    fn dapp_endpoint(&self, app: &ApplicationId)
-        -> Box< Future<Item=Rc<DAppEndpoint>, Error=String> >
+    fn dapp_session(&self, app: &ApplicationId, authorization: Option<DAppPermission>)
+        -> Box< Future<Item=Rc<DAppSession>, Error=String> >
     {
         let app = app.to_owned();
         let handle = self.handle.clone();
@@ -311,7 +311,7 @@ impl ConnectService for ServiceImpl
         Box::new(fut)
     }
 
-    fn admin_endpoint(&self, authorization: &DAppPermission)
+    fn admin_endpoint(&self, ui: Rc<UserInterface>, authorization: Option<DAppPermission>)
         -> Box< Future<Item=Rc<AdminEndpoint>, Error=String> >
     {
         let settings = SettingsImpl{
