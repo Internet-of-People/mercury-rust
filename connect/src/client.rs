@@ -187,7 +187,7 @@ pub trait ProfileGateway
 impl DAppInit for Rc<ProfileGateway>
 {
     fn initialize(&self, app: &ApplicationId, handle: &reactor::Handle)
-        -> Box< Future<Item=Rc<DAppSession>, Error=Error> >
+        -> Box< Future<Item=Rc<DAppSession>, Error=::error::Error> >
     {
         let instance = Rc::new( DAppConnect::new( self.clone(), app, handle) ) as Rc<DAppSession>;
         Box::new( Ok(instance).into_future() )

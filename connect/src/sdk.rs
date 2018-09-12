@@ -8,7 +8,8 @@ use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::{Call, DAppSession, Relation, client::{Error, ErrorKind, ProfileGateway}};
+use ::{Call, DAppSession, Relation, client::ProfileGateway};
+use ::error::{Error, ErrorKind};
 
 
 
@@ -110,7 +111,7 @@ impl DAppConnect
                     session
                 }
             } )
-            .map_err(|err| err.context(ErrorKind::LoginFailed).into());
+            .map_err( |err| err.context(ErrorKind::Unknown).into() ); // TODO
         Box::new(login_fut)
     }
 
@@ -131,7 +132,6 @@ impl DAppConnect
         let gateway = self.gateway.clone();
 
         let proof_fut = self.contacts()
-            .map_err(|err| err.context(ErrorKind::FailedToGetContacts).into())
             .and_then( move |contacts|
             {
                 let first_match = contacts.iter()
@@ -148,7 +148,7 @@ impl DAppConnect
 
                     None => {
                         let proof_fut = gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &profile_id2, None)
-                            .map_err(|err| err.context(ErrorKind::PairRequestFailed).into())
+                            .map_err( |err| err.context(ErrorKind::Unknown).into() ) // TODO
                             .and_then( |_| login_fut )
                             .and_then( move |_session|
                                 event_stream.filter_map( move |event|
@@ -161,9 +161,9 @@ impl DAppConnect
                                 } )
                                 .take(1)
                                 .collect()
-                                .map_err( |_| ErrorKind::PairRequestFailed.into())
+                                .map_err( |_| Error::from(ErrorKind::Unknown) ) // TODO
                             )
-                            .and_then( |mut proofs| proofs.pop().ok_or( ErrorKind::PairRequestFailed.into()));
+                            .and_then( |mut proofs| proofs.pop().ok_or( ErrorKind::Unknown.into() ) ); // TODO
                         Box::new(proof_fut)
                     }
 //                        Err( ErrorToBeSpecified::TODO( "get_relation_proof: no appropriate relation found".to_string()) ).into_future()
@@ -212,9 +212,10 @@ impl DAppSession for DAppConnect
                 let app_id = self.app_id.clone();
                 let (to_caller, from_callee) = mpsc::channel(CHANNEL_CAPACITY);
                 move |relation| gateway.call(relation.to_owned(), app_id, init_payload, Some(to_caller))
+                    .map_err( |e| e.context(ErrorKind::Unknown).into() )
                     .and_then( |to_callee_opt|
                         match to_callee_opt {
-                            None => Err( ErrorKind::CallRefused.into() ),
+                            None => Err( Error::from(ErrorKind::Unknown) ), // TODO
                             Some(to_callee) => Ok( Call{ sender: to_callee, receiver: from_callee } )
                         }
                     )

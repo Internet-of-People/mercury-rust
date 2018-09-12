@@ -15,6 +15,7 @@ extern crate failure;
 
 
 pub mod client;
+pub mod error;
 pub mod net;
 pub use net::SimpleTcpHomeConnector;
 
@@ -33,7 +34,7 @@ use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::client::Error;
+use ::error::*;
 
 
 
