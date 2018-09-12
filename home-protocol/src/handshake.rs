@@ -2,6 +2,7 @@ use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use std::mem;
 use std::rc::Rc;
 
+use failure::Fail;
 use futures::{future, Future};
 use serde_json::{from_slice, to_vec};
 //bincode::{deserialize, serialize};

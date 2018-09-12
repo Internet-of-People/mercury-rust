@@ -2,12 +2,13 @@ use std::{cell::RefCell, rc::Rc, rc::Weak};
 use std::collections::HashMap;
 use std::time::Duration;
 
-use failure::{Fail, ResultExt};
+use failure::Fail;
 use futures::{future, stream, Future, Sink};
 use futures::sync::{mpsc, oneshot};
 use tokio_core::reactor::{self, Timeout};
 
 use mercury_home_protocol::*;
+use mercury_home_protocol::error::*;
 use mercury_storage::{async::KeyValueStore, error::StorageError};
 
 

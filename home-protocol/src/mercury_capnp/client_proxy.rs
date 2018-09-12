@@ -1,9 +1,9 @@
 use std::time::Duration;
 
 use capnp::capability::Promise;
-use futures::{Future, Sink};
-use futures::sync::mpsc;
-use futures::sync::oneshot;
+use failure::Fail;
+use futures::prelude::*;
+use futures::sync::{mpsc, oneshot};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 

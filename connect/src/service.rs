@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
-//use std::error::Error;
 use std::rc::Rc;
 
 use futures::prelude::*;
@@ -9,8 +8,8 @@ use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::{Error, HomeConnector, ProfileGateway, ProfileGatewayImpl, Relation, sdk::DAppSession};
-use ::sdk::DAppInit;
+use ::{DAppInit, DAppSession, Relation};
+use ::client::{Error, HomeConnector, ProfileGateway, ProfileGatewayImpl};
 
 
 

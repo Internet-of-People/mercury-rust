@@ -1,8 +1,9 @@
 extern crate futures;
 
 use std::collections::HashMap;
-use mercury_home_protocol::*;
 use futures::{Future, future};
+use mercury_home_protocol::{*, error::*};
+
 
 
 pub struct SimpleProfileRepo {

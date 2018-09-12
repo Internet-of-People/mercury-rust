@@ -1,9 +1,10 @@
 use super::*;
-use mercury_connect::sdk::*;
 use mercury_home_protocol::*;
 use futures::IntoFuture;
 use futures::Stream;
 use std::rc::Rc;
+
+
 
 pub struct Client {
     appcx : AppContext,

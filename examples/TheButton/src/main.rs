@@ -19,6 +19,8 @@ extern crate mercury_connect;
 extern crate mercury_storage;
 extern crate mercury_home_protocol;
 
+
+
 pub mod client_config;
 pub mod client;
 pub mod server_config;
@@ -29,33 +31,31 @@ pub mod function;
 pub mod application;
 // pub mod signal_handling;
 
-use cli::cli;
-use function::*;
-use server::Server;
-use client::Client;
-use client_config::*;
-use server_config::*;
-use logging::start_logging;
-use application::{Application, EX_OK, EX_SOFTWARE, EX_USAGE};
+
 
 use std::rc::Rc;
 use std::net::SocketAddr;
 
-use clap::{ArgMatches};
-
-use futures::Future;
-use futures::{IntoFuture, Stream};
-
+use clap::ArgMatches;
+use futures::prelude::*;
+use multiaddr::{Multiaddr, ToMultiaddr};
 use tokio_signal::unix::SIGINT;
 use tokio_core::reactor::{Core, Handle};
 use tokio_timer::*;
 
-use multiaddr::{Multiaddr, ToMultiaddr};
-
 use mercury_connect::*;
-use mercury_connect::net::SimpleTcpHomeConnector;
+use mercury_connect::{client::{ProfileGateway, ProfileGatewayImpl}, net::SimpleTcpHomeConnector};
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::Ed25519Signer;
+use application::{Application, EX_OK, EX_SOFTWARE, EX_USAGE};
+use cli::cli;
+use client::Client;
+use client_config::*;
+use function::*;
+use logging::start_logging;
+use server::Server;
+use server_config::*;
+
 
 
 pub struct AppContext{

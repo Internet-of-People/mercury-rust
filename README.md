@@ -64,16 +64,13 @@ We'd like to have feedback to learn problems in the earliest phases,
 priorities of missing features and your requirements we haven't thought of yet.
 
 We think to have an initial functional implementation of the architecture.
-We're finishing our optimistic test cases, making sure they all pass.
-We're working to improve usability of the server daemon and
-drafting an SDK API for distributed applications.
+We're drafting our SDK API for distributed applications.
 There are still a lot of important components to be added,
 existing ones might be changed or redesigned,
 documentation is still lacking nearly everywhere.
 
 Rough edges of the existing server and client are
  - documentation
- - proper error type structure
  - profile metadata structure and protection levels
 
 Missing important parts are
@@ -86,7 +83,7 @@ Missing important parts are
  - DHT integration (IPFS with custom IPNS, Kademlia or others)
  - profile search on distributed storage
  - language bindings
- - undelivered message persistance (in case of server reboot)
+ - undelivered message persistance (e.g. missed calls)
 
 
 ## Code structure

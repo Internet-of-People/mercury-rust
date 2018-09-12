@@ -1,12 +1,14 @@
 use std::net::{SocketAddr, IpAddr};
+use std::rc::Rc;
 
+use failure::Fail;
 use futures::{future, Future};
 use multiaddr::{Multiaddr, AddrComponent};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 
-use super::{Error, ErrorKind};
-use super::*;
+use mercury_home_protocol::*;
+use ::client::{Error, ErrorKind, HomeConnector};
 
 
 
@@ -38,7 +40,7 @@ pub struct TcpHomeConnector
 impl HomeConnector for TcpHomeConnector
 {
     fn connect(&self, _home_profile: &Profile, _signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=::Error> >
+        Box< Future<Item=Rc<Home>, Error=Error> >
     {
         unimplemented!()
         // TODO in case of TCP addresses, use StunTurnTcpConnector to build an async TcpStream
