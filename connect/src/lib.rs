@@ -72,7 +72,7 @@ pub struct Call
     pub receiver : AppMsgStream
 }
 
-pub trait DAppInit
+trait DAppInit
 {
     // Implies asking the user interface to manually pick a profile the app is used with
     fn initialize(&self, app: &ApplicationId, handle: &reactor::Handle)

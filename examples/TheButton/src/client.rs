@@ -2,7 +2,6 @@ use super::*;
 use mercury_home_protocol::*;
 use futures::IntoFuture;
 use futures::Stream;
-use std::rc::Rc;
 
 
 
@@ -28,7 +27,7 @@ impl IntoFuture for Client {
     fn into_future(self) -> Self::Future {
         let callee_profile_id = self.cfg.callee_profile_id.clone();
 
-        let f = (self.appcx.gateway as Rc<ProfileGateway>).initialize(&ApplicationId("buttondapp".into()), &self.appcx.handle)
+        let f = self.appcx.service.dapp_session( &ApplicationId("buttondapp".into()), None )
             .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect"))
             .and_then(move |mercury_app|{
                 info!("application initialized, calling {:?}", callee_profile_id);

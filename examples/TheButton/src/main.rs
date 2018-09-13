@@ -45,7 +45,7 @@ use tokio_core::reactor::{Core, Handle};
 use tokio_timer::*;
 
 use mercury_connect::*;
-use mercury_connect::{client::{ProfileGateway, ProfileGatewayImpl}, net::SimpleTcpHomeConnector};
+use mercury_connect::net::SimpleTcpHomeConnector;
 use mercury_connect::service::{ConnectService, DummyUserInterface, ProfileGatewayFactory, ServiceImpl, SignerFactory};
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::Ed25519Signer;
@@ -65,15 +65,14 @@ pub struct AppContext{
 //    priv_key: PrivateKey,
 //    home_pub: PublicKey,
 //    home_address: SocketAddr,
-    gateway: Rc<ProfileGateway>, // TODO remove this field and use service.dapp_session() instead everywhere
+//    gateway: Rc<ProfileGateway>, // TODO remove this field and use service.dapp_session() instead everywhere
+//    handle: Handle,
     service: Rc<ConnectService>,
-    handle: Handle,
 }
 
 impl AppContext{
     pub fn new(priv_key: &str, node_id: &str, node_addr: &str, handle: Handle)->Result<Self, std::io::Error>{
         let server_pub = PublicKey(std::fs::read(node_id)?);
-        let private_key = PrivateKey(std::fs::read(priv_key)?);
         let server_id = ProfileId::from(&server_pub);
 
         let addr :SocketAddr = node_addr.parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
@@ -83,15 +82,17 @@ impl AppContext{
         //      e.g. with having only a Home URL including hints to access Home
         let home_profile = Profile::new_home( server_id, server_pub.clone(), multaddr );
 
-        let client_signer = Rc::new( Ed25519Signer::new(&private_key).unwrap() );
         let home_connector = Rc::new( SimpleTcpHomeConnector::new( handle.clone() ) );
 
         let mut profile_repo = SimpleProfileRepo::new();
         profile_repo.insert(home_profile);
         let profile_repo = Rc::new(profile_repo);
-        
-        let profile_gw = Rc::new(ProfileGatewayImpl::new(client_signer, profile_repo.clone(), home_connector.clone() ));
 
+        // let profile_gw = Rc::new(ProfileGatewayImpl::new(client_signer, profile_repo.clone(), home_connector.clone() ));
+
+        // TODO add private_key to signer factory
+        let private_key = PrivateKey(std::fs::read(priv_key)?);
+        let client_signer = Rc::new( Ed25519Signer::new(&private_key).unwrap() );
         let signer_factory: Rc<SignerFactory> = Rc::new(SignerFactory::new( Default::default() ) );
         let gateways = Rc::new( ProfileGatewayFactory::new(
             signer_factory, profile_repo.clone(), home_connector ) );
@@ -105,9 +106,9 @@ impl AppContext{
 //            priv_key: private_key,
 //            home_pub: server_pub,
 //            home_address: addr,
-            gateway: profile_gw,
+//            gateway: profile_gw,
+//            handle,
             service,
-            handle
         })
     }
 }
