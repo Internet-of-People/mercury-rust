@@ -162,7 +162,9 @@ pub trait ConnectService
         -> Box< Future<Item=Rc<DAppSession>, Error=Error> >;
 
     // TODO The Settings app is not really a dApp but a privilegized system app, might use different authorization
-    fn admin_endpoint(&self, ui: Rc<UserInterface>, authorization: Option<DAppPermission>)
+    // TODO assigning a UI is more like an initialization process than an Rpc endpoint, reconsider the ui argument
+    fn admin_endpoint(&self, // ui: Rc<UserInterface>,
+                      authorization: Option<DAppPermission>)
         -> Box< Future<Item=Rc<AdminEndpoint>, Error=Error> >;
 }
 
@@ -194,22 +196,28 @@ pub struct SignerFactory
 
 impl SignerFactory
 {
+    pub fn new(signers: HashMap<ProfileId, Rc<Signer>>) -> Self
+        { Self{signers} }
+
     pub fn signer(&self, profile_id: &ProfileId) -> Option<Rc<Signer>>
         { self.signers.get(profile_id).map( |s| s.clone() ) }
 }
 
 
 
-struct ProfileGatewayFactory
+pub struct ProfileGatewayFactory
 {
-    pub signer_factory: Rc<SignerFactory>,
-    pub profile_repo:   Rc<ProfileRepo>,
-    pub home_connector: Rc<HomeConnector>,
+    signer_factory: Rc<SignerFactory>,
+    profile_repo:   Rc<ProfileRepo>,
+    home_connector: Rc<HomeConnector>,
 }
 
 
 impl ProfileGatewayFactory
 {
+    pub fn new(signer_factory: Rc<SignerFactory>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
+        -> Self { Self{signer_factory, profile_repo, home_connector} }
+
     pub fn gateway(&self, profile_id: &ProfileId) -> Option<Rc<ProfileGateway>>
     {
         let repo = self.profile_repo.clone();
@@ -231,6 +239,15 @@ pub struct SettingsImpl
     my_profiles:    Rc<HashSet<ProfileId>>,
     profile_store:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
     gateways:       Rc<ProfileGatewayFactory>,
+}
+
+
+impl SettingsImpl
+{
+    pub fn new(my_profiles: Rc<HashSet<ProfileId>>,
+               profile_store: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
+               gateways: Rc<ProfileGatewayFactory>) -> Self
+    { Self{my_profiles, gateways, profile_store} }
 }
 
 
@@ -337,14 +354,23 @@ impl AdminEndpoint for SettingsImpl
 
 pub struct ServiceImpl
 {
-//    keyvault:   Rc<KeyVault>,
-//    pathmap:    Rc<Bip32PathMapper>,
-//    accessman:  Rc<AccessManager>,
+//    keyvault:       Rc<KeyVault>,
+//    pathmap:        Rc<Bip32PathMapper>,
+//    accessman:      Rc<AccessManager>,
     ui:             Rc<UserInterface>,
     my_profiles:    Rc<HashSet<ProfileId>>,
     profile_store:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
     gateways:       Rc<ProfileGatewayFactory>,
     handle:         reactor::Handle,
+}
+
+
+impl ServiceImpl
+{
+    pub fn new(ui: Rc<UserInterface>, my_profiles: Rc<HashSet<ProfileId>>,
+               profile_store: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
+               gateways: Rc<ProfileGatewayFactory>, handle: &reactor::Handle) -> Self
+    { Self{ ui, my_profiles, profile_store, gateways, handle: handle.clone() } }
 }
 
 
@@ -364,13 +390,44 @@ impl ConnectService for ServiceImpl
         Box::new(fut)
     }
 
-    fn admin_endpoint(&self, ui: Rc<UserInterface>, authorization: Option<DAppPermission>)
+    fn admin_endpoint(&self, // ui: Rc<UserInterface>,
+                      authorization: Option<DAppPermission>)
         -> Box< Future<Item=Rc<AdminEndpoint>, Error=Error> >
     {
-        let settings = SettingsImpl{
-            my_profiles: self.my_profiles.clone(),
-            profile_store: self.profile_store.clone(),
-            gateways: self.gateways.clone() };
+        let settings = SettingsImpl::new( self.my_profiles.clone(),
+            self.profile_store.clone(), self.gateways.clone() );
         Box::new( Ok( Rc::new(settings) as Rc<AdminEndpoint> ).into_future() )
+    }
+}
+
+
+
+pub struct DummyUserInterface {}
+
+impl DummyUserInterface
+{
+    pub fn new() -> Self { Self{} }
+}
+
+impl UserInterface for DummyUserInterface
+{
+    fn initialize(&self) -> Box< Future<Item=(), Error=Error> >
+    {
+        unimplemented!()
+    }
+
+    fn confirm(&self, action: &DAppAction) -> Box< Future<Item=Signature, Error=Error> >
+    {
+        unimplemented!()
+    }
+
+    fn select_profile(&self) -> Box< Future<Item=ProfileId, Error=Error> >
+    {
+        unimplemented!()
+    }
+
+    fn manage_profiles(&self) -> Box< Future<Item=(), Error=Error> >
+    {
+        unimplemented!()
     }
 }

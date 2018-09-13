@@ -118,6 +118,7 @@ impl DAppConnect
 
     // Try fetching RelationProof from existing contacts. If no appropriate contact found,
     // initiate a pairing procedure and return when it's completed, failed or timed out
+    // TODO automated pairing should be handled at a different level (near the dApp), not here
     fn get_relation_proof(&self, profile_id: &ProfileId)
         -> Box< Future<Item=RelationProof, Error=Error>>
     {

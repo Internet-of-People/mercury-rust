@@ -199,28 +199,16 @@ impl DAppInit for Rc<ProfileGateway>
 #[derive(Clone)]
 pub struct ProfileGatewayImpl
 {
-    pub signer:         Rc<Signer>,
-    //local profile repository?
-    pub profile_repo:   Rc<ProfileRepo>,
-    pub home_connector: Rc<HomeConnector>,
+    signer:         Rc<Signer>,
+    profile_repo:   Rc<ProfileRepo>,
+    home_connector: Rc<HomeConnector>,
 }
 
 
 impl ProfileGatewayImpl
 {
-    pub fn new(
-        signer:         Rc<Signer>,
-        profile_repo:   Rc<ProfileRepo>,
-        home_connector: Rc<HomeConnector>,
-    ) -> Self
-    {
-        ProfileGatewayImpl{
-            signer:         signer,
-            profile_repo:   profile_repo,
-            home_connector: home_connector,
-        }
-
-    }
+    pub fn new(signer: Rc<Signer>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
+        -> Self { Self{signer, profile_repo, home_connector} }
 
     pub fn connect_home(&self, home_profile_id: &ProfileId)
         -> Box< Future<Item=Rc<Home>, Error=Error> >
@@ -275,11 +263,8 @@ impl ProfileGatewayImpl
                 let signer_clone = self.signer.clone();
                 move |home_proof| {
                     Self::connect_home2(&home_profile_id, profile_repo_clone, home_connector_clone, signer_clone)
-                        .and_then( move |home| {
-                            home
-                                .login(&home_proof)
-                                .map_err(|err| err.context(ErrorKind::LoginFailed).into())
-                        })
+                        .and_then( move |home| home.login(&home_proof)
+                            .map_err( |err| err.context(ErrorKind::LoginFailed).into() ) )
                 }
             });
         Box::new(login_fut)

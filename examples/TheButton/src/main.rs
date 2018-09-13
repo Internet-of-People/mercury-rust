@@ -33,8 +33,9 @@ pub mod application;
 
 
 
-use std::rc::Rc;
+use std::cell::RefCell;
 use std::net::SocketAddr;
+use std::rc::Rc;
 
 use clap::ArgMatches;
 use futures::prelude::*;
@@ -45,8 +46,10 @@ use tokio_timer::*;
 
 use mercury_connect::*;
 use mercury_connect::{client::{ProfileGateway, ProfileGatewayImpl}, net::SimpleTcpHomeConnector};
+use mercury_connect::service::{ConnectService, DummyUserInterface, ProfileGatewayFactory, ServiceImpl, SignerFactory};
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::Ed25519Signer;
+use mercury_storage::async::imp::InMemoryStore;
 use application::{Application, EX_OK, EX_SOFTWARE, EX_USAGE};
 use cli::cli;
 use client::Client;
@@ -62,7 +65,8 @@ pub struct AppContext{
 //    priv_key: PrivateKey,
 //    home_pub: PublicKey,
 //    home_address: SocketAddr,
-    gateway: Rc<ProfileGateway>,
+    gateway: Rc<ProfileGateway>, // TODO remove this field and use service.dapp_session() instead everywhere
+    service: Rc<ConnectService>,
     handle: Handle,
 }
 
@@ -74,24 +78,35 @@ impl AppContext{
 
         let addr :SocketAddr = node_addr.parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
         let multaddr : Multiaddr = addr.clone().to_multiaddr().expect("Failed to parse server address");
-        
+
+        // TODO consider that client should be able to start up without being a DHT client,
+        //      e.g. with having only a Home URL including hints to access Home
+        let home_profile = Profile::new_home( server_id, server_pub.clone(), multaddr );
+
         let client_signer = Rc::new( Ed25519Signer::new(&private_key).unwrap() );
-        let mut profile_store = SimpleProfileRepo::new();
-        let home_connector = SimpleTcpHomeConnector::new( handle.clone() );
-        let home_profile = Profile::new_home(
-            server_id, 
-            server_pub.clone(), 
-            multaddr
-        );
-        profile_store.insert(home_profile);
+        let home_connector = Rc::new( SimpleTcpHomeConnector::new( handle.clone() ) );
+
+        let mut profile_repo = SimpleProfileRepo::new();
+        profile_repo.insert(home_profile);
+        let profile_repo = Rc::new(profile_repo);
         
-        let profile_gw = Rc::new(ProfileGatewayImpl::new(client_signer, Rc::new(profile_store),  Rc::new(home_connector)));
+        let profile_gw = Rc::new(ProfileGatewayImpl::new(client_signer, profile_repo.clone(), home_connector.clone() ));
+
+        let signer_factory: Rc<SignerFactory> = Rc::new(SignerFactory::new( Default::default() ) );
+        let gateways = Rc::new( ProfileGatewayFactory::new(
+            signer_factory, profile_repo.clone(), home_connector ) );
+
+        let ui = Rc::new( DummyUserInterface::new() );
+        let my_profiles = Rc::new( Default::default() );
+        let profile_store = Rc::new( RefCell::new( InMemoryStore::new() ) );
+        let service = Rc::new( ServiceImpl::new(ui, my_profiles, profile_store, gateways, &handle) );
 
         Ok(Self{
 //            priv_key: private_key,
 //            home_pub: server_pub,
 //            home_address: addr,
             gateway: profile_gw,
+            service,
             handle
         })
     }
