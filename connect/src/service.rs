@@ -402,32 +402,38 @@ impl ConnectService for ServiceImpl
 
 
 
-pub struct DummyUserInterface {}
+pub struct DummyUserInterface
+{
+    my_profiles: Rc<HashSet<ProfileId>>,
+}
 
 impl DummyUserInterface
 {
-    pub fn new() -> Self { Self{} }
+    pub fn new(my_profiles: Rc<HashSet<ProfileId>>) -> Self
+        { Self{my_profiles} }
 }
 
 impl UserInterface for DummyUserInterface
 {
     fn initialize(&self) -> Box< Future<Item=(), Error=Error> >
     {
-        unimplemented!()
+        Box::new( Ok( () ).into_future() )
     }
 
     fn confirm(&self, action: &DAppAction) -> Box< Future<Item=Signature, Error=Error> >
     {
-        unimplemented!()
+        Box::new( Ok( Signature( Vec::new() ) ).into_future() )
     }
 
     fn select_profile(&self) -> Box< Future<Item=ProfileId, Error=Error> >
     {
-        unimplemented!()
+        let first_profile_res = self.my_profiles.iter().cloned().nth(0)
+            .ok_or( Error::from(ErrorKind::Unknown) );
+        Box::new( first_profile_res.into_future() )
     }
 
     fn manage_profiles(&self) -> Box< Future<Item=(), Error=Error> >
     {
-        unimplemented!()
+        Box::new( Ok( () ).into_future() )
     }
 }

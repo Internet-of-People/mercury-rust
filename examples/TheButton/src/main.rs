@@ -34,6 +34,7 @@ pub mod application;
 
 
 use std::cell::RefCell;
+use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::rc::Rc;
 
@@ -97,8 +98,8 @@ impl AppContext{
         let gateways = Rc::new( ProfileGatewayFactory::new(
             signer_factory, profile_repo.clone(), home_connector ) );
 
-        let ui = Rc::new( DummyUserInterface::new() );
-        let my_profiles = Rc::new( Default::default() );
+        let my_profiles = Rc::new( HashSet::new() );
+        let ui = Rc::new( DummyUserInterface::new( my_profiles.clone() ) );
         let profile_store = Rc::new( RefCell::new( InMemoryStore::new() ) );
         let service = Rc::new( ServiceImpl::new(ui, my_profiles, profile_store, gateways, &handle) );
 
