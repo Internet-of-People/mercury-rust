@@ -29,32 +29,21 @@ impl IntoFuture for Client {
         let callee_profile_id = self.cfg.callee_profile_id.clone();
 
         let f = (self.appcx.gateway as Rc<ProfileGateway>).initialize(&ApplicationId("buttondapp".into()), &self.appcx.handle)
-        .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect"))
-        .and_then(move |mercury_app|{
-            info!("application initialized, calling {:?}", callee_profile_id);
-            mercury_app.call(&callee_profile_id, AppMessageFrame(vec![]))
-                    .map_err(|err| {
-                        error!("call failed: {:?}", err);
-                        ()
-                    })
+            .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect"))
+            .and_then(move |mercury_app|{
+                info!("application initialized, calling {:?}", callee_profile_id);
+                mercury_app.call(&callee_profile_id, AppMessageFrame(vec![]))
+                    .map_err(|err| error!("call failed: {:?}", err) )
                     .and_then(|call: Call| {
                         info!("call accepted, waiting for incoming messages");
                         call.receiver
                             .for_each(|msg: Result<AppMessageFrame, String>| {
-                                match msg {
-                                    Ok(frame) => {
-                                        info!("got message {:?}", frame); 
-                                        Ok(())
-                                    },
-                                    Err(errmsg) => {
-                                        warn!("got error {:?}", errmsg); 
-                                        Err(())
-                                    }
-                                }
-                            })                        
+                                msg.map( |frame| info!("got message {:?}", frame) )
+                                    .map_err(|errmsg| warn!("got error {:?}", errmsg) )
+                            })
                     })
                     .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "encountered error"))
-        });
+            });
         Box::new(f)
     }
 }

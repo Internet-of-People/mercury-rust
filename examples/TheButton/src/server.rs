@@ -37,27 +37,25 @@ impl IntoFuture for Server {
 
         use ::mercury_connect::DAppInit;
         let calls_fut = (self.appcx.gateway as Rc<ProfileGateway>).initialize(&ApplicationId("buttondapp".into()), &self.appcx.handle)
-        .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect"))
-        .and_then(|mercury_app|{
-            mercury_app.checkin()
-                .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err)))
-                .and_then(move |call_stream| {
-                    call_stream
-                        .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "call stream failed"))
-                        .for_each( move |call_result| {
-                            match call_result {
-                                Ok(c) => {
-                                    let (msgchan_tx, _) = channel(1);
-                                    let msgtx = c.answer(Some(msgchan_tx)).to_caller;
-                                    Box::new(tx_call.clone().send(msgtx).map(|_| ()).map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "failed to send to mpsc"))) as Box<Future<Item=(), Error=std::io::Error>> 
-                                },
+            .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect"))
+            .and_then(|mercury_app| mercury_app.checkin()
+                .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err))) )
+            .and_then(move |call_stream| { call_stream
+                .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "call stream failed"))
+                .for_each( move |call_result| {
+                    match call_result {
+                        Ok(c) => {
+                            let (msgchan_tx, _) = channel(1);
+                            let msgtx = c.answer(Some(msgchan_tx)).to_caller;
+                            let fut = tx_call.clone().send(msgtx).map(|_| ())
+                                .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "failed to send to mpsc"));
+                            Box::new(fut) as Box<Future<Item=_, Error=_>>
+                        },
 
-                                Err(_errmsg) => 
-                                    Box::new(Ok(()).into_future()) as Box<Future<Item=(), Error=std::io::Error>>
-                            }
-                        }) 
+                        Err(_errmsg) => Box::new(Ok(()).into_future())
+                    }
                 })
-        });
+            });
 
         // Handling call and event management
         let calls = RefCell::new(Vec::new());
@@ -67,8 +65,6 @@ impl IntoFuture for Server {
                     if let Some(c) = call {
                         calls.borrow_mut().push(c);
                     }
-                    
-                    Ok(())
                 },
                 Either::Right(()) => {
                     debug!("notifying connected clients");
@@ -76,11 +72,9 @@ impl IntoFuture for Server {
                         let cc = c.clone();
                         tokio::spawn(cc.send(Ok(AppMessageFrame(b"".to_vec()))).map(|_| ()).map_err(|_|()));
                     }
-                    Ok(())
                 }
             }
-            
-            
+            Ok(())
         }).map_err(|()| std::io::Error::new(std::io::ErrorKind::Other, "mpsc channel failed"));
 
         // Interval future is generating an event periodcally
