@@ -27,10 +27,7 @@ pub use simple_profile_repo::SimpleProfileRepo;
 
 
 
-use std::rc::Rc;
-
 use futures::prelude::*;
-use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
@@ -72,12 +69,6 @@ pub struct Call
     pub receiver : AppMsgStream
 }
 
-trait DAppInit
-{
-    // Implies asking the user interface to manually pick a profile the app is used with
-    fn initialize(&self, app: &ApplicationId, handle: &reactor::Handle)
-        -> Box< Future<Item=Rc<DAppSession>, Error=Error> >;
-}
 
 
 // NOTE A specific DApp is logged in to the Connect Service with given details, e.g. a selected profile.

@@ -10,8 +10,9 @@ use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::{DAppInit, DAppSession, Relation};
+use ::{DAppSession, Relation};
 use ::client::{HomeConnector, ProfileGateway, ProfileGatewayImpl};
+use ::sdk::DAppConnect;
 
 
 
@@ -385,8 +386,7 @@ impl ConnectService for ServiceImpl
         let fut = self.ui.select_profile()
             .and_then( move |profile_id| gateways.gateway(&profile_id)
                 .ok_or( Error::from(ErrorKind::Unknown) ) )
-            .and_then( move |gateway| gateway.initialize(&app, &handle)
-                .map_err( |e| e.context(ErrorKind::Unknown).into() ) );
+            .map( move |gateway| Rc::new( DAppConnect::new(gateway, &app, &handle) ) as Rc<DAppSession> );
         Box::new(fut)
     }
 

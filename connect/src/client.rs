@@ -3,10 +3,9 @@ use std::fmt::Display;
 
 use failure::{Context, Fail, Backtrace};
 use futures::{future, Future, IntoFuture};
-use tokio_core::reactor;
 
 use mercury_home_protocol::*;
-use ::{DAppInit, DAppSession, Relation, sdk::{DAppConnect}};
+use ::Relation;
 
 
 
@@ -180,18 +179,6 @@ pub trait ProfileGateway
 
     fn login(&self) ->
         Box< Future<Item=Rc<HomeSession>, Error=Error> >;
-}
-
-
-
-impl DAppInit for Rc<ProfileGateway>
-{
-    fn initialize(&self, app: &ApplicationId, handle: &reactor::Handle)
-        -> Box< Future<Item=Rc<DAppSession>, Error=::error::Error> >
-    {
-        let instance = Rc::new( DAppConnect::new( self.clone(), app, handle) ) as Rc<DAppSession>;
-        Box::new( Ok(instance).into_future() )
-    }
 }
 
 
