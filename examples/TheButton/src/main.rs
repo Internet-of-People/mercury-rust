@@ -62,29 +62,28 @@ use server_config::*;
 
 
 
-fn temporary_connect_service_instance(priv_key: &str, node_id: &str, node_addr: &str, handle: Handle)
+fn temporary_connect_service_instance(my_private_profilekey_file: &str,
+        home_id_str: &str, home_addr_str: &str, handle: Handle)
     -> Result<Rc<ConnectService>, std::io::Error>
 {
-    let server_pub = PublicKey(std::fs::read(node_id)?);
+    let server_pub = PublicKey(std::fs::read(home_id_str)?);
     let server_id = ProfileId::from(&server_pub);
-
-    let addr :SocketAddr = node_addr.parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
-    let multaddr : Multiaddr = addr.clone().to_multiaddr().expect("Failed to parse server address");
+    let home_addr :SocketAddr = home_addr_str.parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
+    let home_multiaddr : Multiaddr = home_addr.to_multiaddr().expect("Failed to parse server address");
+    let home_profile = Profile::new_home( server_id, server_pub.clone(), home_multiaddr );
 
     // TODO consider that client should be able to start up without being a DHT client,
     //      e.g. with having only a Home URL including hints to access Home
-    let home_profile = Profile::new_home( server_id, server_pub.clone(), multaddr );
-
-    let home_connector = Rc::new( SimpleTcpHomeConnector::new( handle.clone() ) );
-
     let mut profile_repo = SimpleProfileRepo::new();
     profile_repo.insert(home_profile);
     let profile_repo = Rc::new(profile_repo);
 
-    let private_key = PrivateKey(std::fs::read(priv_key)?);
+    let private_key = PrivateKey(std::fs::read(my_private_profilekey_file)?);
     let client_signer = Rc::new( Ed25519Signer::new(&private_key).unwrap() ) as Rc<Signer>;
     let signers = vec![ (client_signer.profile_id().to_owned(), client_signer) ].into_iter().collect();
+
     let signer_factory: Rc<SignerFactory> = Rc::new(SignerFactory::new(signers) );
+    let home_connector = Rc::new( SimpleTcpHomeConnector::new( handle.clone() ) );
     let gateways = Rc::new( ProfileGatewayFactory::new(
         signer_factory, profile_repo.clone(), home_connector ) );
 
@@ -92,7 +91,7 @@ fn temporary_connect_service_instance(priv_key: &str, node_id: &str, node_addr: 
     let ui = Rc::new( DummyUserInterface::new( my_profiles.clone() ) );
     let profile_store = Rc::new( RefCell::new( InMemoryStore::new() ) );
     let service = Rc::new( ServiceImpl::new(ui, my_profiles, profile_store, gateways, &handle) );
-    Ok(service) // as Rc<ConnectService>
+    Ok(service)
 }
 
 
@@ -169,41 +168,26 @@ fn application_code_internal() -> Result<(), std::io::Error> {
     let app_mode = match sub_args {
         Some(args)=>{
             match sub_name{
-                cli::CLI_SERVER => 
-                    ServerConfig::new_from_args(args.to_owned())
-                        .map( |cfg|
-                            Mode::Server(Server::new(cfg, appcx))
-                        ),
-                cli::CLI_CLIENT => 
-                    ClientConfig::new_from_args(args.to_owned())
-                        .map( |cfg| 
-                            Mode::Client(Client::new(cfg, appcx))
-                        ),
-                _=> 
-                    return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("unknown subcommand '{}'", sub_name)))
-                
-                
+                cli::CLI_SERVER => Mode::Server( Server::new(
+                    ServerConfig::new_from_args(args.to_owned())?, appcx)),
+                cli::CLI_CLIENT => Mode::Client( Client::new(
+                    ClientConfig::new_from_args(args.to_owned())?, appcx)),
+                _=> return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("unknown subcommand '{}'", sub_name)))
             }
         },
-        _=> 
-            return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "subcommand missing"))
+        None => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "subcommand missing"))
     };
 
     // Running the application
 
-    let app_fut = match app_mode? {
-        Mode::Client(client_fut) => 
-            Box::new(client_fut.into_future()),
-        Mode::Server(server_fut) => 
-            Box::new(server_fut.into_future()),  
+    let app_fut = match app_mode {
+        Mode::Client(client) => Box::new(client.into_future()),
+        Mode::Server(server) => Box::new(server.into_future()),
     };
 
     // SIGINT is terminating the server
     let sigint_fut = signal_recv(SIGINT).into_future()
-        .map(|_| {
-            info!("received SIGINT, terminating application");
-            ()
-        })
+        .map(|_| info!("received SIGINT, terminating application") )
         .map_err(|(err, _)| err);
 
     reactor.run(app_fut.select(sigint_fut).map(|(item, _)| item).map_err(|(err, _)| err))
