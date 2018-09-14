@@ -11,7 +11,7 @@ pub struct ClientConfig{
 }
 
 impl ClientConfig{
-    pub fn new_from_args(args: ArgMatches)->Result<Self, std::io::Error> {
+    pub fn try_from(args: &ArgMatches)->Result<Self, std::io::Error> {
         let on_fail = match args.value_of("on-fail") {
             Some(fail) => {
                 match fail {

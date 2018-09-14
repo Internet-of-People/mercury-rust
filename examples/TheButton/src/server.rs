@@ -10,6 +10,8 @@ use tokio_signal::unix::{SIGUSR1};
 
 use ::either::Either;
 
+
+
 pub struct Server{
     cfg : ServerConfig,
     appcx : AppContext,
@@ -23,6 +25,8 @@ impl Server{
         }
     }
 }
+
+
 
 impl IntoFuture for Server {
     type Item = ();
@@ -55,6 +59,9 @@ impl IntoFuture for Server {
                     }
                 })
             });
+
+        let calls_fut = ::temporary_init_env( self.appcx.service.clone(), self.appcx.client_id.clone(), self.appcx.home_id.clone() )
+            .and_then( |_| calls_fut );
 
         // Handling call and event management
         let calls = RefCell::new(Vec::new());

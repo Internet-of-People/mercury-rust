@@ -7,7 +7,7 @@ pub struct ServerConfig{
 }
 
 impl ServerConfig{
-    pub fn new_from_args(args: ArgMatches)-> Result<Self, std::io::Error> {
+    pub fn try_from(args: &ArgMatches)-> Result<Self, std::io::Error> {
         let file_name = args.value_of("event-file").map(|s| s.into());
         let timer = match args.value_of(cli::CLI_EVENT_TIMER) {
             Some(s) => 
