@@ -62,55 +62,53 @@ use server_config::*;
 
 
 
+fn temporary_connect_service_instance(priv_key: &str, node_id: &str, node_addr: &str, handle: Handle)
+    -> Result<Rc<ConnectService>, std::io::Error>
+{
+    let server_pub = PublicKey(std::fs::read(node_id)?);
+    let server_id = ProfileId::from(&server_pub);
+
+    let addr :SocketAddr = node_addr.parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
+    let multaddr : Multiaddr = addr.clone().to_multiaddr().expect("Failed to parse server address");
+
+    // TODO consider that client should be able to start up without being a DHT client,
+    //      e.g. with having only a Home URL including hints to access Home
+    let home_profile = Profile::new_home( server_id, server_pub.clone(), multaddr );
+
+    let home_connector = Rc::new( SimpleTcpHomeConnector::new( handle.clone() ) );
+
+    let mut profile_repo = SimpleProfileRepo::new();
+    profile_repo.insert(home_profile);
+    let profile_repo = Rc::new(profile_repo);
+
+    let private_key = PrivateKey(std::fs::read(priv_key)?);
+    let client_signer = Rc::new( Ed25519Signer::new(&private_key).unwrap() ) as Rc<Signer>;
+    let signers = vec![ (client_signer.profile_id().to_owned(), client_signer) ].into_iter().collect();
+    let signer_factory: Rc<SignerFactory> = Rc::new(SignerFactory::new(signers) );
+    let gateways = Rc::new( ProfileGatewayFactory::new(
+        signer_factory, profile_repo.clone(), home_connector ) );
+
+    let my_profiles = Rc::new( HashSet::new() );
+    let ui = Rc::new( DummyUserInterface::new( my_profiles.clone() ) );
+    let profile_store = Rc::new( RefCell::new( InMemoryStore::new() ) );
+    let service = Rc::new( ServiceImpl::new(ui, my_profiles, profile_store, gateways, &handle) );
+    Ok(service) // as Rc<ConnectService>
+}
+
+
+
 pub struct AppContext{
-//    priv_key: PrivateKey,
-//    home_pub: PublicKey,
-//    home_address: SocketAddr,
-//    gateway: Rc<ProfileGateway>, // TODO remove this field and use service.dapp_session() instead everywhere
-//    handle: Handle,
     service: Rc<ConnectService>,
 }
 
-impl AppContext{
-    pub fn new(priv_key: &str, node_id: &str, node_addr: &str, handle: Handle)->Result<Self, std::io::Error>{
-        let server_pub = PublicKey(std::fs::read(node_id)?);
-        let server_id = ProfileId::from(&server_pub);
-
-        let addr :SocketAddr = node_addr.parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
-        let multaddr : Multiaddr = addr.clone().to_multiaddr().expect("Failed to parse server address");
-
-        // TODO consider that client should be able to start up without being a DHT client,
-        //      e.g. with having only a Home URL including hints to access Home
-        let home_profile = Profile::new_home( server_id, server_pub.clone(), multaddr );
-
-        let home_connector = Rc::new( SimpleTcpHomeConnector::new( handle.clone() ) );
-
-        let mut profile_repo = SimpleProfileRepo::new();
-        profile_repo.insert(home_profile);
-        let profile_repo = Rc::new(profile_repo);
-
-        // let profile_gw = Rc::new(ProfileGatewayImpl::new(client_signer, profile_repo.clone(), home_connector.clone() ));
-
-        // TODO add private_key to signer factory
-        let private_key = PrivateKey(std::fs::read(priv_key)?);
-        let client_signer = Rc::new( Ed25519Signer::new(&private_key).unwrap() );
-        let signer_factory: Rc<SignerFactory> = Rc::new(SignerFactory::new( Default::default() ) );
-        let gateways = Rc::new( ProfileGatewayFactory::new(
-            signer_factory, profile_repo.clone(), home_connector ) );
-
-        let my_profiles = Rc::new( HashSet::new() );
-        let ui = Rc::new( DummyUserInterface::new( my_profiles.clone() ) );
-        let profile_store = Rc::new( RefCell::new( InMemoryStore::new() ) );
-        let service = Rc::new( ServiceImpl::new(ui, my_profiles, profile_store, gateways, &handle) );
-
-        Ok(Self{
-//            priv_key: private_key,
-//            home_pub: server_pub,
-//            home_address: addr,
-//            gateway: profile_gw,
-//            handle,
-            service,
-        })
+impl AppContext
+{
+    pub fn new(priv_key: &str, node_id: &str, node_addr: &str, handle: Handle)->Result<Self, std::io::Error>
+    {
+        // TODO when we'll have a standalone service with proper IPC/RPC interface,
+        //      this must be changed into a simple connect() call instead of building a service instance
+        let service = temporary_connect_service_instance(priv_key, node_id, node_addr, handle)?;
+        Ok( Self{service} )
     }
 }
 
