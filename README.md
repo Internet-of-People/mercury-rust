@@ -9,8 +9,8 @@ even on your phone.
 ## Why?
 
 The internet was designed to provide open distributed peer to peer communication,
-but your your phone or PC don't have that anymore, only servers in data centers.
-You're closed behind ISPs and home routers so you need intermediaries to communicate.
+but your phone and PC don't have that anymore, only servers in data centers.
+You're closed behind ISPs and home routers (e.g. NAT) so you need intermediaries to communicate.
 Those intermediaries tie you by heavy vendor lockin: you can't change service provider
 (consider email, storage, etc) without sacrificing your old identity and data.
 Even worse, the biggest of them make a living from taxing your payments,
