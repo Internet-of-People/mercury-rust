@@ -9,7 +9,7 @@ pub const CLI_HOME_NODE_KEY_FILE : &str = "home-node-key-file";
 pub const CLI_SERVER_ADDRESS : &str = "server-addr";
 pub const CLI_SERVER : &str = "server";
 pub const CLI_EVENT_TIMER : &str = "event-timer";
-pub const CLI_STOP_AFTER : &str = "stop-after";
+//pub const CLI_STOP_AFTER : &str = "stop-after";
 pub const CLI_CLIENT : &str = "client";
 pub const CLI_CONNECT : &str = "connect";
 
@@ -61,24 +61,24 @@ pub fn cli<'a, 'b>()->App<'a, 'b>{
         )
         .subcommand(SubCommand::with_name(CLI_SERVER)
             .about("Sets running mode to server")
-            .arg(Arg::with_name("event-file")
-                .long("event-file")
-                .takes_value(true)
-                .value_name("PATH")
-                .help("path name of device file to poll (every byte on the stream generates an event)")
-            )
+//            .arg(Arg::with_name("event-file")
+//                .long("event-file")
+//                .takes_value(true)
+//                .value_name("PATH")
+//                .help("path name of device file to poll (every byte on the stream generates an event)")
+//            )
             .arg(Arg::with_name(CLI_EVENT_TIMER)
                 .long(CLI_EVENT_TIMER)
                 .takes_value(true)
                 .value_name("GENTIMER")
                 .help("takes n, generating an event automatically every n milliseconds")
             )
-            .arg(Arg::with_name(CLI_STOP_AFTER)
-                .long(CLI_STOP_AFTER)
-                .takes_value(true)
-                .value_name("STOPCOUNT")
-                .help("takes n, when set the server exits after providing n events")
-            )
+//            .arg(Arg::with_name(CLI_STOP_AFTER)
+//                .long(CLI_STOP_AFTER)
+//                .takes_value(true)
+//                .value_name("STOPCOUNT")
+//                .help("takes n, when set the server exits after providing n events")
+//            )
         )
         .subcommand(SubCommand::with_name(CLI_CLIENT)
             .about("Sets running mode to client")
