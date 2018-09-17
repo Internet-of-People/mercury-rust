@@ -40,7 +40,8 @@ impl IntoFuture for Server {
         let rx = rx_call.map(|c| Either::Left(c)).select(rx_event.map(|e| Either::Right(e)));
 
         let calls_fut = self.appcx.service.dapp_session( &ApplicationId("buttondapp".into()), None )
-            .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect"))
+            .inspect( |_app| debug!("dApp session was initialized, checking in") )
+            .map_err( |err| { debug!("Failed to create dApp session: {:?}", err); std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect") })
             .and_then(|mercury_app| mercury_app.checkin()
                 .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err))) )
             .and_then(move |call_stream| { call_stream

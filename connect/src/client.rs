@@ -336,7 +336,7 @@ impl ProfileGateway for ProfileGatewayImpl
         Box< Future<Item=OwnProfile, Error=(OwnProfile,Error)> >
     {
         let own_prof_clone = own_prof.clone();
-        let half_proof = RelationHalfProof::new("home", &home_id, &*self.signer);
+        let half_proof = RelationHalfProof::new(RelationProof::RELATION_TYPE_HOSTED_ON_HOME, &home_id, &*self.signer);
         let reg_fut = self.connect_home(&home_id)
             .map_err( move |e| (own_prof_clone, e) )
             .and_then( move |home| {
@@ -461,7 +461,7 @@ impl ProfileGateway for ProfileGatewayImpl
     fn login(&self) -> Box< Future<Item=Rc<HomeSession>, Error=Error> >
     {
         let log_fut = self.profile_repo.load( self.signer.profile_id() )
-            .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
+            .map_err( |err| err.context(ErrorKind::LoginFailed).into() )
             .and_then( {
                 let profile_repo_clone = self.profile_repo.clone();
                 let home_conn_clone = self.home_connector.clone();
@@ -470,8 +470,7 @@ impl ProfileGateway for ProfileGatewayImpl
                     &profile, profile_repo_clone, home_conn_clone, signer_clone)
             } )
             .and_then( move |(home_proof, home)| {
-                home
-                    .login(&home_proof)
+                home.login(&home_proof)
                     .map_err(|err| err.context(ErrorKind::LoginFailed).into())
             });
 

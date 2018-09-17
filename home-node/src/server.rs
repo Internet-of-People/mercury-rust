@@ -184,7 +184,8 @@ impl Home for HomeConnectionServer
             return Box::new( future::err( (own_prof,ErrorKind::SignerMismatch.into())))
         }
 
-        info!("expected peer id: {:?} my id: {:?}", half_proof.peer_id, *self.context.my_signer().profile_id());
+        debug!( "Request was sent for home_id: {:?}, this should be me, i.e. match my id: {:?}",
+                half_proof.peer_id, *self.context.my_signer().profile_id() );
         if half_proof.peer_id != *self.context.my_signer().profile_id() { 
             return Box::new( future::err( (own_prof, ErrorKind::HomeIdMismatch.into())))
         }
@@ -221,16 +222,21 @@ impl Home for HomeConnectionServer
             .then( |get_res|
             {
                 match get_res {
-                    Ok(_stored_prof) => Err( ( own_prof, ErrorKind::AlreadyRegistered.into() )),
+                    Ok(_stored_prof) => {
+                        debug!("Profile was already registered");
+                        Err( ( own_prof, ErrorKind::AlreadyRegistered.into() ))
+                    },
                     // TODO only errors like NotFound should be accepted here but other (e.g. I/O) errors should be delegated
                     Err(_e) => Ok( () ),
                 }
             } )
             // NOTE Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
             .and_then( move |_| { // Store public profile parts in distributed storage (e.g. DHT)
+                debug!("Saving public profile info into distributed storage");
                 return distributed_store.borrow_mut().set( pub_prof_modified.id.clone(), pub_prof_modified )
                     .map_err(error_mapper_clone ); } )
             .and_then( move |_| { // Store private profile info in local storage only (e.g. SQL)
+                debug!("Saving private profile info into local storage");
                 return local_store.borrow_mut().set( own_prof_modified.profile.id.clone().into(), own_prof_modified.clone() )
                     .map( |_| own_prof_modified )
                     .map_err(error_mapper); } );

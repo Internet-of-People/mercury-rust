@@ -38,7 +38,7 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
 
     let mut size_out_bytes = BytesMut::with_capacity( mem::size_of_val(&bufsize) );
     size_out_bytes.put_u32_le(bufsize);
-    debug!("Sending serialized auth info of myself");
+    debug!("Sending auth info of myself: {:?}", auth_info);
 
     let handshake_fut = io::write_all(writer, size_out_bytes)
         .and_then( move |(writer, _buf)| { io::write_all(writer, out_bytes) } )

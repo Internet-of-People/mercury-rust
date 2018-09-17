@@ -300,18 +300,24 @@ impl AdminEndpoint for SettingsImpl
     fn join_home(&self, profile: &ProfileId, home: &ProfileId)
         -> Box< Future<Item=(), Error=Error> >
     {
+        debug!("Initializing home registration");
+        let homeid_clone = home.to_owned();
         let profileid_clone = profile.to_owned();
         let profileid_clone2 = profile.to_owned();
         let profiles = self.profile_store.clone();
         let gateways = self.gateways.clone();
         let fut = self.profile_store.borrow().get( profile.to_owned() )
             .map_err( |e| e.context(ErrorKind::Unknown).into() )
-            .and_then( move |own_profile| match gateways.gateway(&profileid_clone) {
-                Some(gateway) => Box::new( gateway.register(profileid_clone, own_profile, None)
-                    .map_err( |(_ownprof, e)| e.context(ErrorKind::Unknown).into() ) ) as Box<Future<Item=_,Error=_>>,
-                None => Box::new( Err( Error::from(ErrorKind::Unknown) ).into_future() ),
+            .and_then( move |own_profile| {
+                debug!("Connecting to home server and registering my profile there");
+                match gateways.gateway(&profileid_clone) {
+                    Some(gateway) => Box::new(gateway.register(homeid_clone, own_profile, None)
+                        .map_err( |(_ownprof, e)| e.context(ErrorKind::Unknown).into()) ) as Box<Future<Item=_, Error=_>>,
+                    None => Box::new(Err(Error::from(ErrorKind::Unknown)).into_future()),
+                }
             } )
             .and_then( move |own_profile| {
+                debug!("Saving private profile data to local device storage");
                 let mut profiles = profiles.borrow_mut();
                 profiles.set(profileid_clone2, own_profile)
                     .map_err( |e| e.context(ErrorKind::Unknown).into() )
@@ -386,7 +392,8 @@ impl ConnectService for ServiceImpl
         let fut = self.ui.select_profile()
             .and_then( move |profile_id| gateways.gateway(&profile_id)
                 .ok_or( Error::from(ErrorKind::Unknown) ) )
-            .map( move |gateway| Rc::new( DAppConnect::new(gateway, &app, &handle) ) as Rc<DAppSession> );
+            .map( move |gateway| Rc::new( DAppConnect::new(gateway, &app, &handle) ) as Rc<DAppSession> )
+            .map_err( |err| { debug!("Failed to initialize dapp session: {:?}", err); err } );
         Box::new(fut)
     }
 

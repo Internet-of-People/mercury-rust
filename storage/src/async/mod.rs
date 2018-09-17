@@ -159,3 +159,39 @@ for ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
         Box::new( future::result( self.sync_validate( &object, &hash_str) ) )
     }
 }
+
+
+
+use std::marker::PhantomData;
+pub struct KeyValueStoreAdapter<K,V,T:KeyValueStore<K,V>>
+{
+    store: T,
+    _k: PhantomData<K>,
+    _v: PhantomData<V>,
+}
+
+impl <K,V,T:KeyValueStore<K,V>> KeyValueStoreAdapter<K,V,T>
+{
+    pub fn new(store: T) -> Self
+        { Self{store, _k: PhantomData, _v: PhantomData} }
+}
+
+
+impl <PreferredKeyType, AvailableKeyType, ValueType, T>
+KeyValueStore<PreferredKeyType,ValueType>
+for KeyValueStoreAdapter<AvailableKeyType, ValueType, T>
+    where T: KeyValueStore<AvailableKeyType, ValueType>,
+          PreferredKeyType: Into<AvailableKeyType>
+{
+    fn set(&mut self, key: PreferredKeyType, value: ValueType)
+        -> Box< Future<Item=(), Error=StorageError> >
+    { self.store.set( key.into(), value) }
+
+    fn get(&self, key: PreferredKeyType)
+        -> Box< Future<Item=ValueType, Error=StorageError> >
+    { self.store.get( key.into() ) }
+
+    fn clear_local(&mut self, key: PreferredKeyType)
+        -> Box< Future<Item=(), Error=StorageError> >
+    { self.store.clear_local( key.into() ) }
+}

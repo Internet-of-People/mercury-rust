@@ -67,28 +67,31 @@ impl AsyncFileHandler{
         let (tx, rx) = oneshot::channel::<Result<(), StorageError>>();
         match self.check_and_create_structure(file_path){
             Ok(checked_path) => {
-                self.pool.spawn(
+                // debug!("Scheduling write to file {}", checked_path);
+                self.pool.spawn( {
+                    // debug!("Starting write to file {}", checked_path);
                     File::create(self.get_path(&checked_path))
                         // TODO: map the error in a way to preserve the original error too
                         .map_err(|e| StorageError::StringError(e.description().to_owned()))
-                        .and_then(move |file| {                
+                        .and_then(move |file| {
                             write_all(file, content)
-                                .map(|_| ()) 
+                                .map(|_| ())
                                 // TODO: map the error in a way to preserve the original error too
                                 .map_err(|e|StorageError::StringError(e.description().to_owned()))
                         })
-                        .then( move |res| tx.send(res))
+                        .then( move |res| {
+                            debug!("Write to file result {:?}", res);
+                            tx.send(res)
+                        } )
                         .map_err(|_| ())
-                        .map(|_| ())   
-                );
+                } );
             }
             Err(e) => {return Box::new(future::err(e));}
         }   
         
         Box::new(
-            rx
-                .or_else(|e| {
-                    println!("{:?}",e.description().to_owned());
+            rx.or_else(|e| {
+                    debug!("Async file write failed: {:?}", e);
                     future::err(StorageError::StringError(e.description().to_owned()))
                 })
                 .and_then(|res| res )       // unpacking result
@@ -125,8 +128,10 @@ impl AsyncFileHandler{
                 .map(|_| ())             
         );
         Box::new(
-            rx                                  
-                .or_else(|e| future::err(StorageError::StringError(e.description().to_owned())))
+            rx.or_else(|e| {
+                    debug!("Async file read failed: {:?}", e);
+                    future::err(StorageError::StringError(e.description().to_owned()))
+                })
                 .and_then(|res| res)                
         )                
     }
