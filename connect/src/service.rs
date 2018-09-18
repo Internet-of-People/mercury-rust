@@ -178,10 +178,12 @@ pub trait AdminEndpoint
     fn remove_profile(&self, profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
 
     fn homes(&self, profile: &ProfileId) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
-    fn join_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
-    fn leave_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
+    // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
+    fn join_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >;
+    fn leave_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >;
 
     fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >;
+    // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
     fn initiate_relation(&self, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
     fn accept_relation(&self, half_proof: &RelationHalfProof) -> Box< Future<Item=(), Error=Error> >;
     fn revoke_relation(&self, relation: &RelationProof) -> Box< Future<Item=(), Error=Error> >;
@@ -209,14 +211,16 @@ impl SignerFactory
 pub struct ProfileGatewayFactory
 {
     signer_factory: Rc<SignerFactory>,
-    profile_repo:   Rc<ProfileRepo>,
+    // TODO return to ProfileRepo type after testing and separating service with RPC
+    profile_repo:   Rc<::simple_profile_repo::SimpleProfileRepo>, // Rc<ProfileRepo>,
     home_connector: Rc<HomeConnector>,
 }
 
 
 impl ProfileGatewayFactory
 {
-    pub fn new(signer_factory: Rc<SignerFactory>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
+    //pub fn new(signer_factory: Rc<SignerFactory>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
+    pub fn new(signer_factory: Rc<SignerFactory>, profile_repo: Rc<::simple_profile_repo::SimpleProfileRepo>, home_connector: Rc<HomeConnector>)
         -> Self { Self{signer_factory, profile_repo, home_connector} }
 
     pub fn gateway(&self, profile_id: &ProfileId) -> Option<Rc<ProfileGateway>>
@@ -298,35 +302,41 @@ impl AdminEndpoint for SettingsImpl
     }
 
     fn join_home(&self, profile: &ProfileId, home: &ProfileId)
-        -> Box< Future<Item=(), Error=Error> >
+        -> Box< Future<Item=OwnProfile, Error=Error> >
     {
         debug!("Initializing home registration");
         let homeid_clone = home.to_owned();
         let profileid_clone = profile.to_owned();
         let profileid_clone2 = profile.to_owned();
-        let profiles = self.profile_store.clone();
-        let gateways = self.gateways.clone();
+        let profile_store_clone = self.profile_store.clone();
+        let gateways_clone = self.gateways.clone();
+        let gateways_clone2 = self.gateways.clone();
         let fut = self.profile_store.borrow().get( profile.to_owned() )
             .map_err( |e| e.context(ErrorKind::Unknown).into() )
             .and_then( move |own_profile| {
-                debug!("Connecting to home server and registering my profile there");
-                match gateways.gateway(&profileid_clone) {
-                    Some(gateway) => Box::new(gateway.register(homeid_clone, own_profile, None)
-                        .map_err( |(_ownprof, e)| e.context(ErrorKind::Unknown).into()) ) as Box<Future<Item=_, Error=_>>,
-                    None => Box::new(Err(Error::from(ErrorKind::Unknown)).into_future()),
+                match gateways_clone.gateway(&profileid_clone) {
+                    Some(gateway) => Ok( (gateway, own_profile) ),
+                    None => Err(Error::from(ErrorKind::Unknown)),
                 }
+            } )
+            .and_then( |(gateway,own_profile)| {
+                debug!("Connecting to home server and registering my profile there");
+                Box::new(gateway.register(homeid_clone, own_profile, None)
+                    .map_err( |(_ownprof, e)| e.context(ErrorKind::Unknown).into()) ) // as Box<Future<Item=OwnProfile, Error=_>>
             } )
             .and_then( move |own_profile| {
                 debug!("Saving private profile data to local device storage");
-                let mut profiles = profiles.borrow_mut();
-                profiles.set(profileid_clone2, own_profile)
+                let mut profiles = profile_store_clone.borrow_mut();
+                profiles.set( profileid_clone2, own_profile.clone() )
+                    // TODO REMOVE THIS AFTER TESTING
+                    .map( move |()| { gateways_clone2.profile_repo.insert( own_profile.profile.clone() ); own_profile } )
                     .map_err( |e| e.context(ErrorKind::Unknown).into() )
             } );
         Box::new(fut)
     }
 
     fn leave_home(&self, profile: &ProfileId, home: &ProfileId)
-        -> Box< Future<Item=(), Error=Error> >
+        -> Box< Future<Item=OwnProfile, Error=Error> >
     {
         unimplemented!()
     }

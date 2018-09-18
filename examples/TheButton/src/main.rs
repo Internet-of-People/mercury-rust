@@ -50,8 +50,7 @@ use mercury_connect::net::SimpleTcpHomeConnector;
 use mercury_connect::service::{ConnectService, DummyUserInterface, ProfileGatewayFactory, ServiceImpl, SignerFactory};
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::Ed25519Signer;
-use mercury_storage::async::{KeyValueStore, KeyValueStoreAdapter, imp::InMemoryStore};
-use mercury_storage::filesys::AsyncFileHandler;
+use mercury_storage::async::{KeyValueStore, imp::InMemoryStore};
 use application::{Application, EX_OK, EX_SOFTWARE, EX_USAGE};
 use cli::cli;
 use client::Client;
@@ -80,28 +79,26 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
     let my_profile_id = my_signer.profile_id().to_owned();
     let my_profile = Profile::new( &my_profile_id, my_signer.public_key(),
         &ProfileFacet::Persona( PersonaFacet{homes: vec![], data: vec![]} ) );
-    let my_own_profile = OwnProfile::new(&my_profile,&[]);
-    let signers = vec![ ( my_profile_id.clone(), my_signer ) ].into_iter().collect();
 
     // TODO consider that client should be able to start up without being a DHT client,
     //      e.g. with having only a Home URL including hints to access Home
-    let mut profile_repo = SimpleProfileRepo::new();
+    let profile_repo = SimpleProfileRepo::new();
     profile_repo.insert(home_profile);
-    profile_repo.insert(my_profile);
+    profile_repo.insert( my_profile.clone() );
     let profile_repo = Rc::new(profile_repo);
 
+    let my_profiles = Rc::new( vec![ my_profile_id.clone() ].iter().cloned().collect::<HashSet<_>>() );
+    let my_own_profile = OwnProfile::new(&my_profile,&[]);
+    let signers = vec![ ( my_profile_id.clone(), my_signer ) ].into_iter().collect();
     let signer_factory: Rc<SignerFactory> = Rc::new(SignerFactory::new(signers) );
     let home_connector = Rc::new( SimpleTcpHomeConnector::new( reactor.handle() ) );
     let gateways = Rc::new( ProfileGatewayFactory::new(
         signer_factory, profile_repo.clone(), home_connector ) );
 
-    let my_profiles = Rc::new( vec![ my_profile_id.clone() ].iter().cloned().collect::<HashSet<_>>() );
     let ui = Rc::new( DummyUserInterface::new( my_profiles.clone() ) );
-    let mut profile_store = InMemoryStore::new();
-//    let mut profile_store: KeyValueStoreAdapter<Vec<u8>, OwnProfile, AsyncFileHandler> =
-//        KeyValueStoreAdapter::new( AsyncFileHandler::new( "/tmp/mercury/thebutton-storage".to_owned() ).unwrap() );
-    reactor.run( profile_store.set(my_profile_id.clone(), my_own_profile ) ).unwrap();
-    let profile_store = Rc::new( RefCell::new(profile_store) );
+    let mut own_profile_store = InMemoryStore::new();
+    reactor.run( own_profile_store.set(my_profile_id.clone(), my_own_profile ) ).unwrap();
+    let profile_store = Rc::new( RefCell::new(own_profile_store) );
     let service = Rc::new( ServiceImpl::new(ui, my_profiles, profile_store, gateways, &reactor.handle() ) );
 
     Ok( (service, my_profile_id, home_id) )
@@ -109,12 +106,15 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
 
 
 
-fn temporary_init_env(service: Rc<ConnectService>, client_id: ProfileId, home_id: ProfileId)
+fn temporary_init_env(app_context: &AppContext)
     -> Box< Future<Item=(), Error=std::io::Error> >
 {
-    let init_fut = service.admin_endpoint(None)
+    let appctx = app_context.clone();
+    let init_fut = appctx.service.admin_endpoint(None)
         .inspect( |_admin| debug!("Admin endpoint was connected") )
-        .and_then( move |admin| admin.join_home(&client_id, &home_id) )
+        // TODO no matter if we have already joined, we should normally go on as it had succeeded
+        .and_then( move |admin| admin.join_home(&appctx.client_id, &appctx.home_id) )
+        .map( |_own_prof| () )
         .inspect( |_| debug!("Successfully registered to home") )
         .map_err( |e| { debug!("Failed to register: {:?}", e); std::io::Error::new( std::io::ErrorKind::ConnectionRefused, format!("{}", e) ) } );
     Box::new(init_fut)
@@ -122,10 +122,11 @@ fn temporary_init_env(service: Rc<ConnectService>, client_id: ProfileId, home_id
 
 
 
+#[derive(Clone)]
 pub struct AppContext{
     service: Rc<ConnectService>,
     client_id: ProfileId,
-    home_id: ProfileId
+    home_id: ProfileId,
 }
 
 impl AppContext

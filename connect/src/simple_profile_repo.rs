@@ -1,5 +1,6 @@
 extern crate futures;
 
+use std::cell::RefCell;
 use std::collections::HashMap;
 use futures::{Future, future};
 use mercury_home_protocol::{*, error::*};
@@ -7,16 +8,16 @@ use mercury_home_protocol::{*, error::*};
 
 
 pub struct SimpleProfileRepo {
-    profiles : HashMap<ProfileId, Profile>
+    profiles : RefCell<HashMap<ProfileId, Profile>>
 }
 
 impl SimpleProfileRepo {
     pub fn new() -> SimpleProfileRepo {
-        SimpleProfileRepo { profiles: HashMap::new() }
+        SimpleProfileRepo { profiles: RefCell::new( HashMap::new() ) }
     }
 
-    pub fn insert(&mut self, profile: Profile) -> Option<Profile> {
-        self.profiles.insert(profile.id.clone(), profile.clone())
+    pub fn insert(&self, profile: Profile) { // -> Option<Profile> {
+        self.profiles.borrow_mut().insert( profile.id.clone(), profile.clone() );
     }
 
 }
@@ -36,7 +37,7 @@ impl ProfileRepo for SimpleProfileRepo {
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=Error> >
     {
-        match self.profiles.get(id) {
+        match self.profiles.borrow().get(id) {
             Some(profile) => Box::new(future::ok(profile.to_owned())),
             None => Box::new(future::err(ErrorKind::ProfileLookupFailed.into()))
         }
