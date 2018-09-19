@@ -24,8 +24,9 @@ impl ClientConfig{
         };
         info!("On fail: {:?}",on_fail);
 
-        let callee_profile_id = ProfileId(args.value_of(cli::CLI_CONNECT).unwrap().as_bytes().to_vec()); // option is required
+        let callee_id_str = args.value_of(cli::CLI_SERVER_PROFILE).unwrap();
+        let (_base, callee_id_decoded) = ::multibase::decode(callee_id_str).unwrap();
 
-        Ok( Self{callee_profile_id, on_fail} )
+        Ok( Self{callee_profile_id: ProfileId(callee_id_decoded), on_fail} )
     }
 }

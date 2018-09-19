@@ -11,7 +11,7 @@ pub const CLI_SERVER : &str = "server";
 pub const CLI_EVENT_TIMER : &str = "event-timer";
 //pub const CLI_STOP_AFTER : &str = "stop-after";
 pub const CLI_CLIENT : &str = "client";
-pub const CLI_CONNECT : &str = "connect";
+pub const CLI_SERVER_PROFILE: &str = "server-profile";
 
 
 pub fn cli<'a, 'b>()->App<'a, 'b>{
@@ -91,8 +91,8 @@ pub fn cli<'a, 'b>()->App<'a, 'b>{
                         retry - 
                             do an exponential reconnection from 1 sec up to 32 secs ")
             )
-            .arg(Arg::with_name(CLI_CONNECT)
-                .long(CLI_CONNECT)
+            .arg(Arg::with_name(CLI_SERVER_PROFILE)
+                .long(CLI_SERVER_PROFILE)
                 .takes_value(true)
                 .required(true)
                 .value_name("PROFILE_ID")

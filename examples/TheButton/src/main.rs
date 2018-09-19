@@ -9,6 +9,7 @@ extern crate mercury_connect;
 extern crate mercury_home_protocol;
 extern crate mercury_storage;
 extern crate multiaddr;
+extern crate multibase;
 extern crate tokio_uds;
 extern crate tokio_core;
 extern crate tokio_signal;

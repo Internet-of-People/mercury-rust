@@ -168,7 +168,6 @@ impl DAppConnect
                             .and_then( |mut proofs| proofs.pop().ok_or( ErrorKind::Unknown.into() ) ); // TODO
                         Box::new(proof_fut)
                     }
-//                        Err( ErrorToBeSpecified::TODO( "get_relation_proof: no appropriate relation found".to_string()) ).into_future()
                 }
             } );
         Box::new(proof_fut)
