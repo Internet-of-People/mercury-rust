@@ -41,7 +41,7 @@ use tokio_core::reactor;
 
 use mercury_connect::*;
 use mercury_connect::net::SimpleTcpHomeConnector;
-use mercury_connect::service::{ConnectService, DummyUserInterface, ProfileGatewayFactory, ServiceImpl, SignerFactory};
+use mercury_connect::service::ConnectService;
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::Ed25519Signer;
 use mercury_storage::async::{KeyValueStore, imp::InMemoryStore};
@@ -60,6 +60,8 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
         home_id_str: &str, home_addr_str: &str, reactor: &mut reactor::Core)
     -> Result<(Rc<ConnectService>, ProfileId, ProfileId), std::io::Error>
 {
+    use mercury_connect::service::{DummyUserInterface, ProfileGatewayFactory, ServiceImpl, SignerFactory};
+
     debug!("Initializing service instance");
 
     let home_pubkey = PublicKey(std::fs::read(home_id_str)?);
@@ -76,12 +78,12 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
 
     // TODO consider that client should be able to start up without being a DHT client,
     //      e.g. with having only a Home URL including hints to access Home
-    let profile_repo = SimpleProfileRepo::new();
+    let profile_repo = SimpleProfileRepo::default();
     let repo_initialized = reactor.run( profile_repo.load(&my_profile_id) );
     if repo_initialized.is_err()
     {
-        profile_repo.insert(home_profile);
-        profile_repo.insert(my_profile.clone());
+        reactor.run( profile_repo.insert(home_profile) ).unwrap();
+        reactor.run( profile_repo.insert(my_profile.clone() ) ).unwrap();
     }
     let profile_repo = Rc::new(profile_repo);
 

@@ -44,8 +44,8 @@ impl IntoFuture for Client {
                     .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "encountered error"))
             });
 
-        let fut = ::temporary_init_env(&self.appcx)
-            .then( |_| fut );
+//        let fut = ::temporary_init_env(&self.appcx)
+//            .then( |_| fut );
 
         Box::new(fut)
     }

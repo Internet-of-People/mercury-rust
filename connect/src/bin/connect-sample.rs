@@ -60,7 +60,7 @@ fn main()
     info!("homenode profile id: {:?}", server_id);
     let home_profile = Profile::new_home(server_id.clone(), server_key, addr);
 
-    let profile_store = SimpleProfileRepo::new();
+    let profile_store = SimpleProfileRepo::default();
     profile_store.insert(home_profile);
 
     let mut reactor = reactor::Core::new().unwrap();

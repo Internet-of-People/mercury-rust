@@ -1,35 +1,49 @@
 extern crate futures;
 
 use std::cell::RefCell;
-use std::collections::HashMap;
-use futures::{Future, future};
+//use std::collections::HashMap;
+use std::rc::Rc;
+
+use failure::Fail;
+use futures::prelude::*;
+
 use mercury_home_protocol::{*, error::*};
+use mercury_storage::async::{KeyValueStore, imp::InMemoryStore};
 
 
 
 pub struct SimpleProfileRepo {
-    profiles : RefCell<HashMap<ProfileId, Profile>>
+    profiles : Rc<RefCell< KeyValueStore<ProfileId, Profile> >>
 }
+
+impl Default for SimpleProfileRepo {
+    fn default() -> Self { InMemoryStore::new().into() }
+}
+
+impl<T: KeyValueStore<ProfileId,Profile> + 'static> From<T> for SimpleProfileRepo {
+    fn from(src: T) -> Self{ Self{ profiles: Rc::new( RefCell::new(src) ) } }
+}
+
 
 impl SimpleProfileRepo {
-    pub fn new() -> SimpleProfileRepo {
-        SimpleProfileRepo { profiles: RefCell::new( HashMap::new() ) }
+    pub fn insert(&self, profile: Profile)
+        -> Box< Future<Item=(),Error=::mercury_home_protocol::error::Error> >
+    {
+        let fut = self.profiles.borrow_mut().set( profile.id.clone(), profile.clone() )
+            // TODO find a better error type
+            .map_err( |e| e.context(::mercury_home_protocol::error::ErrorKind::RegisterFailed).into() );
+        Box::new(fut)
     }
-
-    pub fn insert(&self, profile: Profile) { // -> Option<Profile> {
-        self.profiles.borrow_mut().insert( profile.id.clone(), profile.clone() );
-    }
-
 }
 
-impl ProfileRepo for SimpleProfileRepo {
+
+impl ProfileRepo for SimpleProfileRepo
+{
     /// List all profiles that can be load()'ed or resolve()'d.
     fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
         HomeStream<Profile,String>
     {
         unimplemented!()
-//        let (send, recv) = futures::sync::mpsc::channel(0);
-//        recv
     }
 
     /// Look for specified `id` and return. This might involve searching for the latest version
@@ -37,24 +51,15 @@ impl ProfileRepo for SimpleProfileRepo {
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=Error> >
     {
-        match self.profiles.borrow().get(id) {
-            Some(profile) => Box::new(future::ok(profile.to_owned())),
-            None => Box::new(future::err(ErrorKind::ProfileLookupFailed.into()))
-        }
+        let fut = self.profiles.borrow().get( id.to_owned() )
+            .map_err( |e| e.context(ErrorKind::ProfileLookupFailed).into() );
+        Box::new(fut)
     }
 
 
-    /// Same as load(), but also contains hints for resolution, therefore it's more efficient than load(id)
-    ///
-    /// The `url` may contain
-    /// * ProfileID (mandatory)
-    /// * some profile metadata (for user experience enhancement) (big fat warning should be thrown if it does not match the latest info)
-    /// * ProfileID of its home server
-    /// * last known multiaddress(es) of its home server
     fn resolve(&self, url: &str) ->
         Box< Future<Item=Profile, Error=Error> >
     {
-        self.load(&ProfileId(Vec::from(url)))
+        unimplemented!()
     }
-
 }
