@@ -183,8 +183,11 @@ impl DAppSession for DAppConnect
         { self.gateway.signer().profile_id() }
 
 
-    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >{
-        unimplemented!();
+    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >
+    {
+        // TODO properly implement this
+        // unimplemented!();
+        Box::new( Ok( Vec::new() ).into_future() )
     }
 
 

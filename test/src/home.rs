@@ -394,7 +394,6 @@ fn test_generate_key_files()
     let (PrivateKey(priv2), PublicKey(pub2)) = generate_keypair();
     std::fs::write("../etc/client.id", priv2).unwrap();
     std::fs::write("../etc/client.id.pub", pub2).unwrap();
-
 }
 
 
@@ -402,5 +401,4 @@ fn test_generate_key_files()
 #[ignore]
 fn test_session_update()
 {
-
 }
