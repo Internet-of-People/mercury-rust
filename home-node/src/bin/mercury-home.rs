@@ -35,8 +35,7 @@ fn main()
     // TODO use some kind of persistent storage for public distributed storage
     //let distributed_storage = Box::new( Ipfs::new( "localhost", 5001, &handle1.clone() )? )
     let distributed_storage = Rc::new( RefCell::new( InMemoryStore::new() ) );
-    let local_storage = Rc::new( RefCell::new( AsyncFileHandler::new(
-        config.storage_path().to_owned() ).unwrap() ) );
+    let local_storage = Rc::new( RefCell::new( AsyncFileHandler::new( config.storage_path() ).unwrap() ) );
     let signer = config.signer();
     let validator = Rc::new( CompositeValidator::default() );
     let server = Rc::new( HomeServer::new(&handle, validator, distributed_storage, local_storage) );

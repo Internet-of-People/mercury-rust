@@ -432,25 +432,48 @@ impl<'a> From<ProfileId> for Vec<u8>
 }
 
 
-impl<'a> From<&'a str> for ProfileId
+impl<'a> TryFrom<&'a str> for ProfileId
 {
-    fn from(src: &'a str) -> Self
-        { ProfileId( src.as_bytes().to_owned() ) }
+    type Error = ::multibase::Error;
+    fn try_from(src: &'a str) -> Result<Self, Self::Error> {
+        let (_base, binary) = ::multibase::decode(src)?;
+        Ok( ProfileId(binary) )
+    }
 }
 
-impl<'a> TryFrom<&'a ProfileId> for &'a str
+impl<'a> From<&'a ProfileId> for String
 {
-    type Error = ::std::str::Utf8Error;
-    fn try_from(src: &'a ProfileId) -> Result<Self, Self::Error>
-        { ::std::str::from_utf8(&src.0) }
+    fn from(src: &'a ProfileId) -> Self
+        { ::multibase::encode(::multibase::Base::Base64, &src.0) }
 }
 
-impl<'a> TryFrom<ProfileId> for String
+impl<'a> From<ProfileId> for String
 {
-    type Error = ::std::string::FromUtf8Error;
-    fn try_from(src: ProfileId) -> Result<Self, Self::Error>
-        { String::from_utf8(src.0) }
+    fn from(src: ProfileId) -> Self
+        { Self::from(&src) }
 }
+
+
+
+//impl<'a> From<&'a str> for ProfileId
+//{
+//    fn from(src: &'a str) -> Self
+//        { ProfileId( src.as_bytes().to_owned() ) }
+//}
+//
+//impl<'a> TryFrom<&'a ProfileId> for &'a str
+//{
+//    type Error = ::std::str::Utf8Error;
+//    fn try_from(src: &'a ProfileId) -> Result<Self, Self::Error>
+//        { ::std::str::from_utf8(&src.0) }
+//}
+//
+//impl<'a> TryFrom<ProfileId> for String
+//{
+//    type Error = ::std::string::FromUtf8Error;
+//    fn try_from(src: ProfileId) -> Result<Self, Self::Error>
+//        { String::from_utf8(src.0) }
+//}
 
 
 

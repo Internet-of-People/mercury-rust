@@ -44,6 +44,7 @@ impl IntoFuture for Server {
             .map_err( |err| { debug!("Failed to create dApp session: {:?}", err); std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect") })
             .and_then(|mercury_app| mercury_app.checkin()
                 .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err))) )
+            .inspect( |_call_stream| debug!("Call stream received with successful checkin, listening for calls") )
             .and_then(move |call_stream| { call_stream
                 .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "call stream failed"))
                 .for_each( move |call_result| {
@@ -107,11 +108,11 @@ impl IntoFuture for Server {
         });
         
         let mut fut : Box<Future<Item=(), Error=std::io::Error>> = 
-            // Box::new(sigint_fut
-                //.select(sigusr1_fut).map(|(item, _)| item).map_err(|(err, _)| err)
-            Box::new(sigusr1_fut
-                .select(rx_fut).map(|(item, _)| item).map_err(|(err, _)| err)
-                .select(calls_fut).map(|(item, _)| item).map_err(|(err, _)| err)
+             Box::new(rx_fut.join(calls_fut)
+                .map(|_| ()).map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "TODO testing")) // TODO
+//            Box::new(sigusr1_fut
+//                .select(rx_fut).map(|(item, _)| item).map_err(|(err, _)| err)
+//                .select(calls_fut).map(|(item, _)| item).map_err(|(err, _)| err)
         );
         
         if interval_fut.is_some() {

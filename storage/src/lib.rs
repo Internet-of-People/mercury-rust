@@ -9,7 +9,6 @@ extern crate multibase;
 extern crate multihash;
 extern crate serde;
 extern crate serde_json;
-extern crate tokio;
 extern crate tokio_io;
 extern crate tokio_core;
 extern crate tokio_postgres;

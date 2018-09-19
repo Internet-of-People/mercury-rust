@@ -163,14 +163,14 @@ for ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
 
 
 use std::marker::PhantomData;
-pub struct KeyValueStoreAdapter<K,V,T:KeyValueStore<K,V>>
+pub struct KeyAdapter<K,V,T:KeyValueStore<K,V>>
 {
     store: T,
     _k: PhantomData<K>,
     _v: PhantomData<V>,
 }
 
-impl <K,V,T:KeyValueStore<K,V>> KeyValueStoreAdapter<K,V,T>
+impl <K,V,T:KeyValueStore<K,V>> KeyAdapter<K,V,T>
 {
     pub fn new(store: T) -> Self
         { Self{store, _k: PhantomData, _v: PhantomData} }
@@ -179,7 +179,7 @@ impl <K,V,T:KeyValueStore<K,V>> KeyValueStoreAdapter<K,V,T>
 
 impl <PreferredKeyType, AvailableKeyType, ValueType, T>
 KeyValueStore<PreferredKeyType,ValueType>
-for KeyValueStoreAdapter<AvailableKeyType, ValueType, T>
+for KeyAdapter<AvailableKeyType, ValueType, T>
     where T: KeyValueStore<AvailableKeyType, ValueType>,
           PreferredKeyType: Into<AvailableKeyType>
 {

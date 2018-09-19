@@ -27,12 +27,9 @@ impl<T: KeyValueStore<ProfileId,Profile> + 'static> From<T> for SimpleProfileRep
 
 impl SimpleProfileRepo {
     pub fn insert(&self, profile: Profile)
-        -> Box< Future<Item=(),Error=::mercury_home_protocol::error::Error> >
+        -> Box< Future<Item=(),Error=::mercury_storage::error::StorageError> >
     {
-        let fut = self.profiles.borrow_mut().set( profile.id.clone(), profile.clone() )
-            // TODO find a better error type
-            .map_err( |e| e.context(::mercury_home_protocol::error::ErrorKind::RegisterFailed).into() );
-        Box::new(fut)
+        self.profiles.borrow_mut().set( profile.id.clone(), profile.clone() )
     }
 }
 

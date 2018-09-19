@@ -101,11 +101,11 @@ impl DAppConnect
 
         let login_fut = self.gateway.login()
             .map( {
-                debug!("Login was successful, start forwarding profile events to listeners");
                 let handle = self.handle.clone();
                 let session_cache = self.session_cache.clone();
                 let listeners = Rc::downgrade(&self.event_sinks);
                 move |session| {
+                    debug!("Login was successful, start forwarding profile events to listeners");
                     *session_cache.borrow_mut() = Some( session.clone() );
                     handle.spawn( session.events().for_each(
                         move |event| Self::forward_event_res( listeners.clone(), event ) ) );
@@ -201,8 +201,10 @@ impl DAppSession for DAppConnect
         let checkin_fut = self.login_and_forward_events()
             .and_then( {
                 let app = self.app_id.clone();
-                debug!("Checking in app {:?} to receive incoming calls", app);
-                move |session| Ok( session.checkin_app(&app) )
+                move |session| {
+                    debug!("Checking in app {:?} to receive incoming calls", app);
+                    Ok( session.checkin_app(&app) )
+                }
             } );
         Box::new(checkin_fut)
     }

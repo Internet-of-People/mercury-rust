@@ -24,13 +24,13 @@ pub struct AsyncFileHandler{
 }
 
 impl AsyncFileHandler{
-    pub fn new(main_directory : String) 
+    pub fn new(main_directory : &str)
     -> Result<Self, StorageError>{
         let thread_pool = Rc::new(ThreadPool::new());
         Self::new_with_pool(main_directory, thread_pool)
     }
 
-    pub fn new_with_pool(main_directory : String, pool: Rc<ThreadPool>) 
+    pub fn new_with_pool(main_directory : &str, pool: Rc<ThreadPool>)
     -> Result<Self, StorageError>{
         match create_dir_all(Path::new(&main_directory)){
             Ok(_)=>Ok(
@@ -43,7 +43,7 @@ impl AsyncFileHandler{
         }
     }
 
-    pub fn new_with_pool_maxblocking(main_directory : String, max_blocking_size : usize) 
+    pub fn new_with_pool_maxblocking(main_directory : &str, max_blocking_size : usize)
     -> Result<Self, StorageError>{
         let thread_pool = Rc::new(Builder::new()
             .max_blocking(max_blocking_size)
@@ -52,17 +52,17 @@ impl AsyncFileHandler{
         Self::new_with_pool(main_directory, thread_pool)
     }
 
-    fn check_and_create_structure(&self, path : String) -> Result<String, StorageError>{
-        match PathBuf::from(&path).parent(){
+    fn check_and_create_structure<'a>(&self, path : &'a str) -> Result<&'a str, StorageError>{
+        match PathBuf::from(path).parent(){
             Some(parent_path)=>{ create_dir_all(self.get_path(parent_path.to_str().unwrap_or("")))
                 .map_err(|e| return StorageError::StringError(e.description().to_owned()))?;
             }
-            None=>{();}
+            None=>()
         }
         Ok(path)
     }
 
-    pub fn write_to_file(&self, file_path : String, content : String) 
+    pub fn write_to_file(&self, file_path : &str, content : String)
     -> Box< Future< Item = (), Error = StorageError > > {
         let (tx, rx) = oneshot::channel::<Result<(), StorageError>>();
         match self.check_and_create_structure(file_path){
@@ -70,7 +70,7 @@ impl AsyncFileHandler{
                 // debug!("Scheduling write to file {}", checked_path);
                 self.pool.spawn( {
                     // debug!("Starting write to file {}", checked_path);
-                    File::create(self.get_path(&checked_path))
+                    File::create(self.get_path(checked_path))
                         // TODO: map the error in a way to preserve the original error too
                         .map_err(|e| StorageError::StringError(e.description().to_owned()))
                         .and_then(move |file| {
@@ -80,7 +80,7 @@ impl AsyncFileHandler{
                                 .map_err(|e|StorageError::StringError(e.description().to_owned()))
                         })
                         .then( move |res| {
-                            debug!("Write to file result {:?}", res);
+                            // debug!("Write to file result {:?}", res);
                             tx.send(res)
                         } )
                         .map_err(|_| ())
@@ -99,8 +99,9 @@ impl AsyncFileHandler{
         )        
     }
 
-    pub fn read_from_file(&self, file_path : String) 
+    pub fn read_from_file(&self, file_path : &str)
     -> Box< Future< Item = String, Error = StorageError> > {
+        // debug!("Scheduling async file read {}", file_path);
         let (tx, rx) = oneshot::channel::<Result<String,StorageError>>();
         if !&self.get_path(&file_path).exists(){
             return Box::new(future::err(StorageError::InvalidKey));
@@ -159,14 +160,16 @@ impl<V> KeyValueStore<String, V> for AsyncFileHandler
         -> Box< Future<Item=(), Error=StorageError> >
     {
         match serde_json::to_string(&value) {
-            Ok(str_value) => self.write_to_file(key, str_value),
+            Ok(str_value) => self.write_to_file(&key, str_value),
             Err(e) => Box::new( future::err( StorageError::StringError( e.description().to_owned() ) ) ),
         }
     }
 
     fn get(&self, key: String) -> Box< Future<Item=V, Error=StorageError> >
     {
-        let get_fut = self.read_from_file(key)
+        debug!("Requested reading key {}", key);
+        let get_fut = self.read_from_file(&key)
+            .inspect( |content| debug!("Read key content of {} bytes", content.len()) )
             .map_err( |e| StorageError::StringError( e.description().to_owned())  )
             .and_then( |profile| serde_json::from_str(&profile)
                 .map_err( |e| StorageError::StringError( e.description().to_owned() ) )
@@ -183,6 +186,7 @@ impl<V> KeyValueStore<String, V> for AsyncFileHandler
 
 
 
+// TODO comment this impl as a whole and use KeyAdapter instead
 impl<V> KeyValueStore<Vec<u8>, V> for AsyncFileHandler
     where  V: 'static + Serialize + DeserializeOwned
 {
@@ -204,7 +208,7 @@ fn future_file_key_value(){
 
     let mut reactor = reactor::Core::new().unwrap();
     println!("\n\n\n");
-    let mut storage : AsyncFileHandler = AsyncFileHandler::new(String::from("./filetest/homeserverid")).unwrap();
+    let mut storage : AsyncFileHandler = AsyncFileHandler::new("./filetest/homeserverid").unwrap();
     let file_path = String::from("alma.json");
     let json = String::from("<Json:json>");
     let set = storage.set(file_path.clone(), json.clone());
@@ -227,8 +231,8 @@ fn one_pool_multiple_filehandler(){
         .pool_size(8)
         .build()
     );
-    let mut alpha_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./filetest/alpha/"), Rc::clone(&thread_pool)).unwrap();
-    let mut beta_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool(String::from("./filetest/beta"), thread_pool).unwrap();
+    let mut alpha_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool("./filetest/alpha/", Rc::clone(&thread_pool)).unwrap();
+    let mut beta_storage : AsyncFileHandler = AsyncFileHandler::new_with_pool("./filetest/beta", thread_pool).unwrap();
     let json = String::from("<Json:json>");
     let file_path = String::from("alma.json");
     for i in 0..100{

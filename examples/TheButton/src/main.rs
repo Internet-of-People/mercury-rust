@@ -44,7 +44,6 @@ use mercury_connect::net::SimpleTcpHomeConnector;
 use mercury_connect::service::ConnectService;
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::Ed25519Signer;
-use mercury_storage::async::{KeyValueStore, imp::InMemoryStore};
 use application::{Application, EX_OK, EX_SOFTWARE, EX_USAGE};
 use cli::cli;
 use client::Client;
@@ -61,6 +60,8 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
     -> Result<(Rc<ConnectService>, ProfileId, ProfileId), std::io::Error>
 {
     use mercury_connect::service::{DummyUserInterface, ProfileGatewayFactory, ServiceImpl, SignerFactory};
+    use mercury_storage::async::{KeyAdapter, KeyValueStore, imp::InMemoryStore};
+    use mercury_storage::filesys::AsyncFileHandler;
 
     debug!("Initializing service instance");
 
@@ -78,13 +79,17 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
 
     // TODO consider that client should be able to start up without being a DHT client,
     //      e.g. with having only a Home URL including hints to access Home
-    let profile_repo = SimpleProfileRepo::default();
+    let profile_repo = SimpleProfileRepo::from( KeyAdapter::<String,_,_>::new(
+        AsyncFileHandler::new("/tmp/mercury/thebutton-storage").unwrap() ) );
+//    let profile_repo = SimpleProfileRepo::default();
     let repo_initialized = reactor.run( profile_repo.load(&my_profile_id) );
     if repo_initialized.is_err()
     {
+        debug!("Profile repository was not initialized, populate it with required entries");
         reactor.run( profile_repo.insert(home_profile) ).unwrap();
         reactor.run( profile_repo.insert(my_profile.clone() ) ).unwrap();
     }
+    else { debug!("Profile repository was initialized, continue without populating it"); }
     let profile_repo = Rc::new(profile_repo);
 
     let my_profiles = Rc::new( vec![ my_profile_id.clone() ].iter().cloned().collect::<HashSet<_>>() );

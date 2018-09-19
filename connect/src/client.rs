@@ -209,6 +209,7 @@ impl ProfileGatewayImpl
         -> Box< Future<Item=Rc<Home>, Error=Error> >
     {
         let home_conn_fut = prof_repo.load(home_profile_id)
+            .inspect( move |home_profile| debug!("Finished loading details for home {}", home_profile.id) )
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
             .and_then( move |home_profile| connector.connect(&home_profile, signer) );
 
@@ -277,17 +278,19 @@ impl ProfileGatewayImpl
         };
 
         let home_conn_futs = homes.iter()
-            .map( move |home_proof| //|home_id_res|
+            .map( move |home_proof|
             {
                 let prof_repo = prof_repo.clone();
                 let connector = connector.clone();
                 let signer = signer.clone();
                 let proof = home_proof.to_owned();
                 match home_proof.peer_id( signer.profile_id() ) {
-                    Ok(ref home_id) => Box::new(
-                        Self::connect_home2(home_id.to_owned(), prof_repo, connector, signer)
-                            .map( move |home| (proof, home) )
-                        ) as Box< Future<Item=(RelationProof, Rc<Home>), Error=Error> >,
+                    Ok(ref home_id) => {
+                        debug!("Scheduling connect_home2 for home id {}", home_id);
+                        let conn_fut = Self::connect_home2( home_id.to_owned(), prof_repo, connector, signer )
+                            .map( move |home| (proof, home) );
+                        Box::new(conn_fut) as Box<Future<Item=_, Error=Error>>
+                    },
                     Err(e) => Box::new( future::err(e.context(ErrorKind::FailedToGetPeerId).into()) ),
                 }
             } )
@@ -298,8 +301,10 @@ impl ProfileGatewayImpl
             { return Box::new( future::err(ErrorKind::NoHomesFound.into())) }
 
         // Pick first successful home connection
+        debug!("Try connecting to {} homes", home_conn_futs.len());
         let result = future::select_ok(home_conn_futs)
-            .map( |(home_conn, _pending_conn_futs)| home_conn );
+            .map( |(home_conn, _pending_conn_futs)| home_conn )
+            .inspect( |_home_conn| debug!("Connected to first home, ignoring the rest") );
         Box::new(result)
     }
 }
@@ -466,10 +471,14 @@ impl ProfileGateway for ProfileGatewayImpl
                 let profile_repo_clone = self.profile_repo.clone();
                 let home_conn_clone = self.home_connector.clone();
                 let signer_clone = self.signer.clone();
-                move |profile| ProfileGatewayImpl::any_home_of2(
-                    &profile, profile_repo_clone, home_conn_clone, signer_clone)
+                move |profile| {
+                    debug!("Client profile was loaded for login, connecting home");
+                    ProfileGatewayImpl::any_home_of2(
+                        &profile, profile_repo_clone, home_conn_clone, signer_clone)
+                }
             } )
             .and_then( move |(home_proof, home)| {
+                debug!("Home connection established, logging in");
                 home.login(&home_proof)
                     .map_err(|err| err.context(ErrorKind::LoginFailed).into())
             });

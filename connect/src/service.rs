@@ -330,8 +330,9 @@ impl AdminEndpoint for SettingsImpl
                 let mut profiles = profile_store_clone.borrow_mut();
                 profiles.set( profileid_clone2, own_profile.clone() )
                     // TODO REMOVE THIS AFTER TESTING
-                    .map( move |()| { gateways_clone2.profile_repo.insert( own_profile.profile.clone() ); own_profile } )
-                    .map_err( |e| e.context(ErrorKind::Unknown).into() )
+                    .and_then( move |()| gateways_clone2.profile_repo.insert( own_profile.profile.clone() )
+                        .map( |()| own_profile ) )
+                    .map_err( |e| e.context( ErrorKind::Unknown).into() )
             } );
         Box::new(fut)
     }
