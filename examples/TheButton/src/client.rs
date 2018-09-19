@@ -27,7 +27,7 @@ impl IntoFuture for Client {
     fn into_future(self) -> Self::Future {
         let callee_profile_id = self.cfg.callee_profile_id.clone();
 
-        let f = self.appcx.service.dapp_session( &ApplicationId("buttondapp".into()), None )
+        let fut = self.appcx.service.dapp_session( &ApplicationId("buttondapp".into()), None )
             .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect"))
             .and_then(move |mercury_app|{
                 info!("application initialized, calling {:?}", callee_profile_id);
@@ -43,7 +43,11 @@ impl IntoFuture for Client {
                     })
                     .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "encountered error"))
             });
-        Box::new(f)
+
+        let fut = ::temporary_init_env(&self.appcx)
+            .then( |_| fut );
+
+        Box::new(fut)
     }
 }
 

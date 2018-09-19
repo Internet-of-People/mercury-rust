@@ -77,8 +77,12 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
     // TODO consider that client should be able to start up without being a DHT client,
     //      e.g. with having only a Home URL including hints to access Home
     let profile_repo = SimpleProfileRepo::new();
-    profile_repo.insert(home_profile);
-    profile_repo.insert( my_profile.clone() );
+    let repo_initialized = reactor.run( profile_repo.load(&my_profile_id) );
+    if repo_initialized.is_err()
+    {
+        profile_repo.insert(home_profile);
+        profile_repo.insert(my_profile.clone());
+    }
     let profile_repo = Rc::new(profile_repo);
 
     let my_profiles = Rc::new( vec![ my_profile_id.clone() ].iter().cloned().collect::<HashSet<_>>() );
