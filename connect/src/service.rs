@@ -227,6 +227,7 @@ impl ProfileGatewayFactory
     {
         let repo = self.profile_repo.clone();
         let conn = self.home_connector.clone();
+        debug!("Creating new gateway for profile {}", profile_id);
         self.signer_factory.signer(profile_id)
             .map( move |signer|
                 Rc::new( ProfileGatewayImpl::new(signer, repo, conn) ) as Rc<ProfileGateway> )

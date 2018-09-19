@@ -58,17 +58,14 @@ fn main()
     info!("homenode public key: {:?}", server_key);
     let server_id = ProfileId::from(&server_key);            
     info!("homenode profile id: {:?}", server_id);
-
-    let mut reactor = reactor::Core::new().unwrap();
-    let client_signer_clone = client_signer.clone();
-
-    let mut profile_store = SimpleProfileRepo::new();
-
     let home_profile = Profile::new_home(server_id.clone(), server_key, addr);
+
+    let profile_store = SimpleProfileRepo::new();
     profile_store.insert(home_profile);
 
+    let mut reactor = reactor::Core::new().unwrap();
     let home_connector = SimpleTcpHomeConnector::new(reactor.handle());
-    let profile_gw = ProfileGatewayImpl::new(client_signer_clone, Rc::new(profile_store),  Rc::new(home_connector));
+    let profile_gw = ProfileGatewayImpl::new( client_signer.clone(), Rc::new(profile_store), Rc::new(home_connector) );
     let test_fut = profile_gw.connect_home(&server_id.clone())
         .map_err(|err| err.context(::mercury_home_protocol::error::ErrorKind::ConnectionToHomeFailed).into())
         .and_then(|home| {

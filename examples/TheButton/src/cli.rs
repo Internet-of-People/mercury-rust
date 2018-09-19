@@ -96,7 +96,7 @@ pub fn cli<'a, 'b>()->App<'a, 'b>{
                 .takes_value(true)
                 .required(true)
                 .value_name("PROFILE_ID")
-                .help("profile id of the button app server")
+                .help("profile id of the button app server (multibase encoded)")
             )
         )
 }

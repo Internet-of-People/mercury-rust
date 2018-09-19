@@ -96,6 +96,7 @@ impl SimpleTcpHomeConnector
             Err(err) => return Box::new( future::err(err))
         };
 
+        debug!("Connecting to socket address {}", tcp_addr);
         let tcp_str = TcpStream::connect(&tcp_addr, handle).map_err( |err| err.context(ErrorKind::ConnectionFailed).into());
         Box::new(tcp_str)
     }

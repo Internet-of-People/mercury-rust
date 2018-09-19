@@ -4,20 +4,17 @@ version = "0.1.0"
 authors = ["Deusz <lovaszoltanr@gmail.com>"]
 
 [dependencies]
-clap ={version = "*", features = ["yaml"]}
+clap = "*"
 either = "*"
+futures = "0.1"
 log = "*"
 log4rs = "*"
-tempdir = "*"
-futures = "*"
-tokio = "*"
-tokio-executor = "*"
-tokio-signal = "*"
-tokio-timer = "*"
-tokio-core = "*"
-tokio-uds = "*"
-tokio-io = "*"
-multiaddr = "*"
 mercury-home-protocol = { path="../../home-protocol" }
 mercury-storage = {path="../../storage"}
 mercury-connect = {path="../../connect"}
+multiaddr = "*"
+multibase = "*"
+tempdir = "*"
+tokio-signal = "*"
+tokio-core = "*"
+tokio-uds = "*"

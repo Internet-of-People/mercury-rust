@@ -4,6 +4,8 @@ extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
 extern crate ed25519_dalek;
+#[macro_use]
+extern crate failure;
 extern crate futures;
 #[macro_use]
 extern crate log;
@@ -11,11 +13,6 @@ extern crate multiaddr;
 extern crate multibase;
 extern crate multihash;
 extern crate serde;
-
-#[macro_use] 
-extern crate failure;
-
-
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
@@ -672,8 +669,9 @@ pub trait Validator: ProfileValidator + SignatureValidator
 
 impl std::fmt::Display for ProfileId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let enc = multibase::encode(multibase::Base::Base16, &self.0);
-        write!(f, "{}", &enc[..10])
+        let enc = multibase::encode(multibase::Base::Base64, &self.0);
+        //write!(f, "{}", &enc[..10])
+        write!(f, "{}", &enc)
     }
 }
 

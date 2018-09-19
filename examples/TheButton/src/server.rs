@@ -66,6 +66,7 @@ impl IntoFuture for Server {
 
         // Handling call and event management
         let calls = RefCell::new(Vec::new());
+        let handle = self.appcx.handle.clone();
         let rx_fut = rx.for_each(move |v : Either<Option<AppMsgSink>, ()>| {   
             match v {
                 Either::Left(call) => {
@@ -77,7 +78,8 @@ impl IntoFuture for Server {
                     debug!("notifying connected clients");
                     for c in calls.borrow().iter() {
                         let cc = c.clone();
-                        tokio::spawn(cc.send(Ok(AppMessageFrame(b"".to_vec()))).map(|_| ()).map_err(|_|()));
+                        handle.spawn(cc.send(Ok(AppMessageFrame(b"".to_vec())))
+                            .map(|_| ()).map_err(|_|()));
                     }
                 }
             }
@@ -85,9 +87,12 @@ impl IntoFuture for Server {
         }).map_err(|()| std::io::Error::new(std::io::ErrorKind::Other, "mpsc channel failed"));
 
         // Interval future is generating an event periodcally
-        let interval_fut = self.cfg.event_timer.map(|interval| {
-            let tx_interval = tx_event.clone();
-            Interval::new(std::time::Instant::now() + Duration::from_secs(interval), Duration::from_secs(interval)).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
+        let handle = self.appcx.handle.clone();
+        let tx_interval = tx_event.clone();
+        let interval_fut = self.cfg.event_timer.map( move |interval| {
+            let duration = Duration::from_secs(interval);
+            reactor::Interval::new( duration, &handle).unwrap()
+                .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
                 .for_each(move |_| {
                     info!("interval timer fired, generating event");
                     tx_interval.clone().send(()).map(|_| ()).map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))

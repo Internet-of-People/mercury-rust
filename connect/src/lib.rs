@@ -1,3 +1,5 @@
+#[macro_use]
+extern crate failure;
 extern crate futures;
 #[macro_use]
 extern crate log;
@@ -9,8 +11,6 @@ extern crate serde;
 extern crate serde_derive;
 extern crate tokio_core;
 extern crate tokio_io;
-#[macro_use]
-extern crate failure;
 
 
 

@@ -15,26 +15,17 @@ impl ClientConfig{
         let on_fail = match args.value_of("on-fail") {
             Some(fail) => {
                 match fail {
-                    "retry" => 
-                        OnFail::Retry,
-                    "terminate" => 
-                        OnFail::Terminate,
-                    _ => 
-                        return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse --on-fail value"))                    
+                    "retry"     => OnFail::Retry,
+                    "terminate" => OnFail::Terminate,
+                    _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse --on-fail value"))
                 }
             },
-            None => {
-                OnFail::Terminate
-            }
+            None => OnFail::Terminate
         };
+        info!("On fail: {:?}",on_fail);
 
         let callee_profile_id = ProfileId(args.value_of(cli::CLI_CONNECT).unwrap().as_bytes().to_vec()); // option is required
 
-        info!("On fail: {:?}",on_fail);
-
-        Ok(Self{
-            callee_profile_id: callee_profile_id,
-            on_fail: on_fail
-        })
+        Ok( Self{callee_profile_id, on_fail} )
     }
 }

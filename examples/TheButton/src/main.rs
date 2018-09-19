@@ -1,23 +1,17 @@
 //#[macro_use]
 extern crate clap;
+extern crate either;
+extern crate futures;
 #[macro_use]
 extern crate log;
 extern crate log4rs;
-
-extern crate futures;
-extern crate tokio;
-extern crate tokio_io;
+extern crate mercury_connect;
+extern crate mercury_home_protocol;
+extern crate mercury_storage;
+extern crate multiaddr;
 extern crate tokio_uds;
 extern crate tokio_core;
-extern crate tokio_timer;
 extern crate tokio_signal;
-extern crate tokio_executor;
-extern crate either;
-extern crate multiaddr;
-
-extern crate mercury_connect;
-extern crate mercury_storage;
-extern crate mercury_home_protocol;
 
 
 
@@ -43,7 +37,6 @@ use futures::prelude::*;
 use multiaddr::{Multiaddr, ToMultiaddr};
 use tokio_signal::unix::SIGINT;
 use tokio_core::reactor;
-use tokio_timer::*;
 
 use mercury_connect::*;
 use mercury_connect::net::SimpleTcpHomeConnector;
@@ -127,6 +120,7 @@ pub struct AppContext{
     service: Rc<ConnectService>,
     client_id: ProfileId,
     home_id: ProfileId,
+    handle: reactor::Handle,
 }
 
 impl AppContext
@@ -137,7 +131,7 @@ impl AppContext
         // TODO when we'll have a standalone service with proper IPC/RPC interface,
         //      this must be changed into a simple connect() call instead of building a service instance
         let (service, client_id, home_id) = temporary_connect_service_instance(priv_key, node_id, node_addr, reactor)?;
-        Ok( Self{service, client_id, home_id} )
+        Ok( Self{ service, client_id, home_id, handle: reactor.handle() } )
     }
 }
 
