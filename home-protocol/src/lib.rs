@@ -453,27 +453,32 @@ impl<'a> From<ProfileId> for String
         { Self::from(&src) }
 }
 
+impl std::fmt::Display for ProfileId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let enc = multibase::encode(multibase::Base::Base64, &self.0);
+        write!(f, "{}", &enc)
+    }
+}
 
 
-//impl<'a> From<&'a str> for ProfileId
-//{
-//    fn from(src: &'a str) -> Self
-//        { ProfileId( src.as_bytes().to_owned() ) }
-//}
-//
-//impl<'a> TryFrom<&'a ProfileId> for &'a str
-//{
-//    type Error = ::std::str::Utf8Error;
-//    fn try_from(src: &'a ProfileId) -> Result<Self, Self::Error>
-//        { ::std::str::from_utf8(&src.0) }
-//}
-//
-//impl<'a> TryFrom<ProfileId> for String
-//{
-//    type Error = ::std::string::FromUtf8Error;
-//    fn try_from(src: ProfileId) -> Result<Self, Self::Error>
-//        { String::from_utf8(src.0) }
-//}
+impl<'a> From<&'a PublicKey> for String
+{
+    fn from(src: &'a PublicKey) -> Self
+        { ::multibase::encode(::multibase::Base::Base64, &src.0) }
+}
+
+impl<'a> From<PublicKey> for String
+{
+    fn from(src: PublicKey) -> Self
+        { Self::from(&src) }
+}
+
+impl std::fmt::Display for PublicKey {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        let enc = multibase::encode(multibase::Base::Base64, &self.0);
+        write!(f, "{}", &enc)
+    }
+}
 
 
 
@@ -690,13 +695,7 @@ pub trait Validator: ProfileValidator + SignatureValidator
     }
 }
 
-impl std::fmt::Display for ProfileId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let enc = multibase::encode(multibase::Base::Base64, &self.0);
-        //write!(f, "{}", &enc[..10])
-        write!(f, "{}", &enc)
-    }
-}
+
 
 #[cfg(test)]
 mod tests

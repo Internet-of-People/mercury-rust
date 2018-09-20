@@ -35,8 +35,8 @@ impl Config
         let signer = Rc::new( Ed25519Signer::new(&private_key)
             .expect("Invalid private key") );
 
-        info!("homenode public key: {:?}", signer.public_key());
-        info!("homenode profile id: {:?}", signer.profile_id());
+        info!("homenode public key: {}", signer.public_key());
+        info!("homenode profile id: {}", signer.profile_id());
 
         let listen_socket = args.value_of(FileCliParser::ARG_NAME_LOCAL_SOCKET_ADDRESS)
             .expect("Socket address should have a default value")

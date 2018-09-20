@@ -38,13 +38,13 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
 
     let mut size_out_bytes = BytesMut::with_capacity( mem::size_of_val(&bufsize) );
     size_out_bytes.put_u32_le(bufsize);
-    debug!("Sending auth info of myself: {:?}", auth_info);
+    trace!("Sending auth info of myself: {:?}", auth_info);
 
     let handshake_fut = io::write_all(writer, size_out_bytes)
         .and_then( move |(writer, _buf)| { io::write_all(writer, out_bytes) } )
         .and_then( move |(writer, _buf)|
         {
-            debug!("Reading buffer size for peer info");
+            trace!("Reading buffer size for peer info");
             let mut size_bytes = BytesMut::new();
             size_bytes.resize( mem::size_of_val(&bufsize), 0 );
             io::read_exact(reader, size_bytes)
@@ -52,7 +52,7 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
         } )
         .and_then( |(reader, writer, buf)|
         {
-            debug!("Reading peer info, size: {:?}", buf);
+            trace!("Reading peer info, size: {:?}", buf);
             let size_in_bytes = buf.into_buf().get_u32_le();
             let mut in_bytes = BytesMut::new();
             in_bytes.resize(size_in_bytes as usize, 0);
@@ -61,11 +61,12 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
         } )        
         .and_then( |(reader, writer, buf)|
         {
-            debug!("Processing peer info received");
+            trace!("Processing peer info received");
             let peer_auth: AuthenticationInfo = from_slice(&buf)
                 .map_err( |e| std::io::Error::new( std::io::ErrorKind::Other, e) )?;
-            debug!("Received peer identity: {:?}", peer_auth);
+            trace!("Received peer identity: {:?}", peer_auth);
             let peer_ctx = PeerContext::new( signer, peer_auth.public_key, peer_auth.profile_id );
+            debug!("Handshake succeeded");
             Ok( (reader, writer, peer_ctx) )
         } )
         .map_err(|err| err.context(ErrorKind::TlsHandshakeFailed).into()); 

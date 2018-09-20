@@ -184,7 +184,7 @@ impl Home for HomeConnectionServer
             return Box::new( future::err( (own_prof,ErrorKind::SignerMismatch.into())))
         }
 
-        debug!( "Request was sent for home_id: {:?}, this should be me, i.e. match my id: {:?}",
+        trace!( "Request was sent for home_id: {:?}, this should be me, i.e. match my id: {:?}",
                 half_proof.peer_id, *self.context.my_signer().profile_id() );
         if half_proof.peer_id != *self.context.my_signer().profile_id() { 
             return Box::new( future::err( (own_prof, ErrorKind::HomeIdMismatch.into())))
@@ -482,7 +482,7 @@ impl HomeSessionServer
 impl Drop for HomeSessionServer {
     fn drop(&mut self) {
         let peer_id = self.context.peer_id();
-        debug!("dropping session {:?}", peer_id);
+        debug!("dropping session {}", peer_id);
         self.server.sessions.borrow_mut().remove(peer_id);
     }   
 }

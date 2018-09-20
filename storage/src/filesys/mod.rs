@@ -66,9 +66,9 @@ impl AsyncFileHandler{
         let (tx, rx) = oneshot::channel::<Result<(), StorageError>>();
         match self.check_and_create_structure(file_path){
             Ok(checked_path) => {
-                // debug!("Scheduling write to file {}", checked_path);
+                trace!("Scheduling write to file {}", checked_path);
                 self.pool.spawn( {
-                    // debug!("Starting write to file {}", checked_path);
+                    trace!("Starting write {} bytes to file {}", content.len(), checked_path);
                     File::create(self.get_path(checked_path))
                         // TODO: map the error in a way to preserve the original error too
                         .map_err(|e| StorageError::StringError(e.description().to_owned()))
@@ -79,7 +79,7 @@ impl AsyncFileHandler{
                                 .map_err(|e|StorageError::StringError(e.description().to_owned()))
                         })
                         .then( move |res| {
-                            // debug!("Write to file result {:?}", res);
+                            trace!("Write to file result {:?}", res);
                             tx.send(res)
                         } )
                         .map_err(|_| ())
@@ -166,9 +166,9 @@ impl<V> KeyValueStore<String, V> for AsyncFileHandler
 
     fn get(&self, key: String) -> Box< Future<Item=V, Error=StorageError> >
     {
-        debug!("Requested reading key {}", key);
+        trace!("Requested reading key {}", key);
         let get_fut = self.read_from_file(&key)
-            .inspect( |content| debug!("Read key content of {} bytes", content.len()) )
+            .inspect( |content| trace!("Read key content of {} bytes", content.len()) )
             .map_err( |e| StorageError::StringError( e.description().to_owned())  )
             .and_then( |profile| serde_json::from_str(&profile)
                 .map_err( |e| StorageError::StringError( e.description().to_owned() ) )

@@ -282,12 +282,11 @@ impl ProfileGatewayImpl
             {
                 let prof_repo = prof_repo.clone();
                 let connector = connector.clone();
-                let signer = signer.clone();
                 let proof = home_proof.to_owned();
-                match home_proof.peer_id( signer.profile_id() ) {
+                match home_proof.peer_id(&profile.id) {
                     Ok(ref home_id) => {
                         debug!("Scheduling connect_home2 for home id {}", home_id);
-                        let conn_fut = Self::connect_home2( home_id.to_owned(), prof_repo, connector, signer )
+                        let conn_fut = Self::connect_home2( home_id.to_owned(), prof_repo, connector, signer.clone() )
                             .map( move |home| (proof, home) );
                         Box::new(conn_fut) as Box<Future<Item=_, Error=Error>>
                     },
@@ -454,8 +453,7 @@ impl ProfileGateway for ProfileGatewayImpl
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
             .and_then( |profile| Self::any_home_of2(&profile, profile_repo, home_connector, signer) )
             .and_then( move |(_home_proof, home)| {
-                home
-                    .call(app, CallRequestDetails { relation: proof, init_payload: init_payload, to_caller: to_caller } )
+                home.call(app, CallRequestDetails { relation: proof, init_payload: init_payload, to_caller: to_caller } )
                     .map_err(|err| err.context(ErrorKind::CallFailed).into())
             });
         Box::new(call_fut)

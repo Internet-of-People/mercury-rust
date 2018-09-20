@@ -146,16 +146,23 @@ impl DAppConnect
 
                 match first_match
                 {
-                    Some(proof) => Box::new( Ok(proof).into_future() ) as Box<Future<Item=RelationProof, Error=Error>>,
+                    Some(proof) => {
+                        debug!("Found proof of contact");
+                        Box::new( Ok(proof).into_future() ) as Box<Future<Item=_, Error=_>>
+                    },
 
                     None => {
+                        debug!("No proof of contact found, initiate profile pairing");
                         let proof_fut = gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &profile_id2, None)
                             .map_err( |err| err.context(ErrorKind::Unknown).into() ) // TODO
+                            .inspect( |_| debug!("Pairing request was sent, listen for profile events on my home") )
                             .and_then( |_| login_fut )
                             .and_then( move |_session|
                                 event_stream.filter_map( move |event|
                                 {
+                                    debug!("Profile event listener got event");
                                     if let ProfileEvent::PairingResponse(proof) = event {
+                                        debug!("Got pairing response, checking peer id: {:?}", proof);
                                         if proof.peer_id( gateway.signer().profile_id() ).is_ok()
                                             { return Some(proof) }
                                     }
@@ -163,9 +170,18 @@ impl DAppConnect
                                 } )
                                 .take(1)
                                 .collect()
-                                .map_err( |_| Error::from(ErrorKind::Unknown) ) // TODO
+                                .map_err( |()| {
+                                    debug!("Pairing failed");
+                                    Error::from(ErrorKind::Unknown) // TODO
+                                } )
                             )
-                            .and_then( |mut proofs| proofs.pop().ok_or( ErrorKind::Unknown.into() ) ); // TODO
+                            .and_then( |mut proofs| {
+                                debug!("Got {} matching pairing response: {:?}", proofs.len(), proofs.last());
+                                proofs.pop().ok_or( {
+                                    debug!("Profile event stream ended without proper response");
+                                    ErrorKind::Unknown.into()
+                                } )
+                            } ); // TODO
                         Box::new(proof_fut)
                     }
                 }
@@ -213,19 +229,22 @@ impl DAppSession for DAppConnect
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
         -> Box< Future<Item=Call, Error=Error> >
     {
+        debug!("Got call request to {}", profile_id);
         let call_fut = self.get_relation_proof(profile_id)
+            .inspect( |_| debug!("Got relation proof, initiate call") )
             .and_then( {
                 let gateway = self.gateway.clone();
                 let app_id = self.app_id.clone();
                 let (to_caller, from_callee) = mpsc::channel(CHANNEL_CAPACITY);
                 move |relation| gateway.call(relation.to_owned(), app_id, init_payload, Some(to_caller))
                     .map_err( |e| e.context(ErrorKind::Unknown).into() )
-                    .and_then( |to_callee_opt|
+                    .and_then( |to_callee_opt| {
+                        debug!("Got response to call");
                         match to_callee_opt {
                             None => Err( Error::from(ErrorKind::Unknown) ), // TODO
                             Some(to_callee) => Ok( Call{ sender: to_callee, receiver: from_callee } )
                         }
-                    )
+                    } )
             } );
 
         Box::new(call_fut)
