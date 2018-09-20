@@ -381,7 +381,7 @@ impl ProfileGateway for ProfileGatewayImpl
     }
 
 
-    fn pair_request(&self, relation_type: &str, with_profile_id: &ProfileId, pairing_url: Option<&str>) ->
+    fn pair_request(&self, relation_type: &str, with_profile_id: &ProfileId, _pairing_url: Option<&str>) ->
         Box< Future<Item=(), Error=Error> >
     {
         let profile_repo_clone = self.profile_repo.clone();
@@ -389,10 +389,12 @@ impl ProfileGateway for ProfileGatewayImpl
         let signer_clone = self.signer.clone();
         let rel_type_clone = relation_type.to_owned();
 
-        let profile_fut = match pairing_url {
-            Some(url) => self.profile_repo.resolve(url),
-            None      => self.profile_repo.load(with_profile_id),
-        };
+//        let profile_fut = match pairing_url {
+//            Some(url) => self.profile_repo.resolve(url),
+//            None      => self.profile_repo.load(with_profile_id),
+//        };
+
+        let profile_fut = self.profile_repo.load(with_profile_id);
 
         let pair_fut = profile_fut
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())

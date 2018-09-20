@@ -36,12 +36,12 @@ impl SimpleProfileRepo {
 
 impl ProfileRepo for SimpleProfileRepo
 {
-    /// List all profiles that can be load()'ed or resolve()'d.
-    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-        HomeStream<Profile,String>
-    {
-        unimplemented!()
-    }
+//    /// List all profiles that can be load()'ed or resolve()'d.
+//    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
+//        HomeStream<Profile,String>
+//    {
+//        unimplemented!()
+//    }
 
     /// Look for specified `id` and return. This might involve searching for the latest version
     /// of the profile in the dht, but if it's the profile's home server, could come from memory, too.
@@ -54,9 +54,9 @@ impl ProfileRepo for SimpleProfileRepo
     }
 
 
-    fn resolve(&self, _url: &str) ->
-        Box< Future<Item=Profile, Error=Error> >
-    {
-        unimplemented!()
-    }
+//    fn resolve(&self, _url: &str) ->
+//        Box< Future<Item=Profile, Error=Error> >
+//    {
+//        unimplemented!()
+//    }
 }

@@ -127,30 +127,26 @@ impl HomeConnectionServer
 
 impl ProfileRepo for HomeConnectionServer
 {
-    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-        HomeStream<Profile, String>
-    {
-        unimplemented!()
-//        let (send, receive) = mpsc::channel(CHANNEL_CAPACITY);
-//        receive
-    }
+//    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
+//        HomeStream<Profile, String>
+//    {
+//        unimplemented!()
+//    }
 
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=Error> >
     {
-
         let profile_fut = self.server.public_profile_dht.borrow().get( id.to_owned() )
             .map_err( |e| e.context(ErrorKind::DhtLookupFailed).into() );
         Box::new(profile_fut)
     }
 
-    fn resolve(&self, _url: &str) ->
-        Box< Future<Item=Profile, Error=Error> >
-    {
-        // TODO parse URL and fetch profile accordingly
-        unimplemented!()
-//        Box::new( future::err(ErrorToBeSpecified::TODO(String::from("HomeServer/ProfileRepo.resolve"))) )
-    }
+//    fn resolve(&self, _url: &str) ->
+//        Box< Future<Item=Profile, Error=Error> >
+//    {
+//        // TODO parse URL and fetch profile accordingly
+//        unimplemented!()
+//    }
 }
 
 

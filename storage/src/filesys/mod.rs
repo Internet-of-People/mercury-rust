@@ -105,17 +105,20 @@ impl AsyncFileHandler{
         if !&self.get_path(&file_path).exists(){
             return Box::new(future::err(StorageError::InvalidKey));
         }
+        let path_clone = self.get_path(&file_path);
         self.pool.spawn(
-            File::open(self.get_path(&file_path))        
-                .map_err(|e| 
+            Ok( debug!("Opening file {}", file_path) ).into_future()
+                .and_then( move |_| File::open(path_clone) )
+                .map_err(|e|
                     // TODO: map the error in a way to preserve the original error too
                     StorageError::StringError(e.description().to_owned())
                 )
-                .and_then(move |file|
+                .and_then(move |file| {
+                    debug!("Successfully opened file");
                     read_to_end(file , Vec::new())          
                         // TODO: map the error in a way to preserve the original error too
                         .map_err(|e|{ StorageError::StringError(e.description().to_owned())})
-                )
+                } )
                 .and_then(|(_, buffer)|
                     match String::from_utf8(buffer) {
                         Ok(content)=> future::ok(content),                                
@@ -123,8 +126,9 @@ impl AsyncFileHandler{
                         Err(e)=> future::err(StorageError::StringError(e.description().to_owned()))                                
                     }
                 )
+                .map_err( |e| { debug!("Async read failed: {:?}", e); e } )
                 .then( move |res| tx.send(res))
-                .map_err(|_| ())
+                .map_err( |e| debug!("Sending read result failed: {:?}", e) )
                 .map(|_| ())             
         );
         Box::new(

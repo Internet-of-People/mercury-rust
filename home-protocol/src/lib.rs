@@ -151,24 +151,24 @@ pub type HomeSink<Elem, RemoteErr>   = mpsc::Sender< std::result::Result<Elem, R
 /// Potentially a whole network of nodes with internal routing and sharding
 pub trait ProfileRepo
 {
-    /// List all profiles that can be load()'ed or resolve()'d.
-    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-        HomeStream<Profile,String>;
+//    /// List all profiles that can be load()'ed or resolve()'d.
+//    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
+//        HomeStream<Profile,String>;
 
     /// Look for specified `id` and return. This might involve searching for the latest version
     /// of the profile in the dht, but if it's the profile's home server, could come from memory, too.
     fn load(&self, id: &ProfileId) ->
         Box< Future<Item=Profile, Error=Error> >;
 
-    /// Same as load(), but also contains hints for resolution, therefore it's more efficient than load(id)
-    ///
-    /// The `url` may contain
-    /// * ProfileID (mandatory)
-    /// * some profile metadata (for user experience enhancement) (big fat warning should be thrown if it does not match the latest info)
-    /// * ProfileID of its home server
-    /// * last known multiaddress(es) of its home server
-    fn resolve(&self, url: &str) ->
-        Box< Future<Item=Profile, Error=Error> >;
+//    /// Same as load(), but also contains hints for resolution, therefore it's more efficient than load(id)
+//    ///
+//    /// The `url` may contain
+//    /// * ProfileID (mandatory)
+//    /// * some profile metadata (for user experience enhancement) (big fat warning should be thrown if it does not match the latest info)
+//    /// * ProfileID of its home server
+//    /// * last known multiaddress(es) of its home server
+//    fn resolve(&self, url: &str) ->
+//        Box< Future<Item=Profile, Error=Error> >;
 
     // TODO notifications on profile updates should be possible
 }

@@ -56,12 +56,12 @@ impl Drop for HomeDispatcherCapnProto
 
 impl profile_repo::Server for HomeDispatcherCapnProto
 {
-    fn list(&mut self, _params: profile_repo::ListParams, _results: profile_repo::ListResults)
-        -> Promise<(), ::capnp::Error>
-    {
-        // TODO properly implement this
-        unimplemented!()
-    }
+//    fn list(&mut self, _params: profile_repo::ListParams, _results: profile_repo::ListResults)
+//        -> Promise<(), ::capnp::Error>
+//    {
+//        // TODO properly implement this
+//        unimplemented!()
+//    }
 
 
     fn load(&mut self, params: profile_repo::LoadParams,
@@ -77,17 +77,17 @@ impl profile_repo::Server for HomeDispatcherCapnProto
     }
 
 
-    fn resolve(&mut self, params: profile_repo::ResolveParams,
-               mut results: profile_repo::ResolveResults)
-        -> Promise<(), ::capnp::Error>
-    {
-        let profile_url = pry!( pry!( params.get() ).get_profile_url() );
-        let res_fut = self.home.resolve(profile_url)
-            .map( move |profile| results.get().init_profile().fill_from(&profile) )
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to resolve url: {:?}",e ) ) );
-
-        Promise::from_future(res_fut)
-    }
+//    fn resolve(&mut self, params: profile_repo::ResolveParams,
+//               mut results: profile_repo::ResolveResults)
+//        -> Promise<(), ::capnp::Error>
+//    {
+//        let profile_url = pry!( pry!( params.get() ).get_profile_url() );
+//        let res_fut = self.home.resolve(profile_url)
+//            .map( move |profile| results.get().init_profile().fill_from(&profile) )
+//            .map_err( | e| ::capnp::Error::failed( format!("Failed to resolve url: {:?}",e ) ) );
+//
+//        Promise::from_future(res_fut)
+//    }
 }
 
 
