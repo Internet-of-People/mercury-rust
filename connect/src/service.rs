@@ -277,13 +277,13 @@ impl AdminEndpoint for SettingsImpl
         unimplemented!()
     }
 
-    fn update_profile(&self, profile: &OwnProfile)
+    fn update_profile(&self, _profile: &OwnProfile)
         -> Box< Future<Item=(), Error=Error> >
     {
         unimplemented!()
     }
 
-    fn remove_profile(&self, profile: &ProfileId)
+    fn remove_profile(&self, _profile: &ProfileId)
         -> Box< Future<Item=(), Error=Error> >
     {
         unimplemented!()
@@ -337,7 +337,7 @@ impl AdminEndpoint for SettingsImpl
         Box::new(fut)
     }
 
-    fn leave_home(&self, profile: &ProfileId, home: &ProfileId)
+    fn leave_home(&self, _profile: &ProfileId, _home: &ProfileId)
         -> Box< Future<Item=OwnProfile, Error=Error> >
     {
         unimplemented!()
@@ -350,19 +350,19 @@ impl AdminEndpoint for SettingsImpl
         unimplemented!()
     }
 
-    fn initiate_relation(&self, with_profile: &ProfileId) ->
+    fn initiate_relation(&self, _with_profile: &ProfileId) ->
         Box< Future<Item=(), Error=Error> >
     {
         unimplemented!()
     }
 
-    fn accept_relation(&self, half_proof: &RelationHalfProof) ->
+    fn accept_relation(&self, _half_proof: &RelationHalfProof) ->
         Box< Future<Item=(), Error=Error> >
     {
         unimplemented!()
     }
 
-    fn revoke_relation(&self, relation: &RelationProof) ->
+    fn revoke_relation(&self, _relation: &RelationProof) ->
         Box< Future<Item=(), Error=Error> >
     {
         unimplemented!()
@@ -439,7 +439,7 @@ impl UserInterface for DummyUserInterface
         Box::new( Ok( () ).into_future() )
     }
 
-    fn confirm(&self, action: &DAppAction) -> Box< Future<Item=Signature, Error=Error> >
+    fn confirm(&self, _action: &DAppAction) -> Box< Future<Item=Signature, Error=Error> >
     {
         Box::new( Ok( Signature( Vec::new() ) ).into_future() )
     }

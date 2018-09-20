@@ -54,7 +54,7 @@ impl ProfileRepo for SimpleProfileRepo
     }
 
 
-    fn resolve(&self, url: &str) ->
+    fn resolve(&self, _url: &str) ->
         Box< Future<Item=Profile, Error=Error> >
     {
         unimplemented!()

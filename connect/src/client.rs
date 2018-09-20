@@ -162,7 +162,7 @@ pub trait ProfileGateway
         Box< Future<Item=(), Error=Error> >;
 
     // NOTE newhome is a profile that contains at least one HomeSchema different than this home
-    fn unregister(&self, home: ProfileId, own_prof: ProfileId, newhome: Option<Profile>) ->
+    fn unregister(&self, home: ProfileId, newhome: Option<Profile>) ->
         Box< Future<Item=(), Error=Error> >;
 
 
@@ -368,7 +368,7 @@ impl ProfileGateway for ProfileGatewayImpl
     }
 
 
-    fn unregister(&self, home_id: ProfileId, own_prof: ProfileId, newhome_id: Option<Profile>) ->
+    fn unregister(&self, home_id: ProfileId, newhome_id: Option<Profile>) ->
         Box< Future<Item=(), Error=Error> >
     {
         let unreg_fut = self.login_home(home_id)

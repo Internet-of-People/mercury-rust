@@ -109,7 +109,7 @@ impl IntoFuture for Server {
         
         let mut fut : Box<Future<Item=(), Error=std::io::Error>> = 
              Box::new(rx_fut.join(calls_fut)
-                .map(|_| ()).map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "TODO testing")) // TODO
+                .map(|_| ())
 //            Box::new(sigusr1_fut
 //                .select(rx_fut).map(|(item, _)| item).map_err(|(err, _)| err)
 //                .select(calls_fut).map(|(item, _)| item).map_err(|(err, _)| err)
