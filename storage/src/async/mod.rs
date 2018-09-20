@@ -8,6 +8,7 @@ use futures::future;
 use common::*;
 use error::*;
 
+pub mod fs;
 pub mod imp;
 
 
@@ -33,11 +34,11 @@ pub trait HashSpace<ObjectType, ReadableHashType>
 pub trait KeyValueStore<KeyType, ValueType>
 {
     fn set(&mut self, key: KeyType, value: ValueType)
-        -> Box< Future<Item=(), Error=StorageError> >;
+        -> Box< Future<Item=(), Error=StorageError> + Send >;
     fn get(&self, key: KeyType)
-        -> Box< Future<Item=ValueType, Error=StorageError> >;
+        -> Box< Future<Item=ValueType, Error=StorageError> + Send >;
     fn clear_local(&mut self, key: KeyType)
-        -> Box< Future<Item=(), Error=StorageError> >;
+        -> Box< Future<Item=(), Error=StorageError> + Send >;
 }
 
 
@@ -184,14 +185,14 @@ for KeyAdapter<AvailableKeyType, ValueType, T>
           PreferredKeyType: Into<AvailableKeyType>
 {
     fn set(&mut self, key: PreferredKeyType, value: ValueType)
-        -> Box< Future<Item=(), Error=StorageError> >
+        -> Box< Future<Item=(), Error=StorageError> + Send >
     { self.store.set( key.into(), value) }
 
     fn get(&self, key: PreferredKeyType)
-        -> Box< Future<Item=ValueType, Error=StorageError> >
+        -> Box< Future<Item=ValueType, Error=StorageError> + Send >
     { self.store.get( key.into() ) }
 
     fn clear_local(&mut self, key: PreferredKeyType)
-        -> Box< Future<Item=(), Error=StorageError> >
+        -> Box< Future<Item=(), Error=StorageError> + Send >
     { self.store.clear_local( key.into() ) }
 }

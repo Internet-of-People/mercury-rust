@@ -60,8 +60,7 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
     -> Result<(Rc<ConnectService>, ProfileId, ProfileId), std::io::Error>
 {
     use mercury_connect::service::{DummyUserInterface, ProfileGatewayFactory, ServiceImpl, SignerFactory};
-    use mercury_storage::async::{KeyAdapter, KeyValueStore, imp::InMemoryStore};
-    use mercury_storage::filesys::AsyncFileHandler;
+    use mercury_storage::async::{KeyAdapter, KeyValueStore, fs::FileStore, imp::InMemoryStore};
 
     debug!("Initializing service instance");
 
@@ -80,7 +79,7 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
     // TODO consider that client should be able to start up without being a DHT client,
     //      e.g. with having only a Home URL including hints to access Home
     let profile_repo = SimpleProfileRepo::from( KeyAdapter::<String,_,_>::new(
-        AsyncFileHandler::new("/tmp/mercury/thebutton-storage").unwrap() ) );
+        FileStore::new("/tmp/mercury/thebutton-storage").unwrap() ) );
 //    let profile_repo = SimpleProfileRepo::default();
     let repo_initialized = reactor.run( profile_repo.load(&my_profile_id) );
     if repo_initialized.is_err()

@@ -444,7 +444,7 @@ impl<'a> TryFrom<&'a str> for ProfileId
 impl<'a> From<&'a ProfileId> for String
 {
     fn from(src: &'a ProfileId) -> Self
-        { ::multibase::encode(::multibase::Base::Base64, &src.0) }
+        { ::multibase::encode(::multibase::Base::Base64url, &src.0) }
 }
 
 impl<'a> From<ProfileId> for String
@@ -455,8 +455,7 @@ impl<'a> From<ProfileId> for String
 
 impl std::fmt::Display for ProfileId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let enc = multibase::encode(multibase::Base::Base64, &self.0);
-        write!(f, "{}", &enc)
+        write!(f, "{}", String::from(self))
     }
 }
 
@@ -464,7 +463,7 @@ impl std::fmt::Display for ProfileId {
 impl<'a> From<&'a PublicKey> for String
 {
     fn from(src: &'a PublicKey) -> Self
-        { ::multibase::encode(::multibase::Base::Base64, &src.0) }
+        { ::multibase::encode(::multibase::Base::Base64url, &src.0) }
 }
 
 impl<'a> From<PublicKey> for String
@@ -475,8 +474,7 @@ impl<'a> From<PublicKey> for String
 
 impl std::fmt::Display for PublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        let enc = multibase::encode(multibase::Base::Base64, &self.0);
-        write!(f, "{}", &enc)
+        write!(f, "{}", String::from(self))
     }
 }
 

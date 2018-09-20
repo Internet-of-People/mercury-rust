@@ -8,7 +8,7 @@ pub enum HashError {
     UnsupportedType,
     BadInputLength,
     UnknownCode,
-    Other(Box<Error>),
+    Other(Box<Error + Send>),
 }
 
 impl fmt::Display for HashError {
@@ -34,7 +34,7 @@ impl Error for HashError {
 pub enum SerializerError {
     SerializationError(Box<Error>),
     DeserializationError(Box<Error>),
-    Other(Box<Error>),
+    Other(Box<Error + Send>),
 }
 
 impl fmt::Display for SerializerError {
@@ -84,7 +84,7 @@ impl Error for StorageError {
 
 #[derive(Debug)]
 pub enum StringCoderError {
-    Other(Box<Error>),
+    Other(Box<Error + Send>),
 }
 
 impl fmt::Display for StringCoderError {
@@ -112,7 +112,7 @@ pub enum HashSpaceError {
     LinkFormatError(String),
     UnknownHashSpace(String),
     UnsupportedHashSpace(String),
-    Other(Box<Error>),
+    Other(Box<Error + Send>),
 }
 
 impl fmt::Display for HashSpaceError {
