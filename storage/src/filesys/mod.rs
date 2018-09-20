@@ -2,7 +2,6 @@ use ::async::*;
 use ::error::*;
 use futures::*;
 use futures::sync::oneshot;
-use multibase::{Base, encode};
 use std::rc::Rc;
 use std::path::{Path, PathBuf};
 use std::error::Error;
@@ -182,22 +181,6 @@ impl<V> KeyValueStore<String, V> for AsyncFileHandler
     {
         self.remove_file(&key)
     }
-}
-
-
-
-// TODO comment this impl as a whole and use KeyAdapter instead
-impl<V> KeyValueStore<Vec<u8>, V> for AsyncFileHandler
-    where  V: 'static + Serialize + DeserializeOwned
-{
-    fn set(&mut self, key: Vec<u8>, value: V) -> Box< Future<Item=(), Error=StorageError> >
-        { self.set( encode(Base::Base64, &key), value ) }
-
-    fn get(&self, key: Vec<u8>) -> Box< Future<Item=V, Error=StorageError> >
-        { self.get( encode(Base::Base64, key) ) }
-
-    fn clear_local(&mut self, key: Vec<u8>) -> Box< Future<Item=(), Error=StorageError> >
-        { (self as &mut KeyValueStore<String, V>).clear_local( encode(Base::Base64, key) ) }
 }
 
 

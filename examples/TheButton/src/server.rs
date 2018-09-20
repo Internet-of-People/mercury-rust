@@ -102,7 +102,7 @@ impl IntoFuture for Server {
 
         // SIGUSR1 is generating an event
         let tx_sigint1 = tx_event.clone();
-        let sigusr1_fut = signal_recv(SIGUSR1).for_each(move |_| {
+        let _sigusr1_fut = signal_recv(SIGUSR1).for_each(move |_| {
             info!("received SIGUSR1, generating event");                                    
             tx_sigint1.clone().send(()).map(|_| ()).map_err(|err |std::io::Error::new(std::io::ErrorKind::Other, err))
         });

@@ -22,7 +22,7 @@ pub struct HomeServer
     handle:             reactor::Handle,
     validator:          Rc<Validator>,
     public_profile_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
-    hosted_profile_db:  Rc<RefCell< KeyValueStore<Vec<u8>, OwnProfile> >>,
+    hosted_profile_db:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
     sessions:           Rc<RefCell< HashMap<ProfileId, Weak<HomeSessionServer>> >>,
 }
 
@@ -31,7 +31,7 @@ impl HomeServer
     pub fn new(handle: &reactor::Handle,
                validator: Rc<Validator>,
                public_dht: Rc<RefCell< KeyValueStore<ProfileId, Profile> >>,
-               private_db: Rc<RefCell< KeyValueStore<Vec<u8>, OwnProfile> >>) -> Self
+               private_db: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>) -> Self
     { Self{ handle: handle.clone(), validator: validator,
             public_profile_dht: public_dht, hosted_profile_db: private_db,
             sessions: Rc::new( RefCell::new( HashMap::new() ) ) } }
@@ -63,7 +63,7 @@ impl HomeConnectionServer
         let sessions_clone = server.sessions.clone();
 
         // Check if this profile is hosted on this server
-        let session_fut = server.hosted_profile_db.borrow().get( to_profile.clone().into() )
+        let session_fut = server.hosted_profile_db.borrow().get( to_profile.clone() )
             .and_then( move |_profile_data|
             {
                 // Seperate variable needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
@@ -163,7 +163,7 @@ impl Home for HomeConnectionServer
         if profile != *self.context.peer_id()
             { return Box::new( future::err(ErrorKind::FailedToClaimProfile.into())) }
 
-        let claim_fut = self.server.hosted_profile_db.borrow().get( profile.into() )
+        let claim_fut = self.server.hosted_profile_db.borrow().get(profile)
             .map_err( |e| e.context(ErrorKind::FailedToClaimProfile).into() );
         Box::new(claim_fut)
     }
@@ -218,7 +218,7 @@ impl Home for HomeConnectionServer
         let pub_prof_modified = own_prof_modified.profile.clone();
         let local_store = self.server.hosted_profile_db.clone();
         let distributed_store = self.server.public_profile_dht.clone();
-        let reg_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone().into() )
+        let reg_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )
             .then( |get_res|
             {
                 match get_res {
@@ -237,7 +237,7 @@ impl Home for HomeConnectionServer
                     .map_err(error_mapper_clone ); } )
             .and_then( move |_| { // Store private profile info in local storage only (e.g. SQL)
                 debug!("Saving private profile info into local storage");
-                return local_store.borrow_mut().set( own_prof_modified.profile.id.clone().into(), own_prof_modified.clone() )
+                return local_store.borrow_mut().set( own_prof_modified.profile.id.clone(), own_prof_modified.clone() )
                     .map( |_| own_prof_modified )
                     .map_err(error_mapper); } );
 
@@ -258,7 +258,7 @@ impl Home for HomeConnectionServer
             Err(e) => return Box::new(future::err(e.context(ErrorKind::ProfileMismatch).into()))                
         };
 
-        let val_fut = self.server.hosted_profile_db.borrow().get( profile_id.clone().into() )            
+        let val_fut = self.server.hosted_profile_db.borrow().get( profile_id.clone() )
             .map( {
                 let context_clone = self.context.clone();
                 let server_clone = self.server.clone();
@@ -307,7 +307,7 @@ impl Home for HomeConnectionServer
         let relation_clone = relation.clone();
 
         // We need to look up the public key to be able to validate the proof
-        let fut = self.server.hosted_profile_db.borrow().get( to_profile.clone().into() )
+        let fut = self.server.hosted_profile_db.borrow().get( to_profile.clone() )
             .map_err(|err| err.context(ErrorKind::PeerNotHostedHere).into())
             .and_then(move |profile_data|
             {
@@ -350,7 +350,7 @@ impl Home for HomeConnectionServer
             Err(err) => return Box::new(future::err(err.context(ErrorKind::TimeoutFailed).into())),
         };
 
-        let answer_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone().into() )
+        let answer_fut = self.server.hosted_profile_db.borrow().get( to_profile.clone() )
             .map_err(|e| e.context(ErrorKind::PeerNotHostedHere).into())
             .and_then(move |profile_data|
             {
@@ -499,7 +499,7 @@ impl HomeSession for HomeSessionServer
             return Box::new( future::err( ErrorKind::PublicKeyMismatch.into())) 
         }
 
-        let upd_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone().into() )
+        let upd_fut = self.server.hosted_profile_db.borrow().get( own_prof.profile.id.clone() )
             // NOTE Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
             .and_then( {
                 let distributed_store = self.server.public_profile_dht.clone();
@@ -511,7 +511,7 @@ impl HomeSession for HomeSessionServer
             .and_then( {
                 let local_store = self.server.hosted_profile_db.clone();
                 move |_| { // Update private profile info in local storage only (e.g. SQL)
-                    return local_store.borrow_mut().set( own_prof.profile.id.clone().into(), own_prof );
+                    return local_store.borrow_mut().set( own_prof.profile.id.clone(), own_prof );
                 }
             } )
             // TODO: fix it after storage error refactorings
@@ -538,7 +538,7 @@ impl HomeSession for HomeSessionServer
         // TODO force close/drop session connection after successful unregister().
         //      Ideally self would be consumed here, but that'd require binding to self: Box<Self> or Rc<Self> to compile within a trait.
 
-        let local_fut = self.server.hosted_profile_db.borrow_mut().clear_local( profile_id.clone().into() );
+        let local_fut = self.server.hosted_profile_db.borrow_mut().clear_local( profile_id.clone() );
         let unreg_fut = self.server.public_profile_dht.borrow_mut().clear_local(profile_id)
             .and_then( |_| local_fut )
             .map_err( |e| e.context(ErrorKind::UnregisterFailed).into());
