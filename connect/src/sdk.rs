@@ -153,11 +153,13 @@ impl DAppConnect
 
                     None => {
                         debug!("No proof of contact found, initiate profile pairing");
+                        // TODO move this pairing implementation together with the automated event forwarding
+                        //      to the ConnectService instead of the SDK here
                         let proof_fut = gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &profile_id2, None)
                             .map_err( |err| err.context(ErrorKind::Unknown).into() ) // TODO
                             .inspect( |_| debug!("Pairing request was sent, listen for profile events on my home") )
                             .and_then( |_| login_fut )
-                            .and_then( move |_session|
+                            .and_then( |_session|
                                 event_stream.filter_map( move |event|
                                 {
                                     debug!("Profile event listener got event");

@@ -177,12 +177,7 @@ fn application_code_internal() -> Result<(), std::io::Error>
         return Ok(())
     }
 
-    // Initialize logging
-    match matches.occurrences_of(cli::CLI_VERBOSE) {
-        0 => start_logging("i"),
-        1 => start_logging("d"),
-        _ => start_logging("t"),
-    }
+    start_logging(&matches);
 
     // Creating a reactor
     let mut reactor = reactor::Core::new().unwrap();
@@ -216,6 +211,7 @@ fn application_code_internal() -> Result<(), std::io::Error>
         .map(|_| info!("received SIGINT, terminating application") )
         .map_err(|(err, _)| err);
 
+    // reactor.run(app_fut)
     reactor.run(app_fut.select(sigint_fut).map(|(item, _)| item).map_err(|(err, _)| err))
 }
 
