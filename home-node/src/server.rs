@@ -554,7 +554,7 @@ impl HomeSession for HomeSessionServer
             {
                 // NOTE consuming the calls stream multiple times is likely a client implementation error
                 self.server.handle.spawn(
-                    old_sender.send( Err( "Repeated call of HomeSession::checkin_app() detected, this channel is dropped, using the new one".to_owned() ) )
+                    old_sender.send( Err( "WARNING: Repeated call of HomeSession::checkin_app() detected, this channel is dropped, using the new one".to_owned() ) )
                         .map( |_sender| () )
                         .map_err( |_e| () )
                 )
@@ -592,7 +592,7 @@ impl HomeSession for HomeSessionServer
             {
                 // NOTE consuming the events stream multiple times is likely a client implementation error
                 self.server.handle.spawn(
-                    old_sender.send( Err( "Repeated call of HomeSession::events() detected, this channel is dropped, using the new one".to_owned() ) )
+                    old_sender.send( Err( "WARNING: Repeated call of HomeSession::events() detected, this channel is dropped, using the new one".to_owned() ) )
                         .map( |_sender| () )
                         .map_err( |_e| () )
                 )

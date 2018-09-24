@@ -27,11 +27,18 @@ pub use simple_profile_repo::SimpleProfileRepo;
 
 
 
+use std::rc::Rc;
+
 use futures::prelude::*;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
 use ::error::*;
+
+
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub struct DAppPermission(Vec<u8>);
 
 
 
@@ -71,6 +78,21 @@ pub struct Call
 
 
 
+pub trait ConnectService
+{
+    // NOTE this implicitly asks for user interaction (through UI) selecting a profile to be used with the app
+    fn dapp_session(&self, app: &ApplicationId, authorization: Option<DAppPermission>)
+        -> Box< Future<Item=Rc<DAppSession>, Error=Error> >;
+
+    // TODO The Settings app is not really a dApp but a privilegized system app, might use different authorization
+    // TODO assigning a UI is more like an initialization process than an Rpc endpoint, reconsider the ui argument
+    fn admin_endpoint(&self, // ui: Rc<UserInterface>,
+                      authorization: Option<DAppPermission>)
+        -> Box< Future<Item=Rc<AdminEndpoint>, Error=Error> >;
+}
+
+
+
 // NOTE A specific DApp is logged in to the Connect Service with given details, e.g. a selected profile.
 //      A DApp might have several sessions, e.g. running in the name of multiple profiles.
 pub trait DAppSession
@@ -87,4 +109,26 @@ pub trait DAppSession
     // This includes initiating a pair request with the profile if not a relation yet
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
         -> Box< Future<Item=Call, Error=::Error> >;
+}
+
+
+
+pub trait AdminEndpoint
+{
+    fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
+    // fn claim(&self, profile_path: TODO_profileId_or_Bip32PAth?) -> Box< Future<Item=Rc<OwnProfile>, Error=Error> >;
+    fn create_profile(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
+    fn update_profile(&self, profile: &OwnProfile) -> Box< Future<Item=(), Error=Error> >;
+    fn remove_profile(&self, profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
+
+    fn homes(&self, profile: &ProfileId) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
+    // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
+    fn join_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >;
+    fn leave_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >;
+
+    fn relations(&self, profile: &ProfileId) -> Box< Future<Item=Vec<Relation>, Error=Error> >;
+    // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
+    fn initiate_relation(&self, my_profile: &ProfileId, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
+    fn accept_relation(&self, half_proof: &RelationHalfProof) -> Box< Future<Item=(), Error=Error> >;
+    fn revoke_relation(&self, profile: &ProfileId, relation: &RelationProof) -> Box< Future<Item=(), Error=Error> >;
 }

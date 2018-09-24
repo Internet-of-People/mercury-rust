@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::fmt::Display;
 
@@ -189,13 +191,14 @@ pub struct ProfileGatewayImpl
     signer:         Rc<Signer>,
     profile_repo:   Rc<ProfileRepo>,
     home_connector: Rc<HomeConnector>,
+    session_cache:  Rc<RefCell< HashMap<ProfileId, Rc<HomeSession>> >>,
 }
 
 
 impl ProfileGatewayImpl
 {
     pub fn new(signer: Rc<Signer>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
-        -> Self { Self{signer, profile_repo, home_connector} }
+        -> Self { Self{ signer, profile_repo, home_connector, session_cache: Default::default() } }
 
     pub fn connect_home(&self, home_profile_id: &ProfileId)
         -> Box< Future<Item=Rc<Home>, Error=Error> >
@@ -220,8 +223,12 @@ impl ProfileGatewayImpl
     pub fn login_home(&self, home_profile_id: ProfileId) ->
         Box< Future<Item=Rc<HomeSession>, Error=Error> >
     {
+        if let Some(ref session_rc) = self.session_cache.borrow().get(&home_profile_id)
+            { return Box::new( Ok( Rc::clone(session_rc) ).into_future() ) }
+
         let home_id = home_profile_id.clone();
         let my_profile_id = self.signer.profile_id().to_owned();
+        let session_cache = self.session_cache.clone();
         let login_fut = self.profile_repo.load(&my_profile_id)
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
             .and_then( |profile|
@@ -251,8 +258,13 @@ impl ProfileGatewayImpl
                 let signer_clone = self.signer.clone();
                 move |home_proof| {
                     Self::connect_home2(&home_profile_id, profile_repo_clone, home_connector_clone, signer_clone)
-                        .and_then( move |home| home.login(&home_proof)
-                            .map_err( |err| err.context(ErrorKind::LoginFailed).into() ) )
+                        .and_then( move |home| {
+                            home.login(&home_proof)
+                                .map_err( |err| err.context(ErrorKind::LoginFailed).into() )
+                                .inspect( move |session| {
+                                    session_cache.borrow_mut().insert( home_profile_id.to_owned(), session.clone() );
+                                } )
+                        } )
                 }
             });
         Box::new(login_fut)
@@ -465,6 +477,11 @@ impl ProfileGateway for ProfileGatewayImpl
     // TODO this should try connecting to ALL of our homes
     fn login(&self) -> Box< Future<Item=Rc<HomeSession>, Error=Error> >
     {
+        if let Some(ref session_rc) = self.session_cache.borrow().values().next()
+            { return Box::new( Ok( Rc::clone(session_rc) ).into_future() ) }
+
+        let my_profile_id = self.signer.profile_id().to_owned();
+        let session_cache = self.session_cache.clone();
         let log_fut = self.profile_repo.load( self.signer.profile_id() )
             .map_err( |err| err.context(ErrorKind::LoginFailed).into() )
             .and_then( {
@@ -479,8 +496,15 @@ impl ProfileGateway for ProfileGatewayImpl
             } )
             .and_then( move |(home_proof, home)| {
                 debug!("Home connection established, logging in");
-                home.login(&home_proof)
+                let home_id = match home_proof.peer_id(&my_profile_id) {
+                    Ok(id) => id.to_owned(),
+                    Err(e) => return Box::new( Err( e.context(ErrorKind::Unknown).into() ).into_future() ) as Box<Future<Item=_,Error=_>>,
+                };
+                let login_fut = home.login(&home_proof)
                     .map_err(|err| err.context(ErrorKind::LoginFailed).into())
+                    .inspect( move |session| {
+                        session_cache.borrow_mut().insert( home_id, session.clone() ); } );
+                Box::new(login_fut)
             });
 
         Box::new(log_fut)
