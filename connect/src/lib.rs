@@ -69,10 +69,17 @@ impl Relation
 }
 
 
-pub struct Call
+pub struct DAppCall
 {
     pub sender   : AppMsgSink,
     pub receiver : AppMsgStream
+}
+
+
+pub enum DAppEvent
+{
+    PairingResponse(RelationProof),
+    Call(Box<IncomingCall>),
 }
 
 
@@ -97,13 +104,12 @@ pub trait DAppSession
 
     fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=::Error> >;
 
-    // TODO merge different incoming events (e.g. pairing response, profile updates, etc)
-    //      into a single event enum, so as not only calls are returned here
-    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=::Error> >;
+    fn checkin(&self)
+        -> Box< Future<Item=Box<Stream<Item=Result<DAppEvent,String>, Error=()>>, Error=::Error> >;
 
     // This includes initiating a pair request with the profile if not a relation yet
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
-        -> Box< Future<Item=Call, Error=::Error> >;
+        -> Box< Future<Item=DAppCall, Error=::Error> >;
 }
 
 

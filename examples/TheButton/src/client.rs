@@ -34,7 +34,7 @@ impl IntoFuture for Client {
                 info!("application initialized, calling {:?}", callee_profile_id);
                 mercury_app.call(&callee_profile_id, AppMessageFrame(vec![]))
                     .map_err(|err| error!("call failed: {:?}", err) )
-                    .and_then(|call: Call| {
+                    .and_then(|call: DAppCall| {
                         info!("call accepted, waiting for incoming messages");
                         call.receiver
                             .for_each(|msg: Result<AppMessageFrame, String>| {

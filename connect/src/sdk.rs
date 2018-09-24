@@ -6,7 +6,7 @@ use futures::sync::mpsc;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::{Call, DAppSession, Relation, client::ProfileGateway};
+use ::{DAppCall, DAppEvent, DAppSession, Relation, client::ProfileGateway};
 use ::error::{Error, ErrorKind};
 
 
@@ -70,14 +70,22 @@ impl DAppSession for DAppConnect
     }
 
 
-    fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=Error> >
+    // TODO merge different incoming events (e.g. pairing response, profile updates, etc)
+    //      into a single event enum, so as not only calls are returned here
+    fn checkin(&self)
+        -> Box< Future<Item=Box<Stream<Item=Result<DAppEvent,String>, Error=()>>, Error=::Error> >
     {
         let checkin_fut = self.gateway.login()
             .and_then( {
                 let app = self.app_id.clone();
                 move |session| {
                     debug!("Checking in app {:?} to receive incoming calls", app);
-                    Ok( session.checkin_app(&app) )
+                    let event_stream = session.checkin_app(&app)
+                        // Map stream elements, i.e. each incoming call Result object
+                        .map( |inc_call_res| inc_call_res
+                            // Transform only Ok(call) into an event
+                            .map( |call| DAppEvent::Call(call) ) );
+                    Ok( Box::new(event_stream) as Box<Stream<Item=_,Error=_>>)
                 }
             } )
             .map_err( |e| e.context(ErrorKind::Unknown).into() );
@@ -86,7 +94,7 @@ impl DAppSession for DAppConnect
 
 
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
-        -> Box< Future<Item=Call, Error=Error> >
+        -> Box< Future<Item=DAppCall, Error=Error> >
     {
         debug!("Got call request to {}", profile_id);
         let call_fut = self.get_relation_proof(profile_id)
@@ -101,7 +109,7 @@ impl DAppSession for DAppConnect
                         debug!("Got response to call");
                         match to_callee_opt {
                             None => Err( Error::from(ErrorKind::Unknown) ), // TODO
-                            Some(to_callee) => Ok( Call{ sender: to_callee, receiver: from_callee } )
+                            Some(to_callee) => Ok( DAppCall{ sender: to_callee, receiver: from_callee } )
                         }
                     } )
             } );

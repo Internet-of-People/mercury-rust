@@ -46,10 +46,10 @@ impl IntoFuture for Server {
                 .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", err))) )
             .inspect( |_call_stream| debug!("Call stream received with successful checkin, listening for calls") )
             .and_then(move |call_stream| { call_stream
-                .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "call stream failed"))
+                .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "Failed to receive call stream"))
                 .for_each( move |call_result| {
                     match call_result {
-                        Ok(c) => {
+                        Ok(DAppEvent::Call(c)) => {
                             let (msgchan_tx, _) = channel(1);
                             let msgtx = c.answer(Some(msgchan_tx)).to_caller;
                             let fut = tx_call.clone().send(msgtx).map(|_| ())
@@ -57,7 +57,14 @@ impl IntoFuture for Server {
                             Box::new(fut) as Box<Future<Item=_, Error=_>>
                         },
 
-                        Err(_errmsg) => Box::new(Ok(()).into_future())
+                        Ok(event) => {
+                            // debug!("Got incoming event, ignoring it {}", event);
+                            Box::new(Ok(()).into_future())
+                        }
+                        Err(err) => {
+                            debug!("Received error for events, closing event stream: {}", err);
+                            Box::new(Err(std::io::Error::new(std::io::ErrorKind::Other, "Call stream got error")).into_future())
+                        }
                     }
                 })
             });
