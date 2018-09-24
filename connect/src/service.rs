@@ -511,7 +511,16 @@ impl ServiceImpl
     pub fn new(ui: Rc<UserInterface>, my_profiles: Rc<HashSet<ProfileId>>,
                profile_store: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
                gateways: Rc<ProfileGatewayFactory>, handle: &reactor::Handle) -> Self
-    { Self{ ui, my_profiles, profile_store, gateways, handle: handle.clone() } }
+        { Self{ ui, my_profiles, profile_store, gateways, handle: handle.clone() } }
+
+
+    pub fn admin_endpoint(&self, authorization: Option<DAppPermission>)
+        -> Box< Future<Item=Rc<AdminEndpoint>, Error=Error> >
+    {
+        let settings = SettingsImpl::new( self.ui.clone(), self.my_profiles.clone(),
+            self.profile_store.clone(), self.gateways.clone(), &self.handle );
+        Box::new( Ok( Rc::new(settings) as Rc<AdminEndpoint> ).into_future() )
+    }
 }
 
 
@@ -528,14 +537,6 @@ impl ConnectService for ServiceImpl
             .map( move |gateway| Rc::new( DAppConnect::new(gateway, &app) ) as Rc<DAppSession> )
             .map_err( |err| { debug!("Failed to initialize dapp session: {:?}", err); err } );
         Box::new(fut)
-    }
-
-    fn admin_endpoint(&self, authorization: Option<DAppPermission>)
-        -> Box< Future<Item=Rc<AdminEndpoint>, Error=Error> >
-    {
-        let settings = SettingsImpl::new( self.ui.clone(), self.my_profiles.clone(),
-            self.profile_store.clone(), self.gateways.clone(), &self.handle );
-        Box::new( Ok( Rc::new(settings) as Rc<AdminEndpoint> ).into_future() )
     }
 }
 

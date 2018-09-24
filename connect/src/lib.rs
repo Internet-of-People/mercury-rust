@@ -69,7 +69,6 @@ impl Relation
 }
 
 
-
 pub struct Call
 {
     pub sender   : AppMsgSink,
@@ -83,12 +82,6 @@ pub trait ConnectService
     // NOTE this implicitly asks for user interaction (through UI) selecting a profile to be used with the app
     fn dapp_session(&self, app: &ApplicationId, authorization: Option<DAppPermission>)
         -> Box< Future<Item=Rc<DAppSession>, Error=Error> >;
-
-    // TODO The Settings app is not really a dApp but a privilegized system app, might use different authorization
-    // TODO assigning a UI is more like an initialization process than an Rpc endpoint, reconsider the ui argument
-    fn admin_endpoint(&self, // ui: Rc<UserInterface>,
-                      authorization: Option<DAppPermission>)
-        -> Box< Future<Item=Rc<AdminEndpoint>, Error=Error> >;
 }
 
 
@@ -104,6 +97,8 @@ pub trait DAppSession
 
     fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=::Error> >;
 
+    // TODO merge different incoming events (e.g. pairing response, profile updates, etc)
+    //      into a single event enum, so as not only calls are returned here
     fn checkin(&self) -> Box< Future<Item=HomeStream<Box<IncomingCall>,String>, Error=::Error> >;
 
     // This includes initiating a pair request with the profile if not a relation yet

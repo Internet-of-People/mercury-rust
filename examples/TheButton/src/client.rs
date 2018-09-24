@@ -27,6 +27,7 @@ impl IntoFuture for Client {
     fn into_future(self) -> Self::Future {
         let callee_profile_id = self.cfg.callee_profile_id.clone();
 
+// TODO query if there is already an appropriate connection for the call available
         let fut = self.appcx.service.dapp_session( &ApplicationId("buttondapp".into()), None )
             .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect"))
             .and_then(move |mercury_app|{
@@ -44,7 +45,12 @@ impl IntoFuture for Client {
                     .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "encountered error"))
             });
 
+        let callee_profile_id = self.cfg.callee_profile_id.clone();
+        let client_id = self.appcx.client_id.clone();
         let fut = ::temporary_init_env(&self.appcx)
+            .and_then( move |admin| admin.initiate_relation(&client_id, &callee_profile_id)
+                .map_err( |_e| ::std::io::Error::from(::std::io::ErrorKind::AddrNotAvailable)) )
+// TODO wait for relation response and continue with the call only afterwards
             .then( |_| fut );
 
         Box::new(fut)
