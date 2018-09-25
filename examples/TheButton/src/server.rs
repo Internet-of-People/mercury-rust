@@ -57,7 +57,8 @@ impl IntoFuture for Server {
                             Box::new(fut) as Box<Future<Item=_, Error=_>>
                         },
 
-                        Ok(event) => {
+                        Ok(_event) => {
+                            // TODO we should somehow initiate sending a pairing response here through ConnectService
                             // debug!("Got incoming event, ignoring it {}", event);
                             Box::new(Ok(()).into_future())
                         }
@@ -129,5 +130,3 @@ impl IntoFuture for Server {
         fut
     }
 }
-
-

@@ -1,13 +1,3 @@
-pub struct Application;
-
-use std;
-
-impl Application{
-    pub fn run(func : i32)->!{
-        std::process::exit(func);
-    }
-}
-
 pub const EX_OK: i32 = 0;
 pub const EX_USAGE: i32 = 64;
 pub const EX_DATAERR: i32 = 65;

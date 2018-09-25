@@ -44,7 +44,6 @@ use mercury_connect::net::SimpleTcpHomeConnector;
 use mercury_connect::service::ServiceImpl;
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::Ed25519Signer;
-use application::{Application, EX_OK, EX_SOFTWARE, EX_USAGE};
 use cli::cli;
 use client::Client;
 use client_config::*;
@@ -153,20 +152,8 @@ pub enum OnFail {
 }
 
 
-fn application_code() -> i32 {
-    match application_code_internal() {
-        Ok(_) => EX_OK,
-        Err(err) => {       
-            error!("application failed: {}", err);
-            match err.kind() {
-                std::io::ErrorKind::InvalidInput => EX_USAGE,
-                _ => EX_SOFTWARE
-            }
-        }
-    }
-}
 
-fn application_code_internal() -> Result<(), std::io::Error>
+fn main() -> Result<(), std::io::Error>
 {
     //ARGUMENT HANDLING START
     let matches = cli().get_matches();
@@ -213,8 +200,4 @@ fn application_code_internal() -> Result<(), std::io::Error>
 
     // reactor.run(app_fut)
     reactor.run(app_fut.select(sigint_fut).map(|(item, _)| item).map_err(|(err, _)| err))
-}
-
-fn main() {
-    Application::run(application_code());
 }
