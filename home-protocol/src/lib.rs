@@ -339,6 +339,7 @@ pub enum ProfileEvent
 {
     Unknown(Vec<u8>), // forward compatibility for protocol extension
     PairingRequest(RelationHalfProof),
+    // TODO do we want to distinguish "rejected" and "notYetApproved" states for pairing, i.e. need an explicit rejected response?
     PairingResponse(RelationProof),
 // TODO are these events needed? What others?
 //    HomeBroadcast,

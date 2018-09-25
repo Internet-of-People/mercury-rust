@@ -29,6 +29,7 @@ pub struct Bip32Path(String);
 
 
 
+// TODO consider using this own error type for the service instead of the imported connect error type
 //#[derive(Debug)]
 //pub struct Error {
 //    inner: Context<ErrorKind>
@@ -130,8 +131,14 @@ pub trait UserInterface
     // explicit user confirmation.
     // TODO how to show a human-readable summary of the action (i.e. binary to be signed)
     //      making sure it's not a fake/misinterpreted description?
-    fn confirm(&self, action: &DAppAction)
-        -> Box< Future<Item=Signature, Error=Error> >;
+    fn confirm_dappaction(&self, action: &DAppAction)
+        -> Box< Future<Item=(), Error=Error> >;
+
+    fn confirm_pairing(&self, request: &RelationHalfProof)
+        -> Box< Future<Item=(), Error=Error>>;
+
+    fn notify_pairing(&self, response: &RelationProof)
+        -> Box< Future<Item=(), Error=Error>>;
 
     // Select a profile to be used by a dApp. It can be either an existing one
     // or the user can create a new one (using a KeyVault) to be selected.
@@ -149,6 +156,8 @@ pub trait UserInterface
     //      (new profile)
     fn manage_profiles(&self)
         -> Box< Future<Item=(), Error=Error> >;
+
+
 }
 
 
@@ -158,6 +167,9 @@ pub trait AdminEndpoint
     fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
     // fn claim(&self, profile_path: TODO_profileId_or_Bip32PAth?) -> Box< Future<Item=Rc<OwnProfile>, Error=Error> >;
     fn create_profile(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
+
+    // TODO separate these profile-related functions below into a separate trait and give a getter method like
+    //      fn profile_admin(&self, profile: &ProfileId) -> Future<ProfileAdminEndpoint>
     fn update_profile(&self, profile: &OwnProfile) -> Box< Future<Item=(), Error=Error> >;
     fn remove_profile(&self, profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
 
@@ -165,6 +177,8 @@ pub trait AdminEndpoint
     // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
     fn join_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >;
     fn leave_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >;
+//    fn home_endpoint_hint(&self, home: &ProfileId, endpoint: multiaddr);
+//    fn profile_home_hint(&self, profile: &ProfileId, home: &ProfileId);
 
     fn relations(&self, profile: &ProfileId) -> Box< Future<Item=Vec<Relation>, Error=Error> >;
     // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
@@ -196,7 +210,7 @@ pub struct ProfileGatewayFactory
 {
     signer_factory: Rc<SignerFactory>,
     // TODO return to ProfileRepo type after testing and separating service with RPC
-    profile_repo:   Rc<::simple_profile_repo::SimpleProfileRepo>, // Rc<ProfileRepo>,
+    profile_repo:   Rc<::simple_profile_repo::SimpleProfileRepo>, // TODO use Rc<ProfileRepo> after TheButton testing
     home_connector: Rc<HomeConnector>,
     gateway_cache:  Rc<RefCell< HashMap<ProfileId, Rc<ProfileGateway>> >>,
 }
@@ -213,15 +227,13 @@ impl ProfileGatewayFactory
         if let Some(ref gateway_rc) = self.gateway_cache.borrow().get(profile_id)
             { return Some( Rc::clone(gateway_rc) ) }
 
-        let repo = self.profile_repo.clone();
-        let conn = self.home_connector.clone();
-        let cache = self.gateway_cache.clone();
         debug!("Creating new gateway for profile {}", profile_id);
         self.signer_factory.signer(profile_id)
-            .map( move |signer| {
-                let gateway = Rc::new( ProfileGatewayImpl::new(signer, repo, conn) ) as Rc<ProfileGateway>;
-                cache.borrow_mut().insert( profile_id.to_owned(), gateway.clone() );
-                gateway
+            .map( |signer| {
+                let gateway = ProfileGatewayImpl::new( signer, self.profile_repo.clone(), self.home_connector.clone() );
+                let gateway_rc = Rc::new(gateway) as Rc<ProfileGateway>;
+                self.gateway_cache.borrow_mut().insert( profile_id.to_owned(), gateway_rc.clone() );
+                gateway_rc
             } )
     }
 }
@@ -465,7 +477,7 @@ impl AdminEndpoint for SettingsImpl
             .and_then( move |_session|
                 gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &with_profile, None)
                     .map_err( |err| err.context(ErrorKind::Unknown).into() ) )
-            .inspect( |_| debug!("Pairing request was sent, listen for profile events on my home") )
+            .inspect( |_| debug!("Pairing request sent, expect response as profile event on my home") )
 //            .and_then( |()|
 //            {
 //                let (event_sink, event_stream) = mpsc::channel(CHANNEL_CAPACITY);
@@ -582,9 +594,19 @@ impl UserInterface for DummyUserInterface
         Box::new( Ok( () ).into_future() )
     }
 
-    fn confirm(&self, _action: &DAppAction) -> Box< Future<Item=Signature, Error=Error> >
+    fn confirm_dappaction(&self, _action: &DAppAction) -> Box< Future<Item=(), Error=Error> >
     {
-        Box::new( Ok( Signature( Vec::new() ) ).into_future() )
+        Box::new( Ok( () ).into_future() )
+    }
+
+    fn confirm_pairing(&self, _request: &RelationHalfProof) -> Box< Future<Item=(), Error=Error> >
+    {
+        Box::new( Ok( () ).into_future() )
+    }
+
+    fn notify_pairing(&self, _response: &RelationProof) -> Box< Future<Item=(), Error=Error> >
+    {
+        Box::new( Ok( () ).into_future() )
     }
 
     fn select_profile(&self) -> Box< Future<Item=ProfileId, Error=Error> >

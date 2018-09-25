@@ -115,7 +115,6 @@ fn temporary_init_env(app_context: &AppContext)
     let appctx = app_context.clone();
     let init_fut = appctx.service.admin_endpoint(None)
         .inspect( |_admin| debug!("Admin endpoint was connected") )
-        // TODO no matter if we have already joined, we should normally go on as it had succeeded
         .and_then( move |admin| admin.join_home(&appctx.client_id, &appctx.home_id)
             .map( |_own_prof| admin ) )
         .inspect( |_| debug!("Successfully registered to home") )

@@ -191,7 +191,7 @@ pub struct ProfileGatewayImpl
     signer:         Rc<Signer>,
     profile_repo:   Rc<ProfileRepo>,
     home_connector: Rc<HomeConnector>,
-    session_cache:  Rc<RefCell< HashMap<ProfileId, Rc<HomeSession>> >>,
+    session_cache:  Rc<RefCell< HashMap<ProfileId, Rc<HomeSession>> >>, // {home_id -> session}
 }
 
 
@@ -443,8 +443,7 @@ impl ProfileGateway for ProfileGatewayImpl
                 move |profile| Self::any_home_of2(&profile, profile_repo, connector, signer)
             } )
             .and_then( move |(_home_proof, home)| {
-                home
-                    .pair_response(proof)
+                home.pair_response(proof)
                     .map_err(|err| err.context(ErrorKind::PeerResponseFailed).into())
             });
         Box::new(pair_fut)
