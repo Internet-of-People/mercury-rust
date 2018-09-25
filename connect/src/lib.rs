@@ -132,3 +132,22 @@ pub trait AdminEndpoint
     fn accept_relation(&self, half_proof: &RelationHalfProof) -> Box< Future<Item=(), Error=Error> >;
     fn revoke_relation(&self, profile: &ProfileId, relation: &RelationProof) -> Box< Future<Item=(), Error=Error> >;
 }
+
+
+pub fn find_relation_proof<'a>(relations: &'a [Relation], my_id: ProfileId, peer_id: ProfileId,
+    relation_type: Option<&str>) -> Option<RelationProof>
+{
+    let mut peers_filtered = relations.iter()
+        .map( |relation| relation.proof.clone() )
+        .filter( |proof| {
+            proof.peer_id(&my_id)
+                .map( |p_id| *p_id == peer_id )
+                .unwrap_or(false)
+        } );
+
+    match relation_type {
+        None      => peers_filtered.next(),
+        Some(rel) => peers_filtered
+            .filter( |proof| proof.relation_type == rel ).next(),
+    }
+}

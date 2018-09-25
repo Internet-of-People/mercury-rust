@@ -6,7 +6,7 @@ use futures::sync::mpsc;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::{DAppCall, DAppEvent, DAppSession, Relation, client::ProfileGateway};
+use ::{DAppCall, DAppEvent, DAppSession, find_relation_proof, Relation, client::ProfileGateway};
 use ::error::{Error, ErrorKind};
 
 
@@ -22,30 +22,6 @@ impl DAppConnect
 {
     pub fn new(gateway: Rc<ProfileGateway>, app: &ApplicationId) -> Self
         { Self{ gateway, app_id: app.to_owned() } }
-
-
-    // Try fetching RelationProof from existing contacts.
-    fn get_relation_proof(&self, peer_id: &ProfileId)
-        -> Box< Future<Item=RelationProof, Error=Error>>
-    {
-        let my_id = self.gateway.signer().profile_id().to_owned();
-        let peer_id = peer_id.to_owned();
-
-        let proof_fut = self.contacts()
-            .and_then( move |contacts|
-            {
-                let first_match = contacts.iter()
-                    .map( |relation| relation.proof.to_owned() )
-                    .filter( move |proof| {
-                        let res = proof.peer_id(&my_id).map( |id| id.to_owned() );
-                        res.is_ok() && res.unwrap() == peer_id.clone()
-                    })
-                    .nth(0);
-
-                first_match.ok_or( ErrorKind::Unknown.into() )
-            } );
-        Box::new(proof_fut)
-    }
 }
 
 
@@ -76,7 +52,8 @@ impl DAppSession for DAppConnect
         -> Box< Future<Item=Box<Stream<Item=Result<DAppEvent,String>, Error=()>>, Error=::Error> >
     {
         let checkin_fut = self.gateway.login()
-            .and_then( {
+            .and_then(
+            {
                 let app = self.app_id.clone();
                 move |session| {
                     debug!("Checking in app {:?} to receive incoming calls", app);
@@ -97,9 +74,20 @@ impl DAppSession for DAppConnect
         -> Box< Future<Item=DAppCall, Error=Error> >
     {
         debug!("Got call request to {}", profile_id);
-        let call_fut = self.get_relation_proof(profile_id)
+
+        let call_fut = self.contacts()
+            .and_then(
+            {
+                let my_id = self.gateway.signer().profile_id().to_owned();
+                let peer_id = profile_id.to_owned();
+                move |contacts|
+                    find_relation_proof( &contacts, my_id, peer_id, Some(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN) )
+                        .ok_or( ErrorKind::Unknown.into() )
+
+            } )
             .inspect( |_| debug!("Got relation proof, initiate call") )
-            .and_then( {
+            .and_then(
+            {
                 let gateway = self.gateway.clone();
                 let app_id = self.app_id.clone();
                 let (to_caller, from_callee) = mpsc::channel(CHANNEL_CAPACITY);
