@@ -10,7 +10,7 @@ use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::{AdminEndpoint, ConnectService, DAppPermission, DAppSession, Relation};
+use ::{ConnectService, DAppPermission, DAppSession, Relation};
 use ::client::{HomeConnector, ProfileGateway, ProfileGatewayImpl};
 use ::error::*;
 use ::sdk::DAppConnect;
@@ -149,6 +149,28 @@ pub trait UserInterface
     //      (new profile)
     fn manage_profiles(&self)
         -> Box< Future<Item=(), Error=Error> >;
+}
+
+
+
+pub trait AdminEndpoint
+{
+    fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
+    // fn claim(&self, profile_path: TODO_profileId_or_Bip32PAth?) -> Box< Future<Item=Rc<OwnProfile>, Error=Error> >;
+    fn create_profile(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
+    fn update_profile(&self, profile: &OwnProfile) -> Box< Future<Item=(), Error=Error> >;
+    fn remove_profile(&self, profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
+
+    fn homes(&self, profile: &ProfileId) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
+    // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
+    fn join_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >;
+    fn leave_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >;
+
+    fn relations(&self, profile: &ProfileId) -> Box< Future<Item=Vec<Relation>, Error=Error> >;
+    // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
+    fn initiate_relation(&self, my_profile: &ProfileId, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
+    fn accept_relation(&self, half_proof: &RelationHalfProof) -> Box< Future<Item=(), Error=Error> >;
+    fn revoke_relation(&self, profile: &ProfileId, relation: &RelationProof) -> Box< Future<Item=(), Error=Error> >;
 }
 
 

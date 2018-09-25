@@ -41,7 +41,7 @@ use tokio_core::reactor;
 
 use mercury_connect::*;
 use mercury_connect::net::SimpleTcpHomeConnector;
-use mercury_connect::service::ServiceImpl;
+use mercury_connect::service::{AdminEndpoint, ServiceImpl};
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::Ed25519Signer;
 use cli::cli;

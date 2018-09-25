@@ -113,27 +113,6 @@ pub trait DAppSession
 
 
 
-pub trait AdminEndpoint
-{
-    fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
-    // fn claim(&self, profile_path: TODO_profileId_or_Bip32PAth?) -> Box< Future<Item=Rc<OwnProfile>, Error=Error> >;
-    fn create_profile(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
-    fn update_profile(&self, profile: &OwnProfile) -> Box< Future<Item=(), Error=Error> >;
-    fn remove_profile(&self, profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
-
-    fn homes(&self, profile: &ProfileId) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
-    // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
-    fn join_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >;
-    fn leave_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >;
-
-    fn relations(&self, profile: &ProfileId) -> Box< Future<Item=Vec<Relation>, Error=Error> >;
-    // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
-    fn initiate_relation(&self, my_profile: &ProfileId, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
-    fn accept_relation(&self, half_proof: &RelationHalfProof) -> Box< Future<Item=(), Error=Error> >;
-    fn revoke_relation(&self, profile: &ProfileId, relation: &RelationProof) -> Box< Future<Item=(), Error=Error> >;
-}
-
-
 pub fn find_relation_proof<'a>(relations: &'a [Relation], my_id: ProfileId, peer_id: ProfileId,
     relation_type: Option<&str>) -> Option<RelationProof>
 {
