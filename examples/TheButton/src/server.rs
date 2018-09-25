@@ -14,16 +14,12 @@ use ::either::Either;
 
 pub struct Server{
     cfg : ServerConfig,
-    appcx : AppContext,
+    appctx: AppContext,
 }
 
 impl Server{
-    pub fn new(cfg: ServerConfig, appcx : AppContext) -> Self {
-        Server{
-            cfg : cfg,
-            appcx : appcx,
-        }
-    }
+    pub fn new(cfg: ServerConfig, appctx: AppContext) -> Self
+        { Self{cfg, appctx} }
 }
 
 
@@ -39,7 +35,7 @@ impl IntoFuture for Server {
 
         let rx = rx_call.map(|c| Either::Left(c)).select(rx_event.map(|e| Either::Right(e)));
 
-        let calls_fut = self.appcx.service.dapp_session( &ApplicationId("buttondapp".into()), None )
+        let calls_fut = self.appctx.service.dapp_session(&ApplicationId("buttondapp".into()), None )
             .inspect( |_app| debug!("dApp session was initialized, checking in") )
             .map_err( |err| { debug!("Failed to create dApp session: {:?}", err); std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect") })
             .and_then(|mercury_app| mercury_app.checkin()
@@ -57,9 +53,8 @@ impl IntoFuture for Server {
                             Box::new(fut) as Box<Future<Item=_, Error=_>>
                         },
 
-                        Ok(_event) => {
-                            // TODO we should somehow initiate sending a pairing response here through ConnectService
-                            // debug!("Got incoming event, ignoring it {}", event);
+                        Ok(DAppEvent::PairingResponse(response)) => {
+                            debug!("Got incoming pairing response, ignoring it {:?}", response);
                             Box::new(Ok(()).into_future())
                         }
                         Err(err) => {
@@ -70,12 +65,12 @@ impl IntoFuture for Server {
                 })
             });
 
-        let calls_fut = ::temporary_init_env(&self.appcx)
+        let calls_fut = ::temporary_init_env(&self.appctx)
             .then( |_| calls_fut );
 
         // Handling call and event management
         let calls = RefCell::new(Vec::new());
-        let handle = self.appcx.handle.clone();
+        let handle = self.appctx.handle.clone();
         let rx_fut = rx.for_each(move |v : Either<Option<AppMsgSink>, ()>| {   
             match v {
                 Either::Left(call) => {
@@ -96,7 +91,7 @@ impl IntoFuture for Server {
         }).map_err(|()| std::io::Error::new(std::io::ErrorKind::Other, "mpsc channel failed"));
 
         // Interval future is generating an event periodcally
-        let handle = self.appcx.handle.clone();
+        let handle = self.appctx.handle.clone();
         let tx_interval = tx_event.clone();
         let interval_fut = self.cfg.event_timer.map( move |interval| {
             let duration = Duration::from_secs(interval);
@@ -109,24 +104,20 @@ impl IntoFuture for Server {
         });
 
         // SIGUSR1 is generating an event
-        let tx_sigint1 = tx_event.clone();
-        let _sigusr1_fut = signal_recv(SIGUSR1).for_each(move |_| {
+        let sigusr1_fut = signal_recv(SIGUSR1).for_each(move |_| {
             info!("received SIGUSR1, generating event");                                    
-            tx_sigint1.clone().send(()).map(|_| ()).map_err(|err |std::io::Error::new(std::io::ErrorKind::Other, err))
+            tx_event.clone().send(()).map(|_| ())
+                .map_err(|err| std::io::Error::new(std::io::ErrorKind::Other, err))
         });
-        
-        let mut fut : Box<Future<Item=(), Error=std::io::Error>> = 
-             Box::new(rx_fut.join(calls_fut)
-                .map(|_| ())
-//            Box::new(sigusr1_fut
-//                .select(rx_fut).map(|(item, _)| item).map_err(|(err, _)| err)
-//                .select(calls_fut).map(|(item, _)| item).map_err(|(err, _)| err)
-        );
-        
-        if interval_fut.is_some() {
-            fut = Box::new(fut
-                .select(interval_fut.unwrap()).map(|(item, _)| item).map_err(|(err, _)| err));
+
+        let server_fut = rx_fut
+            .select(calls_fut).map(|_| ()).map_err(|(e,_)| e)
+            .select(sigusr1_fut).map(|_| ()).map_err(|(e,_)| e);
+
+        match interval_fut {
+            None => Box::new(server_fut), // as Box<Future<Item=_,Error=_>>,
+            Some(timer_fut) => Box::new( server_fut.select(timer_fut)
+                .map(|_| ()).map_err(|(e,_)| e) ),
         }
-        fut
     }
 }

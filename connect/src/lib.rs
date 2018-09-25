@@ -97,7 +97,7 @@ pub trait ConnectService
 //      A DApp might have several sessions, e.g. running in the name of multiple profiles.
 pub trait DAppSession
 {
-    // Once initialized, the profile is selected and can be queried any time
+    // After the session was initialized, the profile is selected and can be queried any time
     fn selected_profile(&self) -> &ProfileId;
 
     fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=::Error> >;
@@ -107,7 +107,6 @@ pub trait DAppSession
     fn checkin(&self)
         -> Box< Future<Item=Box<Stream<Item=Result<DAppEvent,String>, Error=()>>, Error=::Error> >;
 
-    // This includes initiating a pair request with the profile if not a relation yet
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
         -> Box< Future<Item=DAppCall, Error=::Error> >;
 }
