@@ -25,6 +25,7 @@ extern crate tokio_io;
 
 pub mod crypto;
 pub mod error;
+pub mod future;
 pub mod handshake;
 pub mod mercury_capnp;
 

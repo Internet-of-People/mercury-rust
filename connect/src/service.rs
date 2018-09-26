@@ -156,8 +156,6 @@ pub trait UserInterface
     //      (new profile)
     fn manage_profiles(&self)
         -> Box< Future<Item=(), Error=Error> >;
-
-
 }
 
 
@@ -261,10 +259,21 @@ impl SettingsImpl
 {
     pub fn new(ui: Rc<UserInterface>, my_profiles: Rc<HashSet<ProfileId>>,
                profile_store: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-               gateways: Rc<ProfileGatewayFactory>, handle: &reactor::Handle) -> Self
+               gateways: Rc<ProfileGatewayFactory>, handle: &reactor::Handle)
+        -> Box< Future<Item=Self, Error=Error> >
     {
-        Self{ ui, my_profiles, gateways, profile_store, handle: handle.to_owned(),
-              event_sinks: Rc::new( RefCell::new( Vec::new() ) ), }
+//        let gateway_futs = my_profiles.iter().cloned()
+//            .filter_map( |profile_id| gateways.gateway(&profile_id) )
+//            .map( |gateway|
+//                gateway.login()
+//                    .map( |session| session.events() )
+//            );
+//        let my_gateways = future::join_all(gateway_futs);
+
+        let this = Self{ ui, my_profiles, gateways, profile_store, handle: handle.to_owned(),
+              event_sinks: Rc::new( RefCell::new( Vec::new() ) ), };
+
+        Box::new( Ok(this).into_future() )
     }
 
 
@@ -291,7 +300,7 @@ impl SettingsImpl
                 future::select_all(remaining).then( |first_finished_res|
                 {
                     let (sent, tail) = match first_finished_res {
-                        Err( (_err, _idx, tail) ) => ( Box::new(successful) as Box<Iterator<Item=_>>, tail ),
+                        Err( (_err, _idx, tail) ) => ( Box::new( successful) as Box<Iterator<Item=_>>, tail ),
                         Ok( (sink, _idx, tail) )  => ( Box::new( successful.chain( ::std::iter::once(sink) ) ) as Box<Iterator<Item=_>>, tail ),
                     };
 
@@ -553,7 +562,8 @@ impl ServiceImpl
     {
         let settings = SettingsImpl::new( self.ui.clone(), self.my_profiles.clone(),
             self.profile_store.clone(), self.gateways.clone(), &self.handle );
-        Box::new( Ok( Rc::new(settings) as Rc<AdminEndpoint> ).into_future() )
+
+        Box::new( settings.map( |adm| Rc::new(adm) as Rc<AdminEndpoint> ) )
     }
 }
 
