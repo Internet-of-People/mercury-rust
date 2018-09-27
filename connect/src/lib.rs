@@ -14,7 +14,7 @@ extern crate tokio_io;
 
 
 
-pub mod client;
+pub mod profile;
 pub mod error;
 pub mod net;
 pub use net::SimpleTcpHomeConnector;
@@ -84,7 +84,7 @@ pub enum DAppEvent
 
 
 
-pub trait ConnectService
+pub trait DAppEndpoint
 {
     // NOTE this implicitly asks for user interaction (through UI) selecting a profile to be used with the app
     fn dapp_session(&self, app: &ApplicationId, authorization: Option<DAppPermission>)

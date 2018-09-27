@@ -41,7 +41,7 @@ use tokio_core::reactor;
 
 use mercury_connect::*;
 use mercury_connect::net::SimpleTcpHomeConnector;
-use mercury_connect::service::{AdminEndpoint, ServiceImpl};
+use mercury_connect::service::{AdminSession, ConnectService};
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::Ed25519Signer;
 use cli::cli;
@@ -56,9 +56,9 @@ use server_config::*;
 
 fn temporary_connect_service_instance(my_private_profilekey_file: &str,
         home_id_str: &str, home_addr_str: &str, reactor: &mut reactor::Core)
-    -> Result<(Rc<ServiceImpl>, ProfileId, ProfileId), std::io::Error>
+    -> Result<(Rc<ConnectService>, ProfileId, ProfileId), std::io::Error>
 {
-    use mercury_connect::service::{DummyUserInterface, ProfileGatewayFactory, SignerFactory};
+    use mercury_connect::service::{DummyUserInterface, MyProfileFactory, SignerFactory};
     use mercury_storage::async::{KeyAdapter, KeyValueStore, fs::FileStore, imp::InMemoryStore};
 
     debug!("Initializing service instance");
@@ -95,14 +95,14 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
     let signers = vec![ ( my_profile_id.clone(), my_signer ) ].into_iter().collect();
     let signer_factory: Rc<SignerFactory> = Rc::new(SignerFactory::new(signers) );
     let home_connector = Rc::new( SimpleTcpHomeConnector::new( reactor.handle() ) );
-    let gateways = Rc::new( ProfileGatewayFactory::new(
+    let gateways = Rc::new( MyProfileFactory::new(
         signer_factory, profile_repo.clone(), home_connector ) );
 
     let ui = Rc::new( DummyUserInterface::new( my_profiles.clone() ) );
     let mut own_profile_store = InMemoryStore::new();
     reactor.run( own_profile_store.set(my_profile_id.clone(), my_own_profile ) ).unwrap();
     let profile_store = Rc::new( RefCell::new(own_profile_store) );
-    let service = Rc::new( ServiceImpl::new(ui, my_profiles, profile_store, gateways, &reactor.handle() ) );
+    let service = Rc::new( ConnectService::new(ui, my_profiles, profile_store, gateways, &reactor.handle() ) );
 
     Ok( (service, my_profile_id, home_id) )
 }
@@ -110,10 +110,10 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
 
 
 fn temporary_init_env(app_context: &AppContext)
-    -> Box< Future<Item=Rc<AdminEndpoint>, Error=std::io::Error> >
+    -> Box< Future<Item=Rc<AdminSession>, Error=std::io::Error> >
 {
     let appctx = app_context.clone();
-    let init_fut = appctx.service.admin_endpoint(None)
+    let init_fut = appctx.service.admin_session(None)
         .inspect( |_admin| debug!("Admin endpoint was connected") )
         .and_then( move |admin| admin.join_home(&appctx.client_id, &appctx.home_id)
             .map( |_own_prof| admin ) )
@@ -126,7 +126,7 @@ fn temporary_init_env(app_context: &AppContext)
 
 #[derive(Clone)]
 pub struct AppContext{
-    service: Rc<ServiceImpl>,
+    service: Rc<ConnectService>,
     client_id: ProfileId,
     home_id: ProfileId,
     handle: reactor::Handle,

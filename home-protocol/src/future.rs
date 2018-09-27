@@ -9,6 +9,9 @@ use futures::future::{self, loop_fn, Loop};
 // and collect their results into a vector in the original order. This function may not error..
 // As a simplification, the function performs transformation
 // Iter< Future<T,E> > -> Future< Vec<Result<T,E>>, () >
+// TODO consider simplifying this trying to use conventional join_all in the direction of
+//      join_all( futs.map( fut.then( Ok(res) ) ) )
+//          .map( results.filter_map( res.ok() ) )
 pub fn collect_results<I>(futures_iterator: I)
     -> Box< Future<Item = Vec< Result< <I::Item as IntoFuture>::Item,
                                        <I::Item as IntoFuture>::Error > >,

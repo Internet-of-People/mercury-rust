@@ -11,8 +11,8 @@ use tokio_core::reactor;
 use mercury_home_protocol::*;
 use mercury_home_protocol::future as fut;
 use mercury_storage::async::KeyValueStore;
-use ::{ConnectService, DAppPermission, DAppSession, Relation};
-use ::client::{HomeConnector, ProfileGateway, ProfileGatewayImpl};
+use ::{DAppEndpoint, DAppPermission, DAppSession, Relation};
+use ::profile::{HomeConnector, MyProfile, MyProfileImpl};
 use ::error::*;
 use ::sdk::DAppConnect;
 
@@ -161,7 +161,7 @@ pub trait UserInterface
 
 
 
-pub trait AdminEndpoint
+pub trait AdminSession
 {
     fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
     // fn claim(&self, profile_path: TODO_profileId_or_Bip32PAth?) -> Box< Future<Item=Rc<OwnProfile>, Error=Error> >;
@@ -205,34 +205,37 @@ impl SignerFactory
 
 
 
-pub struct ProfileGatewayFactory
+pub struct MyProfileFactory
 {
     signer_factory: Rc<SignerFactory>,
     // TODO return to ProfileRepo type after testing and separating service with RPC
     profile_repo:   Rc<::simple_profile_repo::SimpleProfileRepo>, // TODO use Rc<ProfileRepo> after TheButton testing
     home_connector: Rc<HomeConnector>,
-    gateway_cache:  Rc<RefCell< HashMap<ProfileId, Rc<ProfileGateway>> >>,
+    cache:          Rc<RefCell< HashMap<ProfileId, Rc<MyProfile>> >>,
 }
 
 
-impl ProfileGatewayFactory
+impl MyProfileFactory
 {
     //pub fn new(signer_factory: Rc<SignerFactory>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
     pub fn new(signer_factory: Rc<SignerFactory>, profile_repo: Rc<::simple_profile_repo::SimpleProfileRepo>, home_connector: Rc<HomeConnector>)
-        -> Self { Self{ signer_factory, profile_repo, home_connector, gateway_cache: Default::default() } }
+        -> Self { Self{ signer_factory, profile_repo, home_connector, cache: Default::default() } }
 
-    pub fn gateway(&self, profile_id: &ProfileId) -> Option<Rc<ProfileGateway>>
+    pub fn create(&self, profile_id: &ProfileId) -> Option<Rc<MyProfile>>
     {
-        if let Some(ref gateway_rc) = self.gateway_cache.borrow().get(profile_id)
-            { return Some( Rc::clone(gateway_rc) ) }
+        if let Some(ref my_profile_rc) = self.cache.borrow().get(profile_id)
+            { return Some( Rc::clone(my_profile_rc) ) }
 
-        debug!("Creating new gateway for profile {}", profile_id);
+        debug!("Creating new profile wrapper for profile {}", profile_id);
         self.signer_factory.signer(profile_id)
             .map( |signer| {
-                let gateway = ProfileGatewayImpl::new( signer, self.profile_repo.clone(), self.home_connector.clone() );
-                let gateway_rc = Rc::new(gateway) as Rc<ProfileGateway>;
-                self.gateway_cache.borrow_mut().insert( profile_id.to_owned(), gateway_rc.clone() );
-                gateway_rc
+                let result = MyProfileImpl::new(signer, self.profile_repo.clone(), self.home_connector.clone() );
+                let result_rc = Rc::new(result) as Rc<MyProfile>;
+                // TODO this allows initiating several fill attempts in parallel
+                //      until first one succeeds, last one wins by overwriting.
+                //      Is this acceptable?
+                self.cache.borrow_mut().insert(profile_id.to_owned(), result_rc.clone() );
+                result_rc
             } )
     }
 }
@@ -242,7 +245,7 @@ impl ProfileGatewayFactory
 pub type EventSink   = mpsc::Sender<ProfileEvent>;
 pub type EventStream = mpsc::Receiver<ProfileEvent>;
 
-pub struct SettingsImpl
+pub struct AdminSessionImpl
 {
 //    keyvault:   Rc<KeyVault>,
 //    pathmap:    Rc<Bip32PathMapper>,
@@ -250,29 +253,45 @@ pub struct SettingsImpl
     ui:             Rc<UserInterface>,
     my_profiles:    Rc<HashSet<ProfileId>>,
     profile_store:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-    gateways:       Rc<ProfileGatewayFactory>,
-    event_sinks:    Rc<RefCell< Vec<EventSink> >>,
+    profile_factory:Rc<MyProfileFactory>,
+    // {persona -> profile_event_listeners}
+    event_sinks:    Rc<RefCell< HashMap<ProfileId, Rc<RefCell< Vec<EventSink>> >> >>, // TODO can this be simpler?
     handle:         reactor::Handle,
 }
 
 
-impl SettingsImpl
+impl AdminSessionImpl
 {
-    pub fn new(ui: Rc<UserInterface>, my_profiles: Rc<HashSet<ProfileId>>,
+    pub fn new(ui: Rc<UserInterface>, my_profile_ids: Rc<HashSet<ProfileId>>,
                profile_store: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-               gateways: Rc<ProfileGatewayFactory>, handle: &reactor::Handle)
+               profile_factory: Rc<MyProfileFactory>, handle: &reactor::Handle)
         -> Box< Future<Item=Self, Error=Error> >
     {
-//        let gateway_futs = my_profiles.iter().cloned()
-//            .filter_map( |profile_id| gateways.gateway(&profile_id) )
-//            .map( |gateway|
-//                gateway.login()
-//                    .map( |session| session.events() )
-//            );
-//        let my_gateways = future::join_all(gateway_futs);
+        let this = Self{ ui, profile_store, my_profiles: my_profile_ids.clone(),
+            profile_factory: profile_factory.clone(), handle: handle.to_owned(),
+            event_sinks: Default::default(), };
 
-        let this = Self{ ui, my_profiles, gateways, profile_store, handle: handle.to_owned(),
-              event_sinks: Rc::new( RefCell::new( Vec::new() ) ), };
+        // Create a stream of profile events for each home
+        let event_futs = my_profile_ids.iter().cloned()
+            .filter_map( |profile_id| profile_factory.create(&profile_id) )
+            .map( |my_profile| my_profile.login()
+                .map( move |session| ( my_profile.signer().profile_id().to_owned(), session.events() ) ) )
+            .collect::<Vec<_>>();
+
+//        let events_fut = fut::collect_results(event_futs)
+//            .map( |mut results| results.drain(..)
+//                // TODO how should we handle errors better then just skipping failing homes?
+//                //      We should check if we had at least one successful home
+//                .filter_map( |res| res.ok() )
+//                .map( move |(profile_id, events)| {
+//                    let event_sinks = this.event_sinks.clone();
+//                    event_sinks.borrow_mut().insert( profile_id, Vec::new() );
+//                    handle.spawn(
+//                        events.for_each( move |event|
+//                            Self::forward_event_safe(listeners.clone(), event ) ) );
+//                } )
+//                .collect::<Vec<_>>()
+//            );
 
         Box::new( Ok(this).into_future() )
     }
@@ -330,33 +349,33 @@ impl SettingsImpl
     }
 
 
-    // TODO somehow make sure this is called only once and cached if successful
-    fn login_and_forward_events(&self, profile_id: &ProfileId)
-        -> Box< Future<Item=Rc<HomeSession>, Error=Error> >
-    {
-        let gateway = match self.gateways.gateway(profile_id) {
-            Some(gateway) => gateway,
-            None => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
-        };
-
-        let log_fut = gateway.login()
-            .map_err( |e| e.context(ErrorKind::Unknown).into() )
-            .inspect( {
-                let handle = self.handle.clone();
-                let listeners = Rc::downgrade(&self.event_sinks);
-                move |session| {
-                    debug!("Login was successful, start forwarding profile events to listeners");
-                    handle.spawn(
-                        session.events().for_each( move |event|
-                            Self::forward_event_safe(listeners.clone(), event ) ) );
-                }
-            } );
-        Box::new(log_fut)
-    }
+//    // TODO somehow make sure this is called only once and cached if successful
+//    fn login_and_forward_events(&self, profile_id: &ProfileId)
+//        -> Box< Future<Item=Rc<HomeSession>, Error=Error> >
+//    {
+//        let gateway = match self.gateways.gateway(profile_id) {
+//            Some(gateway) => gateway,
+//            None => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
+//        };
+//
+//        let log_fut = gateway.login()
+//            .map_err( |e| e.context(ErrorKind::Unknown).into() )
+//            .inspect( {
+//                let handle = self.handle.clone();
+//                let listeners = Rc::downgrade(&self.event_sinks);
+//                move |session| {
+//                    debug!("Login was successful, start forwarding profile events to listeners");
+//                    handle.spawn(
+//                        session.events().for_each( move |event|
+//                            Self::forward_event_safe(listeners.clone(), event ) ) );
+//                }
+//            } );
+//        Box::new(log_fut)
+//    }
 }
 
 
-impl AdminEndpoint for SettingsImpl
+impl AdminSession for AdminSessionImpl
 {
     fn profiles(&self)
         -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >
@@ -416,19 +435,19 @@ impl AdminEndpoint for SettingsImpl
         let profileid_clone = profile.to_owned();
         let profileid_clone2 = profile.to_owned();
         let profile_store_clone = self.profile_store.clone();
-        let gateways_clone = self.gateways.clone();
-        let gateways_clone2 = self.gateways.clone();
+        let profile_factory_clone = self.profile_factory.clone();
+        let profile_factory_clone2 = self.profile_factory.clone();
         let fut = self.profile_store.borrow().get( profile.to_owned() )
             .map_err( |e| e.context(ErrorKind::Unknown).into() )
             .and_then( move |own_profile| {
-                match gateways_clone.gateway(&profileid_clone) {
-                    Some(gateway) => Ok( (gateway, own_profile) ),
+                match profile_factory_clone.create(&profileid_clone) {
+                    Some(my_profile) => Ok( (my_profile, own_profile) ),
                     None => Err(Error::from(ErrorKind::Unknown)),
                 }
             } )
-            .and_then( |(gateway,own_profile)| {
+            .and_then( |(my_profile, own_profile)| {
                 debug!("Connecting to home server and registering my profile there");
-                Box::new(gateway.register(homeid_clone, own_profile, None)
+                Box::new(my_profile.register(homeid_clone, own_profile, None)
                     .map_err( |(_ownprof, e)| e.context(ErrorKind::Unknown).into()) ) // as Box<Future<Item=OwnProfile, Error=_>>
             } )
             .and_then( move |own_profile| {
@@ -436,7 +455,7 @@ impl AdminEndpoint for SettingsImpl
                 let mut profiles = profile_store_clone.borrow_mut();
                 profiles.set( profileid_clone2, own_profile.clone() )
                     // TODO REMOVE THIS AFTER TESTING
-                    .and_then( move |()| gateways_clone2.profile_repo.insert( own_profile.profile.clone() )
+                    .and_then( move |()| profile_factory_clone2.profile_repo.insert( own_profile.profile.clone() )
                         .map( |()| own_profile ) )
                     .map_err( |e| e.context( ErrorKind::Unknown).into() )
             } );
@@ -459,21 +478,21 @@ impl AdminEndpoint for SettingsImpl
 
 
     // TODO should the future wait for a proper response to be received?
-    fn initiate_relation(&self, my_profile: &ProfileId, with_profile: &ProfileId) ->
+    fn initiate_relation(&self, my_profile_id: &ProfileId, with_profile: &ProfileId) ->
         Box< Future<Item=(), Error=Error> >
     {
-        let gateway = match self.gateways.gateway(my_profile) {
-            Some(gateway) => gateway,
+        let my_profile = match self.profile_factory.create(my_profile_id) {
+            Some(profile) => profile,
             None => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
         };
 
         // let event_sinks = self.event_sinks.clone();
         let with_profile = with_profile.to_owned();
-        let proof_fut = self.login_and_forward_events(my_profile)
-            .and_then( move |_session|
-                gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &with_profile, None)
-                    .map_err( |err| err.context(ErrorKind::Unknown).into() ) )
-            .inspect( |_| debug!("Pairing request sent, expect response as profile event on my home") )
+//        let proof_fut = self.login_and_forward_events(my_profile)
+//            .and_then( move |_session|
+//                gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &with_profile, None)
+//                    .map_err( |err| err.context(ErrorKind::Unknown).into() ) )
+//            .inspect( |_| debug!("Pairing request sent, expect response as profile event on my home") )
 //            .and_then( |()|
 //            {
 //                let (event_sink, event_stream) = mpsc::channel(CHANNEL_CAPACITY);
@@ -503,8 +522,9 @@ impl AdminEndpoint for SettingsImpl
 //                    ErrorKind::Unknown.into()
 //                } )
 //            } ); // TODO
-            ;
-        Box::new(proof_fut)
+//            ;
+//        Box::new(proof_fut)
+        unimplemented!()
     }
 
 
@@ -523,49 +543,49 @@ impl AdminEndpoint for SettingsImpl
 
 
 
-pub struct ServiceImpl
+pub struct ConnectService
 {
 //    keyvault:       Rc<KeyVault>,
 //    pathmap:        Rc<Bip32PathMapper>,
 //    accessman:      Rc<AccessManager>,
     ui:             Rc<UserInterface>,
-    my_profiles:    Rc<HashSet<ProfileId>>,
+    my_profile_ids: Rc<HashSet<ProfileId>>,
     profile_store:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-    gateways:       Rc<ProfileGatewayFactory>,
+    profile_factory:Rc<MyProfileFactory>,
     handle:         reactor::Handle,
 }
 
 
-impl ServiceImpl
+impl ConnectService
 {
-    pub fn new(ui: Rc<UserInterface>, my_profiles: Rc<HashSet<ProfileId>>,
+    pub fn new(ui: Rc<UserInterface>, my_profile_ids: Rc<HashSet<ProfileId>>,
                profile_store: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-               gateways: Rc<ProfileGatewayFactory>, handle: &reactor::Handle) -> Self
-        { Self{ ui, my_profiles, profile_store, gateways, handle: handle.clone() } }
+               profile_factory: Rc<MyProfileFactory>, handle: &reactor::Handle) -> Self
+        { Self{ ui, my_profile_ids: my_profile_ids, profile_store, profile_factory: profile_factory, handle: handle.clone() } }
 
 
-    pub fn admin_endpoint(&self, authorization: Option<DAppPermission>)
-        -> Box< Future<Item=Rc<AdminEndpoint>, Error=Error> >
+    pub fn admin_session(&self, authorization: Option<DAppPermission>)
+        -> Box< Future<Item=Rc<AdminSession>, Error=Error> >
     {
-        let settings = SettingsImpl::new( self.ui.clone(), self.my_profiles.clone(),
-            self.profile_store.clone(), self.gateways.clone(), &self.handle );
+        let settings = AdminSessionImpl::new(self.ui.clone(), self.my_profile_ids.clone(),
+                                             self.profile_store.clone(), self.profile_factory.clone(), &self.handle );
 
-        Box::new( settings.map( |adm| Rc::new(adm) as Rc<AdminEndpoint> ) )
+        Box::new( settings.map( |adm| Rc::new(adm) as Rc<AdminSession> ) )
     }
 }
 
 
-impl ConnectService for ServiceImpl
+impl DAppEndpoint for ConnectService
 {
     fn dapp_session(&self, app: &ApplicationId, authorization: Option<DAppPermission>)
         -> Box< Future<Item=Rc<DAppSession>, Error=Error> >
     {
         let app = app.to_owned();
-        let gateways = self.gateways.clone();
+        let profile_factory = self.profile_factory.clone();
         let fut = self.ui.select_profile()
-            .and_then( move |profile_id| gateways.gateway(&profile_id)
+            .and_then( move |profile_id| profile_factory.create(&profile_id)
                 .ok_or( Error::from(ErrorKind::Unknown) ) )
-            .map( move |gateway| Rc::new( DAppConnect::new(gateway, &app) ) as Rc<DAppSession> )
+            .map( move |my_profile| DAppConnect::new(my_profile, app) )
             .map_err( |err| { debug!("Failed to initialize dapp session: {:?}", err); err } );
         Box::new(fut)
     }

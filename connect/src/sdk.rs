@@ -6,22 +6,22 @@ use futures::sync::mpsc;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::{DAppCall, DAppEvent, DAppSession, find_relation_proof, Relation, client::ProfileGateway};
+use ::{DAppCall, DAppEvent, DAppSession, find_relation_proof, Relation, profile::MyProfile};
 use ::error::{Error, ErrorKind};
 
 
 
 pub struct DAppConnect
 {
-    gateway:        Rc<ProfileGateway>,
+    my_profile:     Rc<MyProfile>,
     app_id:         ApplicationId,
 }
 
 
 impl DAppConnect
 {
-    pub fn new(gateway: Rc<ProfileGateway>, app: &ApplicationId) -> Self
-        { Self{ gateway, app_id: app.to_owned() } }
+    pub fn new(my_profile: Rc<MyProfile>, app_id: ApplicationId) -> Rc<DAppSession>
+        { Rc::new( Self{ my_profile, app_id } ) }
 }
 
 
@@ -30,7 +30,7 @@ impl DAppConnect
 impl DAppSession for DAppConnect
 {
     fn selected_profile(&self) -> &ProfileId
-        { self.gateway.signer().profile_id() }
+        { self.my_profile.signer().profile_id() }
 
 
     fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >
@@ -51,7 +51,7 @@ impl DAppSession for DAppConnect
     fn checkin(&self)
         -> Box< Future<Item=Box<Stream<Item=Result<DAppEvent,String>, Error=()>>, Error=::Error> >
     {
-        let checkin_fut = self.gateway.login()
+        let checkin_fut = self.my_profile.login()
             .and_then(
             {
                 let app = self.app_id.clone();
@@ -78,7 +78,7 @@ impl DAppSession for DAppConnect
         let call_fut = self.contacts()
             .and_then(
             {
-                let my_id = self.gateway.signer().profile_id().to_owned();
+                let my_id = self.my_profile.signer().profile_id().to_owned();
                 let peer_id = profile_id.to_owned();
                 move |contacts|
                     find_relation_proof( &contacts, my_id, peer_id, Some(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN) )
@@ -88,10 +88,10 @@ impl DAppSession for DAppConnect
             .inspect( |_| debug!("Got relation proof, initiate call") )
             .and_then(
             {
-                let gateway = self.gateway.clone();
+                let my_profile = self.my_profile.clone();
                 let app_id = self.app_id.clone();
                 let (to_caller, from_callee) = mpsc::channel(CHANNEL_CAPACITY);
-                move |relation| gateway.call(relation.to_owned(), app_id, init_payload, Some(to_caller))
+                move |relation| my_profile.call(relation.to_owned(), app_id, init_payload, Some(to_caller))
                     .map_err( |e| e.context(ErrorKind::Unknown).into() )
                     .and_then( |to_callee_opt| {
                         debug!("Got response to call");

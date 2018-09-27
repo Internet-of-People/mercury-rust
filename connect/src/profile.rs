@@ -148,7 +148,7 @@ pub trait HomeConnector
 
 
 
-pub trait ProfileGateway
+pub trait MyProfile
 {
     fn signer(&self) -> &Signer;
     fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >;
@@ -186,7 +186,7 @@ pub trait ProfileGateway
 
 
 #[derive(Clone)]
-pub struct ProfileGatewayImpl
+pub struct MyProfileImpl
 {
     signer:         Rc<Signer>,
     profile_repo:   Rc<ProfileRepo>,
@@ -195,7 +195,7 @@ pub struct ProfileGatewayImpl
 }
 
 
-impl ProfileGatewayImpl
+impl MyProfileImpl
 {
     pub fn new(signer: Rc<Signer>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
         -> Self { Self{ signer, profile_repo, home_connector, session_cache: Default::default() } }
@@ -262,6 +262,9 @@ impl ProfileGatewayImpl
                             home.login(&home_proof)
                                 .map_err( |err| err.context(ErrorKind::LoginFailed).into() )
                                 .inspect( move |session| {
+                                    // TODO this allows initiating several fill attempts in parallel
+                                    //      until first one succeeds, last one wins by overwriting.
+                                    //      Is this acceptable?
                                     session_cache.borrow_mut().insert( home_profile_id.to_owned(), session.clone() );
                                 } )
                         } )
@@ -274,8 +277,8 @@ impl ProfileGatewayImpl
     pub fn any_home_of(&self, profile: &Profile) ->
         Box< Future<Item=(RelationProof, Rc<Home>), Error=Error> >
     {
-        ProfileGatewayImpl::any_home_of2( profile, self.profile_repo.clone(),
-                                          self.home_connector.clone(), self.signer.clone() )
+        MyProfileImpl::any_home_of2(profile, self.profile_repo.clone(),
+                                    self.home_connector.clone(), self.signer.clone() )
     }
 
 
@@ -321,7 +324,7 @@ impl ProfileGatewayImpl
 }
 
 
-impl ProfileGateway for ProfileGatewayImpl
+impl MyProfile for MyProfileImpl
 {
     fn signer(&self) -> &Signer { &*self.signer }
 
@@ -412,9 +415,9 @@ impl ProfileGateway for ProfileGatewayImpl
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
             .and_then( move |profile|
             {
-                //let half_proof = ProfileGatewayImpl::new_half_proof(rel_type_clone.as_str(), &profile.id, signer_clone.clone() );
+                //let half_proof = MyProfileImpl::new_half_proof(rel_type_clone.as_str(), &profile.id, signer_clone.clone() );
                 let half_proof = RelationHalfProof::new(&rel_type_clone, &profile.id, &*signer_clone.clone() );
-                ProfileGatewayImpl::any_home_of2(&profile, profile_repo_clone, home_connector_clone, signer_clone)
+                MyProfileImpl::any_home_of2(&profile, profile_repo_clone, home_connector_clone, signer_clone)
                     .and_then( move |(_home_proof, home)| {
                         home
                             .pair_request(half_proof)
@@ -473,7 +476,7 @@ impl ProfileGateway for ProfileGatewayImpl
     }
 
 
-    // TODO this should try connecting to ALL of our homes
+    // TODO this should try connecting to ALL of our homes, using our collect_results() future util function
     fn login(&self) -> Box< Future<Item=Rc<HomeSession>, Error=Error> >
     {
         if let Some(ref session_rc) = self.session_cache.borrow().values().next()
@@ -489,7 +492,7 @@ impl ProfileGateway for ProfileGatewayImpl
                 let signer_clone = self.signer.clone();
                 move |profile| {
                     debug!("Client profile was loaded for login, connecting home");
-                    ProfileGatewayImpl::any_home_of2(
+                    MyProfileImpl::any_home_of2(
                         &profile, profile_repo_clone, home_conn_clone, signer_clone)
                 }
             } )
@@ -502,6 +505,9 @@ impl ProfileGateway for ProfileGatewayImpl
                 let login_fut = home.login(&home_proof)
                     .map_err(|err| err.context(ErrorKind::LoginFailed).into())
                     .inspect( move |session| {
+                        // TODO this allows initiating several fill attempts in parallel
+                        //      until first one succeeds, last one wins by overwriting.
+                        //      Is this acceptable?
                         session_cache.borrow_mut().insert( home_id, session.clone() ); } );
                 Box::new(login_fut)
             });

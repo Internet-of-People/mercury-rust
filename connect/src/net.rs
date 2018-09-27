@@ -8,7 +8,7 @@ use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 
 use mercury_home_protocol::*;
-use ::client::{Error, ErrorKind, HomeConnector};
+use ::profile::{Error, ErrorKind, HomeConnector};
 
 
 
