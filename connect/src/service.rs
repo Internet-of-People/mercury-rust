@@ -5,10 +5,11 @@ use std::rc::{Rc, Weak};
 
 use failure::Fail; // Backtrace, Context
 use futures::prelude::*;
-use futures::{future::{self, loop_fn, Loop}, sync::mpsc};
+use futures::{future, sync::mpsc};
 use tokio_core::reactor;
 
 use mercury_home_protocol::*;
+use mercury_home_protocol::future as fut;
 use mercury_storage::async::KeyValueStore;
 use ::{ConnectService, DAppPermission, DAppSession, Relation};
 use ::client::{HomeConnector, ProfileGateway, ProfileGatewayImpl};
@@ -287,28 +288,14 @@ impl SettingsImpl
         -> Box< Future<Item=Vec<EventSink>, Error=()> >
     {
         // Create tasks (futures) of sending an item to each listener
-        let all_send_futs = sinks.drain(..)
-            .map( |sink| sink.send( event.clone() ) )
-            .collect();
+        let send_futs = sinks.drain(..)
+            .map( |sink| sink.send( event.clone() ) );
 
         // Collect successful senders, drop failing ones
-        // TODO here we should use either a send timeout or unbounded listener channels without backpressure
-        //      because now a single slow listener could delay all others
-        let fwd_fut = loop_fn( ( Box::new( ::std::iter::empty() ) as Box<Iterator<Item=_>>, all_send_futs),
-            |(successful, remaining)|
-            {
-                future::select_all(remaining).then( |first_finished_res|
-                {
-                    let (sent, tail) = match first_finished_res {
-                        Err( (_err, _idx, tail) ) => ( Box::new( successful) as Box<Iterator<Item=_>>, tail ),
-                        Ok( (sink, _idx, tail) )  => ( Box::new( successful.chain( ::std::iter::once(sink) ) ) as Box<Iterator<Item=_>>, tail ),
-                    };
+        let fwd_fut = fut::collect_results(send_futs)
+            .map( |mut results| results.drain(..)
+                .filter_map( |res| res.ok() ).collect() );
 
-                    if tail.is_empty() { Ok(Loop::Break( (sent,tail) )) }
-                    else { Ok(Loop::Continue( (sent,tail) )) }
-                } )
-            } )
-            .map( |(successful, _tail)| successful.collect::<Vec<_>>() );
         Box::new(fwd_fut)
     }
 
