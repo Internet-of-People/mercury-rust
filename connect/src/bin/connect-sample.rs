@@ -65,7 +65,8 @@ fn main()
 
     let mut reactor = reactor::Core::new().unwrap();
     let home_connector = SimpleTcpHomeConnector::new(reactor.handle());
-    let profile_gw = MyProfileImpl::new(client_signer.clone(), Rc::new(profile_store), Rc::new(home_connector) );
+    let profile_gw = MyProfileImpl::new(client_signer.clone(), Rc::new(profile_store),
+        Rc::new(home_connector), reactor.handle() );
     let test_fut = profile_gw.connect_home(&server_id.clone())
         .map_err(|err| err.context(::mercury_home_protocol::error::ErrorKind::ConnectionToHomeFailed).into())
         .and_then(|home| {

@@ -1,12 +1,15 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::rc::Rc;
+use std::rc::{Rc, Weak};
 use std::fmt::Display;
 
 use failure::{Context, Fail, Backtrace};
-use futures::{future, Future, IntoFuture};
+use futures::prelude::*;
+use futures::{future, sync::mpsc};
+use tokio_core::reactor;
 
 use mercury_home_protocol::*;
+use mercury_home_protocol::future as fut;
 use ::Relation;
 
 
@@ -180,7 +183,20 @@ pub trait MyProfile
 
 
     fn login(&self) ->
-        Box< Future<Item=Rc<HomeSession>, Error=Error> >;
+        Box< Future<Item=Rc<MyHomeSession>, Error=Error> >;
+}
+
+
+
+pub type EventSink   = mpsc::Sender<ProfileEvent>;
+pub type EventStream = mpsc::Receiver<ProfileEvent>;
+
+pub trait MyHomeSession
+{
+    fn session(&self) -> Rc<HomeSession>;
+
+    // There's no separate remove_listener(), just drop the listener stream side and that's all
+    fn add_listener(&self, listener: EventSink);
 }
 
 
@@ -191,14 +207,17 @@ pub struct MyProfileImpl
     signer:         Rc<Signer>,
     profile_repo:   Rc<ProfileRepo>,
     home_connector: Rc<HomeConnector>,
-    session_cache:  Rc<RefCell< HashMap<ProfileId, Rc<HomeSession>> >>, // {home_id -> session}
+    handle:         reactor::Handle,
+    session_cache:  Rc<RefCell< HashMap<ProfileId, Rc<MyHomeSession>> >>, // {home_id -> session}
 }
 
 
 impl MyProfileImpl
 {
-    pub fn new(signer: Rc<Signer>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
-        -> Self { Self{ signer, profile_repo, home_connector, session_cache: Default::default() } }
+    pub fn new(signer: Rc<Signer>, profile_repo: Rc<ProfileRepo>,
+               home_connector: Rc<HomeConnector>, handle: reactor::Handle) -> Self
+        { Self{ signer, profile_repo, home_connector, handle, session_cache: Default::default() } }
+
 
     pub fn connect_home(&self, home_profile_id: &ProfileId)
         -> Box< Future<Item=Rc<Home>, Error=Error> >
@@ -221,7 +240,7 @@ impl MyProfileImpl
 
 
     pub fn login_home(&self, home_profile_id: ProfileId) ->
-        Box< Future<Item=Rc<HomeSession>, Error=Error> >
+        Box< Future<Item=Rc<MyHomeSession>, Error=Error> >
     {
         if let Some(ref session_rc) = self.session_cache.borrow().get(&home_profile_id)
             { return Box::new( Ok( Rc::clone(session_rc) ).into_future() ) }
@@ -256,16 +275,18 @@ impl MyProfileImpl
                 let profile_repo_clone = self.profile_repo.clone();
                 let home_connector_clone = self.home_connector.clone();
                 let signer_clone = self.signer.clone();
+                let handle = self.handle.clone();
                 move |home_proof| {
                     Self::connect_home2(&home_profile_id, profile_repo_clone, home_connector_clone, signer_clone)
                         .and_then( move |home| {
                             home.login(&home_proof)
                                 .map_err( |err| err.context(ErrorKind::LoginFailed).into() )
-                                .inspect( move |session| {
+                                .map( move |session| MyHomeSessionImpl::new(session, handle) )
+                                .inspect( move |my_session| {
                                     // TODO this allows initiating several fill attempts in parallel
                                     //      until first one succeeds, last one wins by overwriting.
                                     //      Is this acceptable?
-                                    session_cache.borrow_mut().insert( home_profile_id.to_owned(), session.clone() );
+                                    session_cache.borrow_mut().insert( home_profile_id.to_owned(), my_session.clone() );
                                 } )
                         } )
                 }
@@ -324,6 +345,7 @@ impl MyProfileImpl
 }
 
 
+
 impl MyProfile for MyProfileImpl
 {
     fn signer(&self) -> &Signer { &*self.signer }
@@ -373,11 +395,10 @@ impl MyProfile for MyProfileImpl
         let own_profile_clone = own_prof.clone();
         let upd_fut = self.login_home(home_id)
             .map_err(|err| err.context(ErrorKind::LoginFailed).into())
-            .and_then( move |session| {
-                session
-                    .update(own_profile_clone)
-                    .map_err(|err| err.context(ErrorKind::ProfileUpdateFailed).into())
-            });
+            .and_then( move |my_session| my_session.session()
+                .update(own_profile_clone)
+                .map_err(|err| err.context(ErrorKind::ProfileUpdateFailed).into())
+            );
         Box::new(upd_fut)
     }
 
@@ -387,11 +408,10 @@ impl MyProfile for MyProfileImpl
     {
         let unreg_fut = self.login_home(home_id)
             .map_err(|err| err.context(ErrorKind::LoginFailed).into())
-            .and_then( move |session| {
-                session
-                    .unregister(newhome_id)
-                    .map_err(|err| err.context(ErrorKind::DeregistrationFailed).into())
-            });
+            .and_then( move |my_session| my_session.session()
+                .unregister(newhome_id)
+                .map_err(|err| err.context(ErrorKind::DeregistrationFailed).into())
+            );
         Box::new(unreg_fut)
     }
 
@@ -477,13 +497,14 @@ impl MyProfile for MyProfileImpl
 
 
     // TODO this should try connecting to ALL of our homes, using our collect_results() future util function
-    fn login(&self) -> Box< Future<Item=Rc<HomeSession>, Error=Error> >
+    fn login(&self) -> Box< Future<Item=Rc<MyHomeSession>, Error=Error> >
     {
         if let Some(ref session_rc) = self.session_cache.borrow().values().next()
             { return Box::new( Ok( Rc::clone(session_rc) ).into_future() ) }
 
         let my_profile_id = self.signer.profile_id().to_owned();
         let session_cache = self.session_cache.clone();
+        let handle = self.handle.clone();
         let log_fut = self.profile_repo.load( self.signer.profile_id() )
             .map_err( |err| err.context(ErrorKind::LoginFailed).into() )
             .and_then( {
@@ -504,14 +525,106 @@ impl MyProfile for MyProfileImpl
                 };
                 let login_fut = home.login(&home_proof)
                     .map_err(|err| err.context(ErrorKind::LoginFailed).into())
-                    .inspect( move |session| {
+                    .map( move |session| MyHomeSessionImpl::new(session, handle) )
+                    .inspect( move |my_session| {
                         // TODO this allows initiating several fill attempts in parallel
                         //      until first one succeeds, last one wins by overwriting.
                         //      Is this acceptable?
-                        session_cache.borrow_mut().insert( home_id, session.clone() ); } );
+                        session_cache.borrow_mut().insert( home_id, my_session.clone() ); } );
                 Box::new(login_fut)
             });
 
         Box::new(log_fut)
     }
+}
+
+
+
+pub struct MyHomeSessionImpl
+{
+    session:        Rc<HomeSession>,
+    event_listeners:Rc<RefCell< Vec<EventSink> >>,
+}
+
+
+impl MyHomeSessionImpl
+{
+    fn new(session: Rc<HomeSession>, handle: reactor::Handle) -> Rc<MyHomeSession>
+    {
+        let this = Self{ session, event_listeners: Default::default() };
+
+        let listeners = Rc::downgrade(&this.event_listeners);
+        debug!("Initialized session, start forwarding profile events to listeners");
+        handle.spawn(
+            this.session.events().for_each( move |event|
+                Self::forward_event_safe( listeners.clone(), event ) ) );
+
+        Rc::new(this)
+    }
+
+
+    pub fn add_listener(event_listeners: Rc<RefCell< Vec<EventSink> >>, listener: EventSink)
+        { event_listeners.borrow_mut().push(listener) }
+
+
+    // Notify all registered listeners of an incoming profile event,
+    // removing failing (i.e. dropped) listeners from the list
+    fn forward_event(mut event_listeners: Vec<EventSink>, event: ProfileEvent)
+        -> Box< Future<Item=Vec<EventSink>, Error=()> >
+    {
+        // Create tasks (futures) of sending an item to each listener
+        let send_futs = event_listeners.drain(..)
+            .map( |listener| listener.send( event.clone() ) );
+
+        // Collect successful senders, drop failing ones
+        let fwd_fut = fut::collect_results(send_futs)
+            .map( |mut results| results.drain(..)
+                .filter_map( |res| res.ok() ).collect() );
+
+        Box::new(fwd_fut)
+    }
+
+
+    // Call forward event with safety measures on: respect a dropped service and remote errors sent by the home
+    fn forward_event_safe(event_listeners_weak: Weak<RefCell< Vec<EventSink> >>,
+                          event_res: Result<ProfileEvent,String>)
+        -> Box< Future<Item=(), Error=()> >
+    {
+        // Get strong Rc from Weak, stop forwarding if Rc is already dropped
+        let event_listeners_rc = match event_listeners_weak.upgrade() {
+            Some(listeners) => listeners,
+            None => {
+                debug!("Stop event forwarding for profile after underlying session was dropped");
+                return Box::new( Err( () ).into_future() ) // NOTE error only to break for_each, otherwise normal
+            },
+        };
+
+        // Try unwrapping and forwarding event, stop forwarding if received remote error
+        match event_res {
+            Ok(event) => {
+                let listeners = event_listeners_rc.replace( Vec::new() );
+                let fwd_fut = Self::forward_event(listeners, event)
+                    .map( move |successful_listeners| {
+                        let mut listeners = event_listeners_rc.borrow_mut();
+                        listeners.extend(successful_listeners); // Use extend instead of assignment to keep listeners added meanwhile
+                    } );
+                Box::new(fwd_fut) as Box<Future<Item=(), Error=()>>
+            },
+            Err(e) => {
+                warn!("Remote error listening to profile events, stopping listeners: {}", e);
+                Box::new( Err(()).into_future() )
+            },
+        }
+    }
+}
+
+
+impl MyHomeSession for MyHomeSessionImpl
+{
+    fn session(&self) -> Rc<HomeSession>
+        { self.session.clone() }
+
+    // There's no separate remove_listener(), just drop the listener stream side and that's all
+    fn add_listener(&self, listener: EventSink)
+        { Self::add_listener( self.event_listeners.clone(), listener ); }
 }

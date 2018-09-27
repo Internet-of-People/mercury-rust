@@ -96,7 +96,7 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
     let signer_factory: Rc<SignerFactory> = Rc::new(SignerFactory::new(signers) );
     let home_connector = Rc::new( SimpleTcpHomeConnector::new( reactor.handle() ) );
     let gateways = Rc::new( MyProfileFactory::new(
-        signer_factory, profile_repo.clone(), home_connector ) );
+        signer_factory, profile_repo.clone(), home_connector, reactor.handle() ) );
 
     let ui = Rc::new( DummyUserInterface::new( my_profiles.clone() ) );
     let mut own_profile_store = InMemoryStore::new();

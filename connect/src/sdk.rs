@@ -55,9 +55,9 @@ impl DAppSession for DAppConnect
             .and_then(
             {
                 let app = self.app_id.clone();
-                move |session| {
+                move |my_session| {
                     debug!("Checking in app {:?} to receive incoming calls", app);
-                    let event_stream = session.checkin_app(&app)
+                    let event_stream = my_session.session().checkin_app(&app)
                         // Map stream elements, i.e. each incoming call Result object
                         .map( |inc_call_res| inc_call_res
                             // Transform only Ok(call) into an event
