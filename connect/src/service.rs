@@ -5,14 +5,14 @@ use std::rc::Rc;
 
 use failure::Fail; // Backtrace, Context
 use futures::prelude::*;
-use futures::future;
+use futures::{future, sync::mpsc};
 use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
 use ::{DAppEndpoint, DAppPermission, DAppSession, Relation};
 use ::error::*;
-use ::profile::{HomeConnector, MyProfile, MyProfileImpl};
+use ::profile::{EventStream, HomeConnector, MyProfile, MyProfileImpl};
 use ::sdk::DAppConnect;
 use ::simple_profile_repo::SimpleProfileRepo;
 
@@ -168,7 +168,7 @@ pub trait AdminSession
     fn create_profile(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
 
     // TODO separate these profile-related functions below into a separate trait and give a getter method like
-    //      fn profile_admin(&self, profile: &ProfileId) -> Future<ProfileAdminEndpoint>
+    //      fn profile_admin(&self, profile: &ProfileId) -> Future<ProfileAdminSession>
     fn update_profile(&self, profile: &OwnProfile) -> Box< Future<Item=(), Error=Error> >;
     fn remove_profile(&self, profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
 
@@ -184,6 +184,8 @@ pub trait AdminSession
     fn initiate_relation(&self, my_profile: &ProfileId, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
     fn accept_relation(&self, half_proof: &RelationHalfProof) -> Box< Future<Item=(), Error=Error> >;
     fn revoke_relation(&self, profile: &ProfileId, relation: &RelationProof) -> Box< Future<Item=(), Error=Error> >;
+
+    fn events(&self, profile: &ProfileId) -> Box< Future<Item=EventStream, Error=Error>>;
 }
 
 
@@ -254,7 +256,7 @@ pub struct AdminSessionImpl
     my_profile_ids: Rc<HashSet<ProfileId>>,
     profile_store:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
     profile_factory:Rc<MyProfileFactory>,
-    handle:         reactor::Handle,
+//    handle:         reactor::Handle,
 }
 
 
@@ -262,10 +264,10 @@ impl AdminSessionImpl
 {
     pub fn new(ui: Rc<UserInterface>, my_profile_ids: Rc<HashSet<ProfileId>>,
                profile_store: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-               profile_factory: Rc<MyProfileFactory>, handle: reactor::Handle)
+               profile_factory: Rc<MyProfileFactory>) //, handle: reactor::Handle)
         -> Rc<AdminSession>
     {
-        let this = Self{ ui, profile_store, my_profile_ids, profile_factory, handle };
+        let this = Self{ ui, profile_store, my_profile_ids, profile_factory}; //, handle };
         Rc::new(this) // as Rc<AdminSession>
     }
 }
@@ -373,7 +375,6 @@ impl AdminSession for AdminSessionImpl
     }
 
 
-    // TODO should the future wait for a proper response to be received?
     fn initiate_relation(&self, my_profile_id: &ProfileId, with_profile: &ProfileId) ->
         Box< Future<Item=(), Error=Error> >
     {
@@ -382,45 +383,10 @@ impl AdminSession for AdminSessionImpl
             None => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
         };
 
-        // let event_sinks = self.event_sinks.clone();
-        let with_profile = with_profile.to_owned();
-//        let proof_fut = self.login_and_forward_events(my_profile)
-//            .and_then( move |_session|
-//                gateway.pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &with_profile, None)
-//                    .map_err( |err| err.context(ErrorKind::Unknown).into() ) )
-//            .inspect( |_| debug!("Pairing request sent, expect response as profile event on my home") )
-//            .and_then( |()|
-//            {
-//                let (event_sink, event_stream) = mpsc::channel(CHANNEL_CAPACITY);
-//                Self::add_listener(event_sinks, event_sink);
-//
-//                event_stream.filter_map( move |event|
-//                {
-//                    debug!("Profile event listener got event");
-//                    if let ProfileEvent::PairingResponse(proof) = event {
-//                        debug!("Got pairing response, checking peer id: {:?}", proof);
-//                        if proof.peer_id( gateway.signer().profile_id() ).is_ok()
-//                            { return Some(proof) }
-//                    }
-//                    return None
-//                } )
-//                .take(1)
-//                .collect()
-//                .map_err( |()| {
-//                    debug!("Pairing failed");
-//                    Error::from(ErrorKind::Unknown) // TODO
-//                } )
-//            } )
-//            .and_then( |mut proofs| {
-//                debug!("Got {} matching pairing response: {:?}", proofs.len(), proofs.last());
-//                proofs.pop().ok_or( {
-//                    debug!("Profile event stream ended without proper response");
-//                    ErrorKind::Unknown.into()
-//                } )
-//            } ); // TODO
-//            ;
-//        Box::new(proof_fut)
-        unimplemented!()
+        let init_fut = my_profile
+            .pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &with_profile, None)
+            .map_err( |err| err.context(ErrorKind::Unknown).into() );
+        Box::new(init_fut)
     }
 
 
@@ -435,6 +401,26 @@ impl AdminSession for AdminSessionImpl
     {
         unimplemented!()
     }
+
+
+    fn events(&self, profile: &ProfileId) -> Box< Future<Item=EventStream, Error=Error>>
+    {
+        let my_profile = match self.profile_factory.create(profile) {
+            Some(profile) => profile,
+            None => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
+        };
+
+        let fut = my_profile.login()
+            .map( |my_session| {
+                // TODO consider if this is right here, or maybe this service (after splitted by profile)
+                //      should own and dispatch the original event stream and handle listeners
+                let (listener, events) = mpsc::channel(CHANNEL_CAPACITY);
+                my_session.add_listener(listener);
+                events
+            } )
+            .map_err( |err| err.context(ErrorKind::Unknown).into() );;
+        Box::new(fut)
+    }
 }
 
 
@@ -448,7 +434,7 @@ pub struct ConnectService
     my_profile_ids: Rc<HashSet<ProfileId>>,
     profile_store:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
     profile_factory:Rc<MyProfileFactory>,
-    handle:         reactor::Handle,
+//    handle:         reactor::Handle,
 }
 
 
@@ -456,15 +442,16 @@ impl ConnectService
 {
     pub fn new(ui: Rc<UserInterface>, my_profile_ids: Rc<HashSet<ProfileId>>,
                profile_store: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-               profile_factory: Rc<MyProfileFactory>, handle: &reactor::Handle) -> Self
-        { Self{ ui, my_profile_ids: my_profile_ids, profile_store, profile_factory: profile_factory, handle: handle.clone() } }
+               profile_factory: Rc<MyProfileFactory>) //, handle: &reactor::Handle)
+        -> Self
+    { Self{ ui, my_profile_ids: my_profile_ids, profile_store, profile_factory: profile_factory } } //, handle: handle.clone() } }
 
 
     pub fn admin_session(&self, authorization: Option<DAppPermission>)
         -> Box< Future<Item=Rc<AdminSession>, Error=Error> >
     {
         let adm = AdminSessionImpl::new(self.ui.clone(), self.my_profile_ids.clone(),
-            self.profile_store.clone(), self.profile_factory.clone(), self.handle.clone() );
+            self.profile_store.clone(), self.profile_factory.clone() ); //, self.handle.clone() );
 
         Box::new( Ok(adm).into_future() )
     }

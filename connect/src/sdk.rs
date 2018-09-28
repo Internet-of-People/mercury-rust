@@ -46,8 +46,6 @@ impl DAppSession for DAppConnect
     }
 
 
-    // TODO merge different incoming events (e.g. pairing response, profile updates, etc)
-    //      into a single event enum, so as not only calls are returned here
     fn checkin(&self)
         -> Box< Future<Item=Box<Stream<Item=Result<DAppEvent,String>, Error=()>>, Error=::Error> >
     {

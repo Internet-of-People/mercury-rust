@@ -102,7 +102,7 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
     let mut own_profile_store = InMemoryStore::new();
     reactor.run( own_profile_store.set(my_profile_id.clone(), my_own_profile ) ).unwrap();
     let profile_store = Rc::new( RefCell::new(own_profile_store) );
-    let service = Rc::new( ConnectService::new(ui, my_profiles, profile_store, gateways, &reactor.handle() ) );
+    let service = Rc::new( ConnectService::new(ui, my_profiles, profile_store, gateways) ); //, &reactor.handle() ) );
 
     Ok( (service, my_profile_id, home_id) )
 }

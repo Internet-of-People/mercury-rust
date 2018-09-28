@@ -1,8 +1,9 @@
-use super::*;
-use mercury_home_protocol::*;
 use futures::IntoFuture;
 use futures::Stream;
 
+use mercury_home_protocol::*;
+use mercury_connect::profile::EventStream;
+use super::*;
 
 
 pub struct Client {
@@ -13,7 +14,38 @@ pub struct Client {
 impl Client{
     pub fn new(cfg: ClientConfig, appctx: AppContext) -> Self
         { Self{appctx, cfg} }
+
+    fn wait_for_pairing_response(events: EventStream, my_profile_id: ProfileId)
+        -> Box< Future<Item=RelationProof, Error=std::io::Error> >
+    {
+        let fut = events
+            .filter_map( move |event|
+            {
+                debug!("Profile event listener got event");
+                if let ProfileEvent::PairingResponse(proof) = event {
+                    debug!("Got pairing response, checking peer id: {:?}", proof);
+                    if proof.peer_id(&my_profile_id).is_ok()
+                        { return Some(proof) }
+                }
+                return None
+            } )
+            .take(1)
+            .into_future()
+            .map_err( |((),__stream)| {
+                debug!("Pairing failed");
+                std::io::Error::new(std::io::ErrorKind::Other, "Pairing failed")
+            } )
+            .and_then( |(proof, _stream)| {
+                debug!("Got matching pairing response: {:?}", proof);
+                proof.ok_or( {
+                    debug!("Profile event stream ended without proper response");
+                    std::io::Error::new(std::io::ErrorKind::Other, "Got no pairing response")
+                } )
+            } );
+        Box::new(fut)
+    }
 }
+
 
 impl IntoFuture for Client
 {
@@ -57,11 +89,15 @@ impl IntoFuture for Client
                 let rel_opt = find_relation_proof(&relations, client_id2.clone(), peer_id.clone(),
                     Some(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN) );
                 match rel_opt {
-                    // TODO return relation found here and continue with that
-                    Some(_rel) => Box::new( Ok(()).into_future() ) as Box<Future<Item=_,Error=_>>,
-                    // TODO wait for relation response and continue with the call only afterwards
-                    None => Box::new( admin.initiate_relation(&client_id2, &peer_id)
-                        .map_err( |_e| ::std::io::Error::from(::std::io::ErrorKind::AddrNotAvailable) ) )
+                    Some(proof) => Box::new( Ok(proof).into_future() ) as Box<Future<Item=_,Error=_>>,
+                    None => {
+                        let client_id3 = client_id2.clone();
+                        let rel_fut = admin.initiate_relation(&client_id2, &peer_id)
+                            .and_then( move |()| admin.events(&client_id2) )
+                            .map_err( |_e| ::std::io::Error::from(::std::io::ErrorKind::AddrNotAvailable) )
+                            .and_then( |events| Self::wait_for_pairing_response(events, client_id3) );
+                        Box::new(rel_fut)
+                    }
                 }
             } )
             .then( |_| fut );
@@ -69,4 +105,3 @@ impl IntoFuture for Client
         Box::new(fut)
     }
 }
-

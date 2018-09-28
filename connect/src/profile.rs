@@ -191,6 +191,8 @@ pub trait MyProfile
 pub type EventSink   = mpsc::Sender<ProfileEvent>;
 pub type EventStream = mpsc::Receiver<ProfileEvent>;
 
+// TODO consider if event listeners should be handled here or we should delete this and
+//      allow event listeners somewhere under the service instead
 pub trait MyHomeSession
 {
     fn session(&self) -> Rc<HomeSession>;
