@@ -6,7 +6,7 @@ use futures::sync::mpsc;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::{DAppCall, DAppEvent, DAppSession, find_relation_proof, Relation, profile::MyProfile};
+use ::{DAppCall, DAppEvent, DAppSession, find_relation_proof, profile::MyProfile};
 use ::error::{Error, ErrorKind};
 
 
@@ -33,7 +33,7 @@ impl DAppSession for DAppConnect
         { self.my_profile.signer().profile_id() }
 
 
-    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >
+    fn contacts(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
     {
         // TODO properly implement this
         // unimplemented!();
@@ -95,7 +95,7 @@ impl DAppSession for DAppConnect
                         debug!("Got response to call");
                         match to_callee_opt {
                             None => Err( Error::from(ErrorKind::Unknown) ), // TODO
-                            Some(to_callee) => Ok( DAppCall{ sender: to_callee, receiver: from_callee } )
+                            Some(to_callee) => Ok( DAppCall{ outgoing: to_callee, incoming: from_callee } )
                         }
                     } )
             } );

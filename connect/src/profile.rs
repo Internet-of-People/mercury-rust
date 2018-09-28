@@ -10,7 +10,6 @@ use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_home_protocol::future as fut;
-use ::Relation;
 
 
 
@@ -154,7 +153,10 @@ pub trait HomeConnector
 pub trait MyProfile
 {
     fn signer(&self) -> &Signer;
-    fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >;
+    fn relations(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
+
+    fn received_pairing_response(&self, rel_proof: RelationProof) ->
+        Box< Future<Item=(),Error=()> >;
 
     fn claim(&self, home: ProfileId, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=Error> >;
@@ -171,10 +173,10 @@ pub trait MyProfile
         Box< Future<Item=(), Error=Error> >;
 
 
-    fn pair_request(&self, relation_type: &str, with_profile_id: &ProfileId, pairing_url: Option<&str>) ->
+    fn send_pairing_request(&self, relation_type: &str, with_profile_id: &ProfileId, pairing_url: Option<&str>) ->
         Box< Future<Item=(), Error=Error> >;
 
-    fn pair_response(&self, proof: RelationProof) ->
+    fn send_pairing_response(&self, proof: RelationProof) ->
         Box< Future<Item=(), Error=Error> >;
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
@@ -211,6 +213,7 @@ pub struct MyProfileImpl
     home_connector: Rc<HomeConnector>,
     handle:         reactor::Handle,
     session_cache:  Rc<RefCell< HashMap<ProfileId, Rc<MyHomeSession>> >>, // {home_id -> session}
+    relations:      Rc<RefCell< Vec<RelationProof> >>,
 }
 
 
@@ -218,7 +221,8 @@ impl MyProfileImpl
 {
     pub fn new(signer: Rc<Signer>, profile_repo: Rc<ProfileRepo>,
                home_connector: Rc<HomeConnector>, handle: reactor::Handle) -> Self
-        { Self{ signer, profile_repo, home_connector, handle, session_cache: Default::default() } }
+        { Self{ signer, profile_repo, home_connector, handle,
+                relations: Default::default(), session_cache: Default::default() } }
 
 
     pub fn connect_home(&self, home_profile_id: &ProfileId)
@@ -353,11 +357,15 @@ impl MyProfile for MyProfileImpl
     fn signer(&self) -> &Signer { &*self.signer }
 
 
-    fn relations(&self) -> Box< Future<Item=Vec<Relation>, Error=Error> >
-    {
-        unimplemented!()
-    }
+    fn relations(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
+        { Box::new( Ok( self.relations.borrow().clone() ).into_future() ) }
 
+
+    fn received_pairing_response(&self, rel_proof: RelationProof) ->
+        Box< Future<Item=(),Error=()> >
+    {
+        Box::new( Ok( self.relations.borrow_mut().push(rel_proof) ).into_future() )
+    }
 
     fn claim(&self, home_id: ProfileId, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=Error> >
@@ -418,9 +426,11 @@ impl MyProfile for MyProfileImpl
     }
 
 
-    fn pair_request(&self, relation_type: &str, with_profile_id: &ProfileId, _pairing_url: Option<&str>) ->
+    fn send_pairing_request(&self, relation_type: &str, with_profile_id: &ProfileId, _pairing_url: Option<&str>) ->
         Box< Future<Item=(), Error=Error> >
     {
+        debug!("Trying to send pairing request to {}", with_profile_id);
+
         let profile_repo_clone = self.profile_repo.clone();
         let home_connector_clone = self.home_connector.clone();
         let signer_clone = self.signer.clone();
@@ -441,8 +451,8 @@ impl MyProfile for MyProfileImpl
                 let half_proof = RelationHalfProof::new(&rel_type_clone, &profile.id, &*signer_clone.clone() );
                 MyProfileImpl::any_home_of2(&profile, profile_repo_clone, home_connector_clone, signer_clone)
                     .and_then( move |(_home_proof, home)| {
-                        home
-                            .pair_request(half_proof)
+                        debug!("Contacted home of target profile, sending pairing request");
+                        home.pair_request(half_proof)
                             .map_err(|err| err.context(ErrorKind::PairRequestFailed).into())
                     })
             } );
@@ -451,7 +461,7 @@ impl MyProfile for MyProfileImpl
     }
 
 
-    fn pair_response(&self, proof: RelationProof) ->
+    fn send_pairing_response(&self, proof: RelationProof) ->
         Box< Future<Item=(), Error=Error> >
     {
         let peer_id = match proof.peer_id( self.signer.profile_id() ) {

@@ -66,6 +66,10 @@ impl IntoFuture for Server {
             });
 
         let calls_fut = ::temporary_init_env(&self.appctx)
+//            // TODO listen and accept all incoming pairing requests
+//            .and_then( move |admin|
+//                admin.events(&client_id2)
+//            )
             .then( |_| calls_fut );
 
         // Handling call and event management

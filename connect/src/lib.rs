@@ -55,24 +55,24 @@ pub struct Relation
     pub peer:       Profile,
 }
 
-impl Relation
-{
-    pub fn new(peer: &Profile, proof: &RelationProof) -> Self
-        { Self { peer: peer.clone(), proof: proof.clone() } }
-
+//impl Relation
+//{
+//    pub fn new(peer: &Profile, proof: &RelationProof) -> Self
+//        { Self { peer: peer.clone(), proof: proof.clone() } }
+//
 //    pub fn call(&self, init_payload: AppMessageFrame,
 //                to_caller: Option<AppMsgSink>) ->
 //        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
 //    {
 //        unimplemented!();
 //    }
-}
+//}
 
 
 pub struct DAppCall
 {
-    pub sender   : AppMsgSink,
-    pub receiver : AppMsgStream
+    pub outgoing: AppMsgSink,
+    pub incoming: AppMsgStream
 }
 
 
@@ -100,7 +100,7 @@ pub trait DAppSession
     // After the session was initialized, the profile is selected and can be queried any time
     fn selected_profile(&self) -> &ProfileId;
 
-    fn contacts(&self) -> Box< Future<Item=Vec<Relation>, Error=::Error> >;
+    fn contacts(&self) -> Box< Future<Item=Vec<RelationProof>, Error=::Error> >;
 
     fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=::Error> >;
 
@@ -113,11 +113,10 @@ pub trait DAppSession
 
 
 
-pub fn find_relation_proof<'a>(relations: &'a [Relation], my_id: ProfileId, peer_id: ProfileId,
+pub fn find_relation_proof<'a>(relations: &'a [RelationProof], my_id: ProfileId, peer_id: ProfileId,
     relation_type: Option<&str>) -> Option<RelationProof>
 {
-    let mut peers_filtered = relations.iter()
-        .map( |relation| relation.proof.clone() )
+    let mut peers_filtered = relations.iter().cloned()
         .filter( |proof| {
             proof.peer_id(&my_id)
                 .map( |p_id| *p_id == peer_id )

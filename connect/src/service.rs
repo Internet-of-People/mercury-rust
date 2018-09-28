@@ -10,7 +10,7 @@ use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::{DAppEndpoint, DAppPermission, DAppSession, Relation};
+use ::{DAppEndpoint, DAppPermission, DAppSession};
 use ::error::*;
 use ::profile::{EventStream, HomeConnector, MyProfile, MyProfileImpl};
 use ::sdk::DAppConnect;
@@ -179,7 +179,7 @@ pub trait AdminSession
 //    fn home_endpoint_hint(&self, home: &ProfileId, endpoint: multiaddr);
 //    fn profile_home_hint(&self, profile: &ProfileId, home: &ProfileId);
 
-    fn relations(&self, profile: &ProfileId) -> Box< Future<Item=Vec<Relation>, Error=Error> >;
+    fn relations(&self, profile: &ProfileId) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
     // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
     fn initiate_relation(&self, my_profile: &ProfileId, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
     fn accept_relation(&self, half_proof: &RelationHalfProof) -> Box< Future<Item=(), Error=Error> >;
@@ -368,10 +368,17 @@ impl AdminSession for AdminSessionImpl
     }
 
 
-    fn relations(&self, _profile: &ProfileId) ->
-        Box< Future<Item=Vec<Relation>, Error=Error> >
+    fn relations(&self, profile_id: &ProfileId) ->
+        Box< Future<Item=Vec<RelationProof>, Error=Error> >
     {
-        unimplemented!()
+        let my_profile = match self.profile_factory.create(profile_id) {
+            Some(profile) => profile,
+            None => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
+        };
+
+        let fut = my_profile.relations()
+            .map_err( |e| e.context(ErrorKind::Unknown).into() );
+        Box::new(fut)
     }
 
 
@@ -384,7 +391,7 @@ impl AdminSession for AdminSessionImpl
         };
 
         let init_fut = my_profile
-            .pair_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &with_profile, None)
+            .send_pairing_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &with_profile, None)
             .map_err( |err| err.context(ErrorKind::Unknown).into() );
         Box::new(init_fut)
     }
@@ -504,7 +511,7 @@ impl UserInterface for DummyUserInterface
         Box::new( Ok( () ).into_future() )
     }
 
-    fn notify_pairing(&self, _response: &RelationProof) -> Box< Future<Item=(), Error=Error> >
+    fn notify_pairing(&self, response: &RelationProof) -> Box< Future<Item=(), Error=Error> >
     {
         Box::new( Ok( () ).into_future() )
     }
