@@ -1,5 +1,7 @@
-use futures::IntoFuture;
-use futures::Stream;
+use std::time::Duration;
+
+use futures::prelude::*;
+use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_connect::profile::EventStream;
@@ -15,7 +17,7 @@ impl Client{
     pub fn new(cfg: ClientConfig, appctx: AppContext) -> Self
         { Self{appctx, cfg} }
 
-    fn wait_for_pairing_response(events: EventStream, my_profile_id: ProfileId)
+    fn wait_for_pairing_response(events: EventStream, my_profile_id: ProfileId, handle: reactor::Handle)
         -> Box< Future<Item=RelationProof, Error=std::io::Error> >
     {
         let fut = events
@@ -23,7 +25,7 @@ impl Client{
             {
                 debug!("Profile event listener got event");
                 if let ProfileEvent::PairingResponse(proof) = event {
-                    debug!("Got pairing response, checking peer id: {:?}", proof);
+                    trace!("Got pairing response, checking peer id: {:?}", proof);
                     if proof.peer_id(&my_profile_id).is_ok()
                         { return Some(proof) }
                 }
@@ -36,12 +38,13 @@ impl Client{
                 std::io::Error::new(std::io::ErrorKind::Other, "Pairing failed")
             } )
             .and_then( |(proof, _stream)| {
-                debug!("Got matching pairing response: {:?}", proof);
-                proof.ok_or( {
+                proof.ok_or_else( || {
                     debug!("Profile event stream ended without proper response");
                     std::io::Error::new(std::io::ErrorKind::Other, "Got no pairing response")
                 } )
-            } );
+            } )
+            .and_then( move |proof| reactor::Timeout::new( Duration::from_millis(10), &handle ).unwrap()
+                .map( |_| proof ) );
         Box::new(fut)
     }
 }
@@ -78,6 +81,7 @@ impl IntoFuture for Client
         let peer_id = self.cfg.callee_profile_id.clone();
         let client_id = self.appctx.client_id.clone();
         let client_id2 = self.appctx.client_id.clone();
+        let handle = self.appctx.handle.clone();
         let fut = ::temporary_init_env(&self.appctx)
             .and_then( move |admin|
                 admin.relations(&client_id)
@@ -92,15 +96,16 @@ impl IntoFuture for Client
                     Some(proof) => Box::new( Ok(proof).into_future() ) as Box<Future<Item=_,Error=_>>,
                     None => {
                         let client_id3 = client_id2.clone();
-                        let rel_fut = admin.initiate_relation(&client_id2, &peer_id)
-                            .and_then( move |()| admin.events(&client_id2) )
+                        let rel_fut = admin.events(&client_id2)
+                            .and_then( move |events| admin.initiate_relation(&client_id2, &peer_id)
+                                .map( |()| events ) )
                             .map_err( |_e| ::std::io::Error::from(::std::io::ErrorKind::AddrNotAvailable) )
-                            .and_then( |events| Self::wait_for_pairing_response(events, client_id3) );
+                            .and_then( |events| Self::wait_for_pairing_response(events, client_id3, handle) );
                         Box::new(rel_fut)
                     }
                 }
             } )
-            .then( |_| fut );
+            .then( |_res| fut );
 
         Box::new(fut)
     }

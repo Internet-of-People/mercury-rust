@@ -239,7 +239,6 @@ pub struct RelationProof
     pub b_id:           ProfileId,
     pub b_signature:    Signature,
     // TODO is a nonce needed?
-
 }
 
 

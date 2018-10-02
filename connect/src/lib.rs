@@ -75,6 +75,10 @@ pub struct DAppCall
     pub incoming: AppMsgStream
 }
 
+//impl Drop for DAppCall
+//    { fn drop(&mut self) { debug!("DAppCall was dropped"); } }
+
+
 
 pub enum DAppEvent
 {

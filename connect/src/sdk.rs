@@ -35,9 +35,12 @@ impl DAppSession for DAppConnect
 
     fn contacts(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
     {
-        // TODO properly implement this
+        // TODO properly implement this to access only contacts related to this dApp
+        let fut = self.my_profile.relations()
+            .map_err( |e| e.context( ErrorKind::Unknown.into() ).into() );
+        Box::new(fut)
         // unimplemented!();
-        Box::new( Ok( Vec::new() ).into_future() )
+        // Box::new( Ok( Vec::new() ).into_future() )
     }
 
 
@@ -71,8 +74,7 @@ impl DAppSession for DAppConnect
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
         -> Box< Future<Item=DAppCall, Error=Error> >
     {
-        debug!("Got call request to {}", profile_id);
-
+        debug!("Looking for relation proof to call profile {}", profile_id);
         let call_fut = self.contacts()
             .and_then(
             {
@@ -80,10 +82,12 @@ impl DAppSession for DAppConnect
                 let peer_id = profile_id.to_owned();
                 move |contacts|
                     find_relation_proof( &contacts, my_id, peer_id, Some(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN) )
-                        .ok_or( ErrorKind::Unknown.into() )
-
+                        .ok_or_else( || {
+                            debug!("Failed to find proper relationproof to start call, drop call request");
+                            ErrorKind::Unknown.into()
+                        } )
             } )
-            .inspect( |_| debug!("Got relation proof, initiate call") )
+            .inspect( |_| debug!("Got relation proof, initiate call to profile") )
             .and_then(
             {
                 let my_profile = self.my_profile.clone();
@@ -92,10 +96,13 @@ impl DAppSession for DAppConnect
                 move |relation| my_profile.call(relation.to_owned(), app_id, init_payload, Some(to_caller))
                     .map_err( |e| e.context(ErrorKind::Unknown).into() )
                     .and_then( |to_callee_opt| {
-                        debug!("Got response to call");
+                        debug!("Call was answered, processing response");
                         match to_callee_opt {
                             None => Err( Error::from(ErrorKind::Unknown) ), // TODO
-                            Some(to_callee) => Ok( DAppCall{ outgoing: to_callee, incoming: from_callee } )
+                            Some(to_callee) => {
+                                info!("Call with duplex channel established");
+                                Ok( DAppCall{ outgoing: to_callee, incoming: from_callee } )
+                            }
                         }
                     } )
             } );

@@ -3,7 +3,7 @@ use super::*;
 use std::cell::RefCell;
 use std::time::Duration;
 
-use futures::*;
+use futures::prelude::*;
 use futures::sync::mpsc::channel;
 
 use tokio_signal::unix::{SIGUSR1};
@@ -65,11 +65,27 @@ impl IntoFuture for Server {
                 })
             });
 
+        let client_id = self.appctx.client_id.clone();
+        let handle = self.appctx.handle.clone();
         let calls_fut = ::temporary_init_env(&self.appctx)
-//            // TODO listen and accept all incoming pairing requests
-//            .and_then( move |admin|
-//                admin.events(&client_id2)
-//            )
+            .and_then( move |admin| admin.events(&client_id)
+                .map( |events| (admin, events) )
+                .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "failed to fetch events")) )
+            .and_then( move |(admin, events)| {
+                handle.spawn(
+                    events.for_each( move |event| {
+                        match event {
+                            ProfileEvent::PairingRequest(half_proof) => {
+                                let accept_fut = admin.accept_relation(&half_proof)
+                                    .map_err( |e| debug!("Failed to accept pairing request: {}", e) );
+                                Box::new(accept_fut) as Box<Future<Item=_,Error=_>>
+                            },
+                            err => Box::new( Ok( debug!("Got event {:?}, ignoring it", err) ).into_future() ),
+                        }
+                    } )
+                );
+                Ok( () )
+            } )
             .then( |_| calls_fut );
 
         // Handling call and event management

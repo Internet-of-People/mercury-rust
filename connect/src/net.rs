@@ -78,6 +78,7 @@ pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Result<SocketAddr, Erro
 pub struct SimpleTcpHomeConnector
 {
     handle: reactor::Handle,
+    // TODO cache_connections: TODO,
 }
 
 

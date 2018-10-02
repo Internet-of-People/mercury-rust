@@ -155,7 +155,7 @@ pub trait MyProfile
     fn signer(&self) -> &Signer;
     fn relations(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
 
-    fn received_pairing_response(&self, rel_proof: RelationProof) ->
+    fn on_new_relation(&self, rel_proof: RelationProof) ->
         Box< Future<Item=(),Error=()> >;
 
     fn claim(&self, home: ProfileId, profile: ProfileId) ->
@@ -213,6 +213,7 @@ pub struct MyProfileImpl
     home_connector: Rc<HomeConnector>,
     handle:         reactor::Handle,
     session_cache:  Rc<RefCell< HashMap<ProfileId, Rc<MyHomeSession>> >>, // {home_id -> session}
+// TODO remove this after testing, this should be fetched from the private binary part of OwnProfile
     relations:      Rc<RefCell< Vec<RelationProof> >>,
 }
 
@@ -282,17 +283,21 @@ impl MyProfileImpl
                 let home_connector_clone = self.home_connector.clone();
                 let signer_clone = self.signer.clone();
                 let handle = self.handle.clone();
+                let handle2 = self.handle.clone();
+                let relations_weak = Rc::downgrade(&self.relations);
                 move |home_proof| {
                     Self::connect_home2(&home_profile_id, profile_repo_clone, home_connector_clone, signer_clone)
                         .and_then( move |home| {
                             home.login(&home_proof)
                                 .map_err( |err| err.context(ErrorKind::LoginFailed).into() )
                                 .map( move |session| MyHomeSessionImpl::new(session, handle) )
-                                .inspect( move |my_session| {
+                                .inspect( move |my_session|
+                                {
                                     // TODO this allows initiating several fill attempts in parallel
                                     //      until first one succeeds, last one wins by overwriting.
                                     //      Is this acceptable?
                                     session_cache.borrow_mut().insert( home_profile_id.to_owned(), my_session.clone() );
+                                    Self::start_event_handler( relations_weak, my_session.clone(), &handle2 )
                                 } )
                         } )
                 }
@@ -348,6 +353,45 @@ impl MyProfileImpl
             .inspect( |_home_conn| debug!("Connected to first home, ignoring the rest") );
         Box::new(result)
     }
+
+
+    fn on_new_relation(relations: Weak<RefCell< Vec<RelationProof> >>, rel_proof: RelationProof) ->
+        Box< Future<Item=(),Error=()> >
+    {
+        debug!("Storing new relation: {:?}", rel_proof);
+        let relations_rc = match relations.upgrade() {
+            Some(rc) => rc,
+            None => return Box::new( Err( debug!("Received new relation to store, but Rc upgrade failed") ).into_future() ),
+        };
+
+        relations_rc.borrow_mut().push(rel_proof);
+        Box::new( Ok( () ).into_future() )
+    }
+
+    fn start_event_handler(relations: Weak<RefCell< Vec<RelationProof> >>,
+                           session: Rc<MyHomeSession>, handle: &reactor::Handle)
+    {
+        let (listener, events) = mpsc::channel(CHANNEL_CAPACITY);
+        session.add_listener(listener);
+
+        debug!("Start processing events to store accepted pairing responses as relations");
+        handle.spawn(
+            events.for_each( move |event| {
+                debug!("Profile event handler got new event to match: {:?}", event);
+                match event {
+                    ProfileEvent::PairingResponse(rel_proof) => {
+                        debug!("Got pairing response, saving relation");
+                        Self::on_new_relation( relations.clone(), rel_proof )
+                    },
+                    _ => Box::new( Ok( () ).into_future() ),
+                }
+            } )
+            .then( |res| {
+                debug!("Profile event handler read all events from stream, stopping with: {:?}", res);
+                Ok( () )
+            } )
+        );
+    }
 }
 
 
@@ -361,10 +405,10 @@ impl MyProfile for MyProfileImpl
         { Box::new( Ok( self.relations.borrow().clone() ).into_future() ) }
 
 
-    fn received_pairing_response(&self, rel_proof: RelationProof) ->
+    fn on_new_relation(&self, rel_proof: RelationProof) ->
         Box< Future<Item=(),Error=()> >
     {
-        Box::new( Ok( self.relations.borrow_mut().push(rel_proof) ).into_future() )
+        Self::on_new_relation( Rc::downgrade(&self.relations), rel_proof )
     }
 
     fn claim(&self, home_id: ProfileId, profile: ProfileId) ->
@@ -373,10 +417,8 @@ impl MyProfile for MyProfileImpl
         let claim_fut = self.connect_home(&home_id)
             .map_err(|err| err.context(ErrorKind::ConnectionToHomeFailed).into())
             .and_then( move |home| {
-                home
-                    .claim(profile)
+                home.claim(profile)
                     .map_err(|err| err.context(ErrorKind::FailedToClaimProfile).into())
-
             });
         Box::new(claim_fut)
     }
@@ -391,8 +433,7 @@ impl MyProfile for MyProfileImpl
         let reg_fut = self.connect_home(&home_id)
             .map_err( move |e| (own_prof_clone, e) )
             .and_then( move |home| {
-                home
-                    .register(own_prof, half_proof, invite)
+                home.register(own_prof, half_proof, invite)
                     .map_err(|(own_prof, err)| (own_prof, err.context(ErrorKind::RegistrationFailed).into()))
             });
         Box::new(reg_fut)
@@ -405,9 +446,10 @@ impl MyProfile for MyProfileImpl
         let own_profile_clone = own_prof.clone();
         let upd_fut = self.login_home(home_id)
             .map_err(|err| err.context(ErrorKind::LoginFailed).into())
-            .and_then( move |my_session| my_session.session()
-                .update(own_profile_clone)
-                .map_err(|err| err.context(ErrorKind::ProfileUpdateFailed).into())
+            .and_then( move |my_session|
+                my_session.session()
+                    .update(own_profile_clone)
+                    .map_err(|err| err.context(ErrorKind::ProfileUpdateFailed).into())
             );
         Box::new(upd_fut)
     }
@@ -418,9 +460,10 @@ impl MyProfile for MyProfileImpl
     {
         let unreg_fut = self.login_home(home_id)
             .map_err(|err| err.context(ErrorKind::LoginFailed).into())
-            .and_then( move |my_session| my_session.session()
-                .unregister(newhome_id)
-                .map_err(|err| err.context(ErrorKind::DeregistrationFailed).into())
+            .and_then( move |my_session|
+                my_session.session()
+                    .unregister(newhome_id)
+                    .map_err(|err| err.context(ErrorKind::DeregistrationFailed).into())
             );
         Box::new(unreg_fut)
     }
@@ -464,6 +507,8 @@ impl MyProfile for MyProfileImpl
     fn send_pairing_response(&self, proof: RelationProof) ->
         Box< Future<Item=(), Error=Error> >
     {
+        debug!("Trying to send pairing response");
+
         let peer_id = match proof.peer_id( self.signer.profile_id() ) {
             Ok(peer_id) => peer_id.to_owned(),
             Err(e) => return Box::new( Err(e.context(ErrorKind::LookupFailed).into()).into_future() ),
@@ -478,6 +523,7 @@ impl MyProfile for MyProfileImpl
                 move |profile| Self::any_home_of2(&profile, profile_repo, connector, signer)
             } )
             .and_then( move |(_home_proof, home)| {
+                debug!("Contacted home of target profile, sending pairing response");
                 home.pair_response(proof)
                     .map_err(|err| err.context(ErrorKind::PeerResponseFailed).into())
             });
@@ -501,6 +547,7 @@ impl MyProfile for MyProfileImpl
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
             .and_then( |profile| Self::any_home_of2(&profile, profile_repo, home_connector, signer) )
             .and_then( move |(_home_proof, home)| {
+                debug!("Connected to home, calling target profile");
                 home.call(app, CallRequestDetails { relation: proof, init_payload: init_payload, to_caller: to_caller } )
                     .map_err(|err| err.context(ErrorKind::CallFailed).into())
             });
@@ -517,6 +564,8 @@ impl MyProfile for MyProfileImpl
         let my_profile_id = self.signer.profile_id().to_owned();
         let session_cache = self.session_cache.clone();
         let handle = self.handle.clone();
+        let handle2 = self.handle.clone();
+        let relations_weak = Rc::downgrade(&self.relations);
         let log_fut = self.profile_repo.load( self.signer.profile_id() )
             .map_err( |err| err.context(ErrorKind::LoginFailed).into() )
             .and_then( {
@@ -538,17 +587,24 @@ impl MyProfile for MyProfileImpl
                 let login_fut = home.login(&home_proof)
                     .map_err(|err| err.context(ErrorKind::LoginFailed).into())
                     .map( move |session| MyHomeSessionImpl::new(session, handle) )
-                    .inspect( move |my_session| {
+                    .inspect( move |my_session|
+                    {
                         // TODO this allows initiating several fill attempts in parallel
                         //      until first one succeeds, last one wins by overwriting.
                         //      Is this acceptable?
-                        session_cache.borrow_mut().insert( home_id, my_session.clone() ); } );
+                        session_cache.borrow_mut().insert( home_id, my_session.clone() );
+                        Self::start_event_handler( relations_weak, my_session.clone(), &handle2 )
+                    } );
                 Box::new(login_fut)
             });
 
         Box::new(log_fut)
     }
 }
+
+
+impl Drop for MyProfileImpl
+    { fn drop(&mut self) { debug!("MyProfile was dropped"); } }
 
 
 
@@ -563,37 +619,25 @@ impl MyHomeSessionImpl
 {
     fn new(session: Rc<HomeSession>, handle: reactor::Handle) -> Rc<MyHomeSession>
     {
-        let this = Self{ session, event_listeners: Default::default() };
+        let this = Rc::new( Self{ session, event_listeners: Default::default() } );
 
+        debug!("Created MyHomeSession, start forwarding profile events to listeners");
         let listeners = Rc::downgrade(&this.event_listeners);
-        debug!("Initialized session, start forwarding profile events to listeners");
         handle.spawn(
-            this.session.events().for_each( move |event|
-                Self::forward_event_safe( listeners.clone(), event ) ) );
+            this.session.events().for_each( move |event| {
+                debug!("Received event {:?}, dispatching", event);
+                Self::forward_event_safe( listeners.clone(), event )
+            } )
+        );
 
-        Rc::new(this)
+        this
     }
 
 
     pub fn add_listener(event_listeners: Rc<RefCell< Vec<EventSink> >>, listener: EventSink)
-        { event_listeners.borrow_mut().push(listener) }
-
-
-    // Notify all registered listeners of an incoming profile event,
-    // removing failing (i.e. dropped) listeners from the list
-    fn forward_event(mut event_listeners: Vec<EventSink>, event: ProfileEvent)
-        -> Box< Future<Item=Vec<EventSink>, Error=()> >
     {
-        // Create tasks (futures) of sending an item to each listener
-        let send_futs = event_listeners.drain(..)
-            .map( |listener| listener.send( event.clone() ) );
-
-        // Collect successful senders, drop failing ones
-        let fwd_fut = fut::collect_results(send_futs)
-            .map( |mut results| results.drain(..)
-                .filter_map( |res| res.ok() ).collect() );
-
-        Box::new(fwd_fut)
+        debug!("Adding new event listener to session");
+        event_listeners.borrow_mut().push(listener);
     }
 
 
@@ -615,9 +659,11 @@ impl MyHomeSessionImpl
         match event_res {
             Ok(event) => {
                 let listeners = event_listeners_rc.replace( Vec::new() );
+                debug!( "Notifying {} listeners on incoming event", listeners.len() );
                 let fwd_fut = Self::forward_event(listeners, event)
                     .map( move |successful_listeners| {
                         let mut listeners = event_listeners_rc.borrow_mut();
+                        debug!( "{} listeners were notified, detected {} new listeners meanwhile", successful_listeners.len(), listeners.len() );
                         listeners.extend(successful_listeners); // Use extend instead of assignment to keep listeners added meanwhile
                     } );
                 Box::new(fwd_fut) as Box<Future<Item=(), Error=()>>
@@ -628,7 +674,29 @@ impl MyHomeSessionImpl
             },
         }
     }
+
+
+    // Notify all registered listeners of an incoming profile event,
+    // removing failing (i.e. dropped) listeners from the list
+    fn forward_event(mut event_listeners: Vec<EventSink>, event: ProfileEvent)
+        -> Box< Future<Item=Vec<EventSink>, Error=()> >
+    {
+        // Create tasks (futures) of sending an item to each listener
+        let send_futs = event_listeners.drain(..)
+            .map( |listener| listener.send( event.clone() ) );
+
+        // Collect successful senders, drop failing ones
+        let fwd_fut = fut::collect_results(send_futs)
+            .map( |mut send_results| send_results.drain(..)
+                .filter_map( |res| res.ok() ).collect() );
+
+        Box::new(fwd_fut)
+    }
 }
+
+
+impl Drop for MyHomeSessionImpl
+    { fn drop(&mut self) { debug!("MyHomeSession was dropped"); } }
 
 
 impl MyHomeSession for MyHomeSessionImpl

@@ -267,8 +267,8 @@ impl AdminSessionImpl
                profile_factory: Rc<MyProfileFactory>) //, handle: reactor::Handle)
         -> Rc<AdminSession>
     {
-        let this = Self{ ui, profile_store, my_profile_ids, profile_factory}; //, handle };
-        Rc::new(this) // as Rc<AdminSession>
+        let this = Self{ ui, profile_store, my_profile_ids, profile_factory }; //, handle };
+        Rc::new(this)
     }
 }
 
@@ -352,9 +352,10 @@ impl AdminSession for AdminSessionImpl
                 debug!("Saving private profile data to local device storage");
                 let mut profiles = profile_store_clone.borrow_mut();
                 profiles.set( profileid_clone2, own_profile.clone() )
-                    // TODO REMOVE THIS AFTER TESTING
+// TODO REMOVE THIS AFTER TESTING
                     .and_then( move |()| profile_factory_clone2.profile_repo.insert( own_profile.profile.clone() )
                         .map( |()| own_profile ) )
+                    .inspect( |_| { let remove_this_after_testing = true; } )
                     .map_err( |e| e.context( ErrorKind::Unknown).into() )
             } );
         Box::new(fut)
@@ -397,10 +398,24 @@ impl AdminSession for AdminSessionImpl
     }
 
 
-    fn accept_relation(&self, _half_proof: &RelationHalfProof) ->
+    fn accept_relation(&self, half_proof: &RelationHalfProof) ->
         Box< Future<Item=(), Error=Error> >
     {
-        unimplemented!()
+        let my_profile = match self.profile_factory.create(&half_proof.peer_id) {
+            Some(profile) => profile,
+            None => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
+        };
+
+        let proof = match RelationProof::sign_remaining_half( &half_proof, my_profile.signer() ) {
+            Ok(proof) => proof,
+            Err(e) => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
+        };
+
+        let init_fut = my_profile.send_pairing_response( proof.clone() )
+            .map_err( |err| err.context(ErrorKind::Unknown).into() )
+            .and_then( move |()| my_profile.on_new_relation(proof)
+                .map_err( |()| ErrorKind::Unknown.into() ) );
+        Box::new(init_fut)
     }
 
     fn revoke_relation(&self, _profile: &ProfileId, _relation: &RelationProof) ->
@@ -511,7 +526,7 @@ impl UserInterface for DummyUserInterface
         Box::new( Ok( () ).into_future() )
     }
 
-    fn notify_pairing(&self, response: &RelationProof) -> Box< Future<Item=(), Error=Error> >
+    fn notify_pairing(&self, _response: &RelationProof) -> Box< Future<Item=(), Error=Error> >
     {
         Box::new( Ok( () ).into_future() )
     }
