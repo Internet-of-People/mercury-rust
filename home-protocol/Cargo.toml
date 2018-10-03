@@ -5,17 +5,17 @@ version = "0.1.0"
 authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 
 [build-dependencies]
-capnpc = "0.8"
+capnpc = "*"
 
 [dependencies]
 bincode = "*"
 bytes = "*"
-capnp = "0.8"
-capnp-rpc = "0.8"
+capnp = "*"
+capnp-rpc = "*"
 ed25519-dalek = "*"
 failure= "*"
 futures = "0.1"
-log = "0.4"
+log = "*"
 multiaddr = "*"
 multibase = "*"
 multihash = "*"

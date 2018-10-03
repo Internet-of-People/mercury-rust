@@ -6,7 +6,7 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 [dependencies]
 clap = {version = "*", features = ["yaml"]}
 futures = "0.1"
-log = "0.4"
+log = "*"
 log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }
 mercury-storage = { path="../storage" }

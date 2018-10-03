@@ -7,8 +7,8 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 bincode = "*"
 clap = "2"
 futures = "0.1"
-log = "0.4"
-log4rs = "0.8"
+log = "*"
+log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }
 mercury-storage = { path="../storage" }
 multiaddr = "*"

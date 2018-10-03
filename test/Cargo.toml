@@ -5,8 +5,8 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 
 [dependencies]
 base64 = "0.9.0"
-capnp = "0.8"
-capnp-rpc = "0.8"
+capnp = "*"
+capnp-rpc = "*"
 ed25519-dalek = "*"
 futures = "0.1"
 memsocket = "*"
@@ -17,7 +17,7 @@ mercury-storage= { path="../storage" }
 multiaddr = "*"
 multihash = "*"
 rand = "*"
-sha2 = "*"
+sha2 = "0.7"
 tokio-core = "0.1"
 tokio-io = "*"
 tokio-stdin-stdout = "0.1.1"
