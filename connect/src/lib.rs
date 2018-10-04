@@ -42,33 +42,6 @@ pub struct DAppPermission(Vec<u8>);
 
 
 
-// TODO maybe this should be transformed to store a relationproof with an operation like
-//      fn profile(&self) -> Box<Future<Item=Profile,Error=SomeError>>
-//      cache profile after fetched in something like an Option<RefCell<Profile>>
-#[derive(PartialEq, Eq, Clone, Debug)]
-pub struct Relation
-{
-    pub proof:      RelationProof,
-// TODO consider transforming Profile to Option<WeakRef<Profile>> with an operation like
-//      fn peer(&self) -> Box<Future<Item=Profile,Error=SomeError>>
-//      which could return a cache profile value immediately or load it if not present yet
-    pub peer:       Profile,
-}
-
-//impl Relation
-//{
-//    pub fn new(peer: &Profile, proof: &RelationProof) -> Self
-//        { Self { peer: peer.clone(), proof: proof.clone() } }
-//
-//    pub fn call(&self, init_payload: AppMessageFrame,
-//                to_caller: Option<AppMsgSink>) ->
-//        Box< Future<Item=Option<AppMsgSink>, Error=ErrorToBeSpecified> >
-//    {
-//        unimplemented!();
-//    }
-//}
-
-
 pub struct DAppCall
 {
     pub outgoing: AppMsgSink,
@@ -113,23 +86,4 @@ pub trait DAppSession
 
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
         -> Box< Future<Item=DAppCall, Error=::Error> >;
-}
-
-
-
-pub fn find_relation_proof<'a>(relations: &'a [RelationProof], my_id: ProfileId, peer_id: ProfileId,
-    relation_type: Option<&str>) -> Option<RelationProof>
-{
-    let mut peers_filtered = relations.iter().cloned()
-        .filter( |proof| {
-            proof.peer_id(&my_id)
-                .map( |p_id| *p_id == peer_id )
-                .unwrap_or(false)
-        } );
-
-    match relation_type {
-        None      => peers_filtered.next(),
-        Some(rel) => peers_filtered
-            .filter( |proof| proof.relation_type == rel ).next(),
-    }
 }

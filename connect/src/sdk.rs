@@ -6,7 +6,7 @@ use futures::sync::mpsc;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::{DAppCall, DAppEvent, DAppSession, find_relation_proof, profile::MyProfile};
+use ::{DAppCall, DAppEvent, DAppSession, profile::MyProfile};
 use ::error::{Error, ErrorKind};
 
 
@@ -36,11 +36,8 @@ impl DAppSession for DAppConnect
     fn contacts(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
     {
         // TODO properly implement this to access only contacts related to this dApp
-        let fut = self.my_profile.relations()
-            .map_err( |e| e.context( ErrorKind::Unknown.into() ).into() );
-        Box::new(fut)
+        Box::new(Ok( self.my_profile.relations() ).into_future() )
         // unimplemented!();
-        // Box::new( Ok( Vec::new() ).into_future() )
     }
 
 
@@ -75,19 +72,27 @@ impl DAppSession for DAppConnect
         -> Box< Future<Item=DAppCall, Error=Error> >
     {
         debug!("Looking for relation proof to call profile {}", profile_id);
-        let call_fut = self.contacts()
-            .and_then(
-            {
-                let my_id = self.my_profile.signer().profile_id().to_owned();
-                let peer_id = profile_id.to_owned();
-                move |contacts|
-                    find_relation_proof( &contacts, my_id, peer_id, Some(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN) )
-                        .ok_or_else( || {
-                            debug!("Failed to find proper relationproof to start call, drop call request");
-                            ErrorKind::Unknown.into()
-                        } )
-            } )
-            .inspect( |_| debug!("Got relation proof, initiate call to profile") )
+        let relation_res = self.my_profile.relations_with_peer(profile_id,
+                Some(&self.app_id), Some(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN) )
+            .pop()
+            .ok_or_else( || {
+                debug!("Failed to find proper relationproof to start call, drop call request");
+                ErrorKind::Unknown.into()
+            } );
+
+        let call_fut = relation_res.into_future()
+//            .and_then(
+//            {
+//                let my_id = self.my_profile.signer().profile_id().to_owned();
+//                let peer_id = profile_id.to_owned();
+//                move |contacts|
+//                    find_relation_proof( &contacts, my_id, peer_id, Some(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN) )
+//                        .ok_or_else( || {
+//                            debug!("Failed to find proper relationproof to start call, drop call request");
+//                            ErrorKind::Unknown.into()
+//                        } )
+//            } )
+//            .inspect( |_| debug!("Got relation proof, initiate call to profile") )
             .and_then(
             {
                 let my_profile = self.my_profile.clone();

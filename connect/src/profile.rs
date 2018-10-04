@@ -168,7 +168,9 @@ pub trait MyProfile
 //    fn profile_home_hint(&self, profile: &ProfileId, home: &ProfileId);
 
 
-    fn relations(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
+    fn relations(&self) -> Vec<RelationProof>;
+    fn relations_with_peer(&self, peer_id: &ProfileId, app: Option<&ApplicationId>,
+                           relation_type: Option<&str>) -> Vec<RelationProof>;
     fn on_new_relation(&self, rel_proof: RelationProof) -> Box< Future<Item=(),Error=()> >;
     fn initiate_relation(&self, relation_type: &str, with_profile_id: &ProfileId) ->
         Box< Future<Item=(), Error=Error> >;
@@ -410,8 +412,26 @@ impl MyProfile for MyProfileImpl
     fn signer(&self) -> &Signer { &*self.signer }
 
 
-    fn relations(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
-        { Box::new( Ok( self.relations.borrow().clone() ).into_future() ) }
+    fn relations(&self) -> Vec<RelationProof>
+        { self.relations.borrow().clone() }
+
+
+    fn relations_with_peer(&self, peer_id: &ProfileId, app: Option<&ApplicationId>,
+                           relation_type: Option<&str>) -> Vec<RelationProof>
+    {
+        let relations = self.relations();
+        let peers_filtered = relations.iter().cloned()
+            .filter( |proof| {
+                proof.peer_id( self.signer().profile_id() )
+                    .map( |p_id| *p_id == *peer_id )
+                    .unwrap_or(false)
+            } );
+
+        match relation_type {
+            None      => peers_filtered.collect(),
+            Some(rel) => peers_filtered.filter( |proof| proof.relation_type == rel ).collect(),
+        }
+    }
 
 
     fn on_new_relation(&self, rel_proof: RelationProof) ->

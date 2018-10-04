@@ -79,24 +79,23 @@ impl IntoFuture for Client
             } );
 
         let peer_id = self.cfg.callee_profile_id.clone();
+        let peer_id2 = self.cfg.callee_profile_id.clone();
         let client_id = self.appctx.client_id.clone();
         let handle = self.appctx.handle.clone();
         let fut = ::temporary_init_env(&self.appctx)
-            .and_then( move |my_profile|
-                my_profile.relations()
-                    .map( move |relations| (my_profile,relations) )
-                    .map_err( |_e| ::std::io::Error::from(::std::io::ErrorKind::AddrNotAvailable) )
-            )
-            .and_then( move |(my_profile,relations)|
-            {
-                let rel_opt = find_relation_proof(&relations, client_id.clone(), peer_id.clone(),
+            .map( move |my_profile| {
+                let relations = my_profile.relations_with_peer( &peer_id, None,
                     Some(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN) );
-                match rel_opt {
+                (my_profile, relations)
+            } )
+            .and_then( move |(my_profile, mut relations)|
+            {
+                match relations.pop() {
                     Some(proof) => Box::new( Ok(proof).into_future() ) as Box<Future<Item=_,Error=_>>,
                     None => {
                         let rel_fut = my_profile.login()
                             .map( |session| session.events() )
-                            .and_then( move |events| my_profile.initiate_relation(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &peer_id)
+                            .and_then( move |events| my_profile.initiate_relation(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &peer_id2)
                                 .map( |()| events ) )
                             .map_err( |_e| ::std::io::Error::from(::std::io::ErrorKind::AddrNotAvailable) )
                             .and_then( |events| Self::wait_for_pairing_response(events, client_id, handle) );
