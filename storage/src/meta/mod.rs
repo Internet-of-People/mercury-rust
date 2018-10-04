@@ -167,7 +167,7 @@ pub mod tests
     {
         let spoon = "There is no Rust";
         let answer = 42;
-        let pi = 3.14159265358979;
+        let pi = 3.141_592_653_589_79;
 
         let linkhash = "Far/far/away/in/another/storage/network".to_owned();
         let famous = vec!(
@@ -216,7 +216,7 @@ pub mod tests
                         _ => panic!("Unexpected attribute type"),
                     };
                     match arr[2] {
-                        AttributeValue::Float(val) => assert_eq!(val, pi),
+                        AttributeValue::Float(val) => assert!((val - pi) < 2E-16_f64),
                         _ => panic!("Unexpected attribute type"),
                     }
                 },

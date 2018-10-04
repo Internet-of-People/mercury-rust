@@ -37,7 +37,7 @@ impl BlockingFileStore
         let file_path = self.base_path.join(key);
         create_dir_all(&self.base_path)?;
         let mut file = File::create(file_path)?;
-        file.write(value)?;
+        file.write_all(value)?;
         Ok( () )
     }
 
