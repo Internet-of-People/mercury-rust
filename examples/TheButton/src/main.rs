@@ -41,7 +41,8 @@ use tokio_core::reactor;
 
 use mercury_connect::*;
 use mercury_connect::net::SimpleTcpHomeConnector;
-use mercury_connect::service::{AdminSession, ConnectService};
+use mercury_connect::profile::MyProfile;
+use mercury_connect::service::ConnectService;
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::Ed25519Signer;
 use cli::cli;
@@ -110,13 +111,20 @@ fn temporary_connect_service_instance(my_private_profilekey_file: &str,
 
 
 fn temporary_init_env(app_context: &AppContext)
-    -> Box< Future<Item=Rc<AdminSession>, Error=std::io::Error> >
+    -> Box< Future<Item=Rc<MyProfile>, Error=std::io::Error> >
 {
-    let appctx = app_context.clone();
-    let init_fut = appctx.service.admin_session(None)
+    let client_id = app_context.client_id.clone();
+    let home_id = app_context.home_id.clone();
+    let init_fut = app_context.service.admin_session(None)
         .inspect( |_admin| debug!("Admin endpoint was connected") )
-        .and_then( move |admin| admin.join_home(&appctx.client_id, &appctx.home_id)
-            .map( |_own_prof| admin ) )
+        .and_then( move |admin| admin.profile(client_id) )
+        .and_then( move |my_profile| my_profile.join_home(home_id, None )
+            .map( |()| my_profile )
+            .map_err( |e| {
+                debug!("Failed to join home: {:?}", e);
+                mercury_connect::error::Error::from(mercury_connect::error::ErrorKind::Unknown)
+            } )
+        )
         .inspect( |_| debug!("Successfully registered to home") )
         .map_err( |e| { debug!("Failed to register: {:?}", e); std::io::Error::new( std::io::ErrorKind::ConnectionRefused, format!("{}", e) ) } );
     Box::new(init_fut)

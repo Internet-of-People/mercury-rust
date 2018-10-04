@@ -5,14 +5,14 @@ use std::rc::Rc;
 
 use failure::Fail; // Backtrace, Context
 use futures::prelude::*;
-use futures::{future, sync::mpsc};
+use futures::future;
 use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
 use ::{DAppEndpoint, DAppPermission, DAppSession};
 use ::error::*;
-use ::profile::{EventStream, HomeConnector, MyProfile, MyProfileImpl};
+use ::profile::{HomeConnector, MyProfile, MyProfileImpl};
 use ::sdk::DAppConnect;
 use ::simple_profile_repo::SimpleProfileRepo;
 
@@ -163,29 +163,12 @@ pub trait UserInterface
 
 pub trait AdminSession
 {
-    fn profiles(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
-    // fn claim(&self, profile_path: TODO_profileId_or_Bip32PAth?) -> Box< Future<Item=Rc<OwnProfile>, Error=Error> >;
-    fn create_profile(&self) -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >;
-
-    // TODO separate these profile-related functions below into a separate trait and give a getter method like
-    //      fn profile_admin(&self, profile: &ProfileId) -> Future<ProfileAdminSession>
-    fn update_profile(&self, profile: &OwnProfile) -> Box< Future<Item=(), Error=Error> >;
+    fn profiles(&self) -> Box< Future<Item=Vec<Rc<MyProfile>>, Error=Error> >;
+    fn profile(&self, id: ProfileId) -> Box< Future<Item=Rc<MyProfile>, Error=Error> >;
+    fn create_profile(&self) -> Box< Future<Item=Rc<MyProfile>, Error=Error> >;
     fn remove_profile(&self, profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
-
-    fn homes(&self, profile: &ProfileId) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
-    // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
-    fn join_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >;
-    fn leave_home(&self, profile: &ProfileId, home: &ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >;
-//    fn home_endpoint_hint(&self, home: &ProfileId, endpoint: multiaddr);
-//    fn profile_home_hint(&self, profile: &ProfileId, home: &ProfileId);
-
-    fn relations(&self, profile: &ProfileId) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
-    // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
-    fn initiate_relation(&self, my_profile: &ProfileId, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
-    fn accept_relation(&self, half_proof: &RelationHalfProof) -> Box< Future<Item=(), Error=Error> >;
-    fn revoke_relation(&self, profile: &ProfileId, relation: &RelationProof) -> Box< Future<Item=(), Error=Error> >;
-
-    fn events(&self, profile: &ProfileId) -> Box< Future<Item=EventStream, Error=Error>>;
+//    fn claim_profile(&self, home: ProfileId, profile: ProfileId)
+//        -> Box< Future<Item=Rc<MyProfile>, Error=Error> >;
 }
 
 
@@ -210,7 +193,6 @@ impl SignerFactory
 pub struct MyProfileFactory
 {
     signer_factory: Rc<SignerFactory>,
-    // TODO return to ProfileRepo type after testing and separating service with RPC
     profile_repo:   Rc<SimpleProfileRepo>, // TODO use Rc<ProfileRepo> after TheButton testing
     home_connector: Rc<HomeConnector>,
     handle:         reactor::Handle,
@@ -218,6 +200,7 @@ pub struct MyProfileFactory
 }
 
 
+// TODO maybe this should be merged into AdminSessionImpl, the only thing it does is caching
 impl MyProfileFactory
 {
     //pub fn new(signer_factory: Rc<SignerFactory>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
@@ -225,21 +208,22 @@ impl MyProfileFactory
                home_connector: Rc<HomeConnector>, handle: reactor::Handle) -> Self
         { Self{ signer_factory, profile_repo, home_connector, handle, cache: Default::default() } }
 
-    pub fn create(&self, profile_id: &ProfileId) -> Option<Rc<MyProfile>>
+    pub fn create(&self, own_profile: OwnProfile) -> Option<Rc<MyProfile>>
     {
-        if let Some(ref my_profile_rc) = self.cache.borrow().get(profile_id)
+        let profile_id = own_profile.profile.id.clone();
+        if let Some(ref my_profile_rc) = self.cache.borrow().get(&profile_id)
             { return Some( Rc::clone(my_profile_rc) ) }
 
         debug!("Creating new profile wrapper for profile {}", profile_id);
-        self.signer_factory.signer(profile_id)
+        self.signer_factory.signer(&profile_id)
             .map( |signer| {
-                let result = MyProfileImpl::new(signer, self.profile_repo.clone(),
+                let result = MyProfileImpl::new(own_profile, signer, self.profile_repo.clone(),
                     self.home_connector.clone(), self.handle.clone() );
                 let result_rc = Rc::new(result) as Rc<MyProfile>;
                 // TODO this allows initiating several fill attempts in parallel
                 //      until first one succeeds, last one wins by overwriting.
                 //      Is this acceptable?
-                self.cache.borrow_mut().insert(profile_id.to_owned(), result_rc.clone() );
+                self.cache.borrow_mut().insert(profile_id, result_rc.clone() );
                 result_rc
             } )
     }
@@ -275,173 +259,54 @@ impl AdminSessionImpl
 
 impl AdminSession for AdminSessionImpl
 {
-    fn profiles(&self)
-        -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >
+    fn profiles(&self) -> Box< Future<Item=Vec<Rc<MyProfile>>, Error=Error> >
     {
         let store = self.profile_store.clone();
+        let prof_factory = self.profile_factory.clone();
         let profile_futs = self.my_profile_ids.iter()
-            .map( move |x| store.borrow().get( x.to_owned() )
-                .map_err( |e| e.context(ErrorKind::Unknown).into() ) )
+            .map( |prof_id| {
+                let prof_factory = prof_factory.clone();
+                store.borrow().get( prof_id.to_owned() )
+                    .map_err( |e| e.context(ErrorKind::Unknown).into() )
+                    .and_then( move |own_profile| prof_factory.create(own_profile)
+                        .ok_or( ErrorKind::Unknown.into() ) )
+            } )
             .collect::<Vec<_>>();
         let profiles_fut = future::join_all(profile_futs);
         Box::new(profiles_fut)
     }
 
-    fn create_profile(&self)
-        -> Box< Future<Item=Vec<OwnProfile>, Error=Error> >
+    fn profile(&self, id: ProfileId) -> Box< Future<Item=Rc<MyProfile>, Error=Error> >
+    {
+        let profile_factory = self.profile_factory.clone();
+        let fut = self.profile_store.borrow().get( id.to_owned() )
+            .map_err( |e| e.context(ErrorKind::Unknown).into() )
+            .and_then( move |own_profile| profile_factory.create(own_profile)
+                .ok_or( ErrorKind::Unknown.into() ) );
+        Box::new(fut)
+    }
+
+    fn create_profile(&self) -> Box< Future<Item=Rc<MyProfile>, Error=Error> >
     {
         unimplemented!()
     }
 
-//    fn claim(&self, profile_path: TODO_profileId_or_Bip32PAth?)
-//        -> Box< Future<Item=Rc<OwnProfile>, Error=Error> >
+//    fn claim_profile(&self, home_id: ProfileId, profile: ProfileId) ->
+//        Box< Future<Item=Rc<MyProfile>, Error=Error> >
 //    {
-//        unimplemented!()
+//        let claim_fut = self.connect_home(&home_id)
+//            .map_err(|err| err.context(ErrorKind::ConnectionToHomeFailed).into())
+//            .and_then( move |home| {
+//                home.claim(profile)
+//                    .map_err(|err| err.context(ErrorKind::FailedToClaimProfile).into())
+//            });
+//        Box::new(claim_fut)
 //    }
-
-    fn update_profile(&self, _profile: &OwnProfile)
-        -> Box< Future<Item=(), Error=Error> >
-    {
-        unimplemented!()
-    }
 
     fn remove_profile(&self, _profile: &ProfileId)
         -> Box< Future<Item=(), Error=Error> >
     {
         unimplemented!()
-    }
-
-
-    fn homes(&self, profile_id: &ProfileId)
-        -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
-    {
-        let fut = self.profile_store.borrow().get( profile_id.to_owned() )
-            .map_err( |e| e.context(ErrorKind::Unknown).into() )
-            .and_then( |ownprofile| match ownprofile.profile.facet {
-                ProfileFacet::Persona(persona) => Ok(persona.homes),
-                _ => Err( Error::from(ErrorKind::Unknown) )
-            }.into_future() );
-        Box::new(fut)
-    }
-
-
-    fn join_home(&self, profile: &ProfileId, home: &ProfileId)
-        -> Box< Future<Item=OwnProfile, Error=Error> >
-    {
-        debug!("Initializing home registration");
-        let homeid_clone = home.to_owned();
-        let profileid_clone = profile.to_owned();
-        let profileid_clone2 = profile.to_owned();
-        let profile_store_clone = self.profile_store.clone();
-        let profile_factory_clone = self.profile_factory.clone();
-        let profile_factory_clone2 = self.profile_factory.clone();
-        let fut = self.profile_store.borrow().get( profile.to_owned() )
-            .map_err( |e| e.context(ErrorKind::Unknown).into() )
-            .and_then( move |own_profile| {
-                match profile_factory_clone.create(&profileid_clone) {
-                    Some(my_profile) => Ok( (my_profile, own_profile) ),
-                    None => Err(Error::from(ErrorKind::Unknown)),
-                }
-            } )
-            .and_then( |(my_profile, own_profile)| {
-                debug!("Connecting to home server and registering my profile there");
-                Box::new(my_profile.register(homeid_clone, own_profile, None)
-                    .map_err( |(_ownprof, e)| e.context(ErrorKind::Unknown).into()) ) // as Box<Future<Item=OwnProfile, Error=_>>
-            } )
-            .and_then( move |own_profile| {
-                debug!("Saving private profile data to local device storage");
-                let mut profiles = profile_store_clone.borrow_mut();
-                profiles.set( profileid_clone2, own_profile.clone() )
-// TODO REMOVE THIS AFTER TESTING
-                    .and_then( move |()| profile_factory_clone2.profile_repo.insert( own_profile.profile.clone() )
-                        .map( |()| own_profile ) )
-                    .inspect( |_| { let remove_this_after_testing = true; } )
-                    .map_err( |e| e.context( ErrorKind::Unknown).into() )
-            } );
-        Box::new(fut)
-    }
-
-
-    fn leave_home(&self, _profile: &ProfileId, _home: &ProfileId)
-        -> Box< Future<Item=OwnProfile, Error=Error> >
-    {
-        unimplemented!()
-    }
-
-
-    fn relations(&self, profile_id: &ProfileId) ->
-        Box< Future<Item=Vec<RelationProof>, Error=Error> >
-    {
-        let my_profile = match self.profile_factory.create(profile_id) {
-            Some(profile) => profile,
-            None => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
-        };
-
-        let fut = my_profile.relations()
-            .map_err( |e| e.context(ErrorKind::Unknown).into() );
-        Box::new(fut)
-    }
-
-
-    fn initiate_relation(&self, my_profile_id: &ProfileId, with_profile: &ProfileId) ->
-        Box< Future<Item=(), Error=Error> >
-    {
-        let my_profile = match self.profile_factory.create(my_profile_id) {
-            Some(profile) => profile,
-            None => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
-        };
-
-        let init_fut = my_profile
-            .send_pairing_request(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &with_profile, None)
-            .map_err( |err| err.context(ErrorKind::Unknown).into() );
-        Box::new(init_fut)
-    }
-
-
-    fn accept_relation(&self, half_proof: &RelationHalfProof) ->
-        Box< Future<Item=(), Error=Error> >
-    {
-        let my_profile = match self.profile_factory.create(&half_proof.peer_id) {
-            Some(profile) => profile,
-            None => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
-        };
-
-        let proof = match RelationProof::sign_remaining_half( &half_proof, my_profile.signer() ) {
-            Ok(proof) => proof,
-            Err(e) => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
-        };
-
-        let init_fut = my_profile.send_pairing_response( proof.clone() )
-            .map_err( |err| err.context(ErrorKind::Unknown).into() )
-            .and_then( move |()| my_profile.on_new_relation(proof)
-                .map_err( |()| ErrorKind::Unknown.into() ) );
-        Box::new(init_fut)
-    }
-
-    fn revoke_relation(&self, _profile: &ProfileId, _relation: &RelationProof) ->
-        Box< Future<Item=(), Error=Error> >
-    {
-        unimplemented!()
-    }
-
-
-    fn events(&self, profile: &ProfileId) -> Box< Future<Item=EventStream, Error=Error>>
-    {
-        let my_profile = match self.profile_factory.create(profile) {
-            Some(profile) => profile,
-            None => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
-        };
-
-        let fut = my_profile.login()
-            .map( |my_session| {
-                // TODO consider if this is right here, or maybe this service (after splitted by profile)
-                //      should own and dispatch the original event stream and handle listeners
-                let (listener, events) = mpsc::channel(CHANNEL_CAPACITY);
-                my_session.add_listener(listener);
-                events
-            } )
-            .map_err( |err| err.context(ErrorKind::Unknown).into() );;
-        Box::new(fut)
     }
 }
 
@@ -486,9 +351,15 @@ impl DAppEndpoint for ConnectService
         -> Box< Future<Item=Rc<DAppSession>, Error=Error> >
     {
         let app = app.to_owned();
+        let profile_store = self.profile_store.clone();
         let profile_factory = self.profile_factory.clone();
         let fut = self.ui.select_profile()
-            .and_then( move |profile_id| profile_factory.create(&profile_id)
+            .and_then( move |profile_id| {
+                let store = profile_store.borrow();
+                store.get(profile_id)
+                    .map_err( |err| err.context(ErrorKind::Unknown).into() )
+            } )
+            .and_then( move |own_profile| profile_factory.create(own_profile)
                 .ok_or( Error::from(ErrorKind::Unknown) ) )
             .map( move |my_profile| DAppConnect::new(my_profile, app) )
             .map_err( |err| { debug!("Failed to initialize dapp session: {:?}", err); err } );

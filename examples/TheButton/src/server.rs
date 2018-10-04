@@ -65,18 +65,18 @@ impl IntoFuture for Server {
                 })
             });
 
-        let client_id = self.appctx.client_id.clone();
         let handle = self.appctx.handle.clone();
         let calls_fut = ::temporary_init_env(&self.appctx)
-            .and_then( move |admin| admin.events(&client_id)
-                .map( |events| (admin, events) )
+            .and_then( move |my_profile| my_profile.login()
+                .map( |session| (my_profile, session) )
                 .map_err(|_| std::io::Error::new(std::io::ErrorKind::Other, "failed to fetch events")) )
-            .and_then( move |(admin, events)| {
+            .and_then( move |(my_profile, session)| {
                 handle.spawn(
-                    events.for_each( move |event| {
+                    session.events().for_each( move |event| {
                         match event {
                             ProfileEvent::PairingRequest(half_proof) => {
-                                let accept_fut = admin.accept_relation(&half_proof)
+                                let accept_fut = my_profile.accept_relation(&half_proof)
+                                    .map( |_proof| () )
                                     .map_err( |e| debug!("Failed to accept pairing request: {}", e) );
                                 Box::new(accept_fut) as Box<Future<Item=_,Error=_>>
                             },

@@ -10,6 +10,7 @@ use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use mercury_home_protocol::future as fut;
+use ::simple_profile_repo::SimpleProfileRepo;
 
 
 
@@ -152,40 +153,39 @@ pub trait HomeConnector
 
 pub trait MyProfile
 {
+    //fn own_profile(&self) -> &OwnProfile;
     fn signer(&self) -> &Signer;
-    fn relations(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
 
-    fn on_new_relation(&self, rel_proof: RelationProof) ->
-        Box< Future<Item=(),Error=()> >;
 
-    fn claim(&self, home: ProfileId, profile: ProfileId) ->
-        Box< Future<Item=OwnProfile, Error=Error> >;
-
+    fn homes(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
+    // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
     /// `invite` is needed only if the home has a restrictive registration policy.
-    fn register(&self, home: ProfileId, own_prof: OwnProfile, invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=(OwnProfile,Error)> >;
-
-    fn update(&self, home: ProfileId, own_prof: &OwnProfile) ->
+    fn join_home(&self, home: ProfileId, invite: Option<HomeInvitation>) ->
         Box< Future<Item=(), Error=Error> >;
-
     // NOTE newhome is a profile that contains at least one HomeSchema different than this home
-    fn unregister(&self, home: ProfileId, newhome: Option<Profile>) ->
-        Box< Future<Item=(), Error=Error> >;
+    fn leave_home(&self, home: ProfileId, newhome: Option<Profile>) -> Box< Future<Item=(), Error=Error> >;
+//    fn home_endpoint_hint(&self, home: &ProfileId, endpoint: multiaddr);
+//    fn profile_home_hint(&self, profile: &ProfileId, home: &ProfileId);
 
 
-    fn send_pairing_request(&self, relation_type: &str, with_profile_id: &ProfileId, pairing_url: Option<&str>) ->
+    fn relations(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
+    fn on_new_relation(&self, rel_proof: RelationProof) -> Box< Future<Item=(),Error=()> >;
+    fn initiate_relation(&self, relation_type: &str, with_profile_id: &ProfileId) ->
         Box< Future<Item=(), Error=Error> >;
+    fn accept_relation(&self, half_proof: &RelationHalfProof)
+        -> Box< Future<Item=RelationProof, Error=Error> >;
+//    fn revoke_relation(&self, relation: &RelationProof) -> Box< Future<Item=(), Error=Error> >;
 
-    fn send_pairing_response(&self, proof: RelationProof) ->
-        Box< Future<Item=(), Error=Error> >;
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
             to_caller: Option<AppMsgSink>) ->
         Box< Future<Item=Option<AppMsgSink>, Error=Error> >;
 
 
-    fn login(&self) ->
-        Box< Future<Item=Rc<MyHomeSession>, Error=Error> >;
+    fn login(&self) -> Box< Future<Item=Rc<MyHomeSession>, Error=Error> >;
+
+//    fn events(&self, profile: &ProfileId) -> Box< Future<Item=EventStream, Error=Error>>;
+//    fn update(&self, home: ProfileId, own_prof: &OwnProfile) -> Box< Future<Item=(), Error=Error> >;
 }
 
 
@@ -198,9 +198,7 @@ pub type EventStream = mpsc::Receiver<ProfileEvent>;
 pub trait MyHomeSession
 {
     fn session(&self) -> Rc<HomeSession>;
-
-    // There's no separate remove_listener(), just drop the listener stream side and that's all
-    fn add_listener(&self, listener: EventSink);
+    fn events(&self) -> EventStream;
 }
 
 
@@ -208,11 +206,13 @@ pub trait MyHomeSession
 #[derive(Clone)]
 pub struct MyProfileImpl
 {
+    own_profile:    Rc<RefCell<OwnProfile>>,
     signer:         Rc<Signer>,
-    profile_repo:   Rc<ProfileRepo>,
+    profile_repo:   Rc<SimpleProfileRepo>, // TODO use Rc<ProfileRepo> after TheButton testing
     home_connector: Rc<HomeConnector>,
     handle:         reactor::Handle,
     session_cache:  Rc<RefCell< HashMap<ProfileId, Rc<MyHomeSession>> >>, // {home_id -> session}
+    // on_updated:     Rc< Fn(&OwnProfile) -> Box< Future<Item=(),Error=Error> > >,
 // TODO remove this after testing, this should be fetched from the private binary part of OwnProfile
     relations:      Rc<RefCell< Vec<RelationProof> >>,
 }
@@ -220,10 +220,19 @@ pub struct MyProfileImpl
 
 impl MyProfileImpl
 {
-    pub fn new(signer: Rc<Signer>, profile_repo: Rc<ProfileRepo>,
+    pub fn new(own_profile: OwnProfile, signer: Rc<Signer>, profile_repo: Rc<SimpleProfileRepo>,
                home_connector: Rc<HomeConnector>, handle: reactor::Handle) -> Self
-        { Self{ signer, profile_repo, home_connector, handle,
+        { Self{ own_profile : Rc::new( RefCell::new(own_profile) ),
+                signer, profile_repo, home_connector, handle,
                 relations: Default::default(), session_cache: Default::default() } }
+
+//    pub fn new<F>(own_profile: OwnProfile, signer: Rc<Signer>, profile_repo: Rc<ProfileRepo>,
+//                  home_connector: Rc<HomeConnector>, handle: reactor::Handle,
+//                  on_updated: F) -> Self
+//    where F: 'static + Fn(&OwnProfile) -> Box< Future<Item=(),Error=Error> >
+//        { Self{ own_profile : Rc::new( RefCell::new(own_profile) ),
+//                signer, profile_repo, home_connector, handle, on_updated: Rc::new(on_updated),
+//                relations: Default::default(), session_cache: Default::default() } }
 
 
     pub fn connect_home(&self, home_profile_id: &ProfileId)
@@ -371,8 +380,7 @@ impl MyProfileImpl
     fn start_event_handler(relations: Weak<RefCell< Vec<RelationProof> >>,
                            session: Rc<MyHomeSession>, handle: &reactor::Handle)
     {
-        let (listener, events) = mpsc::channel(CHANNEL_CAPACITY);
-        session.add_listener(listener);
+        let events = session.events();
 
         debug!("Start processing events to store accepted pairing responses as relations");
         handle.spawn(
@@ -398,6 +406,7 @@ impl MyProfileImpl
 
 impl MyProfile for MyProfileImpl
 {
+    //fn own_profile(&self) -> &OwnProfile { &self.own_profile.borrow() }
     fn signer(&self) -> &Signer { &*self.signer }
 
 
@@ -411,51 +420,43 @@ impl MyProfile for MyProfileImpl
         Self::on_new_relation( Rc::downgrade(&self.relations), rel_proof )
     }
 
-    fn claim(&self, home_id: ProfileId, profile: ProfileId) ->
-        Box< Future<Item=OwnProfile, Error=Error> >
+
+
+    fn homes(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
     {
-        let claim_fut = self.connect_home(&home_id)
-            .map_err(|err| err.context(ErrorKind::ConnectionToHomeFailed).into())
-            .and_then( move |home| {
-                home.claim(profile)
-                    .map_err(|err| err.context(ErrorKind::FailedToClaimProfile).into())
-            });
-        Box::new(claim_fut)
+        let res = match self.own_profile.borrow().profile.facet {
+            ProfileFacet::Persona(ref persona) => Ok( persona.homes.clone() ),
+            _ => Err( Error::from(ErrorKind::Unknown) )
+        };
+        Box::new( res.into_future() )
     }
 
 
-    fn register(&self, home_id: ProfileId, own_prof: OwnProfile,
-                invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=(OwnProfile,Error)> >
+    fn join_home(&self, home_id: ProfileId, invite: Option<HomeInvitation>) ->
+        Box< Future<Item=(), Error=Error> >
     {
-        let own_prof_clone = own_prof.clone();
         let half_proof = RelationHalfProof::new(RelationProof::RELATION_TYPE_HOSTED_ON_HOME, &home_id, &*self.signer);
+
+        let own_profile_cell = self.own_profile.clone();
+        let own_profile_dataclone = self.own_profile.borrow().to_owned();
+        let profile_repo = self.profile_repo.clone();
         let reg_fut = self.connect_home(&home_id)
-            .map_err( move |e| (own_prof_clone, e) )
             .and_then( move |home| {
-                home.register(own_prof, half_proof, invite)
-                    .map_err(|(own_prof, err)| (own_prof, err.context(ErrorKind::RegistrationFailed).into()))
-            });
+                home.register(own_profile_dataclone, half_proof, invite)
+                    .map_err(|(_own_prof, err)| err.context(ErrorKind::RegistrationFailed).into() )
+            } )
+            // TODO we should also notify the AdminSession here to update its profile_store
+            //.and_then( |own_profile| ... )
+            .map( move |own_profile| {
+                own_profile_cell.replace( own_profile.clone() );
+                // TODO remove this after testing
+                profile_repo.insert(own_profile.profile);
+            } );
         Box::new(reg_fut)
     }
 
 
-    fn update(&self, home_id: ProfileId, own_prof: &OwnProfile) ->
-        Box< Future<Item=(), Error=Error> >
-    {
-        let own_profile_clone = own_prof.clone();
-        let upd_fut = self.login_home(home_id)
-            .map_err(|err| err.context(ErrorKind::LoginFailed).into())
-            .and_then( move |my_session|
-                my_session.session()
-                    .update(own_profile_clone)
-                    .map_err(|err| err.context(ErrorKind::ProfileUpdateFailed).into())
-            );
-        Box::new(upd_fut)
-    }
-
-
-    fn unregister(&self, home_id: ProfileId, newhome_id: Option<Profile>) ->
+    fn leave_home(&self, home_id: ProfileId, newhome_id: Option<Profile>) ->
         Box< Future<Item=(), Error=Error> >
     {
         let unreg_fut = self.login_home(home_id)
@@ -464,12 +465,31 @@ impl MyProfile for MyProfileImpl
                 my_session.session()
                     .unregister(newhome_id)
                     .map_err(|err| err.context(ErrorKind::DeregistrationFailed).into())
-            );
+            )
+            // TODO we should also notify the AdminSession here to update its profile_store
+            // .and_then( || ... )
+            ;
         Box::new(unreg_fut)
     }
 
 
-    fn send_pairing_request(&self, relation_type: &str, with_profile_id: &ProfileId, _pairing_url: Option<&str>) ->
+//    fn update(&self, home_id: ProfileId, own_prof: &OwnProfile) ->
+//        Box< Future<Item=(), Error=Error> >
+//    {
+//        let own_profile_clone = own_prof.clone();
+//        let upd_fut = self.login_home(home_id)
+//            .map_err(|err| err.context(ErrorKind::LoginFailed).into())
+//            .and_then( move |my_session|
+//                my_session.session()
+//                    .update(own_profile_clone)
+//                    .map_err(|err| err.context(ErrorKind::ProfileUpdateFailed).into())
+//            );
+//        Box::new(upd_fut)
+//    }
+
+
+
+    fn initiate_relation(&self, relation_type: &str, with_profile_id: &ProfileId) ->
         Box< Future<Item=(), Error=Error> >
     {
         debug!("Trying to send pairing request to {}", with_profile_id);
@@ -504,17 +524,21 @@ impl MyProfile for MyProfileImpl
     }
 
 
-    fn send_pairing_response(&self, proof: RelationProof) ->
-        Box< Future<Item=(), Error=Error> >
+    fn accept_relation(&self, half_proof: &RelationHalfProof)
+        -> Box< Future<Item=RelationProof, Error=Error> >
     {
         debug!("Trying to send pairing response");
 
-        let peer_id = match proof.peer_id( self.signer.profile_id() ) {
-            Ok(peer_id) => peer_id.to_owned(),
-            Err(e) => return Box::new( Err(e.context(ErrorKind::LookupFailed).into()).into_future() ),
+        if half_proof.peer_id != self.own_profile.borrow().profile.id
+            { return Box::new( Err( ErrorKind::LookupFailed.into() ).into_future() ); }
+
+        let proof = match RelationProof::sign_remaining_half( &half_proof, self.signer() ) {
+            Ok(proof) => proof,
+            Err(e) => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
         };
 
-        let pair_fut = self.profile_repo.load(&peer_id)
+        let proof_clone = proof.clone();
+        let pair_fut = self.profile_repo.load(&half_proof.signer_id)
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
             .and_then( {
                 let profile_repo = self.profile_repo.clone();
@@ -526,7 +550,14 @@ impl MyProfile for MyProfileImpl
                 debug!("Contacted home of target profile, sending pairing response");
                 home.pair_response(proof)
                     .map_err(|err| err.context(ErrorKind::PeerResponseFailed).into())
-            });
+            })
+            .and_then( {
+                let relations = Rc::downgrade(&self.relations);
+                move |()| Self::on_new_relation( relations, proof_clone.clone() )
+                    .map( move |()| proof_clone )
+                    .map_err( |()| ErrorKind::Unknown.into() )
+            } );
+
         Box::new(pair_fut)
     }
 
@@ -704,7 +735,10 @@ impl MyHomeSession for MyHomeSessionImpl
     fn session(&self) -> Rc<HomeSession>
         { self.session.clone() }
 
-    // There's no separate remove_listener(), just drop the listener stream side and that's all
-    fn add_listener(&self, listener: EventSink)
-        { Self::add_listener( self.event_listeners.clone(), listener ); }
+    fn events(&self) -> EventStream
+    {
+        let (listener, events) = mpsc::channel(CHANNEL_CAPACITY);
+        Self::add_listener( self.event_listeners.clone(), listener );
+        events
+    }
 }

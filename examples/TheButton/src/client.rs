@@ -80,27 +80,26 @@ impl IntoFuture for Client
 
         let peer_id = self.cfg.callee_profile_id.clone();
         let client_id = self.appctx.client_id.clone();
-        let client_id2 = self.appctx.client_id.clone();
         let handle = self.appctx.handle.clone();
         let fut = ::temporary_init_env(&self.appctx)
-            .and_then( move |admin|
-                admin.relations(&client_id)
-                    .map( move |relations| (admin,relations) )
+            .and_then( move |my_profile|
+                my_profile.relations()
+                    .map( move |relations| (my_profile,relations) )
                     .map_err( |_e| ::std::io::Error::from(::std::io::ErrorKind::AddrNotAvailable) )
             )
-            .and_then( move |(admin,relations)|
+            .and_then( move |(my_profile,relations)|
             {
-                let rel_opt = find_relation_proof(&relations, client_id2.clone(), peer_id.clone(),
+                let rel_opt = find_relation_proof(&relations, client_id.clone(), peer_id.clone(),
                     Some(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN) );
                 match rel_opt {
                     Some(proof) => Box::new( Ok(proof).into_future() ) as Box<Future<Item=_,Error=_>>,
                     None => {
-                        let client_id3 = client_id2.clone();
-                        let rel_fut = admin.events(&client_id2)
-                            .and_then( move |events| admin.initiate_relation(&client_id2, &peer_id)
+                        let rel_fut = my_profile.login()
+                            .map( |session| session.events() )
+                            .and_then( move |events| my_profile.initiate_relation(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN, &peer_id)
                                 .map( |()| events ) )
                             .map_err( |_e| ::std::io::Error::from(::std::io::ErrorKind::AddrNotAvailable) )
-                            .and_then( |events| Self::wait_for_pairing_response(events, client_id3, handle) );
+                            .and_then( |events| Self::wait_for_pairing_response(events, client_id, handle) );
                         Box::new(rel_fut)
                     }
                 }
