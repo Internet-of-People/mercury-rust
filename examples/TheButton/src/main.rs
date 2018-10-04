@@ -18,12 +18,12 @@ extern crate tokio_signal;
 
 pub mod client_config;
 pub mod client;
+mod init_hack;
 pub mod server_config;
 pub mod server;
 pub mod cli;
 pub mod logging;
-pub mod function;
-pub mod application;
+// pub mod application;
 // pub mod signal_handling;
 
 
@@ -35,8 +35,7 @@ use std::rc::Rc;
 
 use clap::ArgMatches;
 use futures::prelude::*;
-use multiaddr::{Multiaddr, ToMultiaddr};
-use tokio_signal::unix::SIGINT;
+use tokio_signal::unix::{Signal, SIGINT};
 use tokio_core::reactor;
 
 use mercury_connect::*;
@@ -48,86 +47,15 @@ use mercury_home_protocol::crypto::Ed25519Signer;
 use cli::cli;
 use client::Client;
 use client_config::*;
-use function::*;
+use init_hack::init_connect_service;
 use logging::start_logging;
 use server::Server;
 use server_config::*;
 
 
 
-fn temporary_connect_service_instance(my_private_profilekey_file: &str,
-        home_id_str: &str, home_addr_str: &str, reactor: &mut reactor::Core)
-    -> Result<(Rc<ConnectService>, ProfileId, ProfileId), std::io::Error>
-{
-    use mercury_connect::service::{DummyUserInterface, MyProfileFactory, SignerFactory};
-    use mercury_storage::async::{KeyAdapter, KeyValueStore, fs::FileStore, imp::InMemoryStore};
-
-    debug!("Initializing service instance");
-
-    let home_pubkey = PublicKey(std::fs::read(home_id_str)?);
-    let home_id = ProfileId::from(&home_pubkey);
-    let home_addr :SocketAddr = home_addr_str.parse().map_err(|err| std::io::Error::new(std::io::ErrorKind::InvalidInput, err))?;
-    let home_multiaddr : Multiaddr = home_addr.to_multiaddr().expect("Failed to parse server address");
-    let home_profile = Profile::new_home( home_id.clone(), home_pubkey.clone(), home_multiaddr );
-
-    let my_private_key = PrivateKey(std::fs::read(my_private_profilekey_file)?);
-    let my_signer = Rc::new( Ed25519Signer::new(&my_private_key).unwrap() ) as Rc<Signer>;
-    let my_profile_id = my_signer.profile_id().to_owned();
-    let my_profile = Profile::new( &my_profile_id, my_signer.public_key(),
-        &ProfileFacet::Persona( PersonaFacet{homes: vec![], data: vec![]} ) );
-
-    // TODO consider that client should be able to start up without being a DHT client,
-    //      e.g. with having only a Home URL including hints to access Home
-    let profile_repo = SimpleProfileRepo::from( KeyAdapter::<String,_,_>::new(
-        FileStore::new("/tmp/mercury/thebutton-storage").unwrap() ) );
-//    let profile_repo = SimpleProfileRepo::default();
-    let repo_initialized = reactor.run( profile_repo.load(&my_profile_id) );
-    if repo_initialized.is_err()
-    {
-        debug!("Profile repository was not initialized, populate it with required entries");
-        reactor.run( profile_repo.insert(home_profile) ).unwrap();
-        reactor.run( profile_repo.insert(my_profile.clone() ) ).unwrap();
-    }
-    else { debug!("Profile repository was initialized, continue without populating it"); }
-    let profile_repo = Rc::new(profile_repo);
-
-    let my_profiles = Rc::new( vec![ my_profile_id.clone() ].iter().cloned().collect::<HashSet<_>>() );
-    let my_own_profile = OwnProfile::new(&my_profile,&[]);
-    let signers = vec![ ( my_profile_id.clone(), my_signer ) ].into_iter().collect();
-    let signer_factory: Rc<SignerFactory> = Rc::new(SignerFactory::new(signers) );
-    let home_connector = Rc::new( SimpleTcpHomeConnector::new( reactor.handle() ) );
-    let gateways = Rc::new( MyProfileFactory::new(
-        signer_factory, profile_repo.clone(), home_connector, reactor.handle() ) );
-
-    let ui = Rc::new( DummyUserInterface::new( my_profiles.clone() ) );
-    let mut own_profile_store = InMemoryStore::new();
-    reactor.run( own_profile_store.set(my_profile_id.clone(), my_own_profile ) ).unwrap();
-    let profile_store = Rc::new( RefCell::new(own_profile_store) );
-    let service = Rc::new( ConnectService::new(ui, my_profiles, profile_store, gateways) ); //, &reactor.handle() ) );
-
-    Ok( (service, my_profile_id, home_id) )
-}
-
-
-
-fn temporary_init_env(app_context: &AppContext)
-    -> Box< Future<Item=Rc<MyProfile>, Error=std::io::Error> >
-{
-    let client_id = app_context.client_id.clone();
-    let home_id = app_context.home_id.clone();
-    let init_fut = app_context.service.admin_session(None)
-        .inspect( |_admin| debug!("Admin endpoint was connected") )
-        .and_then( move |admin| admin.profile(client_id) )
-        .and_then( move |my_profile| my_profile.join_home(home_id, None )
-            .map( |()| my_profile )
-            .map_err( |e| {
-                debug!("Failed to join home: {:?}", e);
-                mercury_connect::error::Error::from(mercury_connect::error::ErrorKind::Unknown)
-            } )
-        )
-        .inspect( |_| debug!("Successfully registered to home") )
-        .map_err( |e| { debug!("Failed to register: {:?}", e); std::io::Error::new( std::io::ErrorKind::ConnectionRefused, format!("{}", e) ) } );
-    Box::new(init_fut)
+pub fn signal_recv(sig : i32)-> Box< Stream<Item=i32, Error=::std::io::Error> >{
+    Box::new( Signal::new(sig).flatten_stream() )
 }
 
 
@@ -147,7 +75,7 @@ impl AppContext
     {
         // TODO when we'll have a standalone service with proper IPC/RPC interface,
         //      this must be changed into a simple connect() call instead of building a service instance
-        let (service, client_id, home_id) = temporary_connect_service_instance(priv_key, node_id, node_addr, reactor)?;
+        let (service, client_id, home_id) = init_connect_service(priv_key, node_id, node_addr, reactor)?;
         Ok( Self{ service, client_id, home_id, handle: reactor.handle() } )
     }
 }

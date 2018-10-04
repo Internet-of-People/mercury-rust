@@ -304,8 +304,8 @@ pub trait Home: ProfileRepo
     fn claim(&self, profile: ProfileId) ->
         Box< Future<Item=OwnProfile, Error=Error> >;
 
-    // TODO consider how to enforce overwriting the original ownprofile with the modified one
-    //      with the pairing proof, especially the error case
+    // TODO this should return only the signed RelationProof of the home hosting the profile
+    //      because in this form the home can return malicious changes in the profile
     fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
         Box< Future<Item=OwnProfile, Error=(OwnProfile,Error)> >;
 
