@@ -171,7 +171,6 @@ pub trait MyProfile
     fn relations(&self) -> Vec<RelationProof>;
     fn relations_with_peer(&self, peer_id: &ProfileId, app: Option<&ApplicationId>,
                            relation_type: Option<&str>) -> Vec<RelationProof>;
-    fn on_new_relation(&self, rel_proof: RelationProof) -> Box< Future<Item=(),Error=()> >;
     fn initiate_relation(&self, relation_type: &str, with_profile_id: &ProfileId) ->
         Box< Future<Item=(), Error=Error> >;
     fn accept_relation(&self, half_proof: &RelationHalfProof)
@@ -432,14 +431,6 @@ impl MyProfile for MyProfileImpl
             Some(rel) => peers_filtered.filter( |proof| proof.relation_type == rel ).collect(),
         }
     }
-
-
-    fn on_new_relation(&self, rel_proof: RelationProof) ->
-        Box< Future<Item=(),Error=()> >
-    {
-        Self::on_new_relation( Rc::downgrade(&self.relations), rel_proof )
-    }
-
 
 
     fn homes(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
