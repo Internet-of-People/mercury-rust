@@ -8,13 +8,9 @@ use futures::prelude::*;
 use futures::future;
 use tokio_core::reactor;
 
-use mercury_home_protocol::*;
-use mercury_storage::async::KeyValueStore;
-use ::{DAppEndpoint, DAppPermission, DAppSession};
-use ::error::*;
-use ::profile::{HomeConnector, MyProfile, MyProfileImpl};
-use ::sdk::DAppConnect;
-use ::simple_profile_repo::SimpleProfileRepo;
+use super::*;
+use profile::{HomeConnector, MyProfile, MyProfileImpl};
+use sdk::DAppConnect;
 
 
 
@@ -27,59 +23,6 @@ pub struct DeviceAuthorization(Vec<u8>);
 // TODO should be used in parsed version as something like Vec<(bool,uint16)>
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Bip32Path(String);
-
-
-
-// TODO consider using this own error type for the service instead of the imported connect error type
-//#[derive(Debug)]
-//pub struct Error {
-//    inner: Context<ErrorKind>
-//}
-//
-//#[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
-//pub enum ErrorKind {
-//    #[fail(display="unknown")]
-//    Unknown,
-//}
-//
-//impl PartialEq for Error {
-//    fn eq(&self, other: &Error) -> bool {
-//        self.inner.get_context() == other.inner.get_context()
-//    }
-//}
-//
-//impl Fail for Error {
-//    fn cause(&self) -> Option<&Fail> {
-//        self.inner.cause()
-//    }
-//    fn backtrace(&self) -> Option<&Backtrace> {
-//        self.inner.backtrace()
-//    }
-//}
-//
-//impl Display for Error {
-//    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-//        Display::fmt(&self.inner, f)
-//    }
-//}
-//
-//impl Error {
-//    pub fn kind(&self) -> ErrorKind {
-//        *self.inner.get_context()
-//    }
-//}
-//
-//impl From<ErrorKind> for Error {
-//    fn from(kind: ErrorKind) -> Error {
-//        Error { inner: Context::new(kind) }
-//    }
-//}
-//
-//impl From<Context<ErrorKind>> for Error {
-//    fn from(inner: Context<ErrorKind>) -> Error {
-//        Error { inner: inner }
-//    }
-//}
 
 
 
@@ -208,11 +151,11 @@ impl MyProfileFactory
                home_connector: Rc<HomeConnector>, handle: reactor::Handle) -> Self
         { Self{ signer_factory, profile_repo, home_connector, handle, cache: Default::default() } }
 
-    pub fn create(&self, own_profile: OwnProfile) -> Option<Rc<MyProfile>>
+    pub fn create(&self, own_profile: OwnProfile) -> Result<Rc<MyProfile>,Error>
     {
         let profile_id = own_profile.profile.id.clone();
         if let Some(ref my_profile_rc) = self.cache.borrow().get(&profile_id)
-            { return Some( Rc::clone(my_profile_rc) ) }
+            { return Ok( Rc::clone(my_profile_rc) ) }
 
         debug!("Creating new profile wrapper for profile {}", profile_id);
         self.signer_factory.signer(&profile_id)
@@ -226,6 +169,7 @@ impl MyProfileFactory
                 self.cache.borrow_mut().insert(profile_id, result_rc.clone() );
                 result_rc
             } )
+            .ok_or( ErrorKind::FailedToAuthorize.into() )
     }
 }
 
@@ -261,15 +205,15 @@ impl AdminSession for AdminSessionImpl
 {
     fn profiles(&self) -> Box< Future<Item=Vec<Rc<MyProfile>>, Error=Error> >
     {
+        // TODO consider delegating implementation to profile(id)
         let store = self.profile_store.clone();
         let prof_factory = self.profile_factory.clone();
         let profile_futs = self.my_profile_ids.iter()
             .map( |prof_id| {
                 let prof_factory = prof_factory.clone();
                 store.borrow().get( prof_id.to_owned() )
-                    .map_err( |e| e.context(ErrorKind::Unknown).into() )
-                    .and_then( move |own_profile| prof_factory.create(own_profile)
-                        .ok_or( ErrorKind::Unknown.into() ) )
+                    .map_err( |e| e.context(ErrorKind::FailedToLoadProfile).into() )
+                    .and_then( move |own_profile| prof_factory.create(own_profile) )
             } )
             .collect::<Vec<_>>();
         let profiles_fut = future::join_all(profile_futs);
@@ -280,9 +224,8 @@ impl AdminSession for AdminSessionImpl
     {
         let profile_factory = self.profile_factory.clone();
         let fut = self.profile_store.borrow().get( id.to_owned() )
-            .map_err( |e| e.context(ErrorKind::Unknown).into() )
-            .and_then( move |own_profile| profile_factory.create(own_profile)
-                .ok_or( ErrorKind::Unknown.into() ) );
+            .map_err( |e| e.context(ErrorKind::FailedToLoadProfile).into() )
+            .and_then( move |own_profile| profile_factory.create(own_profile) );
         Box::new(fut)
     }
 
@@ -357,10 +300,9 @@ impl DAppEndpoint for ConnectService
             .and_then( move |profile_id| {
                 let store = profile_store.borrow();
                 store.get(profile_id)
-                    .map_err( |err| err.context(ErrorKind::Unknown).into() )
+                    .map_err( |err| err.context(ErrorKind::FailedToLoadProfile).into() )
             } )
-            .and_then( move |own_profile| profile_factory.create(own_profile)
-                .ok_or( Error::from(ErrorKind::Unknown) ) )
+            .and_then( move |own_profile| profile_factory.create(own_profile) )
             .map( move |my_profile| DAppConnect::new(my_profile, app) )
             .map_err( |err| { debug!("Failed to initialize dapp session: {:?}", err); err } );
         Box::new(fut)
@@ -405,7 +347,7 @@ impl UserInterface for DummyUserInterface
     fn select_profile(&self) -> Box< Future<Item=ProfileId, Error=Error> >
     {
         let first_profile_res = self.my_profiles.iter().cloned().nth(0)
-            .ok_or( Error::from(ErrorKind::Unknown) );
+            .ok_or( Error::from(ErrorKind::FailedToAuthorize) );
         Box::new( first_profile_res.into_future() )
     }
 

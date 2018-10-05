@@ -11,8 +11,83 @@ pub struct Error {
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
 pub enum ErrorKind {
-    #[fail(display="unknown")]
-    Unknown,
+    #[fail(display= "connection to home failed")]
+    ConnectionToHomeFailed,
+
+    #[fail(display="handshake failed")]
+    HandshakeFailed,
+
+    #[fail(display= "peer id retreival failed")]
+    PeerIdRetreivalFailed,
+
+    #[fail(display= "failed to get contacts")]
+    FailedToGetContacts,
+
+    #[fail(display="failed to get session")]
+    FailedToGetSession,
+
+    #[fail(display="address conversion failed")]
+    AddressConversionFailed,
+
+    #[fail(display="failed to connect tcp stream")]
+    ConnectionFailed,
+
+    #[fail(display="failed to load profile")]
+    FailedToLoadProfile,
+
+    #[fail(display="failed to resolve profile")]
+    FailedToResolveProfile,
+
+    #[fail(display="home profile expected")]
+    HomeProfileExpected,
+
+    #[fail(display="failed to claim profile")]
+    FailedToClaimProfile,
+
+    #[fail(display="registration failed")]
+    RegistrationFailed,
+
+    #[fail(display="deregistration failed")]
+    DeregistrationFailed,
+
+    #[fail(display="pair request failed")]
+    PairRequestFailed,
+
+    #[fail(display="peer response failed")]
+    PeerResponseFailed,
+
+    #[fail(display="profile update failed")]
+    ProfileUpdateFailed,
+
+    #[fail(display="call failed")]
+    CallFailed,
+
+    #[fail(display="call refused")]
+    CallRefused,
+
+    #[fail(display="lookup failed")]
+    LookupFailed,
+
+    #[fail(display="no proof found for home")]
+    HomeProofNotFound,
+
+    #[fail(display="persona profile expected")]
+    PersonaProfileExpected,
+
+    #[fail(display="no homes found")]
+    NoHomesFound,
+
+    #[fail(display="login failed")]
+    LoginFailed,
+
+    #[fail(display="failed to get peer id")]
+    FailedToGetPeerId,
+
+    #[fail(display="failed to authorize")]
+    FailedToAuthorize,
+
+    #[fail(display="implementation error")]
+    ImplementationError,
 }
 
 impl PartialEq for Error {

@@ -13,8 +13,6 @@ pub struct Client {
 impl Client{
     pub fn new(cfg: ClientConfig, appctx: AppContext) -> Self
         { Self{appctx, cfg} }
-
-
 }
 
 

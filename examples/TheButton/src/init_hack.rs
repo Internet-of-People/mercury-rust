@@ -75,12 +75,7 @@ pub fn init_app_common(app_context: &AppContext)
         .inspect( |_admin| debug!("Admin endpoint was connected") )
         .and_then( move |admin| admin.profile(client_id) )
         .and_then( move |my_profile| my_profile.join_home(home_id, None )
-            .map( |()| my_profile )
-            .map_err( |e| {
-                debug!("Failed to join home: {:?}", e);
-                mercury_connect::error::Error::from(mercury_connect::error::ErrorKind::Unknown)
-            } )
-        )
+            .map( |()| my_profile ) )
         .inspect( |_| debug!("Successfully registered to home") )
         .map_err( |e| { debug!("Failed to register: {:?}", e); std::io::Error::new( std::io::ErrorKind::ConnectionRefused, format!("{}", e) ) } );
     Box::new(init_fut)

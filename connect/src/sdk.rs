@@ -1,13 +1,10 @@
 use std::rc::Rc;
 
-use failure::Fail;
 use futures::prelude::*;
 use futures::sync::mpsc;
 
-use mercury_home_protocol::*;
-use mercury_storage::async::KeyValueStore;
-use ::{DAppCall, DAppEvent, DAppSession, profile::MyProfile};
-use ::error::{Error, ErrorKind};
+use super::*;
+use profile::MyProfile;
 
 
 
@@ -62,8 +59,7 @@ impl DAppSession for DAppConnect
                             .map( |call| DAppEvent::Call(call) ) );
                     Ok( Box::new(event_stream) as Box<Stream<Item=_,Error=_>>)
                 }
-            } )
-            .map_err( |e| e.context(ErrorKind::Unknown).into() );
+            } );
         Box::new(checkin_fut)
     }
 
@@ -77,33 +73,20 @@ impl DAppSession for DAppConnect
             .pop()
             .ok_or_else( || {
                 debug!("Failed to find proper relationproof to start call, drop call request");
-                ErrorKind::Unknown.into()
+                ErrorKind::FailedToAuthorize.into()
             } );
 
         let call_fut = relation_res.into_future()
-//            .and_then(
-//            {
-//                let my_id = self.my_profile.signer().profile_id().to_owned();
-//                let peer_id = profile_id.to_owned();
-//                move |contacts|
-//                    find_relation_proof( &contacts, my_id, peer_id, Some(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN) )
-//                        .ok_or_else( || {
-//                            debug!("Failed to find proper relationproof to start call, drop call request");
-//                            ErrorKind::Unknown.into()
-//                        } )
-//            } )
-//            .inspect( |_| debug!("Got relation proof, initiate call to profile") )
             .and_then(
             {
                 let my_profile = self.my_profile.clone();
                 let app_id = self.app_id.clone();
                 let (to_caller, from_callee) = mpsc::channel(CHANNEL_CAPACITY);
                 move |relation| my_profile.call(relation.to_owned(), app_id, init_payload, Some(to_caller))
-                    .map_err( |e| e.context(ErrorKind::Unknown).into() )
                     .and_then( |to_callee_opt| {
                         debug!("Call was answered, processing response");
                         match to_callee_opt {
-                            None => Err( Error::from(ErrorKind::Unknown) ), // TODO
+                            None => Err( Error::from(ErrorKind::CallRefused) ),
                             Some(to_callee) => {
                                 info!("Call with duplex channel established");
                                 Ok( DAppCall{ outgoing: to_callee, incoming: from_callee } )

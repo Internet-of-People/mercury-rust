@@ -16,6 +16,7 @@ extern crate tokio_io;
 
 pub mod profile;
 pub mod error;
+pub use error::{Error, ErrorKind};
 pub mod net;
 pub use net::SimpleTcpHomeConnector;
 
@@ -33,7 +34,6 @@ use futures::prelude::*;
 
 use mercury_home_protocol::*;
 use mercury_storage::async::KeyValueStore;
-use ::error::*;
 
 
 

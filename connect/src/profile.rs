@@ -1,141 +1,14 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
 use std::rc::{Rc, Weak};
-use std::fmt::Display;
 
-use failure::{Context, Fail, Backtrace};
+use failure::Fail;
 use futures::prelude::*;
 use futures::{future, sync::mpsc};
 use tokio_core::reactor;
 
-use mercury_home_protocol::*;
+use super::*;
 use mercury_home_protocol::future as fut;
-use ::simple_profile_repo::SimpleProfileRepo;
-
-
-
-#[derive(Debug)]
-pub struct Error {
-    inner: Context<ErrorKind>
-}
-
-#[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
-pub enum ErrorKind {
-    #[fail(display= "connection to home failed")]
-    ConnectionToHomeFailed,
-
-    #[fail(display="handshake failed")]
-    HandshakeFailed,
-
-    #[fail(display= "peer id retreival failed")]
-    PeerIdRetreivalFailed,
-
-    #[fail(display= "failed to get contacts")]
-    FailedToGetContacts,
-
-    #[fail(display="failed to get session")]
-    FailedToGetSession,
-
-    #[fail(display="address conversion failed")]
-    AddressConversionFailed,
-
-    #[fail(display="failed to connect tcp stream")]
-    ConnectionFailed,
-
-    #[fail(display="failed to load profile")]
-    FailedToLoadProfile,
-
-    #[fail(display="failed to resolve profile")]
-    FailedToResolveProfile,
-
-    #[fail(display="home profile expected")]
-    HomeProfileExpected,
-
-    #[fail(display="failed to claim profile")]
-    FailedToClaimProfile,
-
-    #[fail(display="registration failed")]
-    RegistrationFailed,
-
-    #[fail(display="deregistration failed")]
-    DeregistrationFailed,
-
-    #[fail(display="pair request failed")]
-    PairRequestFailed,
-
-    #[fail(display="peer response failed")]
-    PeerResponseFailed,
-
-    #[fail(display="profile update failed")]
-    ProfileUpdateFailed,
-
-    #[fail(display="call failed")]
-    CallFailed,
-
-    #[fail(display="call refused")]
-    CallRefused,
-
-    #[fail(display="lookup failed")]
-    LookupFailed,
-
-    #[fail(display="no proof found for home")]
-    HomeProofNotFound,
-
-    #[fail(display="persona profile expected")]
-    PersonaProfileExpected,
-
-    #[fail(display="no homes found")]
-    NoHomesFound,
-
-    #[fail(display="login failed")]
-    LoginFailed,
-
-    #[fail(display="failed to get peer id")]
-    FailedToGetPeerId,
-
-    #[fail(display="unknown")]
-    Unknown,
-}
-
-impl PartialEq for Error {
-    fn eq(&self, other: &Error) -> bool {
-        self.inner.get_context() == other.inner.get_context()
-    }
-}
-
-impl Fail for Error {
-    fn cause(&self) -> Option<&Fail> {
-        self.inner.cause()
-    }
-
-    fn backtrace(&self) -> Option<&Backtrace> {
-        self.inner.backtrace()
-    }
-}
-
-impl Display for Error {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
-        Display::fmt(&self.inner, f)
-    }
-}
-
-impl Error {
-    pub fn kind(&self) -> ErrorKind {
-        *self.inner.get_context()
-    }
-}
-
-impl From<ErrorKind> for Error {
-    fn from(kind: ErrorKind) -> Error {
-        Error { inner: Context::new(kind) }
-    }
-}
-
-impl From<Context<ErrorKind>> for Error {
-    fn from(inner: Context<ErrorKind>) -> Error {
-        Error { inner: inner }
-    }
-}
 
 
 
@@ -366,12 +239,15 @@ impl MyProfileImpl
 
 
     fn on_new_relation(relations: Weak<RefCell< Vec<RelationProof> >>, rel_proof: RelationProof) ->
-        Box< Future<Item=(),Error=()> >
+        Box< Future<Item=(),Error=Error> >
     {
         debug!("Storing new relation: {:?}", rel_proof);
         let relations_rc = match relations.upgrade() {
             Some(rc) => rc,
-            None => return Box::new( Err( debug!("Received new relation to store, but Rc upgrade failed") ).into_future() ),
+            None => {
+                debug!("Received new relation to store, but Rc upgrade failed");
+                return Box::new( Err( ErrorKind::ImplementationError.into() ).into_future() )
+            },
         };
 
         relations_rc.borrow_mut().push(rel_proof);
@@ -390,7 +266,9 @@ impl MyProfileImpl
                 match event {
                     ProfileEvent::PairingResponse(rel_proof) => {
                         debug!("Got pairing response, saving relation");
-                        Self::on_new_relation( relations.clone(), rel_proof )
+                        let not_fut = Self::on_new_relation( relations.clone(), rel_proof )
+                            .map_err( |e| error!("Notification on new relation failed: {}", e) );
+                        Box::new(not_fut) as Box<Future<Item=_,Error=_>>
                     },
                     _ => Box::new( Ok( () ).into_future() ),
                 }
@@ -437,7 +315,7 @@ impl MyProfile for MyProfileImpl
     {
         let res = match self.own_profile.borrow().profile.facet {
             ProfileFacet::Persona(ref persona) => Ok( persona.homes.clone() ),
-            _ => Err( Error::from(ErrorKind::Unknown) )
+            _ => Err( Error::from(ErrorKind::PersonaProfileExpected) )
         };
         Box::new( res.into_future() )
     }
@@ -545,7 +423,7 @@ impl MyProfile for MyProfileImpl
 
         let proof = match RelationProof::sign_remaining_half( &half_proof, self.signer() ) {
             Ok(proof) => proof,
-            Err(e) => return Box::new( Err( ErrorKind::Unknown.into() ).into_future() ),
+            Err(e) => return Box::new( Err( e.context( ErrorKind::FailedToAuthorize ).into() ).into_future() ),
         };
 
         let proof_clone = proof.clone();
@@ -566,7 +444,6 @@ impl MyProfile for MyProfileImpl
                 let relations = Rc::downgrade(&self.relations);
                 move |()| Self::on_new_relation( relations, proof_clone.clone() )
                     .map( move |()| proof_clone )
-                    .map_err( |()| ErrorKind::Unknown.into() )
             } );
 
         Box::new(pair_fut)
@@ -624,7 +501,7 @@ impl MyProfile for MyProfileImpl
                 debug!("Home connection established, logging in");
                 let home_id = match home_proof.peer_id(&my_profile_id) {
                     Ok(id) => id.to_owned(),
-                    Err(e) => return Box::new( Err( e.context(ErrorKind::Unknown).into() ).into_future() ) as Box<Future<Item=_,Error=_>>,
+                    Err(e) => return Box::new( Err( e.context(ErrorKind::FailedToAuthorize).into() ).into_future() ) as Box<Future<Item=_,Error=_>>,
                 };
                 let login_fut = home.login(&home_proof)
                     .map_err(|err| err.context(ErrorKind::LoginFailed).into())

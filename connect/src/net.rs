@@ -7,8 +7,8 @@ use multiaddr::{Multiaddr, AddrComponent};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 
-use mercury_home_protocol::*;
-use ::profile::{Error, ErrorKind, HomeConnector};
+use super::*;
+use profile::HomeConnector;
 
 
 
