@@ -1,9 +1,7 @@
 use std::iter;
 
 use futures::prelude::*;
-use futures::future::{self, loop_fn, Loop};
-
-
+use futures::future::{self, loop_fn, poll_fn, Loop};
 
 // Joins futures into a single future waiting for all of them to finish (no matter if succeed or fail)
 // and collect their results into a vector in the original order. This function may not error..
@@ -72,7 +70,55 @@ where I: IntoIterator,
     Box::new(vec_fut)
 }
 
+// Alternative implementation with poll, just for comparison to the composite solution above
+pub fn collect_results2<I>(futures_iterator: I)
+    -> impl Future<Item = Vec< Result< <I::Item as IntoFuture>::Item,
+                                       <I::Item as IntoFuture>::Error > >,
+                   Error = ()>
+where I: IntoIterator,
+      I::Item: IntoFuture + 'static,
+{
+    // input has all uncompleted futures prefixed with its original position
+    // output has all completed results prefixed with the original position of the future from input
+    // each poll will remove completed futures from input and append them to output
+    let mut input = futures_iterator
+            .into_iter()
+            .map(|a| a.into_future())
+            .enumerate()
+            .collect::<Vec<_>>();
+    let mut output = Vec::new();
 
+    poll_fn(move || {
+        let x = input
+            .drain(..)
+            .filter_map(|(idx, mut f)| {
+                match f.poll() {
+                    Ok(Async::NotReady) => Some((idx, f)),
+                    Ok(Async::Ready(item)) => {
+                        output.push((idx, Ok(item)));
+                        None
+                    },
+                    Err(err) => {
+                        output.push((idx, Err(err)));
+                        None
+                    },
+                }
+            })
+            .collect::<Vec<_>>();
+
+        if x.is_empty() {
+            output
+                .sort_unstable_by( |&(ref idx1, ref _res1), &(ref idx2, ref _res2)| idx1.cmp(idx2) );
+            let result = output.drain(..)
+                .map(|(_idx, f)| f)
+                .collect::<Vec<_>>();
+            Ok(Async::Ready(result))
+        } else {
+            input = x;
+            Ok(Async::NotReady)
+        }
+    })
+}
 
 #[cfg(test)]
 mod test
@@ -107,7 +153,7 @@ mod test
     {
         let (sink,stream) = mpsc::channel(1);
         let mut reactor = reactor::Core::new().unwrap();
-        let mut futs = vec![ Box::new( stream.map(|_| (1) ).collect().map(|vec| vec.first().unwrap().clone()) ) as Box<Future<Item=i32,Error=()>>,
+        let mut futs = vec![ Box::new( stream.map(|_| (1) ).collect().map(|vec| *vec.first().unwrap()) ) as Box<Future<Item=i32,Error=()>>,
                              Box::new( sink.send(42).map(|_| (2)).map_err(|_| ()) ) ];
         let collect_fut = collect_results( futs.drain(..) );
         let result = reactor.run(collect_fut).unwrap();
