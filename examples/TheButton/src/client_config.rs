@@ -11,13 +11,16 @@ pub struct ClientConfig{
 }
 
 impl ClientConfig{
-    pub fn try_from(args: &ArgMatches)->Result<Self, std::io::Error> {
+    pub fn try_from(args: &ArgMatches)->Result<Self, Error> {
         let on_fail = match args.value_of("on-fail") {
             Some(fail) => {
                 match fail {
                     "retry"     => OnFail::Retry,
                     "terminate" => OnFail::Terminate,
-                    _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse --on-fail value"))
+                    _ => {
+                        error!("failed to parse --on-fail value");
+                        return Err( ErrorKind::LookupFailed.into() );
+                    }
                 }
             },
             None => OnFail::Terminate

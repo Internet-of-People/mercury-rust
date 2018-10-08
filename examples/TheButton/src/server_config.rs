@@ -7,11 +7,14 @@ pub struct ServerConfig{
 }
 
 impl ServerConfig{
-    pub fn try_from(args: &ArgMatches)-> Result<Self, std::io::Error> {
+    pub fn try_from(args: &ArgMatches)-> Result<Self, Error> {
         let timer = match args.value_of(cli::CLI_EVENT_TIMER) {
             Some(s) => s.parse::<u64>()
                 .map(|i| Some(i))
-                .map_err(|_err| std::io::Error::new(std::io::ErrorKind::InvalidInput, "failed to parse --event-timer")),
+                .map_err(|e| {
+                    error!("failed to parse --event-timer");
+                    Error::from( e.context(ErrorKind::LookupFailed) )
+                } ),
             None => Result::Ok(Option::None)
         }?;
 

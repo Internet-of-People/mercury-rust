@@ -1,6 +1,7 @@
 //#[macro_use]
 extern crate clap;
 extern crate either;
+extern crate failure;
 extern crate futures;
 #[macro_use]
 extern crate log;
@@ -34,6 +35,7 @@ use std::net::SocketAddr;
 use std::rc::Rc;
 
 use clap::ArgMatches;
+use failure::Fail;
 use futures::prelude::*;
 use tokio_signal::unix::{Signal, SIGINT};
 use tokio_core::reactor;
@@ -54,8 +56,9 @@ use server_config::*;
 
 
 
-pub fn signal_recv(sig : i32)-> Box< Stream<Item=i32, Error=::std::io::Error> >{
-    Box::new( Signal::new(sig).flatten_stream() )
+pub fn signal_recv(sig : i32)-> Box< Stream<Item=i32, Error=Error> >{
+    Box::new( Signal::new(sig).flatten_stream()
+        .map_err( |e| e.context( ErrorKind::ImplementationError ).into() ) )
 }
 
 
@@ -71,7 +74,7 @@ pub struct AppContext{
 impl AppContext
 {
     pub fn new(priv_key: &str, node_id: &str, node_addr: &str, reactor: &mut reactor::Core)
-        -> Result<Self, std::io::Error>
+        -> Result<Self, Error>
     {
         // TODO when we'll have a standalone service with proper IPC/RPC interface,
         //      this must be changed into a simple connect() call instead of building a service instance
@@ -88,7 +91,7 @@ pub enum OnFail {
 
 
 
-fn main() -> Result<(), std::io::Error>
+fn main() -> Result<(), Error>
 {
     //ARGUMENT HANDLING START
     let matches = cli().get_matches();
@@ -120,10 +123,16 @@ fn main() -> Result<(), std::io::Error>
             match sub_name{
                 cli::CLI_SERVER => Server::new( ServerConfig::try_from(args)?, appcx).into_future(),
                 cli::CLI_CLIENT => Client::new( ClientConfig::try_from(args)?, appcx).into_future(),
-                _=> return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, format!("unknown subcommand '{}'", sub_name)))
+                _=> {
+                    error!("unknown subcommand '{}'", sub_name);
+                    return Err( ErrorKind::LookupFailed.into() )
+                }
             }
         },
-        None => return Err(std::io::Error::new(std::io::ErrorKind::InvalidInput, "subcommand missing"))
+        None => {
+            error!("subcommand missing");
+            return Err( ErrorKind::LookupFailed.into() )
+        }
     };
 
     debug!("Initialized application, running");

@@ -20,14 +20,13 @@ impl IntoFuture for Client
 {
     type Future = Box<Future<Item=Self::Item, Error=Self::Error>>;
     type Item = ();
-    type Error = std::io::Error;
+    type Error = Error;
 
     fn into_future(self) -> Self::Future
     {
         let callee_profile_id = self.cfg.callee_profile_id.clone();
 
         let fut = self.appctx.service.dapp_session(&ApplicationId("buttondapp".into()), None )
-            .map_err(|_err| std::io::Error::new(std::io::ErrorKind::Other, "Could not initialize MercuryConnect"))
             .and_then(move |dapp|
             {
                 info!("application initialized, calling {:?}", callee_profile_id);
@@ -41,7 +40,7 @@ impl IntoFuture for Client
                                .map_err(|errmsg| warn!("Client got server error {:?}", errmsg) )
                         })
                     })
-                    .map_err(|()| std::io::Error::new(std::io::ErrorKind::Other, "encountered error"))
+                    .map_err(|()| Error::from(ErrorKind::CallFailed) )
             } );
 
         Box::new( init_client(&self).then( |_res| fut ) )

@@ -77,13 +77,13 @@ pub trait DAppSession
     // After the session was initialized, the profile is selected and can be queried any time
     fn selected_profile(&self) -> &ProfileId;
 
-    fn contacts(&self) -> Box< Future<Item=Vec<RelationProof>, Error=::Error> >;
+    fn contacts(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
 
-    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=::Error> >;
+    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=Error> >;
 
     fn checkin(&self)
-        -> Box< Future<Item=Box<Stream<Item=Result<DAppEvent,String>, Error=()>>, Error=::Error> >;
+        -> Box< Future<Item=Box<Stream<Item=Result<DAppEvent,String>, Error=()>>, Error=Error> >;
 
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
-        -> Box< Future<Item=DAppCall, Error=::Error> >;
+        -> Box< Future<Item=DAppCall, Error=Error> >;
 }
