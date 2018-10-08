@@ -56,7 +56,7 @@ pub struct DAppCall
 pub enum DAppEvent
 {
     PairingResponse(RelationProof),
-    Call(Box<IncomingCall>),
+    Call(Box<IncomingCall>), // TODO wrap IncomingCall so as call.answer() could return a DAppCall directly
 }
 
 

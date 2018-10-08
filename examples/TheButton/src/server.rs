@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::time::Duration;
 
-use either::Either;
 use futures::prelude::*;
 use futures::sync::mpsc;
 use tokio_signal::unix::SIGUSR1;
@@ -14,108 +13,110 @@ use ::init_hack::init_server;
 pub struct Server{
     pub cfg : ServerConfig,
     pub appctx: AppContext,
+    active_calls: Rc<RefCell< Vec<DAppCall> >>,
 }
 
 impl Server{
     pub fn new(cfg: ServerConfig, appctx: AppContext) -> Self
-        { Self{cfg, appctx} }
+        { Self{ cfg, appctx, active_calls: Default::default() } }
 }
 
 
 
-impl IntoFuture for Server {
+impl IntoFuture for Server
+{
     type Item = ();
     type Error = Error;
     type Future = Box<Future<Item=Self::Item, Error=Self::Error>>;
 
-    fn into_future(self) -> Self::Future {
-        let (tx_call, rx_call) = mpsc::channel::<Option<AppMsgSink>>(1);
-        let (tx_event, rx_event) = mpsc::channel::<()>(1);
-
-        let rx = rx_call.map(|c| Either::Left(c)).select(rx_event.map(|e| Either::Right(e)));
-
-        let calls_fut = self.appctx.service.dapp_session( &ApplicationId("buttondapp".into()), None )
-            .inspect( |_app| debug!("dApp session was initialized, checking in") )
-            .map_err( |err| { debug!("Failed to create dApp session: {:?}", err); err } )
-            .and_then(|mercury_app| mercury_app.checkin() )
+    fn into_future(self) -> Self::Future
+    {
+        // Create dApp session with Mercury Connect and listen for incoming events, automatically accept calls
+        let active_calls_rc = self.active_calls.clone();
+        let dapp_events_fut = self.appctx.service.dapp_session(&self.appctx.app_id, None)
+            .inspect( |_| debug!("dApp session was initialized, checking in") )
+            .map_err( |err| { error!("Failed to create dApp session: {:?}", err); err } )
+            .and_then(|dapp_session| dapp_session.checkin() )
             .inspect( |_call_stream| debug!("Call stream received with successful checkin, listening for calls") )
-            .and_then(move |call_stream| { call_stream
-                .map_err( |()| Error::from(ErrorKind::ConnectionFailed) )
-                .for_each( move |call_result| {
-                    match call_result {
-                        Ok(DAppEvent::Call(c)) => {
-                            let (msgchan_tx, _) = mpsc::channel(1);
-                            let msgtx = c.answer(Some(msgchan_tx)).to_caller;
-                            let fut = tx_call.clone().send(msgtx).map(|_| ())
-                                .map_err(|_| Error::from( ErrorKind::ImplementationError) );
-                            Box::new(fut) as Box<Future<Item=_, Error=_>>
-                        },
+            .and_then(move |dapp_events|
+            {
+                dapp_events
+                    .map_err( |()| Error::from(ErrorKind::ConnectionFailed) )
+                    .for_each( move |event|
+                    {
+                        match event
+                        {
+                            Ok(DAppEvent::Call(incoming_call)) => {
+                                let (to_me, from_caller) = mpsc::channel(1);
+                                let to_caller_opt = incoming_call.answer(Some(to_me)).to_caller;
+                                if let Some(to_caller) = to_caller_opt
+                                    { active_calls_rc.borrow_mut().push(
+                                        DAppCall{incoming: from_caller, outgoing: to_caller} ); }
+                                Ok( debug!("Answered incoming call, saving channel to caller") )
+                            },
 
-                        Ok(DAppEvent::PairingResponse(response)) => {
-                            debug!("Got incoming pairing response, ignoring it {:?}", response);
-                            Box::new( Ok(()).into_future() )
+                            Ok(DAppEvent::PairingResponse(response)) => Ok( debug!(
+                                "Got incoming pairing response. We do not send such requests, ignoring it {:?}", response) ),
+
+                            Err(err) => {
+                                warn!("Received error for events, closing event stream: {}", err);
+                                Err( Error::from(ErrorKind::ConnectionFailed) )
+                            }
                         }
-                        Err(err) => {
-                            debug!("Received error for events, closing event stream: {}", err);
-                            Box::new(Err( Error::from(ErrorKind::ConnectionFailed) ).into_future() )
-                        }
-                    }
-                } )
-            });
+                    } )
+            } );
 
-        let calls_fut = init_server(&self)
-            .then( |_| calls_fut );
-
-        // Handling call and event management
-        let calls = RefCell::new(Vec::new());
+        // Forward button press events to all interested clients
         let handle = self.appctx.handle.clone();
-        let rx_fut = rx.for_each(move |v : Either<Option<AppMsgSink>, ()>| {   
-            match v {
-                Either::Left(call) => {
-                    if let Some(c) = call {
-                        calls.borrow_mut().push(c);
-                    }
-                },
-                Either::Right(()) => {
-                    debug!("notifying connected clients");
-                    for c in calls.borrow().iter() {
-                        let cc = c.clone();
-                        handle.spawn(cc.send(Ok(AppMessageFrame(b"".to_vec())))
-                            .map(|_| ()).map_err(|_|()));
-                    }
-                }
+        let active_calls_rc = self.active_calls.clone();
+        let (generate_button_press, got_button_press) = mpsc::channel(CHANNEL_CAPACITY);
+        let fwd_pressed_fut = got_button_press.for_each( move |()|
+        {
+            // TODO use something better here then handle.spawn() for all clients,
+            //      we should also detect and remove failing senders
+            let calls = active_calls_rc.borrow();
+            debug!( "Notifying {} connected clients", calls.len() );
+            for call in calls.iter() {
+                let to_client = call.outgoing.clone();
+                handle.spawn( to_client.send( Ok(AppMessageFrame( vec![42] )) )
+                    .map(|_| ()).map_err(|_|()) );
             }
             Ok(())
-        }) .map_err( |_err| Error::from(ErrorKind::ImplementationError) );
+        } ).map_err( |_err| Error::from(ErrorKind::ImplementationError) );
 
-        // SIGUSR1 is generating an event
-        let tx_interval = tx_event.clone();
-        let sigusr1_fut = signal_recv(SIGUSR1).for_each(move |_| {
+        // Receiving a SIGUSR1 signal generates an event
+        let button_press_generator = generate_button_press.clone();
+        let press_on_sigusr1_fut = signal_recv(SIGUSR1).for_each(move |_| {
             info!("received SIGUSR1, generating event");                                    
-            tx_event.clone().send(()).map(|_| ())
+            button_press_generator.clone().send(()).map(|_| ())
                 .map_err( |_err| Error::from(ErrorKind::ImplementationError) )
-        });
+        } );
 
-        let server_fut = rx_fut
-            .select(calls_fut).map(|_| ()).map_err(|(e,_)| e)
-            .select(sigusr1_fut).map(|_| ()).map_err(|(e,_)| e);
+        // Combine all three for_each() tasks to be run in "parallel" on the reactor
+        let server_fut = dapp_events_fut
+            .select(fwd_pressed_fut).map(|_| ()).map_err(|(e,_)| e)
+            .select(press_on_sigusr1_fut).map(|_| ()).map_err(|(e,_)| e);
 
-        match self.cfg.event_timer {
-            None => Box::new(server_fut), // as Box<Future<Item=_,Error=_>>,
-            Some(interval) => {
-                // Interval future is generating an event periodcally
-                let handle = self.appctx.handle.clone();
-                let timer_fut = reactor::Interval::new( Duration::from_secs(interval) , &handle ).unwrap()
+        // Combine an optional fourth one if timer option is present
+        let server_fut = match self.cfg.event_timer
+        {
+            None => Box::new(server_fut) as Box<Future<Item=_,Error=_>>,
+
+            // Repeatedly generate an event with the given interval
+            Some(interval_secs) => {
+                let press_on_timer_fut = reactor::Interval::new( Duration::from_secs(interval_secs), &self.appctx.handle ).unwrap()
                     .map_err( |err| Error::from( err.context(ErrorKind::ImplementationError) ) )
-                    .for_each(move |_| {
+                    .for_each( move |_| {
                         info!("interval timer fired, generating event");
-                        tx_interval.clone().send(()).map(|_| ())
+                        generate_button_press.clone().send(()).map(|_| ())
                             .map_err( |err| Error::from( err.context(ErrorKind::ImplementationError) ) )
-                    });
+                    } );
 
-                Box::new( server_fut.select(timer_fut)
+                Box::new( server_fut.select(press_on_timer_fut)
                     .map(|_| ()).map_err(|(e,_)| e) )
             },
-        }
+        };
+
+        Box::new( init_server(&self).then( |_| server_fut ) )
     }
 }

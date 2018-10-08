@@ -5,7 +5,6 @@ authors = ["Deusz <lovaszoltanr@gmail.com>"]
 
 [dependencies]
 clap = "*"
-either = "*"
 failure = "*"
 futures = "0.1"
 log = "*"

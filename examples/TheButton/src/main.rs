@@ -1,6 +1,5 @@
 //#[macro_use]
 extern crate clap;
-extern crate either;
 extern crate failure;
 extern crate futures;
 #[macro_use]
@@ -68,6 +67,7 @@ pub struct AppContext{
     service: Rc<ConnectService>,
     client_id: ProfileId,
     home_id: ProfileId,
+    app_id: ApplicationId,
     handle: reactor::Handle,
 }
 
@@ -79,7 +79,8 @@ impl AppContext
         // TODO when we'll have a standalone service with proper IPC/RPC interface,
         //      this must be changed into a simple connect() call instead of building a service instance
         let (service, client_id, home_id) = init_connect_service(priv_key, node_id, node_addr, reactor)?;
-        Ok( Self{ service, client_id, home_id, handle: reactor.handle() } )
+        Ok( Self{ service, client_id, home_id, handle: reactor.handle(),
+                  app_id: ApplicationId( "TheButton-dApp-Sample".into() ) } )
     }
 }
 
