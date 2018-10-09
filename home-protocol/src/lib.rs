@@ -202,6 +202,7 @@ pub struct RelationSignablePart {
     pub relation_type: String,
     pub signer_id: ProfileId,
     pub peer_id: ProfileId,
+    // TODO is a nonce needed?
 }
 
 
@@ -554,8 +555,7 @@ impl RelationSignablePart
 {
     fn new(relation_type: &str, signer_id: &ProfileId, peer_id: &ProfileId) -> Self
         { Self{ relation_type: relation_type.to_owned(),
-                signer_id: signer_id.to_owned(),
-                peer_id: peer_id.to_owned() } }
+                signer_id: signer_id.to_owned(), peer_id: peer_id.to_owned() } }
 
     fn serialized(&self) -> Vec<u8> {
         // TODO unwrap() can fail here in some special cases: when there is a limit set and it's exceeded - or when .len() is
@@ -587,60 +587,44 @@ impl RelationProof
     pub const RELATION_TYPE_HOSTED_ON_HOME:         &'static str = "hosted_on_home";
     pub const RELATION_TYPE_ENABLE_CALLS_BETWEEN:   &'static str = "enable_call_between";
 
-    pub fn new(rel_type: &str, a_id: &ProfileId, a_signature: &Signature, b_id: &ProfileId, b_signature: &Signature) -> Self {
-        if a_id < b_id {
-            Self {
-                relation_type: rel_type.to_owned(),
-                a_id: a_id.to_owned(),
-                a_signature: a_signature.to_owned(),
-                b_id: b_id.to_owned(),
-                b_signature: b_signature.to_owned(),
-            }
-        } else {
-            Self {
-                relation_type: rel_type.to_owned(),  // TODO decide which relation_type belongs here (`a_is_home_of_b` or `b_is_home_of_a`)
-                a_id: b_id.to_owned(),
-                a_signature: b_signature.to_owned(),
-                b_id: a_id.to_owned(),
-                b_signature: a_signature.to_owned(),
-            }
-        }
+    pub fn new(relation_type: &str,
+               a_id: &ProfileId, a_signature: &Signature,
+               b_id: &ProfileId, b_signature: &Signature) -> Self
+    {
+        if a_id < b_id
+            { Self{ relation_type: relation_type.to_owned(),
+                    a_id: a_id.to_owned(), a_signature: a_signature.to_owned(),
+                    b_id: b_id.to_owned(), b_signature: b_signature.to_owned() } }
+        // TODO decide on inverting relation_type if needed, e.g. `a_is_home_of_b` vs `b_is_home_of_a`
+        else{ Self{ relation_type: relation_type.to_owned(),
+                    a_id: b_id.to_owned(), a_signature: b_signature.to_owned(),
+                    b_id: a_id.to_owned(), b_signature: a_signature.to_owned() } }
     }
 
-    pub fn sign_remaining_half(half_proof: &RelationHalfProof, signer: &Signer)
-        -> Result<Self, Error>
+    pub fn sign_remaining_half(half_proof: &RelationHalfProof, signer: &Signer) -> Result<Self, Error>
     {
         let my_profile_id = signer.profile_id().to_owned();
         if half_proof.peer_id != my_profile_id
             { Err(ErrorKind::RelationSigningFailed)? }
 
         let signable = RelationSignablePart::new(
-            &half_proof.relation_type,
-            &my_profile_id,
-            &half_proof.signer_id,
-        );
+            &half_proof.relation_type, &my_profile_id, &half_proof.signer_id);
         Ok( Self::new( &half_proof.relation_type, &half_proof.signer_id, &half_proof.signature,
                        &my_profile_id, &signable.sign(signer) ) )
     }
 
-    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, Error> {
-        if self.a_id == *my_id {
-            Ok(&self.b_id)
-        } else if self.b_id == *my_id {
-            Ok(&self.a_id)
-        } else {
-            Err(ErrorKind::PeerIdRetreivalFailed)?
-        }
+    pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, Error>
+    {
+        if self.a_id == *my_id { return Ok(&self.b_id) }
+        if self.b_id == *my_id { return Ok(&self.a_id) }
+        Err(ErrorKind::PeerIdRetreivalFailed)?
     }
 
-    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, Error> {
-        if self.a_id == *my_id {
-            Ok(&self.b_signature)
-        } else if self.b_id == *my_id {
-            Ok(&self.a_signature)
-        } else {
-            Err(ErrorKind::PeerIdRetreivalFailed)?
-        }
+    pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, Error>
+    {
+        if self.a_id == *my_id { return Ok(&self.b_signature) }
+        if self.b_id == *my_id { return Ok(&self.a_signature) }
+        Err(ErrorKind::PeerIdRetreivalFailed)?
     }
 }
 
@@ -648,8 +632,8 @@ impl RelationProof
 
 pub trait Validator: ProfileValidator + SignatureValidator
 {
-    fn validate_half_proof(&self, half_proof: &RelationHalfProof, signer_public_key: &PublicKey) -> Result<(), Error> {
-        self.validate_signature(signer_public_key,
+    fn validate_half_proof(&self, half_proof: &RelationHalfProof, signer_pubkey: &PublicKey) -> Result<(), Error> {
+        self.validate_signature(signer_pubkey,
             &RelationSignablePart::from(half_proof).serialized(), &half_proof.signature)?;
         Ok(())
     }

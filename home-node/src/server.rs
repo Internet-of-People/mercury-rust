@@ -446,6 +446,7 @@ impl HomeSessionServer
             (
                 sender.clone().send( Ok(event) )
                     .map( |_sender| () )
+                    // TODO if call dispatch fails we probably should replace the sender with a buffer
                     .map_err( |e| e.context(ErrorKind::FailedToSend).into())
             ),
         }
@@ -468,7 +469,7 @@ impl HomeSessionServer
             (
                 sender.clone().send( Ok(call) )
                     .map( |_sender| () )
-                    // TODO if call dispatch fails we probably should remove the checked in app from the session
+                    // TODO if call dispatch fails we probably should replace the sender with a buffer
                     .map_err( |e| ErrorKind::FailedToSend.into() )
             ),
         }
