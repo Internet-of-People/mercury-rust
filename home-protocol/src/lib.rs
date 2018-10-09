@@ -613,6 +613,10 @@ impl RelationProof
                        &my_profile_id, &signable.sign(signer) ) )
     }
 
+    // TODO relation-type should be more sophisticated once we have a proper metainfo schema there
+    pub fn accessible_by(&self, app: &ApplicationId) -> bool
+        { self.relation_type == app.0 }
+
     pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, Error>
     {
         if self.a_id == *my_id { return Ok(&self.b_id) }

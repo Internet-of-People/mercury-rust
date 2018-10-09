@@ -32,35 +32,69 @@ impl DAppSession for DAppConnect
 
     fn contacts(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
     {
-        // TODO properly implement this to access only contacts related to this dApp
-        Box::new(Ok( self.my_profile.relations() ).into_future() )
-        // unimplemented!();
+        let mut relations = self.my_profile.relations();
+        let app_contacts = relations.drain(..)
+            .filter( |proof| proof.accessible_by(&self.app_id) )
+            .collect();
+        Box::new( Ok(app_contacts).into_future() )
+    }
+
+    fn contacts_with_profile(&self, profile: &ProfileId, relation_type: Option<&str>)
+        -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
+    {
+        Box::new( Ok(
+            self.my_profile.relations_with_peer(profile, Some(&self.app_id), relation_type)
+        ).into_future() )
     }
 
 
-    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=Error> >{
-        unimplemented!();
-    }
+    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=Error> >
+        { unimplemented!(); }
 
 
     fn checkin(&self)
         -> Box< Future<Item=Box<Stream<Item=Result<DAppEvent,String>, Error=()>>, Error=::Error> >
     {
-        let checkin_fut = self.my_profile.login()
-            .and_then(
+        let app = self.app_id.clone();
+        let calls_fut = self.my_profile.login()
+            .map( move |my_session|
             {
-                let app = self.app_id.clone();
-                move |my_session| {
-                    debug!("Checking in app {:?} to receive incoming calls", app);
-                    let event_stream = my_session.session().checkin_app(&app)
-                        // Map stream elements, i.e. each incoming call Result object
-                        .map( |inc_call_res| inc_call_res
-                            // Transform only Ok(call) into an event
-                            .map( |call| DAppEvent::Call(call) ) );
-                    Ok( Box::new(event_stream) as Box<Stream<Item=_,Error=_>>)
-                }
+                debug!("Checking in app {:?} to receive incoming calls", app);
+                my_session.session().checkin_app(&app)
+                    // Map stream elements, i.e. each incoming call Result object
+                    .map( |inc_call_res| inc_call_res
+                        // Transform only Ok(call) into an event
+                        .map( |call| DAppEvent::Call(call) ) )
             } );
-        Box::new(checkin_fut)
+
+        let app = self.app_id.clone();
+        let pair_resps_fut = self.my_profile.login()
+            .map( |my_session|
+            {
+                debug!("Forwarding events related to app {:?}", app);
+                my_session.events()
+                    .filter_map( move |event|
+                        match event {
+                            ProfileEvent::PairingResponse(ref proof) if proof.accessible_by(&app) =>
+                                Some( Ok( DAppEvent::PairingResponse( proof.clone() ) ) ),
+                            _ => None
+                        }
+                    )
+            } );
+
+        // Merge the two streams into one
+        let both_fut = calls_fut.join(pair_resps_fut)
+            .map( |(calls_stream, proofs_stream)|
+                Box::new( calls_stream.select(proofs_stream) ) as Box<Stream<Item=_,Error=_>> );
+
+        Box::new(both_fut)
+    }
+
+
+    fn initiate_relation(&self, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >
+    {
+        // TODO relation-type should be more sophisticated once we have a proper metainfo schema there
+        self.my_profile.initiate_relation(&self.app_id.0, with_profile)
     }
 
 

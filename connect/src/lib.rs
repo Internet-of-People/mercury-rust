@@ -78,11 +78,15 @@ pub trait DAppSession
     fn selected_profile(&self) -> &ProfileId;
 
     fn contacts(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
+    fn contacts_with_profile(&self, profile: &ProfileId, relation_type: Option<&str>)
+        -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
 
     fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=Error> >;
 
     fn checkin(&self)
         -> Box< Future<Item=Box<Stream<Item=Result<DAppEvent,String>, Error=()>>, Error=Error> >;
+
+    fn initiate_relation(&self, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
 
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
         -> Box< Future<Item=DAppCall, Error=Error> >;

@@ -296,18 +296,17 @@ impl MyProfile for MyProfileImpl
     fn relations_with_peer(&self, peer_id: &ProfileId, app: Option<&ApplicationId>,
                            relation_type: Option<&str>) -> Vec<RelationProof>
     {
-        let relations = self.relations();
-        let peers_filtered = relations.iter().cloned()
-            .filter( |proof| {
+        let mut relations = self.relations();
+        let relations = relations.drain(..)
+            .filter( |proof|
                 proof.peer_id( self.signer().profile_id() )
                     .map( |p_id| *p_id == *peer_id )
                     .unwrap_or(false)
-            } );
-
-        match relation_type {
-            None      => peers_filtered.collect(),
-            Some(rel) => peers_filtered.filter( |proof| proof.relation_type == rel ).collect(),
-        }
+            )
+            .filter( |proof| app.map_or( true, |app_id| proof.accessible_by(app_id) ) )
+            .filter( |proof| relation_type.map_or( true, |rel| proof.relation_type == rel ) )
+            .collect();
+        relations
     }
 
 
