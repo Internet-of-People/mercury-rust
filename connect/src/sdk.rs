@@ -53,41 +53,35 @@ impl DAppSession for DAppConnect
 
 
     fn checkin(&self)
-        -> Box< Future<Item=Box<Stream<Item=Result<DAppEvent,String>, Error=()>>, Error=::Error> >
+        -> Box< Future<Item=Box<Stream<Item=DAppEvent, Error=()>>, Error=Error> >
     {
         let app = self.app_id.clone();
-        let calls_fut = self.my_profile.login()
+        let fut = self.my_profile.login()
             .map( move |my_session|
             {
-                debug!("Checking in app {:?} to receive incoming calls", app);
-                my_session.session().checkin_app(&app)
-                    // Map stream elements, i.e. each incoming call Result object
-                    .map( |inc_call_res| inc_call_res
-                        // Transform only Ok(call) into an event
-                        .map( |call| DAppEvent::Call(call) ) )
-            } );
+                let app1 = app.clone();
+                let calls_stream = my_session.session().checkin_app(&app)
+                    .inspect( move |_| debug!("Checked in app {:?} to receive incoming calls", app1) )
+                    // Filter stream elements, keep only successful calls, drop errors
+                    .filter_map( |inc_call_res| inc_call_res.ok() )
+                    // Transform only Ok(call) into an event
+                    .map( |call| DAppEvent::Call(call) );
 
-        let app = self.app_id.clone();
-        let pair_resps_fut = self.my_profile.login()
-            .map( |my_session|
-            {
-                debug!("Forwarding events related to app {:?}", app);
-                my_session.events()
+                let app2 = app.clone();
+                let events_stream = my_session.events()
+                    .inspect( move |_| debug!("Forwarding events related to app {:?}", app2) )
                     .filter_map( move |event|
                         match event {
                             ProfileEvent::PairingResponse(ref proof) if proof.accessible_by(&app) =>
-                                Some( Ok( DAppEvent::PairingResponse( proof.clone() ) ) ),
+                                Some( DAppEvent::PairingResponse( proof.clone() ) ),
                             _ => None
                         }
-                    )
+                    );
+
+                Box::new( calls_stream.select(events_stream) ) as Box<Stream<Item=_,Error=_>>
             } );
 
-        // Merge the two streams into one
-        let both_fut = calls_fut.join(pair_resps_fut)
-            .map( |(calls_stream, proofs_stream)|
-                Box::new( calls_stream.select(proofs_stream) ) as Box<Stream<Item=_,Error=_>> );
-
-        Box::new(both_fut)
+        Box::new(fut)
     }
 
 
@@ -102,8 +96,7 @@ impl DAppSession for DAppConnect
         -> Box< Future<Item=DAppCall, Error=Error> >
     {
         debug!("Looking for relation proof to call profile {}", profile_id);
-        let relation_res = self.my_profile.relations_with_peer(profile_id,
-                Some(&self.app_id), Some(RelationProof::RELATION_TYPE_ENABLE_CALLS_BETWEEN) )
+        let relation_res = self.my_profile.relations_with_peer(profile_id, Some(&self.app_id), None )
             .pop()
             .ok_or_else( || {
                 debug!("Failed to find proper relationproof to start call, drop call request");

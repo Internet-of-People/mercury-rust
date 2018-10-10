@@ -42,10 +42,10 @@ pub trait MyProfile
 
 
     fn relations(&self) -> Vec<RelationProof>;
-    fn relations_with_peer(&self, peer_id: &ProfileId, app: Option<&ApplicationId>,
-                           relation_type: Option<&str>) -> Vec<RelationProof>;
-    fn initiate_relation(&self, relation_type: &str, with_profile_id: &ProfileId) ->
-        Box< Future<Item=(), Error=Error> >;
+    fn relations_with_peer(&self, peer_id: &ProfileId, app_filter: Option<&ApplicationId>,
+                           relation_type_filter: Option<&str>) -> Vec<RelationProof>;
+    fn initiate_relation(&self, relation_type: &str, with_profile_id: &ProfileId)
+        -> Box< Future<Item=(), Error=Error> >;
     fn accept_relation(&self, half_proof: &RelationHalfProof)
         -> Box< Future<Item=RelationProof, Error=Error> >;
 //    fn revoke_relation(&self, relation: &RelationProof) -> Box< Future<Item=(), Error=Error> >;
@@ -293,18 +293,24 @@ impl MyProfile for MyProfileImpl
         { self.relations.borrow().clone() }
 
 
-    fn relations_with_peer(&self, peer_id: &ProfileId, app: Option<&ApplicationId>,
-                           relation_type: Option<&str>) -> Vec<RelationProof>
+    fn relations_with_peer(&self, peer_id: &ProfileId, app_filter: Option<&ApplicationId>,
+                           relation_type_filter: Option<&str>) -> Vec<RelationProof>
     {
         let mut relations = self.relations();
+        // debug!( "Checking {} relations according to filter options", relations.len() );
+        // debug!( "  Relation type filter: {:?}", relation_type_filter );
         let relations = relations.drain(..)
+            // .inspect( |rel| debug!("Checking relation {:?}", rel) )
             .filter( |proof|
                 proof.peer_id( self.signer().profile_id() )
                     .map( |p_id| *p_id == *peer_id )
                     .unwrap_or(false)
             )
-            .filter( |proof| app.map_or( true, |app_id| proof.accessible_by(app_id) ) )
-            .filter( |proof| relation_type.map_or( true, |rel| proof.relation_type == rel ) )
+            // .inspect( |rel| debug!("Relation matched peer id filter {:?}", peer_id) )
+            .filter( |proof| app_filter.map_or( true, |app_id| proof.accessible_by(app_id) ) )
+            // .inspect( |rel| debug!("Relation matched app filter {:?}", app_filter) )
+            .filter( |proof| relation_type_filter.map_or( true, |rel| proof.relation_type == rel ) )
+            // .inspect( |rel| debug!("Relation matched relation type filter {:?}", relation_type_filter) )
             .collect();
         relations
     }
@@ -614,7 +620,7 @@ impl MyHomeSessionImpl
 
 
 impl Drop for MyHomeSessionImpl
-    { fn drop(&mut self) { debug!("MyHomeSession was dropped"); } }
+    { fn drop(&mut self) { debug!("MyHomeSessionImpl was dropped"); } }
 
 
 impl MyHomeSession for MyHomeSessionImpl

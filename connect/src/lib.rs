@@ -84,7 +84,7 @@ pub trait DAppSession
     fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=Error> >;
 
     fn checkin(&self)
-        -> Box< Future<Item=Box<Stream<Item=Result<DAppEvent,String>, Error=()>>, Error=Error> >;
+        -> Box< Future<Item=Box< Stream<Item=DAppEvent, Error=()> >, Error=Error> >;
 
     fn initiate_relation(&self, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
 

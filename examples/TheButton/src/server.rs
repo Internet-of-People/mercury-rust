@@ -46,7 +46,7 @@ impl IntoFuture for Server
                     {
                         match event
                         {
-                            Ok(DAppEvent::Call(incoming_call)) => {
+                            DAppEvent::Call(incoming_call) => {
                                 let (to_me, from_caller) = mpsc::channel(1);
                                 let to_caller_opt = incoming_call.answer(Some(to_me)).to_caller;
                                 if let Some(to_caller) = to_caller_opt
@@ -55,13 +55,8 @@ impl IntoFuture for Server
                                 Ok( debug!("Answered incoming call, saving channel to caller") )
                             },
 
-                            Ok(DAppEvent::PairingResponse(response)) => Ok( debug!(
+                            DAppEvent::PairingResponse(response) => Ok( debug!(
                                 "Got incoming pairing response. We do not send such requests, ignoring it {:?}", response) ),
-
-                            Err(err) => {
-                                warn!("Received error for events, closing event stream: {}", err);
-                                Err( Error::from(ErrorKind::ConnectionFailed) )
-                            }
                         }
                     } )
             } );

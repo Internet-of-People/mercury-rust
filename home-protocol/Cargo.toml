@@ -19,8 +19,8 @@ log = "*"
 multiaddr = "*"
 multibase = "*"
 multihash = "*"
-signatory = { version="*", features=["std"] }
-signatory-dalek = "*"
+signatory = { version="0.8", features=["std"] }
+signatory-dalek = "0.8"
 tokio-core = "0.1"
 tokio-io = "0.1"
 serde = "*"
