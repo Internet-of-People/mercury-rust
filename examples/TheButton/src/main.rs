@@ -84,7 +84,7 @@ impl AppContext
     }
 }
 
-#[derive(Debug)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum OnFail {
     Terminate,
     Retry,

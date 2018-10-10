@@ -10,7 +10,7 @@ use tokio_core::reactor;
 
 use super::*;
 use profile::{HomeConnector, MyProfile, MyProfileImpl};
-use sdk::DAppConnect;
+use sdk::DAppSessionImpl;
 
 
 
@@ -303,7 +303,7 @@ impl DAppEndpoint for ConnectService
                     .map_err( |err| err.context(ErrorKind::FailedToLoadProfile).into() )
             } )
             .and_then( move |own_profile| profile_factory.create(own_profile) )
-            .map( move |my_profile| DAppConnect::new(my_profile, app) )
+            .map( move |my_profile| DAppSessionImpl::new(my_profile, app) )
             .map_err( |err| { debug!("Failed to initialize dapp session: {:?}", err); err } );
         Box::new(fut)
     }

@@ -8,14 +8,55 @@ use profile::MyProfile;
 
 
 
-pub struct DAppConnect
+//pub struct RelationImpl
+//{
+//    relation_proof: RelationProof,
+//    dapp_session:   Rc<DAppSessionImpl>,
+//}
+//
+//impl RelationImpl
+//{
+//    fn new(relation_proof: RelationProof, dapp_session: Rc<DAppSessionImpl>) -> Self
+//        { Self { relation_proof, dapp_session } }
+//}
+//
+//impl Relation for RelationImpl
+//{
+//    fn call(&self, init_payload: AppMessageFrame) -> Box< Future<Item=DAppCall, Error=Error> >
+//    {
+//        let (to_caller, from_callee) = mpsc::channel(CHANNEL_CAPACITY);
+//
+//        //self.relation_proof;
+//        //let app_id = self.dapp_session.app_id.clone();
+//        //let my_profile = self.dapp_session.my_profile.clone();
+//        let call_fut = self.dapp_session.my_profile.call( self.relation_proof.clone(),
+//                self.dapp_session.app_id.clone(), init_payload, Some(to_caller) )
+//            .and_then( |to_callee_opt|
+//            {
+//                debug!("Call was answered, processing response");
+//                match to_callee_opt {
+//                    None => Err( Error::from(ErrorKind::CallRefused) ),
+//                    Some(to_callee) => {
+//                        info!("Call with duplex channel established");
+//                        Ok( DAppCall{ outgoing: to_callee, incoming: from_callee } )
+//                    }
+//                }
+//            } );
+//
+//        Box::new(call_fut)
+//    }
+//}
+
+
+
+pub struct DAppSessionImpl
 {
     my_profile:     Rc<MyProfile>,
     app_id:         ApplicationId,
 }
 
 
-impl DAppConnect
+impl DAppSessionImpl
 {
     pub fn new(my_profile: Rc<MyProfile>, app_id: ApplicationId) -> Rc<DAppSession>
         { Rc::new( Self{ my_profile, app_id } ) }
@@ -24,7 +65,7 @@ impl DAppConnect
 
 // TODO this aims only feature-completeness initially for a HelloWorld dApp,
 //      but we also have to include security with authorization and UI-plugins later
-impl DAppSession for DAppConnect
+impl DAppSession for DAppSessionImpl
 {
     fn selected_profile(&self) -> &ProfileId
         { self.my_profile.signer().profile_id() }
@@ -35,6 +76,8 @@ impl DAppSession for DAppConnect
         let mut relations = self.my_profile.relations();
         let app_contacts = relations.drain(..)
             .filter( |proof| proof.accessible_by(&self.app_id) )
+//            .map( |proof| Box::new( RelationImpl::new(
+//                proof, self.clone() ) ) as Box<Relation> )
             .collect();
         Box::new( Ok(app_contacts).into_future() )
     }
@@ -44,7 +87,17 @@ impl DAppSession for DAppConnect
     {
         Box::new( Ok(
             self.my_profile.relations_with_peer(profile, Some(&self.app_id), relation_type)
+//                .drain(..)
+//                .map( |proof| Box::new( RelationImpl::new(
+//                    proof, self.clone() ) ) as Box<Relation> )
+//                .collect()
         ).into_future() )
+    }
+
+    fn initiate_contact(&self, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >
+    {
+        // TODO relation-type should be more sophisticated once we have a proper metainfo schema there
+        self.my_profile.initiate_relation(&self.app_id.0, with_profile)
     }
 
 
@@ -82,13 +135,6 @@ impl DAppSession for DAppConnect
             } );
 
         Box::new(fut)
-    }
-
-
-    fn initiate_relation(&self, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >
-    {
-        // TODO relation-type should be more sophisticated once we have a proper metainfo schema there
-        self.my_profile.initiate_relation(&self.app_id.0, with_profile)
     }
 
 

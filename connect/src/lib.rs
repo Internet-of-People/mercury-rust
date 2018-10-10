@@ -41,6 +41,11 @@ use mercury_storage::async::KeyValueStore;
 pub struct DAppPermission(Vec<u8>);
 
 
+//pub trait Relation
+//{
+//    fn call(&self, init_payload: AppMessageFrame) -> Box< Future<Item=DAppCall, Error=Error> >;
+//}
+
 
 pub struct DAppCall
 {
@@ -55,7 +60,7 @@ pub struct DAppCall
 
 pub enum DAppEvent
 {
-    PairingResponse(RelationProof),
+    PairingResponse(RelationProof), // TODO probably we should use Box<Relation> here instead
     Call(Box<IncomingCall>), // TODO wrap IncomingCall so as call.answer() could return a DAppCall directly
 }
 
@@ -80,13 +85,16 @@ pub trait DAppSession
     fn contacts(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
     fn contacts_with_profile(&self, profile: &ProfileId, relation_type: Option<&str>)
         -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
+    fn initiate_contact(&self, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
+
+//    fn contacts(&self) -> Box< Future<Item=Vec<Box<Relation>>, Error=Error> >;
+//    fn contacts_with_profile(&self, profile: &ProfileId, relation_type: Option<&str>)
+//        -> Box< Future<Item=Vec<Box<Relation>>, Error=Error> >;
 
     fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=Error> >;
 
     fn checkin(&self)
         -> Box< Future<Item=Box< Stream<Item=DAppEvent, Error=()> >, Error=Error> >;
-
-    fn initiate_relation(&self, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
 
     fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
         -> Box< Future<Item=DAppCall, Error=Error> >;
