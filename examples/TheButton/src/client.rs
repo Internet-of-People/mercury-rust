@@ -21,16 +21,16 @@ impl Client
 
     pub fn wait_for_pairing_response(events: Box<Stream<Item=DAppEvent, Error=()>>,
                                      my_profile_id: ProfileId, handle: reactor::Handle)
-        -> Box< Future<Item=RelationProof, Error=Error> >
+        -> Box< Future<Item=Box<Contact>, Error=Error> >
     {
         let fut = events
             .filter_map( move |event|
             {
                 debug!("TheButton got event");
-                if let DAppEvent::PairingResponse(proof) = event {
-                    trace!("Got pairing response, checking peer id: {:?}", proof);
-                    if proof.peer_id(&my_profile_id).is_ok()
-                        { return Some(proof) }
+                if let DAppEvent::PairingResponse(relation) = event {
+                    trace!("Got pairing response, checking peer id: {:?}", relation.proof());
+                    if relation.proof().peer_id(&my_profile_id).is_ok()
+                        { return Some(relation) }
                 }
                 return None
             } )
@@ -54,7 +54,7 @@ impl Client
 
 
     fn get_or_create_contact(self, dapp_session: Rc<DAppSession>)
-        -> Box< Future<Item=Rc<DAppSession>, Error=Error> >
+        -> Box< Future<Item=Box<Contact>, Error=Error> >
     {
         let callee_profile_id = self.cfg.callee_profile_id.clone();
         let contact_fut = dapp_session.contacts_with_profile(&callee_profile_id, None)
@@ -63,17 +63,17 @@ impl Client
                 let peer_id = self.cfg.callee_profile_id.clone();
                 let client_id = self.appctx.client_id.clone();
                 let handle = self.appctx.handle.clone();
-                move |(dapp_session, relations)| {
+                move |(dapp_session, mut relations)| {
                     let init_rel_fut = dapp_session.initiate_contact(&peer_id);
-                    match relations.first() {
-                        Some(proof) => Box::new( Ok( proof.clone() ).into_future() ) as Box<Future<Item=_,Error=_>>,
+                    match relations.pop() {
+                        Some(relation) => Box::new( Ok(relation).into_future() ) as Box<Future<Item=_,Error=_>>,
                         None => {
                             let rel_fut = dapp_session.checkin()
                                 .and_then( |events| init_rel_fut.map( |()| events ) )
                                 .and_then( |events| Self::wait_for_pairing_response(events, client_id, handle) );
                             Box::new(rel_fut)
                         }
-                    }.map( move |_proof| dapp_session )
+                    }
                 }
             } );
         Box::new(contact_fut)
@@ -95,14 +95,11 @@ impl IntoFuture for Client
                 let client = self.clone();
                 move |dapp_session| client.get_or_create_contact(dapp_session)
             } )
-            .and_then( {
-                let callee_profile_id = self.cfg.callee_profile_id.clone();
-                move |dapp_session|
-                {
-                    info!("application initialized, calling {:?}", callee_profile_id);
-                    dapp_session.call(&callee_profile_id, AppMessageFrame(vec![]))
-                        .map_err(|err| { error!("call failed: {:?}", err); err } )
-                }
+            .and_then( |contact|
+            {
+                info!("Contact is available, start calling");
+                contact.call( AppMessageFrame(vec![]) )
+                    .map_err(|err| { error!("call failed: {:?}", err); err } )
             } )
             .and_then( |call|
             {

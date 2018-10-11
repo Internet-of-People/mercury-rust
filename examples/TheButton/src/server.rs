@@ -56,7 +56,7 @@ impl IntoFuture for Server
                             },
 
                             DAppEvent::PairingResponse(response) => Ok( debug!(
-                                "Got incoming pairing response. We do not send such requests, ignoring it {:?}", response) ),
+                                "Got incoming pairing response. We do not send such requests, ignoring it {:?}", response.proof()) ),
                         }
                     } )
             } );

@@ -8,44 +8,47 @@ use profile::MyProfile;
 
 
 
-//pub struct RelationImpl
-//{
-//    relation_proof: RelationProof,
-//    dapp_session:   Rc<DAppSessionImpl>,
-//}
-//
-//impl RelationImpl
-//{
-//    fn new(relation_proof: RelationProof, dapp_session: Rc<DAppSessionImpl>) -> Self
-//        { Self { relation_proof, dapp_session } }
-//}
-//
-//impl Relation for RelationImpl
-//{
-//    fn call(&self, init_payload: AppMessageFrame) -> Box< Future<Item=DAppCall, Error=Error> >
-//    {
-//        let (to_caller, from_callee) = mpsc::channel(CHANNEL_CAPACITY);
-//
-//        //self.relation_proof;
-//        //let app_id = self.dapp_session.app_id.clone();
-//        //let my_profile = self.dapp_session.my_profile.clone();
-//        let call_fut = self.dapp_session.my_profile.call( self.relation_proof.clone(),
-//                self.dapp_session.app_id.clone(), init_payload, Some(to_caller) )
-//            .and_then( |to_callee_opt|
-//            {
-//                debug!("Call was answered, processing response");
-//                match to_callee_opt {
-//                    None => Err( Error::from(ErrorKind::CallRefused) ),
-//                    Some(to_callee) => {
-//                        info!("Call with duplex channel established");
-//                        Ok( DAppCall{ outgoing: to_callee, incoming: from_callee } )
-//                    }
-//                }
-//            } );
-//
-//        Box::new(call_fut)
-//    }
-//}
+pub struct RelationImpl
+{
+    relation_proof: RelationProof,
+    my_profile:     Rc<MyProfile>,
+    app_id:         ApplicationId,
+}
+
+impl RelationImpl
+{
+    fn new(relation_proof: RelationProof, my_profile: Rc<MyProfile>, app_id: ApplicationId) -> Self
+        { Self { relation_proof, my_profile, app_id } }
+}
+
+impl Contact for RelationImpl
+{
+    fn proof(&self) -> &RelationProof { &self.relation_proof }
+
+    fn call(&self, init_payload: AppMessageFrame) -> Box< Future<Item=DAppCall, Error=Error> >
+    {
+        let (to_caller, from_callee) = mpsc::channel(CHANNEL_CAPACITY);
+
+        //self.relation_proof;
+        //let app_id = self.dapp_session.app_id.clone();
+        //let my_profile = self.dapp_session.my_profile.clone();
+        let call_fut = self.my_profile.call( self.relation_proof.clone(),
+                self.app_id.clone(), init_payload, Some(to_caller) )
+            .and_then( |to_callee_opt|
+            {
+                debug!("Call was answered, processing response");
+                match to_callee_opt {
+                    None => Err( Error::from(ErrorKind::CallRefused) ),
+                    Some(to_callee) => {
+                        info!("Call with duplex channel established");
+                        Ok( DAppCall{ outgoing: to_callee, incoming: from_callee } )
+                    }
+                }
+            } );
+
+        Box::new(call_fut)
+    }
+}
 
 
 
@@ -60,6 +63,12 @@ impl DAppSessionImpl
 {
     pub fn new(my_profile: Rc<MyProfile>, app_id: ApplicationId) -> Rc<DAppSession>
         { Rc::new( Self{ my_profile, app_id } ) }
+
+    fn relation_from(&self, proof: RelationProof) -> Box<Contact>
+        { Self::relation_from2( proof, self.my_profile.clone(), self.app_id.clone() ) }
+
+    fn relation_from2(proof: RelationProof, my_profile: Rc<MyProfile>, app_id: ApplicationId) -> Box<Contact>
+        { Box::new( RelationImpl::new(proof, my_profile, app_id) ) }
 }
 
 
@@ -71,27 +80,24 @@ impl DAppSession for DAppSessionImpl
         { self.my_profile.signer().profile_id() }
 
 
-    fn contacts(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
+    fn contacts(&self) -> Box< Future<Item=Vec<Box<Contact>>, Error=Error> >
     {
-        let mut relations = self.my_profile.relations();
-        let app_contacts = relations.drain(..)
+        let mut proofs = self.my_profile.relations();
+        let app_contacts = proofs.drain(..)
             .filter( |proof| proof.accessible_by(&self.app_id) )
-//            .map( |proof| Box::new( RelationImpl::new(
-//                proof, self.clone() ) ) as Box<Relation> )
+            .map( |proof| self.relation_from(proof) )
             .collect();
         Box::new( Ok(app_contacts).into_future() )
     }
 
     fn contacts_with_profile(&self, profile: &ProfileId, relation_type: Option<&str>)
-        -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
+        -> Box< Future<Item=Vec<Box<Contact>>, Error=Error> >
     {
-        Box::new( Ok(
-            self.my_profile.relations_with_peer(profile, Some(&self.app_id), relation_type)
-//                .drain(..)
-//                .map( |proof| Box::new( RelationImpl::new(
-//                    proof, self.clone() ) ) as Box<Relation> )
-//                .collect()
-        ).into_future() )
+        let mut proofs = self.my_profile.relations_with_peer(profile, Some(&self.app_id), relation_type);
+        let peer_contacts = proofs.drain(..)
+            .map( |proof| self.relation_from(proof) )
+            .collect();
+        Box::new( Ok(peer_contacts).into_future() )
     }
 
     fn initiate_contact(&self, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >
@@ -109,6 +115,7 @@ impl DAppSession for DAppSessionImpl
         -> Box< Future<Item=Box<Stream<Item=DAppEvent, Error=()>>, Error=Error> >
     {
         let app = self.app_id.clone();
+        let my_profile = self.my_profile.clone();
         let fut = self.my_profile.login()
             .map( move |my_session|
             {
@@ -121,12 +128,13 @@ impl DAppSession for DAppSessionImpl
                     .map( |call| DAppEvent::Call(call) );
 
                 let app2 = app.clone();
+                let app3 = app.clone();
                 let events_stream = my_session.events()
                     .inspect( move |_| debug!("Forwarding events related to app {:?}", app2) )
                     .filter_map( move |event|
                         match event {
                             ProfileEvent::PairingResponse(ref proof) if proof.accessible_by(&app) =>
-                                Some( DAppEvent::PairingResponse( proof.clone() ) ),
+                                Some( DAppEvent::PairingResponse( Self::relation_from2( proof.clone(), my_profile.clone(), app3.clone() ) ) ),
                             _ => None
                         }
                     );
@@ -135,39 +143,5 @@ impl DAppSession for DAppSessionImpl
             } );
 
         Box::new(fut)
-    }
-
-
-    fn call(&self, profile_id: &ProfileId, init_payload: AppMessageFrame)
-        -> Box< Future<Item=DAppCall, Error=Error> >
-    {
-        debug!("Looking for relation proof to call profile {}", profile_id);
-        let relation_res = self.my_profile.relations_with_peer(profile_id, Some(&self.app_id), None )
-            .pop()
-            .ok_or_else( || {
-                debug!("Failed to find proper relationproof to start call, drop call request");
-                ErrorKind::FailedToAuthorize.into()
-            } );
-
-        let call_fut = relation_res.into_future()
-            .and_then(
-            {
-                let my_profile = self.my_profile.clone();
-                let app_id = self.app_id.clone();
-                let (to_caller, from_callee) = mpsc::channel(CHANNEL_CAPACITY);
-                move |relation| my_profile.call(relation.to_owned(), app_id, init_payload, Some(to_caller))
-                    .and_then( |to_callee_opt| {
-                        debug!("Call was answered, processing response");
-                        match to_callee_opt {
-                            None => Err( Error::from(ErrorKind::CallRefused) ),
-                            Some(to_callee) => {
-                                info!("Call with duplex channel established");
-                                Ok( DAppCall{ outgoing: to_callee, incoming: from_callee } )
-                            }
-                        }
-                    } )
-            } );
-
-        Box::new(call_fut)
     }
 }
