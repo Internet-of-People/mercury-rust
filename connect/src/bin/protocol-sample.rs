@@ -35,7 +35,7 @@ use mercury_home_protocol::crypto::*;
 fn main()
 {
     log4rs::init_file( "log4rs.yml", Default::default() ).unwrap();
-    let yaml = load_yaml!("cli.yml");
+    let yaml = load_yaml!("protocol-sample-cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
 
     let client_private_key_file = matches.value_of("client-key-file").unwrap();
