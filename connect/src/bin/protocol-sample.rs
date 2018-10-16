@@ -1,17 +1,16 @@
+#[macro_use]
+extern crate clap;
+extern crate failure;
 extern crate futures;
 #[macro_use]
 extern crate log;
 extern crate log4rs;
-extern crate failure;
-
-#[macro_use]
-extern crate clap;
-
-extern crate mercury_connect;
-extern crate mercury_home_protocol;
 extern crate multiaddr;
 //extern crate multihash;
 extern crate tokio_core;
+
+extern crate mercury_connect;
+extern crate mercury_home_protocol;
 
 
 
@@ -35,6 +34,7 @@ use mercury_home_protocol::crypto::*;
 fn main()
 {
     log4rs::init_file( "log4rs.yml", Default::default() ).unwrap();
+    // TODO use structopt instead of yaml+clap here
     let yaml = load_yaml!("protocol-sample-cli.yml");
     let matches = App::from_yaml(yaml).get_matches();
 

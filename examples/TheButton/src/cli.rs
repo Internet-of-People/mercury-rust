@@ -48,7 +48,7 @@ pub fn cli<'a, 'b>()->App<'a, 'b>{
         .arg(Arg::with_name(CLI_HOME_NODE_KEY_FILE)
             .long(CLI_HOME_NODE_KEY_FILE)
             .takes_value(true)
-            .help(" public key of the server (binary, ed25519)")
+            .help(" public key of the home node of the profile used (binary, ed25519)")
             .default_value("../../etc/homenode.id.pub")
             .value_name("KEY")
         )

@@ -18,8 +18,10 @@ extern crate serde_derive;
 extern crate serde_json;
 extern crate signatory;
 extern crate signatory_dalek;
+extern crate structopt;
 extern crate tokio_core;
 extern crate tokio_io;
+extern crate toml;
 
 
 
@@ -28,6 +30,7 @@ pub mod error;
 pub mod future;
 pub mod handshake;
 pub mod mercury_capnp;
+pub mod util;
 
 
 

@@ -5,14 +5,15 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 
 [dependencies]
 bincode = "*"
-clap = "2"
+#clap = "2"
+failure = "*"
 futures = "0.1"
 log = "*"
 log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }
 mercury-storage = { path="../storage" }
 multiaddr = "*"
+structopt = "*"
 tokio-core = "0.1"
-toml = "*"
-failure = "*"
 tokio-io = "*"
+toml = "*"

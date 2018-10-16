@@ -5,6 +5,7 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 
 [dependencies]
 clap = {version = "*", features = ["yaml"]}
+failure = "*"
 futures = "0.1"
 log = "*"
 log4rs = "*"
@@ -13,7 +14,6 @@ mercury-storage = { path="../storage" }
 multiaddr = "*"
 serde = "*"
 serde_derive = "*"
+structopt = "*"
 tokio-core = "0.1"
 tokio-io = "*"
-failure = "*"
-

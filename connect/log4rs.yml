@@ -9,11 +9,11 @@ appenders:
   # An appender named "file" that writes to a file with a custom pattern encoder
   file:
     kind: file
-    path: "log/home.log"
+    path: "log/service.log"
     encoder:
       pattern: "{d} - {m}{n}"
 
-# Set the default logging level to "trace" and attach the "stdout" appender to the root
+# Set the default logging level and attach appenders to the root
 root:
   level: debug
   appenders:

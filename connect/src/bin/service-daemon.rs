@@ -1,24 +1,49 @@
-// NOTE that this file contains initialization code for the Mercury Connect Service
-//      that will not be part of this program. Instead, it will run in a separated,
-//      protected background service and communicate with dApps through IPC.
-//      However, until it's properly implemented, dApps have to contain and instantiate it.
+extern crate clap;
+extern crate failure;
+extern crate futures;
+#[macro_use]
+extern crate log;
+extern crate log4rs;
+extern crate multiaddr;
+//extern crate multihash;
+#[macro_use]
+extern crate structopt;
+extern crate tokio_core;
 
+extern crate mercury_connect;
+extern crate mercury_home_protocol;
+extern crate mercury_storage;
+
+
+
+use std::collections::HashSet;
+use std::cell::RefCell;
+use std::net::SocketAddr;
+use std::path::PathBuf;
+use std::rc::Rc;
+
+use failure::Fail;
+//use futures::prelude::*;
 use multiaddr::ToMultiaddr;
+use tokio_core::reactor;
 
-use super::*;
+use mercury_connect::*;
+use mercury_connect::service::*;
+use mercury_home_protocol::*;
+use mercury_home_protocol::crypto::*;
 
 
 
-pub fn init_connect_service(my_private_profilekey_file: &str, home_id_str: &str,
+pub fn init_connect_service(my_profile_privkey_file: &str, home_pubkey_file: &str,
                             home_addr_str: &str, reactor: &mut reactor::Core)
     -> Result<(Rc<ConnectService>, ProfileId, ProfileId), Error>
 {
     use mercury_connect::service::{DummyUserInterface, MyProfileFactory, SignerFactory};
-    use mercury_storage::async::{KeyAdapter, KeyValueStore, fs::FileStore, imp::InMemoryStore};
+    use mercury_storage::async::{KeyAdapter, KeyValueStore, fs::FileStore}; //, imp::InMemoryStore};
 
     debug!("Initializing service instance");
 
-    let home_pubkey_bytes = std::fs::read(home_id_str)
+    let home_pubkey_bytes = std::fs::read(home_pubkey_file)
         .map_err( |e| Error::from( e.context(ErrorKind::LookupFailed) ) )?;
     let home_pubkey = PublicKey(home_pubkey_bytes);
     let home_id = ProfileId::from(&home_pubkey);
@@ -27,7 +52,7 @@ pub fn init_connect_service(my_private_profilekey_file: &str, home_id_str: &str,
     let home_multiaddr = home_addr.to_multiaddr().expect("Failed to parse server address");
     let home_profile = Profile::new_home( home_id.clone(), home_pubkey.clone(), home_multiaddr );
 
-    let my_private_key_bytes = std::fs::read(my_private_profilekey_file)
+    let my_private_key_bytes = std::fs::read(my_profile_privkey_file)
         .map_err( |e| Error::from( e.context(ErrorKind::LookupFailed) ) )?;
     let my_private_key = PrivateKey(my_private_key_bytes);
     let my_signer = Rc::new( Ed25519Signer::new(&my_private_key).unwrap() ) as Rc<Signer>;
@@ -38,7 +63,7 @@ pub fn init_connect_service(my_private_profilekey_file: &str, home_id_str: &str,
     // TODO consider that client should be able to start up without being a DHT client,
     //      e.g. with having only a Home URL including hints to access Home
     let profile_repo = SimpleProfileRepo::from( KeyAdapter::<String,_,_>::new(
-        FileStore::new("/tmp/mercury/thebutton-storage").unwrap() ) );
+        FileStore::new("/tmp/mercury/connect/profile-repository").unwrap() ) );
 //    let profile_repo = SimpleProfileRepo::default();
     let repo_initialized = reactor.run( profile_repo.load(&my_profile_id) );
     if repo_initialized.is_err()
@@ -55,59 +80,53 @@ pub fn init_connect_service(my_private_profilekey_file: &str, home_id_str: &str,
     let signers = vec![ ( my_profile_id.clone(), my_signer ) ].into_iter().collect();
     let signer_factory: Rc<SignerFactory> = Rc::new(SignerFactory::new(signers) );
     let home_connector = Rc::new( SimpleTcpHomeConnector::new( reactor.handle() ) );
-    let gateways = Rc::new( MyProfileFactory::new(
+    let profile_client_factory = Rc::new( MyProfileFactory::new(
         signer_factory, profile_repo.clone(), home_connector, reactor.handle() ) );
 
     let ui = Rc::new( DummyUserInterface::new( my_profiles.clone() ) );
-    let mut own_profile_store = InMemoryStore::new();
+    let mut own_profile_store = KeyAdapter::new( FileStore::new("/tmp/mercury/connect/my-profiles").unwrap() );
     reactor.run( own_profile_store.set(my_profile_id.clone(), my_own_profile ) ).unwrap();
     let profile_store = Rc::new( RefCell::new(own_profile_store) );
-    let service = Rc::new( ConnectService::new(ui, my_profiles, profile_store, gateways) ); //, &reactor.handle() ) );
+    let service = Rc::new( ConnectService::new(ui, my_profiles, profile_store, profile_client_factory) ); //, &reactor.handle() ) );
 
     Ok( (service, my_profile_id, home_id) )
 }
 
 
 
-pub fn init_app_common(app_context: &AppContext)
-    -> Box< Future<Item=Rc<MyProfile>, Error=Error> >
+#[derive(Debug, StructOpt)]
+struct Config
 {
-    let client_id = app_context.client_id.clone();
-    let home_id = app_context.home_id.clone();
-    let init_fut = app_context.service.admin_session(None)
-        .inspect( |_admin| debug!("Admin endpoint was connected") )
-        .and_then( move |admin| admin.profile(client_id) )
-        .and_then( move |my_profile| my_profile.join_home(home_id, None )
-            .map( |()| my_profile ) )
-        .inspect( |_| debug!("Successfully registered to home") )
-        .map_err( |e| { debug!("Failed to register: {:?}", e); e } );
-    Box::new(init_fut)
+    #[structopt(long="my-private-key", default_value="../etc/client.id", raw(value_name=r#""FILE""#),
+        parse(from_os_str), help="Private key file used to prove server identity. Currently only ed25519 keys are supported in raw binary format")]
+    my_private_key: PathBuf,
+
+    #[structopt(long="home-public-key", default_value="../etc/homenode.id.pub", raw(value_name=r#""FILE""#),
+        parse(from_os_str), help="Public key file of home node used by the selected profile")]
+    home_public_key_file: PathBuf,
+
+    #[structopt(long="home-address", default_value="127.0.0.1:2077", raw(value_name=r#""ip:port""#),
+        help="TCP address of the home node to be connected")]
+    home_address: String,
+}
+
+impl Config
+{
+    const CONFIG_PATH: &'static str = "connect.cfg";
+
+    pub fn new() -> Self
+        { util::parse_config::<Self>(Self::CONFIG_PATH) }
 }
 
 
 
-pub fn init_server(server: &Server)
-    -> Box< Future<Item=(), Error=Error> >
+fn main()
 {
-    let handle = server.appctx.handle.clone();
-    let fut = init_app_common(&server.appctx)
-        .and_then( move |my_profile| my_profile.login()
-            .map( |session| (my_profile, session) ) )
-        .and_then( move |(my_profile, session)| {
-            handle.spawn(
-                session.events().for_each( move |event| {
-                    match event {
-                        ProfileEvent::PairingRequest(half_proof) => {
-                            let accept_fut = my_profile.accept_relation(&half_proof)
-                                .map( |_proof| () )
-                                .map_err( |e| debug!("Failed to accept pairing request: {}", e) );
-                            Box::new(accept_fut) as Box<Future<Item=_,Error=_>>
-                        },
-                        err => Box::new( Ok( debug!("Got event {:?}, ignoring it", err) ).into_future() ),
-                    }
-                } )
-            );
-            Ok( () )
-        } );
-    Box::new(fut)
+    log4rs::init_file( "log4rs.yml", Default::default() ).unwrap();
+    let config = Config::new();
+    println!("Config: {:?}", config);
+
+    let mut reactor = reactor::Core::new().unwrap();
+    let (_connect_service, _my_profile_id, _home_id) = init_connect_service(config.my_private_key.to_str().unwrap(),
+        config.home_public_key_file.to_str().unwrap(), &config.home_address, &mut reactor).unwrap();
 }

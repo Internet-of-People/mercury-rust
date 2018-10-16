@@ -27,7 +27,7 @@ use mercury_storage::async::{KeyAdapter, fs::FileStore, imp::InMemoryStore};
 fn main()
 {
     log4rs::init_file( "log4rs.yml", Default::default() ).unwrap();
-    let config = FileCliParser::parse_config();
+    let config = Config::new();
 
     let mut core = reactor::Core::new().unwrap();
     let handle = core.handle();
