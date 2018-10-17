@@ -7,6 +7,8 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 clap = {version = "*", features = ["yaml"]}
 failure = "*"
 futures = "0.1"
+jsonrpc-core = "*"
+jsonrpc-tcp-server = "*"
 log = "*"
 log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }

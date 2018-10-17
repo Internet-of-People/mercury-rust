@@ -1,6 +1,8 @@
 extern crate clap;
 extern crate failure;
 extern crate futures;
+extern crate jsonrpc_core;
+extern crate jsonrpc_tcp_server;
 #[macro_use]
 extern crate log;
 extern crate log4rs;
@@ -129,4 +131,14 @@ fn main()
     let mut reactor = reactor::Core::new().unwrap();
     let (_connect_service, _my_profile_id, _home_id) = init_connect_service(config.my_private_key.to_str().unwrap(),
         config.home_public_key_file.to_str().unwrap(), &config.home_address, &mut reactor).unwrap();
+
+    let mut io = jsonrpc_core::IoHandler::default();
+    io.add_method("ping", |_params| {
+        Ok(jsonrpc_core::Value::String("pong".to_string()))
+    });
+    let server = jsonrpc_tcp_server::ServerBuilder::new(io)
+        .start( &"0.0.0.0:2222".parse().unwrap() )
+        .expect("Server must start with no issues.");
+
+    server.wait();
 }
