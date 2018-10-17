@@ -8,6 +8,9 @@ extern crate log;
 extern crate log4rs;
 extern crate multiaddr;
 //extern crate multihash;
+extern crate serde;
+#[macro_use]
+extern crate serde_derive;
 #[macro_use]
 extern crate structopt;
 extern crate tokio_core;
@@ -121,6 +124,11 @@ impl Config
 }
 
 
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub struct EchoParams
+{
+    pub message: String,
+}
 
 fn main()
 {
@@ -133,8 +141,9 @@ fn main()
         config.home_public_key_file.to_str().unwrap(), &config.home_address, &mut reactor).unwrap();
 
     let mut io = jsonrpc_core::IoHandler::default();
-    io.add_method("ping", |_params| {
-        Ok(jsonrpc_core::Value::String("pong".to_string()))
+    io.add_method("echo", |params : jsonrpc_core::types::Params| {
+        let echo_params: EchoParams = params.parse()?;
+        Ok( jsonrpc_core::Value::String(echo_params.message) )
     });
     let server = jsonrpc_tcp_server::ServerBuilder::new(io)
         .start( &"0.0.0.0:2222".parse().unwrap() )
