@@ -2,6 +2,7 @@ extern crate clap;
 extern crate failure;
 extern crate futures;
 extern crate jsonrpc_core;
+extern crate jsonrpc_pubsub;
 extern crate jsonrpc_tcp_server;
 #[macro_use]
 extern crate log;
@@ -26,6 +27,7 @@ use std::cell::RefCell;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use failure::Fail;
 //use futures::prelude::*;
@@ -130,6 +132,30 @@ pub struct EchoParams
     pub message: String,
 }
 
+
+use jsonrpc_core::{Metadata, MetaIoHandler, Params, Value};
+use jsonrpc_pubsub::{PubSubHandler, PubSubMetadata, Session, Subscriber, SubscriptionId};
+use jsonrpc_tcp_server::{ServerBuilder, RequestContext};
+
+use jsonrpc_core::futures::Future;
+
+
+#[derive(Clone)]
+struct Meta {
+	session: Option<Arc<Session>>,
+}
+
+impl Default for Meta {
+	fn default() -> Self { Self{session: None} }
+}
+
+impl Metadata for Meta {}
+impl PubSubMetadata for Meta {
+	fn session(&self) -> Option<Arc<Session>>
+		{ self.session.clone() }
+}
+
+
 fn main()
 {
     log4rs::init_file( "log4rs.yml", Default::default() ).unwrap();
@@ -140,12 +166,47 @@ fn main()
     let (_connect_service, _my_profile_id, _home_id) = init_connect_service(config.my_private_key.to_str().unwrap(),
         config.home_public_key_file.to_str().unwrap(), &config.home_address, &mut reactor).unwrap();
 
-    let mut io = jsonrpc_core::IoHandler::default();
-    io.add_method("echo", |params : jsonrpc_core::types::Params| {
+    //let mut io = jsonrpc_core::IoHandler::default();
+    let mut io = PubSubHandler::new( MetaIoHandler::default() );
+    io.add_method("echo", |params : Params| {
         let echo_params: EchoParams = params.parse()?;
-        Ok( jsonrpc_core::Value::String(echo_params.message) )
+        Ok( Value::String(echo_params.message) )
     });
-    let server = jsonrpc_tcp_server::ServerBuilder::new(io)
+
+    io.add_subscription("notification_message",
+        ("subscribe_notification", |_params: Params, _pubsub_metadata, subscriber: Subscriber|
+        {
+//            if params != jsonrpc_core::Params::None {
+//				subscriber.reject( jsonrpc_core::Error {
+//					code: jsonrpc_core::ErrorCode::ParseError,
+//					message: "Invalid parameters. Subscription rejected.".into(),
+//					data: None,
+//				}).unwrap();
+//				return;
+//            }
+
+            let sink = subscriber.assign_id(SubscriptionId::Number(5)).unwrap();
+            std::thread::spawn(move || {
+                loop {
+                    std::thread::sleep(std::time::Duration::from_secs(5));
+                    match sink.notify(Params::Array(vec![Value::Number(10.into())])).wait() {
+                        Ok(_) => {},
+                        Err(_) => {
+                            println!("Subscription has ended, finishing.");
+                            break;
+                        }
+                    }
+                }
+            });
+        } ),
+        ("unsubscribe_notification", |_subscriber_id|
+        {
+            Ok( Value::Bool(true) )
+        } ) );
+
+    let server = ServerBuilder::new(io)
+        .session_meta_extractor(|context: &RequestContext|
+			Meta { session: Some(Arc::new(Session::new(context.sender.clone()))), } )
         .start( &"0.0.0.0:2222".parse().unwrap() )
         .expect("Server must start with no issues.");
 

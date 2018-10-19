@@ -1,1 +1,3 @@
 {"jsonrpc": "2.0", "id": 1, "method": "echo", "params": {"message": "This is a message"}}
+{"jsonrpc": "2.0", "id": 2, "method": "subscribe_notification", "params": {}}
+{"jsonrpc": "2.0", "id": 3, "method": "unsubscribe_notification", "params": [5]}
