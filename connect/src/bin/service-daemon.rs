@@ -1,17 +1,10 @@
 extern crate clap;
 extern crate failure;
 extern crate futures;
-extern crate jsonrpc_core;
-extern crate jsonrpc_pubsub;
-extern crate jsonrpc_tcp_server;
 #[macro_use]
 extern crate log;
 extern crate log4rs;
 extern crate multiaddr;
-//extern crate multihash;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
 #[macro_use]
 extern crate structopt;
 extern crate tokio_core;
@@ -27,7 +20,6 @@ use std::cell::RefCell;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::Arc;
 
 use failure::Fail;
 //use futures::prelude::*;
@@ -36,6 +28,7 @@ use tokio_core::reactor;
 
 use mercury_connect::*;
 use mercury_connect::service::*;
+use mercury_connect::jsonrpc;
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::*;
 
@@ -115,6 +108,10 @@ struct Config
     #[structopt(long="home-address", default_value="127.0.0.1:2077", raw(value_name=r#""ip:port""#),
         help="TCP address of the home node to be connected")]
     home_address: String,
+
+//    #[structopt(long="jsonrpc-port", default_value="8888", raw(value_name=r#""port""#),
+//        help="Port number to expose JsonRpc interface on")]
+//    jsonrpc_port: u16,
 }
 
 impl Config
@@ -126,35 +123,6 @@ impl Config
 }
 
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct EchoParams
-{
-    pub message: String,
-}
-
-
-use jsonrpc_core::{Metadata, MetaIoHandler, Params, Value};
-use jsonrpc_pubsub::{PubSubHandler, PubSubMetadata, Session, Subscriber, SubscriptionId};
-use jsonrpc_tcp_server::{ServerBuilder, RequestContext};
-
-use jsonrpc_core::futures::Future;
-
-
-#[derive(Clone)]
-struct Meta {
-	session: Option<Arc<Session>>,
-}
-
-impl Default for Meta {
-	fn default() -> Self { Self{session: None} }
-}
-
-impl Metadata for Meta {}
-impl PubSubMetadata for Meta {
-	fn session(&self) -> Option<Arc<Session>>
-		{ self.session.clone() }
-}
-
 
 fn main()
 {
@@ -162,53 +130,5 @@ fn main()
     let config = Config::new();
     println!("Config: {:?}", config);
 
-    let mut reactor = reactor::Core::new().unwrap();
-    let (_connect_service, _my_profile_id, _home_id) = init_connect_service(config.my_private_key.to_str().unwrap(),
-        config.home_public_key_file.to_str().unwrap(), &config.home_address, &mut reactor).unwrap();
-
-    //let mut io = jsonrpc_core::IoHandler::default();
-    let mut io = PubSubHandler::new( MetaIoHandler::default() );
-    io.add_method("echo", |params : Params| {
-        let echo_params: EchoParams = params.parse()?;
-        Ok( Value::String(echo_params.message) )
-    });
-
-    io.add_subscription("notification_message",
-        ("subscribe_notification", |_params: Params, _pubsub_metadata, subscriber: Subscriber|
-        {
-//            if params != jsonrpc_core::Params::None {
-//				subscriber.reject( jsonrpc_core::Error {
-//					code: jsonrpc_core::ErrorCode::ParseError,
-//					message: "Invalid parameters. Subscription rejected.".into(),
-//					data: None,
-//				}).unwrap();
-//				return;
-//            }
-
-            let sink = subscriber.assign_id(SubscriptionId::Number(5)).unwrap();
-            std::thread::spawn(move || {
-                loop {
-                    std::thread::sleep(std::time::Duration::from_secs(5));
-                    match sink.notify(Params::Array(vec![Value::Number(10.into())])).wait() {
-                        Ok(_) => {},
-                        Err(_) => {
-                            println!("Subscription has ended, finishing.");
-                            break;
-                        }
-                    }
-                }
-            });
-        } ),
-        ("unsubscribe_notification", |_subscriber_id|
-        {
-            Ok( Value::Bool(true) )
-        } ) );
-
-    let server = ServerBuilder::new(io)
-        .session_meta_extractor(|context: &RequestContext|
-			Meta { session: Some(Arc::new(Session::new(context.sender.clone()))), } )
-        .start( &"0.0.0.0:2222".parse().unwrap() )
-        .expect("Server must start with no issues.");
-
-    server.wait();
+    jsonrpc::DAppSessionDispatcherJsonRpc::serve();
 }

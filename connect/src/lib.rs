@@ -1,6 +1,9 @@
 #[macro_use]
 extern crate failure;
 extern crate futures;
+extern crate jsonrpc_core;
+extern crate jsonrpc_pubsub;
+extern crate jsonrpc_tcp_server;
 #[macro_use]
 extern crate log;
 extern crate mercury_home_protocol;
@@ -19,7 +22,7 @@ pub mod error;
 pub use error::{Error, ErrorKind};
 pub mod net;
 pub use net::SimpleTcpHomeConnector;
-
+pub mod jsonrpc;
 pub mod sdk;
 pub mod service;
 
