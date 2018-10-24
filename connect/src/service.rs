@@ -54,11 +54,8 @@ pub trait Bip32PathMapper
 
 pub trait AccessManager
 {
-    fn ask_read_access(&self, resource: &Bip32Path) ->
-        Box< Future<Item=PublicKey, Error=Error> >;
-
-    fn ask_write_access(&self, resource: &Bip32Path) ->
-        Box< Future<Item=Rc<Signer>, Error=Error> >;
+    fn ask_read_access(&self, resource: &Bip32Path) -> AsyncResult<PublicKey, Error>;
+    fn ask_write_access(&self, resource: &Bip32Path) -> AsyncResult<Rc<Signer>, Error>;
 }
 
 
@@ -69,26 +66,22 @@ pub trait UserInterface
 {
     // Initialize system components and configuration where user interaction is needed,
     // e.g. HD wallets need manually saving generated new seed or entering old one
-    fn initialize(&self) -> Box< Future<Item=(), Error=Error> >;
+    fn initialize(&self) -> AsyncResult<(), Error>;
 
     // An action requested by a distributed application needs
     // explicit user confirmation.
     // TODO how to show a human-readable summary of the action (i.e. binary to be signed)
     //      making sure it's not a fake/misinterpreted description?
-    fn confirm_dappaction(&self, action: &DAppAction)
-        -> Box< Future<Item=(), Error=Error> >;
+    fn confirm_dappaction(&self, action: &DAppAction) -> AsyncResult<(), Error>;
 
-    fn confirm_pairing(&self, request: &RelationHalfProof)
-        -> Box< Future<Item=(), Error=Error>>;
+    fn confirm_pairing(&self, request: &RelationHalfProof) -> AsyncResult<(), Error>;
 
-    fn notify_pairing(&self, response: &RelationProof)
-        -> Box< Future<Item=(), Error=Error>>;
+    fn notify_pairing(&self, response: &RelationProof) -> AsyncResult<(), Error>;
 
     // Select a profile to be used by a dApp. It can be either an existing one
     // or the user can create a new one (using a KeyVault) to be selected.
     // TODO this should open something nearly identical to manage_profiles()
-    fn select_profile(&self)
-        -> Box< Future<Item=ProfileId, Error=Error> >;
+    fn select_profile(&self) -> AsyncResult<ProfileId, Error>;
 
     // Open profiles with new, delete and edit (e.g. homes, contacts, apps, etc) options.
     // Specific profiles can also be set online/offline.
@@ -98,20 +91,19 @@ pub trait UserInterface
     //      [ ]off family   (edit) (delete)
     //      [x]ON  hobby    (edit) (delete)
     //      (new profile)
-    fn manage_profiles(&self)
-        -> Box< Future<Item=(), Error=Error> >;
+    fn manage_profiles(&self) -> AsyncResult<(), Error>;
 }
 
 
 
 pub trait AdminSession
 {
-    fn profiles(&self) -> Box< Future<Item=Vec<Rc<MyProfile>>, Error=Error> >;
-    fn profile(&self, id: ProfileId) -> Box< Future<Item=Rc<MyProfile>, Error=Error> >;
-    fn create_profile(&self) -> Box< Future<Item=Rc<MyProfile>, Error=Error> >;
-    fn remove_profile(&self, profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
+    fn profiles(&self) -> AsyncResult<Vec<Rc<MyProfile>>, Error>;
+    fn profile(&self, id: ProfileId) -> AsyncResult<Rc<MyProfile>, Error>;
+    fn create_profile(&self) -> AsyncResult<Rc<MyProfile>, Error>;
+    fn remove_profile(&self, profile: &ProfileId) -> AsyncResult<(), Error>;
 //    fn claim_profile(&self, home: ProfileId, profile: ProfileId)
-//        -> Box< Future<Item=Rc<MyProfile>, Error=Error> >;
+//        -> AsyncResult<Rc<MyProfile>, Error>;
 }
 
 
@@ -203,7 +195,7 @@ impl AdminSessionImpl
 
 impl AdminSession for AdminSessionImpl
 {
-    fn profiles(&self) -> Box< Future<Item=Vec<Rc<MyProfile>>, Error=Error> >
+    fn profiles(&self) -> AsyncResult<Vec<Rc<MyProfile>>, Error>
     {
         // TODO consider delegating implementation to profile(id)
         let store = self.profile_store.clone();
@@ -220,7 +212,7 @@ impl AdminSession for AdminSessionImpl
         Box::new(profiles_fut)
     }
 
-    fn profile(&self, id: ProfileId) -> Box< Future<Item=Rc<MyProfile>, Error=Error> >
+    fn profile(&self, id: ProfileId) -> AsyncResult<Rc<MyProfile>, Error>
     {
         let profile_factory = self.profile_factory.clone();
         let fut = self.profile_store.borrow().get( id.to_owned() )
@@ -229,13 +221,13 @@ impl AdminSession for AdminSessionImpl
         Box::new(fut)
     }
 
-    fn create_profile(&self) -> Box< Future<Item=Rc<MyProfile>, Error=Error> >
+    fn create_profile(&self) -> AsyncResult<Rc<MyProfile>, Error>
     {
         unimplemented!()
     }
 
 //    fn claim_profile(&self, home_id: ProfileId, profile: ProfileId) ->
-//        Box< Future<Item=Rc<MyProfile>, Error=Error> >
+//        AsyncResult<Rc<MyProfile>, Error>
 //    {
 //        let claim_fut = self.connect_home(&home_id)
 //            .map_err(|err| err.context(ErrorKind::ConnectionToHomeFailed).into())
@@ -247,7 +239,7 @@ impl AdminSession for AdminSessionImpl
 //    }
 
     fn remove_profile(&self, _profile: &ProfileId)
-        -> Box< Future<Item=(), Error=Error> >
+        -> AsyncResult<(), Error>
     {
         unimplemented!()
     }
@@ -278,7 +270,7 @@ impl ConnectService
 
 
     pub fn admin_session(&self, authorization: Option<DAppPermission>)
-        -> Box< Future<Item=Rc<AdminSession>, Error=Error> >
+        -> AsyncResult<Rc<AdminSession>, Error>
     {
         let adm = AdminSessionImpl::new(self.ui.clone(), self.my_profile_ids.clone(),
             self.profile_store.clone(), self.profile_factory.clone() ); //, self.handle.clone() );
@@ -291,7 +283,7 @@ impl ConnectService
 impl DAppEndpoint for ConnectService
 {
     fn dapp_session(&self, app: &ApplicationId, authorization: Option<DAppPermission>)
-        -> Box< Future<Item=Rc<DAppSession>, Error=Error> >
+        -> AsyncResult<Rc<DAppSession>, Error>
     {
         let app = app.to_owned();
         let profile_store = self.profile_store.clone();
@@ -324,34 +316,34 @@ impl DummyUserInterface
 
 impl UserInterface for DummyUserInterface
 {
-    fn initialize(&self) -> Box< Future<Item=(), Error=Error> >
+    fn initialize(&self) -> AsyncResult<(), Error>
     {
         Box::new( Ok( () ).into_future() )
     }
 
-    fn confirm_dappaction(&self, _action: &DAppAction) -> Box< Future<Item=(), Error=Error> >
+    fn confirm_dappaction(&self, _action: &DAppAction) -> AsyncResult<(), Error>
     {
         Box::new( Ok( () ).into_future() )
     }
 
-    fn confirm_pairing(&self, _request: &RelationHalfProof) -> Box< Future<Item=(), Error=Error> >
+    fn confirm_pairing(&self, _request: &RelationHalfProof) -> AsyncResult<(), Error>
     {
         Box::new( Ok( () ).into_future() )
     }
 
-    fn notify_pairing(&self, _response: &RelationProof) -> Box< Future<Item=(), Error=Error> >
+    fn notify_pairing(&self, _response: &RelationProof) -> AsyncResult<(), Error>
     {
         Box::new( Ok( () ).into_future() )
     }
 
-    fn select_profile(&self) -> Box< Future<Item=ProfileId, Error=Error> >
+    fn select_profile(&self) -> AsyncResult<ProfileId, Error>
     {
         let first_profile_res = self.my_profiles.iter().cloned().nth(0)
             .ok_or( Error::from(ErrorKind::FailedToAuthorize) );
         Box::new( first_profile_res.into_future() )
     }
 
-    fn manage_profiles(&self) -> Box< Future<Item=(), Error=Error> >
+    fn manage_profiles(&self) -> AsyncResult<(), Error>
     {
         Box::new( Ok( () ).into_future() )
     }

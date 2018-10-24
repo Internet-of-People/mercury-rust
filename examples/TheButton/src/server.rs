@@ -27,7 +27,7 @@ impl IntoFuture for Server
 {
     type Item = ();
     type Error = Error;
-    type Future = Box<Future<Item=Self::Item, Error=Self::Error>>;
+    type Future = AsyncResult<Self::Item, Self::Error>;
 
     fn into_future(self) -> Self::Future
     {
@@ -95,7 +95,7 @@ impl IntoFuture for Server
         // Combine an optional fourth one if timer option is present
         let server_fut = match self.cfg.event_timer
         {
-            None => Box::new(server_fut) as Box<Future<Item=_,Error=_>>,
+            None => Box::new(server_fut) as AsyncResult<_,_>,
 
             // Repeatedly generate an event with the given interval
             Some(interval_secs) => {

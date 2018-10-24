@@ -66,7 +66,7 @@ impl ProfileRepo for HomeClientCapnProto
 //    }
 
 
-    fn load(&self, id: &ProfileId) -> Box< Future<Item=Profile, Error=Error> >
+    fn load(&self, id: &ProfileId) -> AsyncResult<Profile, Error>
     {
         let mut request = self.repo.load_request();
         request.get().set_profile_id( id.into() );
@@ -84,7 +84,7 @@ impl ProfileRepo for HomeClientCapnProto
     }
 
 //    // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
-//    fn resolve(&self, url: &str) -> Box< Future<Item=Profile, Error=Error> >
+//    fn resolve(&self, url: &str) -> AsyncResult<Profile, Error>
 //    {
 //        let mut request = self.repo.resolve_request();
 //        request.get().set_profile_url(url);
@@ -106,7 +106,7 @@ impl ProfileRepo for HomeClientCapnProto
 
 impl Home for HomeClientCapnProto
 {
-    fn claim(&self, profile_id: ProfileId) -> Box< Future<Item=OwnProfile, Error=Error> >
+    fn claim(&self, profile_id: ProfileId) -> AsyncResult<OwnProfile, Error>
     {
         let mut request = self.home.claim_request();
         request.get().set_profile_id( (&profile_id).into() );
@@ -123,7 +123,7 @@ impl Home for HomeClientCapnProto
 
 
     fn register(&self, own_profile: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=(OwnProfile,Error)> >
+        AsyncResult<OwnProfile, (OwnProfile,Error)>
     {
         let mut request = self.home.register_request();
         request.get().init_own_profile().fill_from(&own_profile);
@@ -142,8 +142,7 @@ impl Home for HomeClientCapnProto
     }
 
 
-    fn login(&self, proof_of_home: &RelationProof) ->
-        Box< Future<Item=Rc<HomeSession>, Error=Error> >
+    fn login(&self, proof_of_home: &RelationProof) -> AsyncResult<Rc<HomeSession>, Error>
     {
         let mut request = self.home.login_request();
         request.get().init_proof_of_home().fill_from(proof_of_home);
@@ -165,7 +164,7 @@ impl Home for HomeClientCapnProto
 
     // NOTE acceptor must have this server as its home
     fn pair_request(&self, half_proof: RelationHalfProof) ->
-        Box< Future<Item=(), Error=Error> >
+        AsyncResult<(), Error>
     {
         let mut request = self.home.pair_request_request();
         request.get().init_half_proof().fill_from(&half_proof);
@@ -179,8 +178,7 @@ impl Home for HomeClientCapnProto
 
 
     // NOTE acceptor must have this server as its home
-    fn pair_response(&self, relation_proof: RelationProof) ->
-        Box< Future<Item=(), Error=Error> >
+    fn pair_response(&self, relation_proof: RelationProof) -> AsyncResult<(), Error>
     {
         let mut request = self.home.pair_response_request();
         request.get().init_relation().fill_from(&relation_proof);
@@ -194,7 +192,7 @@ impl Home for HomeClientCapnProto
 
 
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
-        Box< Future<Item=Option<AppMsgSink>, Error=Error> >
+        AsyncResult<Option<AppMsgSink>, Error>
     {
         let mut request = self.home.call_request();
         request.get().init_relation().fill_from(&call_req.relation);
@@ -283,8 +281,7 @@ impl HomeSession for HomeSessionClientCapnProto
     // TODO consider if we should notify an open session about an updated profile
     // TODO consider if an OwnProfile return value is needed or how to force updating
     //      the currently active profile in all PeerContext/Session/etc instances
-    fn update(&self, own_prof: OwnProfile) ->
-        Box< Future<Item=(), Error=Error> >
+    fn update(&self, own_prof: OwnProfile) -> AsyncResult<(), Error>
     {
         let mut request = self.session.update_request();
         request.get().init_own_profile().fill_from(&own_prof);
@@ -298,8 +295,7 @@ impl HomeSession for HomeSessionClientCapnProto
 
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home
-    fn unregister(&self, newhome: Option<Profile>) ->
-        Box< Future<Item=(), Error=Error> >
+    fn unregister(&self, newhome: Option<Profile>) -> AsyncResult<(), Error>
     {
         let mut request = self.session.unregister_request();
         if let Some(new_home_profile) = newhome
@@ -313,7 +309,7 @@ impl HomeSession for HomeSessionClientCapnProto
     }
 
 
-    fn events(&self) -> HomeStream<ProfileEvent, String>
+    fn events(&self) -> AsyncStream<ProfileEvent, String>
     {
         let (send, recv) = mpsc::channel(1);
         let listener = ProfileEventDispatcherCapnProto::new( send.clone() );
@@ -338,7 +334,7 @@ impl HomeSession for HomeSessionClientCapnProto
     }
 
 
-    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
+    fn checkin_app(&self, app: &ApplicationId) -> AsyncStream<Box<IncomingCall>, String>
     {
         // Send a call dispatcher proxy to remote home through which we'll accept incoming calls
         let (send, recv) = mpsc::channel(1);
@@ -367,8 +363,7 @@ impl HomeSession for HomeSessionClientCapnProto
     }
 
 
-    fn ping(&self, txt: &str) ->
-        Box< Future<Item=String, Error=Error> >
+    fn ping(&self, txt: &str) -> AsyncResult<String, Error>
     {
         let mut request = self.session.ping_request();
         request.get().set_txt(txt);

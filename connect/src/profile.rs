@@ -18,8 +18,7 @@ pub trait HomeConnector
     /// existing, live `Home` immediately.
     /// `home_profile` must have a HomeFacet with at least an address filled in.
     /// `signer` belongs to me.
-    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=Error> >;
+    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) -> AsyncResult<Rc<Home>, Error>;
 }
 
 
@@ -30,13 +29,12 @@ pub trait MyProfile
     fn signer(&self) -> &Signer;
 
 
-    fn homes(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >;
+    fn homes(&self) -> AsyncResult<Vec<RelationProof>, Error>;
     // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
     /// `invite` is needed only if the home has a restrictive registration policy.
-    fn join_home(&self, home: ProfileId, invite: Option<HomeInvitation>) ->
-        Box< Future<Item=(), Error=Error> >;
+    fn join_home(&self, home: ProfileId, invite: Option<HomeInvitation>) -> AsyncResult<(), Error>;
     // NOTE newhome is a profile that contains at least one HomeSchema different than this home
-    fn leave_home(&self, home: ProfileId, newhome: Option<Profile>) -> Box< Future<Item=(), Error=Error> >;
+    fn leave_home(&self, home: ProfileId, newhome: Option<Profile>) -> AsyncResult<(), Error>;
 //    fn home_endpoint_hint(&self, home: &ProfileId, endpoint: multiaddr);
 //    fn profile_home_hint(&self, profile: &ProfileId, home: &ProfileId);
 
@@ -45,21 +43,20 @@ pub trait MyProfile
     fn relations_with_peer(&self, peer_id: &ProfileId, app_filter: Option<&ApplicationId>,
                            relation_type_filter: Option<&str>) -> Vec<RelationProof>;
     fn initiate_relation(&self, relation_type: &str, with_profile_id: &ProfileId)
-        -> Box< Future<Item=(), Error=Error> >;
+        -> AsyncResult<(), Error>;
     fn accept_relation(&self, half_proof: &RelationHalfProof)
-        -> Box< Future<Item=RelationProof, Error=Error> >;
-//    fn revoke_relation(&self, relation: &RelationProof) -> Box< Future<Item=(), Error=Error> >;
+        -> AsyncResult<RelationProof, Error>;
+//    fn revoke_relation(&self, relation: &RelationProof) -> AsyncResult<(), Error>;
 
 
     fn call(&self, rel: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
-            to_caller: Option<AppMsgSink>) ->
-        Box< Future<Item=Option<AppMsgSink>, Error=Error> >;
+            to_caller: Option<AppMsgSink>) -> AsyncResult<Option<AppMsgSink>, Error>;
 
 
-    fn login(&self) -> Box< Future<Item=Rc<MyHomeSession>, Error=Error> >;
+    fn login(&self) -> AsyncResult<Rc<MyHomeSession>, Error>;
 
-//    fn events(&self, profile: &ProfileId) -> Box< Future<Item=EventStream, Error=Error>>;
-//    fn update(&self, home: ProfileId, own_prof: &OwnProfile) -> Box< Future<Item=(), Error=Error> >;
+//    fn events(&self, profile: &ProfileId) -> AsyncResult<EventStream, Error>;
+//    fn update(&self, home: ProfileId, own_prof: &OwnProfile) -> AsyncResult<(), Error>;
 }
 
 
@@ -86,7 +83,7 @@ pub struct MyProfileImpl
     home_connector: Rc<HomeConnector>,
     handle:         reactor::Handle,
     session_cache:  Rc<RefCell< HashMap<ProfileId, Rc<MyHomeSession>> >>, // {home_id -> session}
-    // on_updated:     Rc< Fn(&OwnProfile) -> Box< Future<Item=(),Error=Error> > >,
+    // on_updated:     Rc< Fn(&OwnProfile) -> AsyncResult<(),Error>,
 // TODO remove this after testing, this should be fetched from the private binary part of OwnProfile
     relations:      Rc<RefCell< Vec<RelationProof> >>,
 }
@@ -103,14 +100,14 @@ impl MyProfileImpl
 //    pub fn new<F>(own_profile: OwnProfile, signer: Rc<Signer>, profile_repo: Rc<ProfileRepo>,
 //                  home_connector: Rc<HomeConnector>, handle: reactor::Handle,
 //                  on_updated: F) -> Self
-//    where F: 'static + Fn(&OwnProfile) -> Box< Future<Item=(),Error=Error> >
+//    where F: 'static + Fn(&OwnProfile) -> AsyncResult<(), Error>
 //        { Self{ own_profile : Rc::new( RefCell::new(own_profile) ),
 //                signer, profile_repo, home_connector, handle, on_updated: Rc::new(on_updated),
 //                relations: Default::default(), session_cache: Default::default() } }
 
 
     pub fn connect_home(&self, home_profile_id: &ProfileId)
-        -> Box< Future<Item=Rc<Home>, Error=Error> >
+        -> AsyncResult<Rc<Home>, Error>
     {
         Self::connect_home2( home_profile_id, self.profile_repo.clone(),
                              self.home_connector.clone(), self.signer.clone() )
@@ -118,7 +115,7 @@ impl MyProfileImpl
 
     fn connect_home2(home_profile_id: &ProfileId, prof_repo: Rc<ProfileRepo>,
                      connector: Rc<HomeConnector>, signer: Rc<Signer>)
-        -> Box< Future<Item=Rc<Home>, Error=Error> >
+        -> AsyncResult<Rc<Home>, Error>
     {
         let home_conn_fut = prof_repo.load(home_profile_id)
             .inspect( move |home_profile| debug!("Finished loading details for home {}", home_profile.id) )
@@ -129,8 +126,7 @@ impl MyProfileImpl
     }
 
 
-    pub fn login_home(&self, home_profile_id: ProfileId) ->
-        Box< Future<Item=Rc<MyHomeSession>, Error=Error> >
+    pub fn login_home(&self, home_profile_id: ProfileId) -> AsyncResult<Rc<MyHomeSession>, Error>
     {
         if let Some(ref session_rc) = self.session_cache.borrow().get(&home_profile_id)
             { return Box::new( Ok( Rc::clone(session_rc) ).into_future() ) }
@@ -189,8 +185,8 @@ impl MyProfileImpl
     }
 
 
-    pub fn any_home_of(&self, profile: &Profile) ->
-        Box< Future<Item=(RelationProof, Rc<Home>), Error=Error> >
+    pub fn any_home_of(&self, profile: &Profile)
+        -> AsyncResult<(RelationProof, Rc<Home>), Error>
     {
         MyProfileImpl::any_home_of2(profile, self.profile_repo.clone(),
                                     self.home_connector.clone(), self.signer.clone() )
@@ -198,8 +194,8 @@ impl MyProfileImpl
 
 
     fn any_home_of2(profile: &Profile, prof_repo: Rc<ProfileRepo>,
-                    connector: Rc<HomeConnector>, signer: Rc<Signer>) ->
-        Box< Future<Item=(RelationProof, Rc<Home>), Error=Error> >
+                    connector: Rc<HomeConnector>, signer: Rc<Signer>)
+        -> AsyncResult<(RelationProof, Rc<Home>), Error>
     {
         let homes = match profile.facet {
             // TODO consider how to get homes/addresses for apps and smartfridges
@@ -218,7 +214,7 @@ impl MyProfileImpl
                         debug!("Scheduling connect_home2 for home id {}", home_id);
                         let conn_fut = Self::connect_home2( home_id.to_owned(), prof_repo, connector, signer.clone() )
                             .map( move |home| (proof, home) );
-                        Box::new(conn_fut) as Box<Future<Item=_, Error=Error>>
+                        Box::new(conn_fut) as AsyncResult<_, Error>
                     },
                     Err(e) => Box::new( future::err(e.context(ErrorKind::FailedToGetPeerId).into()) ),
                 }
@@ -238,8 +234,8 @@ impl MyProfileImpl
     }
 
 
-    fn on_new_relation(relations: Weak<RefCell< Vec<RelationProof> >>, rel_proof: RelationProof) ->
-        Box< Future<Item=(),Error=Error> >
+    fn on_new_relation(relations: Weak<RefCell< Vec<RelationProof> >>, rel_proof: RelationProof)
+        -> AsyncResult<(),Error>
     {
         debug!("Storing new relation: {:?}", rel_proof);
         let relations_rc = match relations.upgrade() {
@@ -268,7 +264,7 @@ impl MyProfileImpl
                         debug!("Got pairing response, saving relation");
                         let not_fut = Self::on_new_relation( relations.clone(), rel_proof )
                             .map_err( |e| error!("Notification on new relation failed: {}", e) );
-                        Box::new(not_fut) as Box<Future<Item=_,Error=_>>
+                        Box::new(not_fut) as AsyncResult<_,_>
                     },
                     _ => Box::new( Ok( () ).into_future() ),
                 }
@@ -316,7 +312,7 @@ impl MyProfile for MyProfileImpl
     }
 
 
-    fn homes(&self) -> Box< Future<Item=Vec<RelationProof>, Error=Error> >
+    fn homes(&self) -> AsyncResult<Vec<RelationProof>, Error>
     {
         let res = match self.own_profile.borrow().profile.facet {
             ProfileFacet::Persona(ref persona) => Ok( persona.homes.clone() ),
@@ -326,8 +322,7 @@ impl MyProfile for MyProfileImpl
     }
 
 
-    fn join_home(&self, home_id: ProfileId, invite: Option<HomeInvitation>) ->
-        Box< Future<Item=(), Error=Error> >
+    fn join_home(&self, home_id: ProfileId, invite: Option<HomeInvitation>) -> AsyncResult<(), Error>
     {
         let half_proof = RelationHalfProof::new(RelationProof::RELATION_TYPE_HOSTED_ON_HOME, &home_id, &*self.signer);
 
@@ -350,8 +345,7 @@ impl MyProfile for MyProfileImpl
     }
 
 
-    fn leave_home(&self, home_id: ProfileId, newhome_id: Option<Profile>) ->
-        Box< Future<Item=(), Error=Error> >
+    fn leave_home(&self, home_id: ProfileId, newhome_id: Option<Profile>) -> AsyncResult<(), Error>
     {
         let unreg_fut = self.login_home(home_id)
             .map_err(|err| err.context(ErrorKind::LoginFailed).into())
@@ -368,7 +362,7 @@ impl MyProfile for MyProfileImpl
 
 
 //    fn update(&self, home_id: ProfileId, own_prof: &OwnProfile) ->
-//        Box< Future<Item=(), Error=Error> >
+//        AsyncResult<(), Error>
 //    {
 //        let own_profile_clone = own_prof.clone();
 //        let upd_fut = self.login_home(home_id)
@@ -384,7 +378,7 @@ impl MyProfile for MyProfileImpl
 
 
     fn initiate_relation(&self, relation_type: &str, with_profile_id: &ProfileId) ->
-        Box< Future<Item=(), Error=Error> >
+        AsyncResult<(), Error>
     {
         debug!("Trying to send pairing request to {}", with_profile_id);
 
@@ -419,7 +413,7 @@ impl MyProfile for MyProfileImpl
 
 
     fn accept_relation(&self, half_proof: &RelationHalfProof)
-        -> Box< Future<Item=RelationProof, Error=Error> >
+        -> AsyncResult<RelationProof, Error>
     {
         debug!("Trying to send pairing response");
 
@@ -457,7 +451,7 @@ impl MyProfile for MyProfileImpl
 
     fn call(&self, proof: RelationProof, app: ApplicationId, init_payload: AppMessageFrame,
             to_caller: Option<AppMsgSink>) ->
-        Box< Future<Item=Option<AppMsgSink>, Error=Error> >
+        AsyncResult<Option<AppMsgSink>, Error>
     {
         let peer_id = match proof.peer_id( self.signer.profile_id() ) {
             Ok(id) => id.to_owned(),
@@ -480,7 +474,7 @@ impl MyProfile for MyProfileImpl
 
 
     // TODO this should try connecting to ALL of our homes, using our collect_results() future util function
-    fn login(&self) -> Box< Future<Item=Rc<MyHomeSession>, Error=Error> >
+    fn login(&self) -> AsyncResult<Rc<MyHomeSession>, Error>
     {
         if let Some(ref session_rc) = self.session_cache.borrow().values().next()
             { return Box::new( Ok( Rc::clone(session_rc) ).into_future() ) }
@@ -506,7 +500,7 @@ impl MyProfile for MyProfileImpl
                 debug!("Home connection established, logging in");
                 let home_id = match home_proof.peer_id(&my_profile_id) {
                     Ok(id) => id.to_owned(),
-                    Err(e) => return Box::new( Err( e.context(ErrorKind::FailedToAuthorize).into() ).into_future() ) as Box<Future<Item=_,Error=_>>,
+                    Err(e) => return Box::new( Err( e.context(ErrorKind::FailedToAuthorize).into() ).into_future() ) as AsyncResult<_,_>,
                 };
                 let login_fut = home.login(&home_proof)
                     .map_err(|err| err.context(ErrorKind::LoginFailed).into())
@@ -568,7 +562,7 @@ impl MyHomeSessionImpl
     // Call forward event with safety measures on: respect a dropped service and remote errors sent by the home
     fn forward_event_safe(event_listeners_weak: Weak<RefCell< Vec<EventSink> >>,
                           event_res: Result<ProfileEvent,String>)
-        -> Box< Future<Item=(), Error=()> >
+        -> AsyncResult<(), ()>
     {
         // Get strong Rc from Weak, stop forwarding if Rc is already dropped
         let event_listeners_rc = match event_listeners_weak.upgrade() {
@@ -590,7 +584,7 @@ impl MyHomeSessionImpl
                         debug!( "{} listeners were notified, detected {} new listeners meanwhile", successful_listeners.len(), listeners.len() );
                         listeners.extend(successful_listeners); // Use extend instead of assignment to keep listeners added meanwhile
                     } );
-                Box::new(fwd_fut) as Box<Future<Item=(), Error=()>>
+                Box::new(fwd_fut) as AsyncResult<(), ()>
             },
             Err(e) => {
                 warn!("Remote error listening to profile events, stopping listeners: {}", e);
@@ -603,7 +597,7 @@ impl MyHomeSessionImpl
     // Notify all registered listeners of an incoming profile event,
     // removing failing (i.e. dropped) listeners from the list
     fn forward_event(mut event_listeners: Vec<EventSink>, event: ProfileEvent)
-        -> Box< Future<Item=Vec<EventSink>, Error=()> >
+        -> AsyncResult<Vec<EventSink>, ()>
     {
         // Create tasks (futures) of sending an item to each listener
         let send_futs = event_listeners.drain(..)

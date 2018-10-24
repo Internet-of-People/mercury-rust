@@ -69,8 +69,7 @@ pub fn init_connect_service(my_private_profilekey_file: &str, home_id_str: &str,
 
 
 
-pub fn init_app_common(app_context: &AppContext)
-    -> Box< Future<Item=Rc<MyProfile>, Error=Error> >
+pub fn init_app_common(app_context: &AppContext) -> AsyncResult<Rc<MyProfile>, Error>
 {
     let client_id = app_context.client_id.clone();
     let home_id = app_context.home_id.clone();
@@ -86,8 +85,7 @@ pub fn init_app_common(app_context: &AppContext)
 
 
 
-pub fn init_server(server: &Server)
-    -> Box< Future<Item=(), Error=Error> >
+pub fn init_server(server: &Server) -> AsyncResult<(), Error>
 {
     let handle = server.appctx.handle.clone();
     let fut = init_app_common(&server.appctx)
@@ -101,7 +99,7 @@ pub fn init_server(server: &Server)
                             let accept_fut = my_profile.accept_relation(&half_proof)
                                 .map( |_proof| () )
                                 .map_err( |e| debug!("Failed to accept pairing request: {}", e) );
-                            Box::new(accept_fut) as Box<Future<Item=_,Error=_>>
+                            Box::new(accept_fut) as AsyncResult<_,_>
                         },
                         err => Box::new( Ok( debug!("Got event {:?}, ignoring it", err) ).into_future() ),
                     }

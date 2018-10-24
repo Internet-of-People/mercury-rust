@@ -4,7 +4,7 @@ use futures::prelude::*;
 use futures::{future, Sink, sync::mpsc};
 use tokio_core::reactor;
 
-use ::{AppMessageFrame, AppMsgSink, TryFrom};
+use ::{AppMessageFrame, AppMsgSink, AsyncResult, TryFrom};
 
 
 
@@ -341,7 +341,7 @@ pub fn fwd_appmsg(to_callee: app_message_listener::Client, handle: reactor::Hand
                     request.get().set_message(&msg.0);
                     let fut = request.send().promise
                         .map(  |_resp| () );
-                    Box::new(fut) as Box< Future<Item=(), Error=::capnp::Error> >
+                    Box::new(fut) as AsyncResult<(), ::capnp::Error>
                 },
                 Err(err) => {
                     let mut request = to_callee.error_request();

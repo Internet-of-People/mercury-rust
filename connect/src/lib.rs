@@ -47,7 +47,7 @@ pub struct DAppPermission(Vec<u8>);
 pub trait Contact
 {
     fn proof(&self) -> &RelationProof;
-    fn call(&self, init_payload: AppMessageFrame) -> Box< Future<Item=DAppCall, Error=Error> >;
+    fn call(&self, init_payload: AppMessageFrame) -> AsyncResult<DAppCall,Error>;
 }
 
 
@@ -74,7 +74,7 @@ pub trait DAppEndpoint
 {
     // NOTE this implicitly asks for user interaction (through UI) selecting a profile to be used with the app
     fn dapp_session(&self, app: &ApplicationId, authorization: Option<DAppPermission>)
-        -> Box< Future<Item=Rc<DAppSession>, Error=Error> >;
+        -> AsyncResult<Rc<DAppSession>, Error>;
 }
 
 
@@ -87,13 +87,12 @@ pub trait DAppSession
     fn selected_profile(&self) -> &ProfileId;
 
     // TODO merge these two operations using an optional profile argument
-    fn contacts(&self) -> Box< Future<Item=Vec<Box<Contact>>, Error=Error> >;
+    fn contacts(&self) -> AsyncResult<Vec<Box<Contact>>, Error>;
     fn contacts_with_profile(&self, profile: &ProfileId, relation_type: Option<&str>)
-        -> Box< Future<Item=Vec<Box<Contact>>, Error=Error> >;
-    fn initiate_contact(&self, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >;
+        -> AsyncResult<Vec<Box<Contact>>, Error>;
+    fn initiate_contact(&self, with_profile: &ProfileId) -> AsyncResult<(), Error>;
 
-    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=Error> >;
+    fn app_storage(&self) -> AsyncResult<KeyValueStore<String,String>, Error>;
 
-    fn checkin(&self)
-        -> Box< Future<Item=Box< Stream<Item=DAppEvent, Error=()> >, Error=Error> >;
+    fn checkin(&self) -> AsyncResult< Box< Stream<Item=DAppEvent, Error=()> >, Error>;
 }

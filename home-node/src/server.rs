@@ -408,7 +408,7 @@ enum ServerSink<T,E>
 {
     // TODO message buffer should be persistent on the long run
     Buffer(Vec<Result<T,E>>),   // Temporary buffer, sink is not initialized
-    Sender(HomeSink<T,E>)       // Initialized sink end of channel, user is listening on the other half
+    Sender(AsyncSink<T,E>)       // Initialized sink end of channel, user is listening on the other half
 }
 
 pub struct HomeSessionServer
@@ -545,7 +545,7 @@ impl HomeSession for HomeSessionServer
 
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
-    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>
+    fn checkin_app(&self, app: &ApplicationId) -> AsyncStream<Box<IncomingCall>, String>
     {
         let (sender, receiver) = mpsc::channel(CHANNEL_CAPACITY);
 
@@ -581,7 +581,7 @@ impl HomeSession for HomeSessionServer
     // TODO investigate if race condition is possible, e.g. an event was sent out to the old_sender,
     //      and a repeated events() call is received. In this case, can we be sure that the event
     //      has been processed via the old_sender?
-    fn events(&self) -> HomeStream<ProfileEvent, String>
+    fn events(&self) -> AsyncStream<ProfileEvent, String>
     {
         let (sender, receiver) = mpsc::channel(CHANNEL_CAPACITY);
 

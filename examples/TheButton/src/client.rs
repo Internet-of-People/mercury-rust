@@ -21,7 +21,7 @@ impl Client
 
     pub fn wait_for_pairing_response(events: Box<Stream<Item=DAppEvent, Error=()>>,
                                      my_profile_id: ProfileId, handle: reactor::Handle)
-        -> Box< Future<Item=Box<Contact>, Error=Error> >
+        -> AsyncResult<Box<Contact>, Error>
     {
         let fut = events
             .filter_map( move |event|
@@ -54,7 +54,7 @@ impl Client
 
 
     fn get_or_create_contact(self, dapp_session: Rc<DAppSession>)
-        -> Box< Future<Item=Box<Contact>, Error=Error> >
+        -> AsyncResult<Box<Contact>, Error>
     {
         let callee_profile_id = self.cfg.callee_profile_id.clone();
         let contact_fut = dapp_session.contacts_with_profile(&callee_profile_id, None)
@@ -66,7 +66,7 @@ impl Client
                 move |(dapp_session, mut relations)| {
                     let init_rel_fut = dapp_session.initiate_contact(&peer_id);
                     match relations.pop() {
-                        Some(relation) => Box::new( Ok(relation).into_future() ) as Box<Future<Item=_,Error=_>>,
+                        Some(relation) => Box::new( Ok(relation).into_future() ) as AsyncResult<_,_>,
                         None => {
                             let rel_fut = dapp_session.checkin()
                                 .and_then( |events| init_rel_fut.map( |()| events ) )
@@ -84,7 +84,7 @@ impl Client
 
 impl IntoFuture for Client
 {
-    type Future = Box<Future<Item=Self::Item, Error=Self::Error>>;
+    type Future = AsyncResult<Self::Item, Self::Error>;
     type Item = ();
     type Error = Error;
 

@@ -20,8 +20,7 @@ pub struct StunTurnTcpConnector
 
 impl StunTurnTcpConnector
 {
-    pub fn connect(&self, _addr: &SocketAddr) ->
-        Box< Future<Item=TcpStream, Error=Error> >
+    pub fn connect(&self, _addr: &SocketAddr) -> AsyncResult<TcpStream, Error>
     {
         // TODO
         unimplemented!()
@@ -39,8 +38,7 @@ pub struct TcpHomeConnector
 
 impl HomeConnector for TcpHomeConnector
 {
-    fn connect(&self, _home_profile: &Profile, _signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=Error> >
+    fn connect(&self, _home_profile: &Profile, _signer: Rc<Signer>) -> AsyncResult<Rc<Home>, Error>
     {
         unimplemented!()
         // TODO in case of TCP addresses, use StunTurnTcpConnector to build an async TcpStream
@@ -88,7 +86,7 @@ impl SimpleTcpHomeConnector
         { Self{ handle: handle} }
 
     pub fn connect_addr(addr: &Multiaddr, handle: &reactor::Handle) ->
-        Box< Future<Item=TcpStream, Error=Error> >
+        AsyncResult<TcpStream, Error>
     {
         // TODO handle other multiaddresses, not only TCP
         let tcp_addr = match multiaddr_to_socketaddr(addr)
@@ -107,7 +105,7 @@ impl SimpleTcpHomeConnector
 impl HomeConnector for SimpleTcpHomeConnector
 {
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        Box< Future<Item=Rc<Home>, Error=Error> >
+        AsyncResult<Rc<Home>, Error>
     {        
         let addrs = match home_profile.facet {
             ProfileFacet::Home(ref home_facet) => home_facet.addrs.clone(),

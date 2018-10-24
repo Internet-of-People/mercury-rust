@@ -9,6 +9,7 @@ use futures::prelude::*;
 
 use mercury_home_protocol::{*, error::*};
 use mercury_storage::async::{KeyValueStore, imp::InMemoryStore};
+use ::AsyncResult;
 
 
 
@@ -27,7 +28,7 @@ impl<T: KeyValueStore<ProfileId,Profile> + 'static> From<T> for SimpleProfileRep
 
 impl SimpleProfileRepo {
     pub fn insert(&self, profile: Profile)
-        -> Box< Future<Item=(),Error=::mercury_storage::error::StorageError> >
+        -> AsyncResult<(), ::mercury_storage::error::StorageError>
     {
         self.profiles.borrow_mut().set( profile.id.clone(), profile.clone() )
     }
@@ -45,8 +46,7 @@ impl ProfileRepo for SimpleProfileRepo
 
     /// Look for specified `id` and return. This might involve searching for the latest version
     /// of the profile in the dht, but if it's the profile's home server, could come from memory, too.
-    fn load(&self, id: &ProfileId) ->
-        Box< Future<Item=Profile, Error=Error> >
+    fn load(&self, id: &ProfileId) -> AsyncResult<Profile, Error>
     {
         let fut = self.profiles.borrow().get( id.to_owned() )
             .map_err( |e| e.context(ErrorKind::ProfileLookupFailed).into() );
@@ -54,8 +54,7 @@ impl ProfileRepo for SimpleProfileRepo
     }
 
 
-//    fn resolve(&self, _url: &str) ->
-//        Box< Future<Item=Profile, Error=Error> >
+//    fn resolve(&self, _url: &str) -> AsyncResult<Profile, Error>
 //    {
 //        unimplemented!()
 //    }

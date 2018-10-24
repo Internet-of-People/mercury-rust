@@ -3,6 +3,10 @@ use std::iter;
 use futures::prelude::*;
 use futures::future::{self, loop_fn, poll_fn, Loop};
 
+use ::AsyncResult;
+
+
+
 // Joins futures into a single future waiting for all of them to finish (no matter if succeed or fail)
 // and collect their results into a vector in the original order. This function may not error..
 // As a simplification, the function performs transformation
@@ -11,9 +15,7 @@ use futures::future::{self, loop_fn, poll_fn, Loop};
 //      join_all( futs.map( fut.then( Ok(res) ) ) )
 //          .map( results.filter_map( res.ok() ) )
 pub fn collect_results<I>(futures_iterator: I)
-    -> Box< Future<Item = Vec< Result< <I::Item as IntoFuture>::Item,
-                                       <I::Item as IntoFuture>::Error > >,
-                   Error = ()> >
+    -> AsyncResult< Vec< Result< <I::Item as IntoFuture>::Item, <I::Item as IntoFuture>::Error > >, () >
 where I: IntoIterator,
       I::Item: IntoFuture + 'static,
 {
@@ -153,7 +155,7 @@ mod test
     {
         let (sink,stream) = mpsc::channel(1);
         let mut reactor = reactor::Core::new().unwrap();
-        let mut futs = vec![ Box::new( stream.map(|_| (1) ).collect().map(|vec| *vec.first().unwrap()) ) as Box<Future<Item=i32,Error=()>>,
+        let mut futs = vec![ Box::new( stream.map(|_| (1) ).collect().map(|vec| *vec.first().unwrap()) ) as AsyncResult<i32,()>,
                              Box::new( sink.send(42).map(|_| (2)).map_err(|_| ()) ) ];
         let collect_fut = collect_results( futs.drain(..) );
         let result = reactor.run(collect_fut).unwrap();

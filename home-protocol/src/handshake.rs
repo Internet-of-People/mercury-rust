@@ -22,7 +22,7 @@ struct AuthenticationInfo
 
 
 pub fn temp_handshake_until_tls_is_implemented<R,W>(reader: R, writer: W, signer: Rc<Signer>)
-    -> Box< Future<Item=(R, W, PeerContext), Error=Error> >
+    -> AsyncResult<(R, W, PeerContext), Error>
 where R: std::io::Read + tokio_io::AsyncRead + 'static,
       W: std::io::Write + tokio_io::AsyncWrite + 'static
 {
@@ -76,7 +76,7 @@ where R: std::io::Read + tokio_io::AsyncRead + 'static,
 
 
 pub fn temp_tcp_handshake_until_tls_is_implemented(socket: TcpStream, signer: Rc<Signer>)
-    -> Box< Future<Item=(impl std::io::Read, impl std::io::Write, PeerContext), Error=Error> >
+    -> AsyncResult<(impl std::io::Read, impl std::io::Write, PeerContext), Error>
 {
     use tokio_io::AsyncRead;
 

@@ -149,8 +149,10 @@ pub struct PeerContext
 
 
 
-pub type HomeStream<Elem, RemoteErr> = mpsc::Receiver< std::result::Result<Elem, RemoteErr> >;
-pub type HomeSink<Elem, RemoteErr>   = mpsc::Sender< std::result::Result<Elem, RemoteErr> >;
+pub type AsyncResult<T,E> = Box< Future<Item=T, Error=E> >;
+
+pub type AsyncStream<Elem, RemoteErr> = mpsc::Receiver< std::result::Result<Elem, RemoteErr> >;
+pub type AsyncSink<Elem, RemoteErr>   = mpsc::Sender< std::result::Result<Elem, RemoteErr> >;
 
 /// Potentially a whole network of nodes with internal routing and sharding
 pub trait ProfileRepo
@@ -161,8 +163,7 @@ pub trait ProfileRepo
 
     /// Look for specified `id` and return. This might involve searching for the latest version
     /// of the profile in the dht, but if it's the profile's home server, could come from memory, too.
-    fn load(&self, id: &ProfileId) ->
-        Box< Future<Item=Profile, Error=Error> >;
+    fn load(&self, id: &ProfileId) -> AsyncResult<Profile, Error>;
 
 //    /// Same as load(), but also contains hints for resolution, therefore it's more efficient than load(id)
 //    ///
@@ -172,7 +173,7 @@ pub trait ProfileRepo
 //    /// * ProfileID of its home server
 //    /// * last known multiaddress(es) of its home server
 //    fn resolve(&self, url: &str) ->
-//        Box< Future<Item=Profile, Error=Error> >;
+//        AsyncResult<Profile, Error>;
 
     // TODO notifications on profile updates should be possible
 }
@@ -276,8 +277,8 @@ pub struct ApplicationId(pub String);
 pub struct AppMessageFrame(pub Vec<u8>);
 
 
-pub type AppMsgStream = HomeStream<AppMessageFrame, String>;
-pub type AppMsgSink   = HomeSink<AppMessageFrame, String>;
+pub type AppMsgStream = AsyncStream<AppMessageFrame, String>;
+pub type AppMsgSink   = AsyncSink<AppMessageFrame, String>;
 
 
 /// A struct that is passed from the caller to the callee. The callee can examine this
@@ -305,36 +306,32 @@ pub struct CallRequestDetails
 pub trait Home: ProfileRepo
 {
     // NOTE because we support multihash, the id cannot be guessed from the public key
-    fn claim(&self, profile: ProfileId) ->
-        Box< Future<Item=OwnProfile, Error=Error> >;
+    fn claim(&self, profile: ProfileId) -> AsyncResult<OwnProfile, Error>;
 
     // TODO this should return only the signed RelationProof of the home hosting the profile
     //      because in this form the home can return malicious changes in the profile
     fn register(&self, own_prof: OwnProfile, half_proof: RelationHalfProof, invite: Option<HomeInvitation>) ->
-        Box< Future<Item=OwnProfile, Error=(OwnProfile,Error)> >;
+        AsyncResult<OwnProfile, (OwnProfile,Error)>;
 
     /// By calling this method, any active session of the same profile is closed.
-    fn login(&self, proof_of_home: &RelationProof) ->
-        Box< Future<Item=Rc<HomeSession>, Error=Error> >;
+    fn login(&self, proof_of_home: &RelationProof) -> AsyncResult<Rc<HomeSession>, Error>;
 
     /// The peer in `half_proof` must be hosted on this home server.
     /// Returns Error if the peer is not hosted on this home server or an empty result if it is.
     /// Note that the peer will directly invoke `pair_response` on the initiator's home server and call pair_response to send PairingResponse event
-    fn pair_request(&self, half_proof: RelationHalfProof) ->
-        Box< Future<Item=(), Error=Error> >;
+    fn pair_request(&self, half_proof: RelationHalfProof) -> AsyncResult<(), Error>;
 
-    fn pair_response(&self, rel: RelationProof) ->
-        Box< Future<Item=(), Error=Error> >;
+    fn pair_response(&self, rel: RelationProof) -> AsyncResult<(), Error>;
 
     // NOTE initiating a real P2P connection (vs a single frame push notification),
     //      the caller must fill in some message channel to itself.
     //      A successful call returns a channel to callee.
     fn call(&self, app: ApplicationId, call_req: CallRequestDetails) ->
-        Box< Future<Item=Option<AppMsgSink>, Error=Error> >;
+        AsyncResult<Option<AppMsgSink>, Error>;
 
 // TODO consider how to do this in a later milestone
 //    fn presence(&self, rel: Relation, app: ApplicationId) ->
-//        Box< Future<Item=Option<AppMessageFrame>, Error=ErrorToBeSpecified> >;
+//        AsyncResult<Option<AppMessageFrame>, Error>;
 }
 
 
@@ -372,35 +369,27 @@ pub trait IncomingCall
 
 pub trait HomeSession
 {
-    fn update(&self, own_prof: OwnProfile) ->
-        Box< Future<Item=(), Error=Error> >;
+    fn update(&self, own_prof: OwnProfile) -> AsyncResult<(), Error>;
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home
     // TODO should we return a modified OwnProfile here with this home removed from the homes of persona facet in profile?
-    fn unregister(&self, newhome: Option<Profile>) ->
-        Box< Future<Item=(), Error=Error> >;
+    fn unregister(&self, newhome: Option<Profile>) -> AsyncResult<(), Error>;
 
 
-    fn events(&self) -> HomeStream<ProfileEvent, String>;
+    fn events(&self) -> AsyncStream<ProfileEvent, String>;
 
     // TODO some kind of proof might be needed that the AppId given really belongs to the caller
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
-    fn checkin_app(&self, app: &ApplicationId) -> HomeStream<Box<IncomingCall>, String>;
+    fn checkin_app(&self, app: &ApplicationId) -> AsyncStream<Box<IncomingCall>, String>;
 
     // TODO remove this after testing
-    fn ping(&self, txt: &str) ->
-        Box< Future<Item=String, Error=Error> >;
+    fn ping(&self, txt: &str) -> AsyncResult<String, Error>;
 
 
 // TODO ban features are delayed to a later milestone
-//    fn banned_profiles(&self) ->
-//        Box< Future<Item=Vec<ProfileId>, Error=ErrorToBeSpecified> >;
-//
-//    fn ban(&self, profile: &ProfileId) ->
-//        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
-//
-//    fn unban(&self, profile: &ProfileId) ->
-//        Box< Future<Item=(), Error=ErrorToBeSpecified> >;
+//    fn banned_profiles(&self) -> AsyncResult<Vec<ProfileId>, Error>;
+//    fn ban(&self, profile: &ProfileId) -> AsyncResult<(), Error>;
+//    fn unban(&self, profile: &ProfileId) -> AsyncResult<(), Error>;
 }
 
 

@@ -7,7 +7,7 @@ use jsonrpc_pubsub::{PubSubHandler, PubSubMetadata, Session, Subscriber, Subscri
 use jsonrpc_tcp_server::{ServerBuilder, RequestContext};
 
 use mercury_home_protocol::*;
-use ::{Contact, DAppCall, DAppEndpoint, DAppEvent, DAppPermission, DAppSession, Error};
+use ::{AsyncResult, Contact, DAppCall, DAppEndpoint, DAppEvent, DAppPermission, DAppSession, Error};
 use ::jsonrpc::DAppSessionParams;
 
 
@@ -96,7 +96,7 @@ impl DAppEndpointDispatcherJsonRpc
 impl DAppEndpoint for DAppEndpointDispatcherJsonRpc
 {
     fn dapp_session(&self, app: &ApplicationId, authorization: Option<DAppPermission>)
-        -> Box< Future<Item=Rc<DAppSession>, Error=Error> >
+        -> AsyncResult<Rc<DAppSession>, Error>
     {
         unimplemented!()
     }

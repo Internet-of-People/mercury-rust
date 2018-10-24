@@ -25,7 +25,7 @@ impl Contact for RelationImpl
 {
     fn proof(&self) -> &RelationProof { &self.relation_proof }
 
-    fn call(&self, init_payload: AppMessageFrame) -> Box< Future<Item=DAppCall, Error=Error> >
+    fn call(&self, init_payload: AppMessageFrame) -> AsyncResult<DAppCall, Error>
     {
         let (to_caller, from_callee) = mpsc::channel(CHANNEL_CAPACITY);
 
@@ -80,7 +80,7 @@ impl DAppSession for DAppSessionImpl
         { self.my_profile.signer().profile_id() }
 
 
-    fn contacts(&self) -> Box< Future<Item=Vec<Box<Contact>>, Error=Error> >
+    fn contacts(&self) -> AsyncResult<Vec<Box<Contact>>, Error>
     {
         let mut proofs = self.my_profile.relations();
         let app_contacts = proofs.drain(..)
@@ -91,7 +91,7 @@ impl DAppSession for DAppSessionImpl
     }
 
     fn contacts_with_profile(&self, profile: &ProfileId, relation_type: Option<&str>)
-        -> Box< Future<Item=Vec<Box<Contact>>, Error=Error> >
+        -> AsyncResult<Vec<Box<Contact>>, Error>
     {
         let mut proofs = self.my_profile.relations_with_peer(profile, Some(&self.app_id), relation_type);
         let peer_contacts = proofs.drain(..)
@@ -100,19 +100,18 @@ impl DAppSession for DAppSessionImpl
         Box::new( Ok(peer_contacts).into_future() )
     }
 
-    fn initiate_contact(&self, with_profile: &ProfileId) -> Box< Future<Item=(), Error=Error> >
+    fn initiate_contact(&self, with_profile: &ProfileId) -> AsyncResult<(), Error>
     {
         // TODO relation-type should be more sophisticated once we have a proper metainfo schema there
         self.my_profile.initiate_relation(&self.app_id.0, with_profile)
     }
 
 
-    fn app_storage(&self) -> Box< Future<Item=KeyValueStore<String,String>, Error=Error> >
+    fn app_storage(&self) -> AsyncResult<KeyValueStore<String,String>, Error>
         { unimplemented!(); }
 
 
-    fn checkin(&self)
-        -> Box< Future<Item=Box<Stream<Item=DAppEvent, Error=()>>, Error=Error> >
+    fn checkin(&self) -> AsyncResult<Box<Stream<Item=DAppEvent, Error=()>>, Error>
     {
         let app = self.app_id.clone();
         let my_profile = self.my_profile.clone();

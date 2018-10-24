@@ -299,7 +299,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                         let fut = request.send().promise
                             .map( | _resp| () );
                         // TODO .map_err() what to do here in case of an error?
-                        Box::new(fut) as Box< Future<Item=(), Error=::capnp::Error> >
+                        Box::new(fut) as AsyncResult<(), ::capnp::Error>
                     },
                     Err(err) =>
                     {
@@ -362,7 +362,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                                     .ok();
                                 incoming_call.answer(answer);
                             } );
-                        Box::new(fut) as Box< Future<Item=(), Error=::capnp::Error> >
+                        Box::new(fut) as AsyncResult<(), ::capnp::Error>
                     },
                     Err(err) =>
                     {
