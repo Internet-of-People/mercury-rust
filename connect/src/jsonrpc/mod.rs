@@ -1,10 +1,17 @@
+use mercury_home_protocol::*;
+use ::DAppPermission;
+
+
+
 pub mod server_dispatcher;
-pub use self::server_dispatcher::DAppSessionDispatcherJsonRpc;
+pub use self::server_dispatcher::DAppEndpointDispatcherJsonRpc;
+
 
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct EchoParams
+pub struct DAppSessionParams
 {
-    pub message: String,
+    dapp: ApplicationId,
+    authorization: Option<DAppPermission>
 }
 

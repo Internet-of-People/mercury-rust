@@ -34,7 +34,7 @@ use mercury_home_protocol::crypto::*;
 
 
 
-pub fn init_connect_service(my_profile_privkey_file: &str, home_pubkey_file: &str,
+pub fn init_connect_service(my_profile_privkey_file: &PathBuf, home_pubkey_file: &PathBuf,
                             home_addr_str: &str, reactor: &mut reactor::Core)
     -> Result<(Rc<ConnectService>, ProfileId, ProfileId), Error>
 {
@@ -99,7 +99,7 @@ struct Config
 {
     #[structopt(long="my-private-key", default_value="../etc/client.id", raw(value_name=r#""FILE""#),
         parse(from_os_str), help="Private key file used to prove server identity. Currently only ed25519 keys are supported in raw binary format")]
-    my_private_key: PathBuf,
+    my_private_key_file: PathBuf,
 
     #[structopt(long="home-public-key", default_value="../etc/homenode.id.pub", raw(value_name=r#""FILE""#),
         parse(from_os_str), help="Public key file of home node used by the selected profile")]
@@ -109,9 +109,9 @@ struct Config
         help="TCP address of the home node to be connected")]
     home_address: String,
 
-//    #[structopt(long="jsonrpc-port", default_value="8888", raw(value_name=r#""port""#),
-//        help="Port number to expose JsonRpc interface on")]
-//    jsonrpc_port: u16,
+    #[structopt(long="jsonrpc-tcp", default_value="0.0.0.0:2222", raw(value_name=r#""IP:Port""#),
+        help="Listen on this socket to serve JsonRpc Tcp clients")]
+    socket_address: String,
 }
 
 impl Config
@@ -124,11 +124,17 @@ impl Config
 
 
 
-fn main()
+fn main() -> Result<(), Error>
 {
     log4rs::init_file( "log4rs.yml", Default::default() ).unwrap();
     let config = Config::new();
     println!("Config: {:?}", config);
 
-    jsonrpc::DAppSessionDispatcherJsonRpc::serve();
+    let mut reactor = reactor::Core::new().unwrap();
+    let (service, _my_profile_id, _home_id) = init_connect_service(&config.my_private_key_file,
+        &config.home_public_key_file, &config.home_address, &mut reactor)?;
+
+    let jsonrpc_server = jsonrpc::DAppEndpointDispatcherJsonRpc::new(service);
+    jsonrpc_server.serve(&config.socket_address);
+    Ok( () )
 }
