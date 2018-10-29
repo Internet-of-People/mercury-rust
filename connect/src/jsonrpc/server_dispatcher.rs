@@ -1,14 +1,16 @@
 use std::rc::Rc;
 use std::sync::Arc;
 
+//use failure::Fail;
+use futures::{prelude::*, sync::{mpsc, oneshot}};
 use jsonrpc_core::{Metadata, MetaIoHandler, Params, Value};
 use jsonrpc_core::futures::Future;
 use jsonrpc_pubsub::{PubSubHandler, PubSubMetadata, Session, Subscriber, SubscriptionId};
 use jsonrpc_tcp_server::{ServerBuilder, RequestContext};
 
 use mercury_home_protocol::*;
-use ::{AsyncResult, Contact, DAppCall, DAppEndpoint, DAppEvent, DAppPermission, DAppSession, Error};
-use ::jsonrpc::DAppSessionParams;
+use ::*;
+use ::jsonrpc::*;
 
 
 
@@ -40,16 +42,25 @@ impl DAppEndpointDispatcherJsonRpc
     pub fn new(endpoint: Rc<DAppEndpoint>) -> Self
         { Self{endpoint} }
 
-    pub fn serve(&self, socket: &str)
+    pub fn serve(&self, socket: &str) // -> mpsc::Receiver< (Request, oneshot::Sender<Response>) >
     {
         let mut io = PubSubHandler::new( MetaIoHandler::default() );
 
+        let (req_tx, req_rx) = mpsc::channel(CHANNEL_CAPACITY);
+
         let endpoint = self.endpoint.clone();
-        io.add_method("session", move |params : Params| {
-            let params: DAppSessionParams = params.parse()?;
-//            let session = endpoint.dapp_session(&params.dapp, params.authorization);
-            Ok( Value::String( params.dapp.0 ) )
-        });
+        io.add_method("session", move |params : Params|
+        {
+            let req_tx_clone = req_tx.clone();
+            let (resp_tx, resp_rx) = oneshot::channel::<Value>();
+            params.parse::<DAppSessionParams>()
+                .into_future()
+                // TODO at least log errors and maybe try to include them in the JsonRpc error
+                .and_then(  move |params| req_tx_clone.clone().send( ( Request::DAppSessionRequest(params), resp_tx ) )
+                    .map_err( |e| ::jsonrpc_core::Error::internal_error() ) )
+                .and_then( |_sender| resp_rx
+                    .map_err( |e| ::jsonrpc_core::Error::internal_error() ) )
+        } );
 
         io.add_subscription("notification_message",
             ("subscribe_notification", |_params: Params, _pubsub_metadata, subscriber: Subscriber|
