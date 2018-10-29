@@ -1,117 +1,103 @@
-use std::rc::Rc;
-use std::sync::Arc;
+use std::path::PathBuf;
 
-//use failure::Fail;
-use futures::{prelude::*, sync::{mpsc, oneshot}};
-use jsonrpc_core::{Metadata, MetaIoHandler, Params, Value};
-use jsonrpc_core::futures::Future;
-use jsonrpc_pubsub::{PubSubHandler, PubSubMetadata, Session, Subscriber, SubscriptionId};
-use jsonrpc_tcp_server::{ServerBuilder, RequestContext};
+use failure::Fail;
+use futures::{prelude::*};
+use serde_json;
+use tokio_codec::{Decoder, LinesCodec};
+use tokio_core::reactor;
+use tokio_uds::UnixListener;
 
 use mercury_home_protocol::*;
-use ::*;
-use ::jsonrpc::*;
+use ::error::*;
 
 
 
-#[derive(Clone)]
-struct Meta {
-	session: Option<Arc<Session>>,
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+struct JsonRpcRequest
+{
+    jsonrpc: String,
+    id: serde_json::Value,
+    method: String,
+    params: serde_json::Value,
 }
-
-impl Default for Meta {
-	fn default() -> Self { Self{session: None} }
-}
-
-impl Metadata for Meta {}
-impl PubSubMetadata for Meta {
-	fn session(&self) -> Option<Arc<Session>>
-		{ self.session.clone() }
-}
-
 
 
 pub struct DAppEndpointDispatcherJsonRpc
 {
-    endpoint: Rc<DAppEndpoint>,
+    handle: reactor::Handle,
 }
 
 
 impl DAppEndpointDispatcherJsonRpc
 {
-    pub fn new(endpoint: Rc<DAppEndpoint>) -> Self
-        { Self{endpoint} }
+    pub fn new(handle: reactor::Handle) -> Self
+        { Self{handle} }
 
-    pub fn serve(&self, socket: &str) // -> mpsc::Receiver< (Request, oneshot::Sender<Response>) >
+
+    pub fn serve(&self, sock_path: &PathBuf) -> AsyncResult<(),Error>
     {
-        let mut io = PubSubHandler::new( MetaIoHandler::default() );
+        let sock = UnixListener::bind(sock_path, &self.handle).unwrap();
 
-        let (req_tx, req_rx) = mpsc::channel(CHANNEL_CAPACITY);
+        println!("listening on {:?}", sock_path);
 
-        let endpoint = self.endpoint.clone();
-        io.add_method("session", move |params : Params|
+        let handle = self.handle.clone();
+        let server_fut = sock.incoming().for_each( move |(connection, peer_addr)|
         {
-            let req_tx_clone = req_tx.clone();
-            let (resp_tx, resp_rx) = oneshot::channel::<Value>();
-            params.parse::<DAppSessionParams>()
-                .into_future()
-                // TODO at least log errors and maybe try to include them in the JsonRpc error
-                .and_then(  move |params| req_tx_clone.clone().send( ( Request::DAppSessionRequest(params), resp_tx ) )
-                    .map_err( |e| ::jsonrpc_core::Error::internal_error() ) )
-                .and_then( |_sender| resp_rx
-                    .map_err( |e| ::jsonrpc_core::Error::internal_error() ) )
+            let peer_credentials = connection.peer_cred();
+            let framed = LinesCodec::new().framed(connection);
+            //let framed = Framed::new( connection, LinesCodec::new() );
+            let (sink, stream) = framed.split();
+            let client_fut = Self::serve_connection(sink, stream);
+            handle.spawn(client_fut.map_err( |e| warn!("Serving client failed: {}", e) ) );
+            Ok( () )
         } );
 
-        io.add_subscription("notification_message",
-            ("subscribe_notification", |_params: Params, _pubsub_metadata, subscriber: Subscriber|
-            {
-    //            if params != jsonrpc_core::Params::None {
-    //				subscriber.reject( jsonrpc_core::Error {
-    //					code: jsonrpc_core::ErrorCode::ParseError,
-    //					message: "Invalid parameters. Subscription rejected.".into(),
-    //					data: None,
-    //				}).unwrap();
-    //				return;
-    //            }
-
-                let sink = subscriber.assign_id(SubscriptionId::Number(5)).unwrap();
-                ::std::thread::spawn(move || {
-                    loop {
-                        ::std::thread::sleep(::std::time::Duration::from_secs(5));
-                        match sink.notify(Params::Array(vec![Value::Number(10.into())])).wait() {
-                            Ok(_) => {},
-                            Err(_) => {
-                                println!("Subscription has ended, finishing.");
-                                break;
-                            }
-                        }
-                    }
-                });
-            } ),
-            ("unsubscribe_notification", |_subscriber_id|
-            {
-                Ok( Value::Bool(true) )
-            } ) );
-
-        let server = ServerBuilder::new(io)
-            .session_meta_extractor(|context: &RequestContext|
-                Meta { session: Some(Arc::new(Session::new(context.sender.clone()))), } )
-            .start( &socket.parse().unwrap() )
-            .expect("Server must start with no issues.");
-
-        server.wait();
+        Box::new( server_fut.map_err( |e| e.context( ErrorKind::ImplementationError.into() ).into() ) )
     }
-}
 
 
-impl DAppEndpoint for DAppEndpointDispatcherJsonRpc
-{
-    fn dapp_session(&self, app: &ApplicationId, authorization: Option<DAppPermission>)
-        -> AsyncResult<Rc<DAppSession>, Error>
+    pub fn serve_connection<O,I>(sink: O, stream: I) -> AsyncResult<(), ::std::io::Error>
+        where O: 'static + Sink<SinkItem=String, SinkError=::std::io::Error>,
+              I: 'static + Stream<Item=String, Error=::std::io::Error>
     {
-        unimplemented!()
+        let client_fut = stream.for_each( |line|
+        {
+            println!("got line: {}", line);
+            let request = serde_json::from_str::<JsonRpcRequest>(&line)?;
+                // TODO .map_err( |e| e.context( ErrorKind::TODO.into() ).into() )?;
+            println!("got request: {:?}", request);
+
+            // TODO properly process request
+
+            let response_json = json!({"jsonrpc": request.jsonrpc, "id": request.id, "result": "true"});
+            println!("sending response: {}", response_json);
+            Ok( () )
+        } );
+        Box::new(client_fut)
     }
 }
 
 
-// impl DAppSession
+//    let jsonrpc_server_fut = loop_fn( (sock, recv_buf), move |(sock, recv_buf)|
+//    {
+//        sock.recv_dgram(recv_buf)
+//            .and_then( |(sock, recv_buf, byte_count, peer_addr)|
+//            {
+//                println!("Received message of {} bytes from {}", byte_count, peer_addr);
+//                let request = serde_json::from_slice::<JsonRpcRequest>( &recv_buf[..byte_count] )
+//                    .unwrap_or( JsonRpcRequest{jsonrpc: Default::default(), id: serde_json::Value::Null, method: Default::default(), params: serde_json::Value::Null} ); // serde_json::Value::String("Invalid JSON".to_string())
+//                println!("Parsed message: {:?}", request);
+//
+//                // TODO process message
+//
+//                let response_json = json!({"jsonrpc": "2.0", "id": 1, "result": "true"});
+//                let response_buf = serde_json::to_vec(&response_json).unwrap();
+//                sock.send_dgram(response_buf, peer_addr)
+//                    .map( |(sock, _send_buf)| (sock, recv_buf) )
+//            } )
+//            .map( |(sock, recv_buf)| {
+//                println!("Response sent, waiting for next message");
+//                if true { Loop::Continue( (sock, recv_buf) ) }
+//                else    { Loop::Break( () ) } // Help the compiler with return type of loop future
+//            } )
+//    } );

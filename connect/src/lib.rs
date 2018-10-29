@@ -1,9 +1,6 @@
 #[macro_use]
 extern crate failure;
 extern crate futures;
-extern crate jsonrpc_core;
-extern crate jsonrpc_pubsub;
-extern crate jsonrpc_tcp_server;
 #[macro_use]
 extern crate log;
 extern crate mercury_home_protocol;
@@ -12,8 +9,12 @@ extern crate multiaddr;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
+#[macro_use]
+extern crate serde_json;
+extern crate tokio_codec;
 extern crate tokio_core;
 extern crate tokio_io;
+extern crate tokio_uds;
 
 
 

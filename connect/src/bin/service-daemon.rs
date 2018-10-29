@@ -105,13 +105,17 @@ struct Config
         parse(from_os_str), help="Public key file of home node used by the selected profile")]
     home_public_key_file: PathBuf,
 
-    #[structopt(long="home-address", default_value="127.0.0.1:2077", raw(value_name=r#""ip:port""#),
+    #[structopt(long="home-address", default_value="127.0.0.1:2077", raw(value_name=r#""IP:PORT""#),
         help="TCP address of the home node to be connected")]
     home_address: String,
 
-    #[structopt(long="jsonrpc-tcp", default_value="0.0.0.0:2222", raw(value_name=r#""IP:Port""#),
-        help="Listen on this socket to serve JsonRpc Tcp clients")]
-    socket_address: String,
+//    #[structopt(long="jsonrpc-tcp", default_value="0.0.0.0:2222", raw(value_name=r#""IP:PORT""#),
+//        help="Listen on this socket to serve JsonRpc clients via TCP")]
+//    tcp_address: String,
+
+    #[structopt(long="jsonrpc-uds", default_value="/tmp/jsonrpc.sock", raw(value_name=r#""FILE""#),
+        parse(from_os_str), help="Socket file path to serve JsonRpc clients via Unix Domain Sockets")]
+    uds_path: PathBuf,
 }
 
 impl Config
@@ -134,7 +138,7 @@ fn main() -> Result<(), Error>
     let (service, _my_profile_id, _home_id) = init_connect_service(&config.my_private_key_file,
         &config.home_public_key_file, &config.home_address, &mut reactor)?;
 
-    let jsonrpc_server = jsonrpc::DAppEndpointDispatcherJsonRpc::new(service);
-    jsonrpc_server.serve(&config.socket_address);
-    Ok( () )
+    let dispatcher = jsonrpc::DAppEndpointDispatcherJsonRpc::new( reactor.handle() );
+    let jsonrpc_server = dispatcher.serve(&config.uds_path);
+    reactor.run(jsonrpc_server)
 }
