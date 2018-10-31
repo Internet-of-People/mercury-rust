@@ -7,6 +7,7 @@ extern crate log4rs;
 extern crate multiaddr;
 #[macro_use]
 extern crate structopt;
+extern crate tokio_codec;
 extern crate tokio_core;
 
 extern crate mercury_connect;
@@ -24,6 +25,7 @@ use std::rc::Rc;
 use failure::Fail;
 //use futures::prelude::*;
 use multiaddr::ToMultiaddr;
+use tokio_codec::LinesCodec;
 use tokio_core::reactor;
 
 use mercury_connect::*;
@@ -138,7 +140,8 @@ fn main() -> Result<(), Error>
     let (service, _my_profile_id, _home_id) = init_connect_service(&config.my_private_key_file,
         &config.home_public_key_file, &config.home_address, &mut reactor)?;
 
-    let dispatcher = jsonrpc::DAppEndpointDispatcherJsonRpc::new( reactor.handle() );
-    let jsonrpc_server = dispatcher.serve(&config.uds_path);
-    reactor.run(jsonrpc_server)
+    let dispatcher = Rc::new( jsonrpc::JsonRpcDAppEndpointDispatcher::new(service) );
+    let jsonrpc = jsonrpc::StreamingJsonRpc::new( dispatcher, reactor.handle() );
+    let jsonrpc_fut = jsonrpc.dispatch( &config.uds_path, LinesCodec::new() );
+    reactor.run(jsonrpc_fut)
 }

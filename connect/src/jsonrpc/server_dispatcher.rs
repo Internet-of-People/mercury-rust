@@ -1,40 +1,37 @@
 use std::path::PathBuf;
+use std::rc::Rc;
 
 use failure::Fail;
-use futures::{prelude::*};
-use serde_json;
-use tokio_codec::{Decoder, LinesCodec};
+use futures::{prelude::*, future::{loop_fn, Loop}, sync::mpsc};
+use tokio_codec::{Decoder, Encoder, Framed};
 use tokio_core::reactor;
 use tokio_uds::UnixListener;
 
 use mercury_home_protocol::*;
+use ::*;
 use ::error::*;
+use ::jsonrpc::*;
 
 
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-struct JsonRpcRequest
+pub struct StreamingJsonRpc
 {
-    jsonrpc: String,
-    id: serde_json::Value,
-    method: String,
-    params: serde_json::Value,
-}
-
-
-pub struct DAppEndpointDispatcherJsonRpc
-{
+    dispatcher: Rc<JsonRpcMethodDispatcher>,
     handle: reactor::Handle,
 }
 
 
-impl DAppEndpointDispatcherJsonRpc
+// TODO this should work not only over UDS socket streams, but over any AsyncRead/Write stream
+impl StreamingJsonRpc
 {
-    pub fn new(handle: reactor::Handle) -> Self
-        { Self{handle} }
+    pub fn new(dispatcher: Rc<JsonRpcMethodDispatcher>, handle: reactor::Handle) -> Self
+        { Self{dispatcher, handle} }
 
 
-    pub fn serve(&self, sock_path: &PathBuf) -> AsyncResult<(),Error>
+    // TODO this should work with Json::Value in general instead of String
+    pub fn dispatch<C>(&self, sock_path: &PathBuf, codec: C) -> AsyncResult<(),Error>
+        where C: 'static + Decoder<Item=String, Error=::std::io::Error>
+                 + Clone + Encoder<Item=String, Error=::std::io::Error>
     {
         let sock = UnixListener::bind(sock_path, &self.handle).unwrap();
 
@@ -44,10 +41,11 @@ impl DAppEndpointDispatcherJsonRpc
         let server_fut = sock.incoming().for_each( move |(connection, peer_addr)|
         {
             let peer_credentials = connection.peer_cred();
-            let framed = LinesCodec::new().framed(connection);
-            //let framed = Framed::new( connection, LinesCodec::new() );
+            //let framed = LinesCodec::new().framed(connection);
+            let framed = Framed::new( connection, codec.clone() );
             let (sink, stream) = framed.split();
-            let client_fut = Self::serve_connection(sink, stream);
+
+            let client_fut = Self::serve_client(sink, stream);
             handle.spawn(client_fut.map_err( |e| warn!("Serving client failed: {}", e) ) );
             Ok( () )
         } );
@@ -56,10 +54,12 @@ impl DAppEndpointDispatcherJsonRpc
     }
 
 
-    pub fn serve_connection<O,I>(sink: O, stream: I) -> AsyncResult<(), ::std::io::Error>
+    pub fn serve_client<O,I>(sink: O, stream: I) -> AsyncResult<(), ::std::io::Error>
         where O: 'static + Sink<SinkItem=String, SinkError=::std::io::Error>,
               I: 'static + Stream<Item=String, Error=::std::io::Error>
     {
+        // TODO use channel to order responses from multiple clients
+        // let (resp_tx, resp_rx) = mpsc::channel(CHANNEL_CAPACITY);
         let client_fut = stream.for_each( |line|
         {
             println!("got line: {}", line);
@@ -75,6 +75,30 @@ impl DAppEndpointDispatcherJsonRpc
         } );
         Box::new(client_fut)
     }
+
+
+//    pub fn dispatch_requests<O,I>(sink: O, stream: I) -> AsyncResult<(), ::std::io::Error>
+//        where O: 'static + Sink<SinkItem=String, SinkError=::std::io::Error>,
+//              I: 'static + Stream<Item=String, Error=::std::io::Error>
+//    {
+//
+//    }
+//
+//
+//    pub fn send_responses<I,O>(responses: I, socket_writer: O) -> AsyncResult<(), ::std::io::Error>
+//        where I: 'static + Stream<Item=String, Error=::std::io::Error>,
+//              O: 'static + Sink<SinkItem=String, SinkError=::std::io::Error>,
+//    {
+//
+//    }
+//
+//
+//    pub fn send_notifications<I,O>(responses: I, socket_writer: O) -> AsyncResult<(), ::std::io::Error>
+//        where I: 'static + Stream<Item=String, Error=::std::io::Error>,
+//              O: 'static + Sink<SinkItem=String, SinkError=::std::io::Error>,
+//    {
+//
+//    }
 }
 
 
