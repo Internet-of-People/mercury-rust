@@ -1,6 +1,8 @@
 #[macro_use]
 extern crate failure;
 extern crate futures;
+extern crate jsonrpc_core;
+extern crate jsonrpc_pubsub;
 #[macro_use]
 extern crate log;
 extern crate mercury_home_protocol;
