@@ -18,7 +18,7 @@ extern crate base64;
 
 use std::{cell::RefCell, rc::Rc};
 
-use rand::OsRng;
+use rand::rngs::OsRng;
 use sha2::Sha512;
 use tokio_core::reactor;
 

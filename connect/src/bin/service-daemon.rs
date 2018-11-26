@@ -144,11 +144,11 @@ fn main() -> Result<(), Error>
     let (service, _my_profile_id, _home_id) = init_connect_service(&config.my_private_key_file,
         &config.home_public_key_file, &config.home_address, &mut reactor)?;
 
+    // TODO use PubSubHandler to enable notifications
+    //let dispatcher = Rc::new( PubSubHandler::new( MetaIoHandler::default() ) );
     let mut dispatcher = IoHandler::new();
     dispatcher.add_method("session", |params| Ok( Value::String("called".to_owned()) ) );
 
-    //let dispatcher = Rc::new( PubSubHandler::new( MetaIoHandler::default() ) );
-    //let dispatcher = Rc::new( jsonrpc::JsonRpcDAppEndpointDispatcher::new(service) );
     let jsonrpc = jsonrpc::StreamingJsonRpc::new( Rc::new(dispatcher), reactor.handle() );
     let jsonrpc_fut = jsonrpc.dispatch( &config.uds_path, LinesCodec::new() );
     reactor.run(jsonrpc_fut)
