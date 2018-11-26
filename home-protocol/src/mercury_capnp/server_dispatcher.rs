@@ -28,7 +28,7 @@ impl HomeDispatcherCapnProto
         let dispatcher = Self{ home: home, handle: handle.clone() };
 
         let home_capnp = ::mercury_capnp::home::ToClient::new(dispatcher)
-            .from_server::<::capnp_rpc::Server>();
+            .into_client::<::capnp_rpc::Server>();
         let network = ::capnp_rpc::twoparty::VatNetwork::new( reader, writer,
             capnp_rpc::rpc_twoparty_capnp::Side::Server, Default::default() );
 
@@ -145,7 +145,7 @@ impl home::Server for HomeDispatcherCapnProto
             {
                 let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl, handle_clone);
                 let session = home_session::ToClient::new(session_dispatcher)
-                    .from_server::<::capnp_rpc::Server>();
+                    .into_client::<::capnp_rpc::Server>();
                 results.get().set_session(session);
                 ()
             } )
@@ -209,7 +209,7 @@ impl home::Server for HomeDispatcherCapnProto
                 {
                     let to_callee_dispatch = mercury_capnp::AppMessageDispatcherCapnProto::new(to_callee);
                     let to_callee_capnp = mercury_capnp::app_message_listener::ToClient::new(to_callee_dispatch)
-                        .from_server::<::capnp_rpc::Server>();
+                        .into_client::<::capnp_rpc::Server>();
                     results.get().set_to_callee(to_callee_capnp);
                 } );
             } )
@@ -346,7 +346,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                             let listener = AppMessageDispatcherCapnProto::new(to_caller.clone() );
                             // TODO consider how to drop/unregister this object from capnp if the stream is dropped
                             let listener_capnp = mercury_capnp::app_message_listener::ToClient::new(listener)
-                                .from_server::<::capnp_rpc::Server>();
+                                .into_client::<::capnp_rpc::Server>();
                             request.get().get_call().expect("Implementation error: call was just initialized above, should be there")
                                 .set_to_caller(listener_capnp);
                         }

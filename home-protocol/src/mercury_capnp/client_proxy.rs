@@ -203,7 +203,7 @@ impl Home for HomeClientCapnProto
         {
             let to_caller_dispatch = mercury_capnp::AppMessageDispatcherCapnProto::new(send);
             let to_caller_capnp = mercury_capnp::app_message_listener::ToClient::new(to_caller_dispatch)
-                .from_server::<::capnp_rpc::Server>();
+                .into_client::<::capnp_rpc::Server>();
             request.get().set_to_caller(to_caller_capnp);
         }
 
@@ -315,7 +315,7 @@ impl HomeSession for HomeSessionClientCapnProto
         let listener = ProfileEventDispatcherCapnProto::new( send.clone() );
         // TODO consider how to drop/unregister this object from capnp if the stream is dropped
         let listener_capnp = mercury_capnp::profile_event_listener::ToClient::new(listener)
-            .from_server::<::capnp_rpc::Server>();
+            .into_client::<::capnp_rpc::Server>();
 
         let mut request = self.session.events_request();
         request.get().set_event_listener(listener_capnp);
@@ -341,7 +341,7 @@ impl HomeSession for HomeSessionClientCapnProto
         let listener = CallDispatcherCapnProto::new( send.clone(), self.handle.clone() );
         // TODO consider how to drop/unregister this object from capnp if the stream is dropped
         let listener_capnp = mercury_capnp::call_listener::ToClient::new(listener)
-            .from_server::<::capnp_rpc::Server>();
+            .into_client::<::capnp_rpc::Server>();
 
         let mut request = self.session.checkin_app_request();
         request.get().set_app( app.into() );
@@ -425,7 +425,7 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
                 let listener = AppMessageDispatcherCapnProto::new(to_callee);
                 // TODO consider how to drop/unregister this object from capnp if the stream is dropped
                 let listener_capnp = mercury_capnp::app_message_listener::ToClient::new(listener)
-                    .from_server::<::capnp_rpc::Server>();
+                    .into_client::<::capnp_rpc::Server>();
                 results.get().set_to_callee(listener_capnp);
             } );
         } )
