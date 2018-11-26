@@ -26,8 +26,6 @@ use std::rc::Rc;
 
 use failure::Fail;
 //use futures::prelude::*;
-use jsonrpc_core::{IoHandler, MetaIoHandler, serde_json::Value};
-use jsonrpc_pubsub::PubSubHandler;
 use multiaddr::ToMultiaddr;
 use tokio_codec::LinesCodec;
 use tokio_core::reactor;
@@ -144,12 +142,7 @@ fn main() -> Result<(), Error>
     let (service, _my_profile_id, _home_id) = init_connect_service(&config.my_private_key_file,
         &config.home_public_key_file, &config.home_address, &mut reactor)?;
 
-    // TODO use PubSubHandler to enable notifications
-    //let dispatcher = Rc::new( PubSubHandler::new( MetaIoHandler::default() ) );
-    let mut dispatcher = IoHandler::new();
-    dispatcher.add_method("session", |params| Ok( Value::String("called".to_owned()) ) );
-
-    let jsonrpc = jsonrpc::StreamingJsonRpc::new( Rc::new(dispatcher), reactor.handle() );
-    let jsonrpc_fut = jsonrpc.dispatch( &config.uds_path, LinesCodec::new() );
+    let jsonrpc = jsonrpc::UdsServer::new( &config.uds_path, reactor.handle() ).unwrap();
+    let jsonrpc_fut = jsonrpc.dispatch( LinesCodec::new() );
     reactor.run(jsonrpc_fut)
 }
