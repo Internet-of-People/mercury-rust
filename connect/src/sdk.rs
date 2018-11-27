@@ -29,9 +29,6 @@ impl Contact for RelationImpl
     {
         let (to_caller, from_callee) = mpsc::channel(CHANNEL_CAPACITY);
 
-        //self.relation_proof;
-        //let app_id = self.dapp_session.app_id.clone();
-        //let my_profile = self.dapp_session.my_profile.clone();
         let call_fut = self.my_profile.call( self.relation_proof.clone(),
                 self.app_id.clone(), init_payload, Some(to_caller) )
             .and_then( |to_callee_opt|

@@ -2,21 +2,59 @@ use std::rc::Rc;
 
 //use failure::Fail;
 use futures::{prelude::*, future::Either, sync::mpsc};
-use jsonrpc_core::{IoHandler, MetaIoHandler, serde_json::Value};
+use jsonrpc_core::{IoHandler, MetaIoHandler, Params, serde_json as json, types};
 use tokio_codec::{Decoder, Encoder, Framed};
 use tokio_core::reactor;
 use tokio_io::{AsyncRead, AsyncWrite};
 
 use mercury_home_protocol::*;
+use ::*;
 use ::error::*;
+use ::service::*;
 
 
 
-fn create_core_dispatcher() -> Rc<IoHandler>
+fn create_core_dispatcher(service: Rc<ConnectService>) -> Rc<IoHandler>
 {
     let mut dispatcher = IoHandler::new();
 
-    dispatcher.add_method("session", |params| Ok( Value::String("called".to_owned()) ) );
+    dispatcher.add_method("session",
+    {
+        #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+        struct Request {
+            app_id: ApplicationId,
+            authorization: Option<DAppPermission>,
+        }
+
+        #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+        struct Response {
+            // TODO
+        }
+
+        let service = service.clone();
+        move |params: Params|
+        {
+            let param_map = match params {
+                Params::None     => return Either::A( Err( types::Error::new(types::ErrorCode::InvalidParams) ).into_future() ),
+                Params::Array(_) => return Either::A( Err( types::Error::new(types::ErrorCode::InvalidParams) ).into_future() ),
+                Params::Map(map) => map,
+            };
+
+            let req = match serde_json::from_value::<Request>( json::Value::Object(param_map) ) {
+                Ok(req) => req,
+                Err(e)  => return Either::A( Err( types::Error::new(types::ErrorCode::InvalidParams) ).into_future() ),
+            };
+
+            let resp = service.dapp_session(&req.app_id, req.authorization)
+                .map_err( |e| types::Error::new(types::ErrorCode::InternalError) ) // TODO
+                .and_then( |dapp_endpoint| {
+                    let resp = Response{}; // TODO
+                    serde_json::to_value(resp)
+                        .map_err( |e| types::Error::new(types::ErrorCode::InternalError) )
+                } );
+            Either::B(resp)
+        }
+    } );
 
     Rc::new(dispatcher)
 }
@@ -32,13 +70,10 @@ pub struct JsonRpcServer
 
 
 
-// TODO this should work not only over UDS socket streams, but over any AsyncRead/Write stream
 impl JsonRpcServer
 {
-    pub fn new(handle: reactor::Handle) -> Self
-    {
-        Self{ core_dispatcher: create_core_dispatcher(), handle }
-    }
+    pub fn new(service: Rc<ConnectService>, handle: reactor::Handle) -> Self
+        { Self{ core_dispatcher: create_core_dispatcher(service), handle } }
 
 
     pub fn serve_duplex_stream<S,C>(&self, duplex_stream: S, codec: C) -> AsyncResult<(),Error>
@@ -80,8 +115,8 @@ impl JsonRpcServer
                 dispatcher.handle_request(&line)
                     .and_then( move |resp_opt|
                         match resp_opt {
-                            None => Either::B( Ok( () ).into_future() ),
-                            Some(response) => Either::A( sender.send(response)
+                            None => Either::A( Ok( () ).into_future() ),
+                            Some(response) => Either::B( sender.send(response)
                                 .map( |_sink| () ).map_err( |_e| () ) ),
                         }
                     )

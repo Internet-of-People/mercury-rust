@@ -127,7 +127,7 @@ impl Config
     const CONFIG_PATH: &'static str = "connect.cfg";
 
     pub fn new() -> Self
-        { util::parse_config::<Self>(Self::CONFIG_PATH) }
+        { util::parse_config(Self::CONFIG_PATH) }
 }
 
 
@@ -143,6 +143,6 @@ fn main() -> Result<(), Error>
         &config.home_public_key_file, &config.home_address, &mut reactor)?;
 
     let jsonrpc = jsonrpc::UdsServer::new( &config.uds_path, reactor.handle() ).unwrap();
-    let jsonrpc_fut = jsonrpc.dispatch( LinesCodec::new() );
+    let jsonrpc_fut = jsonrpc.dispatch( LinesCodec::new(), service );
     reactor.run(jsonrpc_fut)
 }
