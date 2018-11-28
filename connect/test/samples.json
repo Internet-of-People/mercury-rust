@@ -1,0 +1,4 @@
+{"jsonrpc": "2.0", "id": 1, "method": "session", "params": {"app_id": "TheButton"}}
+{"jsonrpc": "2.0", "id": 2, "method": "subscribe_notification", "params": {}}
+{"jsonrpc": "2.0", "id": 3, "method": "unsubscribe_notification", "params": [5]}
+{"jsonrpc": "2.0", "id": "whatever", "method": "NoSuchMethodExists", "params": {"dapp": "TheButton"}}

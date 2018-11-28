@@ -39,14 +39,15 @@ impl UdsServer
         where C: 'static + Decoder<Item=String, Error=::std::io::Error> +
                    Clone + Encoder<Item=String, Error=::std::io::Error>
     {
-        let rpc_server = server_dispatcher::JsonRpcServer::new( service, self.handle.clone() );
+        let rpc_server = server_dispatcher::JsonRpcServer::new(service);
 
+        let handle = self.handle; // NOTE convince the borrow checker about this partial moved field
         let server_fut = self.listener.incoming().for_each( move |(connection, _peer_addr)|
         {
             let _peer_credentials = connection.peer_cred();
 
             let client_fut = rpc_server.serve_duplex_stream( connection, codec.clone() );
-            // handle.spawn( client_fut.map_err( |e| warn!("Serving client failed: {}", e) ) );
+            handle.spawn( client_fut.map_err( |e| warn!("Serving client failed: {}", e) ) );
             Ok( () )
         } );
 

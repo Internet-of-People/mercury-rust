@@ -8,6 +8,7 @@ use tokio_core::reactor;
 use tokio_io::{AsyncRead, AsyncWrite};
 
 use mercury_home_protocol::*;
+//use mercury_home_protocol::future::select_first;
 use ::*;
 use ::error::*;
 use ::service::*;
@@ -35,14 +36,17 @@ fn create_core_dispatcher(service: Rc<ConnectService>) -> Rc<IoHandler>
         move |params: Params|
         {
             let param_map = match params {
+                Params::Map(map) => map,
                 Params::None     => return Either::A( Err( types::Error::new(types::ErrorCode::InvalidParams) ).into_future() ),
                 Params::Array(_) => return Either::A( Err( types::Error::new(types::ErrorCode::InvalidParams) ).into_future() ),
-                Params::Map(map) => map,
             };
 
             let req = match serde_json::from_value::<Request>( json::Value::Object(param_map) ) {
                 Ok(req) => req,
-                Err(e)  => return Either::A( Err( types::Error::new(types::ErrorCode::InvalidParams) ).into_future() ),
+                Err(e)  => {
+                    debug!("Invalid parameter format: {}", e);
+                    return Either::A( Err( types::Error::new(types::ErrorCode::InvalidParams) ).into_future() )
+                },
             };
 
             let resp = service.dapp_session(&req.app_id, req.authorization)
@@ -65,15 +69,15 @@ fn create_core_dispatcher(service: Rc<ConnectService>) -> Rc<IoHandler>
 pub struct JsonRpcServer
 {
     core_dispatcher: Rc<IoHandler>,
-    handle: reactor::Handle,
+//    handle: reactor::Handle,
 }
 
 
 
 impl JsonRpcServer
 {
-    pub fn new(service: Rc<ConnectService>, handle: reactor::Handle) -> Self
-        { Self{ core_dispatcher: create_core_dispatcher(service), handle } }
+    pub fn new(service: Rc<ConnectService>) -> Self //, handle: reactor::Handle) -> Self
+        { Self{ core_dispatcher: create_core_dispatcher(service) } } //, handle } }
 
 
     pub fn serve_duplex_stream<S,C>(&self, duplex_stream: S, codec: C) -> AsyncResult<(),Error>
@@ -88,16 +92,16 @@ impl JsonRpcServer
         let fwd_resp_fut = resp_stream
             .forward( net_sink.sink_map_err( |e| warn!("Failed to send response or notification: {}", e) ) )
             .map( |(_stream,_sink)| () );
-        self.handle.spawn( fwd_resp_fut );
 
         let req_disp_fut = self.serve_client_requests(net_stream, resp_sink);
-        self.handle.spawn( req_disp_fut );
 
-        // TODO connect futures by f1.select(f2)
-        //let fut = req_disp_fut.select(fwd_resp_fut);
-        //Box::new( fut.map_err( |e| e.context( ErrorKind::ImplementationError.into() ).into() ) )
+//        let fut = select_first( [req_disp_fut, Box::new(fwd_resp_fut)].iter() );
+        let fut = req_disp_fut.select(fwd_resp_fut)
+            .map( |((),_pending)| () )
+            .map_err( |(done,_pending)| done );
 
-        Box::new( Ok( () ).into_future() )
+        Box::new( fut.map_err( |e| ErrorKind::ImplementationError.into() ) )
+
     }
 
 

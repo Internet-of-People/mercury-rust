@@ -1,9 +1,23 @@
 use std::iter;
 
 use futures::prelude::*;
-use futures::future::{self, loop_fn, poll_fn, Loop};
+use futures::future::{self, loop_fn, poll_fn, select_all, Loop};
 
 use ::AsyncResult;
+
+
+
+//// Run futures until one is ready, then ignore remaining pending ones and return the first result
+//pub fn select_first<I>(futures_iterator: I)
+//    -> AsyncResult< <I::Item as IntoFuture>::Item, <I::Item as IntoFuture>::Error >
+//where I: IntoIterator,
+//      I::Item: IntoFuture + 'static,
+//{
+//    let fut = select_all(futures_iterator)
+//        .map( |(done, _idx, _pending)| done )
+//        .map_err( |(err, _idx, _pending)| err );
+//    Box::new(fut)
+//}
 
 
 
