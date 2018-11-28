@@ -1,7 +1,7 @@
 use std::iter;
 
 use futures::prelude::*;
-use futures::future::{self, loop_fn, poll_fn, select_all, Loop};
+use futures::future::{self, loop_fn, poll_fn, Loop};
 
 use ::AsyncResult;
 
@@ -13,7 +13,7 @@ use ::AsyncResult;
 //where I: IntoIterator,
 //      I::Item: IntoFuture + 'static,
 //{
-//    let fut = select_all(futures_iterator)
+//    let fut = future::select_all(futures_iterator)
 //        .map( |(done, _idx, _pending)| done )
 //        .map_err( |(err, _idx, _pending)| err );
 //    Box::new(fut)

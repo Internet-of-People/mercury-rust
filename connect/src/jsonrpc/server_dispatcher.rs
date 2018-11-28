@@ -4,7 +4,7 @@ use std::rc::Rc;
 use futures::{prelude::*, future::Either, sync::mpsc};
 use jsonrpc_core::{IoHandler, MetaIoHandler, Params, serde_json as json, types};
 use tokio_codec::{Decoder, Encoder, Framed};
-use tokio_core::reactor;
+//use tokio_core::reactor;
 use tokio_io::{AsyncRead, AsyncWrite};
 
 use mercury_home_protocol::*;
@@ -19,17 +19,17 @@ fn create_core_dispatcher(service: Rc<ConnectService>) -> Rc<IoHandler>
 {
     let mut dispatcher = IoHandler::new();
 
-    dispatcher.add_method("session",
+    dispatcher.add_method("get_session",
     {
         #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
         struct Request {
-            app_id: ApplicationId,
-            authorization: Option<DAppPermission>,
+            application_id: ApplicationId,
+            permissions: Option<DAppPermission>,
         }
 
         #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
         struct Response {
-            // TODO
+            profile_id: String,
         }
 
         let service = service.clone();
@@ -49,10 +49,10 @@ fn create_core_dispatcher(service: Rc<ConnectService>) -> Rc<IoHandler>
                 },
             };
 
-            let resp = service.dapp_session(&req.app_id, req.authorization)
+            let resp = service.dapp_session(&req.application_id, req.permissions)
                 .map_err( |e| types::Error::new(types::ErrorCode::InternalError) ) // TODO
                 .and_then( |dapp_endpoint| {
-                    let resp = Response{}; // TODO
+                    let resp = Response{ profile_id: dapp_endpoint.selected_profile().into() }; // TODO
                     serde_json::to_value(resp)
                         .map_err( |e| types::Error::new(types::ErrorCode::InternalError) )
                 } );
