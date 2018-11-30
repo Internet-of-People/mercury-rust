@@ -3,6 +3,7 @@ use std::rc::Rc;
 //use failure::Fail;
 use futures::{prelude::*, future::Either, sync::mpsc};
 use jsonrpc_core::{IoHandler, MetaIoHandler, Params, serde_json as json, types};
+use jsonrpc_pubsub::PubSubHandler;
 use tokio_codec::{Decoder, Encoder, Framed};
 //use tokio_core::reactor;
 use tokio_io::{AsyncRead, AsyncWrite};
@@ -88,17 +89,30 @@ impl JsonRpcServer
         let framed = Framed::new(duplex_stream, codec);
         let (net_sink, net_stream) = framed.split();
 
+        // Note that this request channel is not strictly necessary feature-wise, but helps
+        // building backpressure against flooding the server with requests
+        let (req_sink, req_stream) = mpsc::channel(CHANNEL_CAPACITY);
+        let fwd_req_fut = net_stream
+            .map_err( |e| warn!("Failed to read request or notification: {}", e) )
+            .forward( req_sink.sink_map_err( |e| warn!("Failed to forward request or notification: {}", e) ) )
+            .map( |(_stream,_sink)| () );
+
+        // Create a response sender that can be cloned to be moved into different lambdas
         let (resp_sink, resp_stream) = mpsc::channel(CHANNEL_CAPACITY);
         let fwd_resp_fut = resp_stream
             .forward( net_sink.sink_map_err( |e| warn!("Failed to send response or notification: {}", e) ) )
             .map( |(_stream,_sink)| () );
 
-        let req_disp_fut = self.serve_client_requests(net_stream, resp_sink);
+        let req_disp_fut = self.serve_client_requests(req_stream, resp_sink);
 
 //        let fut = select_first( [req_disp_fut, Box::new(fwd_resp_fut)].iter() );
-        let fut = req_disp_fut.select(fwd_resp_fut)
-            .map( |((),_pending)| () )
-            .map_err( |(done,_pending)| done );
+        let fut = req_disp_fut
+            .select(fwd_req_fut)
+                .map( |((),_pending)| () )
+                .map_err( |(done,_pending)| done )
+            .select(fwd_resp_fut)
+                .map( |((),_pending)| () )
+                .map_err( |(done,_pending)| done );
 
         Box::new( fut.map_err( |e| ErrorKind::ImplementationError.into() ) )
 
