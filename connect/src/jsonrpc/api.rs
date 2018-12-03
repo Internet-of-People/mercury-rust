@@ -5,7 +5,7 @@ use std::sync::Arc;
 use futures::{prelude::*, future::Either};
 use jsonrpc_core::{MetaIoHandler, Params, serde_json as json, types};
 use jsonrpc_pubsub::{PubSubHandler, Session, Subscriber, SubscriptionId};
-//use tokio_core::reactor;
+use tokio_core::reactor;
 
 use mercury_home_protocol::*;
 use ::*;
@@ -13,11 +13,12 @@ use ::service::*;
 
 
 
-pub fn create(service: Rc<ConnectService>) -> Rc<PubSubHandler<Arc<Session>>>
+pub fn create(service: Rc<ConnectService>, handle: reactor::Handle)
+    -> Rc<PubSubHandler<Arc<Session>>>
 {
     let mut dispatcher = MetaIoHandler::<Arc<Session>>::default();
 
-    dispatcher.add_method("get_session",
+    dispatcher.add_method_with_meta("get_session",
     {
         #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
         struct Request {
@@ -31,7 +32,7 @@ pub fn create(service: Rc<ConnectService>) -> Rc<PubSubHandler<Arc<Session>>>
         }
 
         let service = service.clone();
-        move |params: Params|
+        move |params: Params, meta: Arc<Session>|
         {
             let param_map = match params {
                 Params::Map(map) => map,
@@ -58,23 +59,22 @@ pub fn create(service: Rc<ConnectService>) -> Rc<PubSubHandler<Arc<Session>>>
         }
     } );
 
+    let service_clone = service.clone();
     let mut pubsub = PubSubHandler::<Arc<Session>>::new(dispatcher);
     pubsub.add_subscription( "event",
-        ( "subscribe_events", |params: Params, meta: Arc<Session>, subscriber: Subscriber|
+        ( "subscribe_events", move |params: Params, meta: Arc<Session>, subscriber: Subscriber|
         {
-            let sink = subscriber.assign_id(SubscriptionId::Number(5)).unwrap();
-            std::thread::spawn( move || {
-                loop {
-                    std::thread::sleep(std::time::Duration::from_secs(5));
-                    match sink.notify(Params::Array(vec![serde_json::Value::Number(10.into())])).wait() {
-                        Ok(_) => {},
-                        Err(_) => {
-                            println!("Subscription has ended, finishing.");
-                            break;
-                        }
-                    }
-                }
-            } );
+            let sink = match subscriber.assign_id( SubscriptionId::String( "Uninitialized".to_owned() ) )
+            {
+                Ok(sink) => sink,
+                Err(()) => return warn!("Subscription failed"),
+            };
+
+            handle.spawn( sink
+                .notify( Params::Array( vec![serde_json::Value::Number( 10.into() )] ) )
+                .map( |_| () )
+                .map_err( |_| () )
+            )
         } ),
         ( "unsubscribe_events", |_id: SubscriptionId|
         {

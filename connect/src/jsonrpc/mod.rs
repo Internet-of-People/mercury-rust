@@ -40,7 +40,7 @@ impl UdsServer
         where C: 'static + Decoder<Item=String, Error=::std::io::Error> +
                    Clone + Encoder<Item=String, Error=::std::io::Error>
     {
-        let rpc_server = server_dispatcher::JsonRpcServer::new(service);
+        let rpc_server = server_dispatcher::JsonRpcServer::new( service, self.handle.clone() );
 
         let handle = self.handle; // NOTE convince the borrow checker about this partial moved field
         let server_fut = self.listener.incoming().for_each( move |(connection, _peer_addr)|

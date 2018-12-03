@@ -5,7 +5,7 @@ use std::sync::Arc;
 use futures::{prelude::*, future::Either, sync::mpsc};
 use tokio_codec::{Decoder, Encoder, Framed};
 use jsonrpc_pubsub::{PubSubHandler, Session};
-//use tokio_core::reactor;
+use tokio_core::reactor;
 use tokio_io::{AsyncRead, AsyncWrite};
 
 use mercury_home_protocol::*;
@@ -27,8 +27,8 @@ pub struct JsonRpcServer
 
 impl JsonRpcServer
 {
-    pub fn new(service: Rc<ConnectService>) -> Self //, handle: reactor::Handle) -> Self
-        { Self{ core_dispatcher: api::create(service) } } //, handle } }
+    pub fn new(service: Rc<ConnectService>, handle: reactor::Handle) -> Self
+        { Self{ core_dispatcher: api::create(service, handle) } } //, handle } }
 
 
     pub fn serve_duplex_stream<S,C>(&self, duplex_stream: S, codec: C) -> AsyncResult<(),Error>
