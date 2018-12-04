@@ -10,6 +10,7 @@ use error::*;
 
 pub mod fs;
 pub mod imp;
+pub mod router_service;
 
 
 
@@ -23,6 +24,7 @@ pub trait HashSpace<ObjectType, ReadableHashType>
         -> Box< Future<Item=bool, Error=HashSpaceError> >;
 }
 
+type AsyncResult<T> = Box<Future<Item=T, Error=StorageError> + Send>;
 
 // TODO probably we should have references (e.g. maybe use AsRef) to keys whenever possible
 // NOTE this interface can be potentially implemented using a simple local in-memory storage
@@ -34,11 +36,11 @@ pub trait HashSpace<ObjectType, ReadableHashType>
 pub trait KeyValueStore<KeyType, ValueType>
 {
     fn set(&mut self, key: KeyType, value: ValueType)
-        -> Box< Future<Item=(), Error=StorageError> + Send >;
+        -> AsyncResult<()>;
     fn get(&self, key: KeyType)
-        -> Box< Future<Item=ValueType, Error=StorageError> + Send >;
+        -> AsyncResult<ValueType>;
     fn clear_local(&mut self, key: KeyType)
-        -> Box< Future<Item=(), Error=StorageError> + Send >;
+        -> AsyncResult<()>;
 }
 
 
