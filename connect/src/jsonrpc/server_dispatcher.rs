@@ -4,7 +4,7 @@ use std::sync::Arc;
 //use failure::Fail;
 use futures::{prelude::*, future::Either, sync::mpsc};
 use tokio_codec::{Decoder, Encoder, Framed};
-use jsonrpc_pubsub::{PubSubHandler, Session};
+use jsonrpc_pubsub::{PubSubHandler, Session as PubSubSession};
 use tokio_core::reactor;
 use tokio_io::{AsyncRead, AsyncWrite};
 
@@ -19,7 +19,7 @@ use ::jsonrpc::api;
 #[derive(Clone)]
 pub struct JsonRpcServer
 {
-    core_dispatcher: Rc<PubSubHandler<Arc<Session>>>,
+    core_dispatcher: Rc<PubSubHandler< Arc<api::Session> >>,
 //    handle: reactor::Handle,
 }
 
@@ -74,7 +74,8 @@ impl JsonRpcServer
         where I: 'static + Stream<Item=String>,
               //O: 'static + Sink<SinkItem=String> + Clone,
     {
-        let session = Arc::new( Session::new( resp_sink.clone() ) );
+        let session = Arc::new( api::Session::new(
+            Arc::new( PubSubSession::new( resp_sink.clone() ) ) ) );
 
         let dispatcher = self.core_dispatcher.clone();
         let client_fut = req_stream
