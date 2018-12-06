@@ -2,7 +2,7 @@ use std::rc::Rc;
 use std::sync::Arc;
 
 //use failure::Fail;
-use futures::{prelude::*, future::Either};
+use futures::{prelude::*, future::Either, sync::{mpsc, oneshot}};
 use jsonrpc_core::{Metadata, MetaIoHandler, Params, serde_json as json, types};
 use jsonrpc_pubsub::{PubSubHandler, Session as PubSubSession, PubSubMetadata, Subscriber, SubscriptionId};
 use tokio_core::reactor;
@@ -13,36 +13,61 @@ use ::service::*;
 
 
 
+pub struct SessionData
+{
+    pubsub_session: Arc<PubSubSession>,
+    dapp_session:   Option<Rc<DAppSession>>,
+    cancel_events:  Option<oneshot::Sender<()>>,
+}
+
+impl SessionData
+{
+    pub fn new(transport_tx: mpsc::Sender<String>) -> Self
+        { Self{ pubsub_session: Arc::new( PubSubSession::new(transport_tx) ),
+                dapp_session: None, cancel_events: None } }
+}
+
+
+
 #[derive(Clone)]
 pub struct Session
 {
-    pubsub_session: Arc<PubSubSession>,
-    dapp_session:   Option<Rc<DAppSession>>
+    inner: Rc<SessionData>
 }
 
 impl Session
 {
-    pub fn new(pubsub_session: Arc<PubSubSession>) -> Self
-        { Self{ pubsub_session, dapp_session: None } }
+    pub fn new(transport_tx: mpsc::Sender<String>) -> Self
+        { Self{ inner: Rc::new( SessionData::new(transport_tx) ) } }
 
-    pub fn dapp_session(&self) -> Option<Rc<DAppSession>> { self.dapp_session.clone() }
-    pub fn dapp_session_mut(&mut self) -> &mut Option<Rc<DAppSession>> { &mut self.dapp_session }
+    fn inner_mut(&mut self) -> &mut SessionData
+        { Rc::get_mut(&mut self.inner).unwrap() } // TODO consider if this can ever fail
+
+    pub fn dapp_session(&self) -> Option<Rc<DAppSession>>
+        { self.inner.dapp_session.clone() }
+    pub fn dapp_session_mut(&mut self) -> &mut Option<Rc<DAppSession>>
+        { &mut self.inner_mut().dapp_session }
+
+    pub fn take_cancel_events(&mut self) -> Option<oneshot::Sender<()>>
+        { self.inner_mut().cancel_events.take() }
+    pub fn cancel_events_mut(&mut self) -> &mut Option<oneshot::Sender<()>>
+        { &mut self.inner_mut().cancel_events }
 }
 
 impl Metadata for Session {}
 
 impl PubSubMetadata for Session {
 	fn session(&self) -> Option<Arc<PubSubSession>> {
-		Some( self.pubsub_session.clone() )
+		Some( self.inner.pubsub_session.clone() )
 	}
 }
 
 
 
 pub fn create(service: Rc<ConnectService>, handle: reactor::Handle)
-    -> Rc<PubSubHandler<Arc<Session>>>
+    -> Rc< PubSubHandler<Session> >
 {
-    let mut dispatcher = MetaIoHandler::<Arc<Session>>::default();
+    let mut dispatcher = MetaIoHandler::<Session>::default();
 
     dispatcher.add_method_with_meta("get_session",
     {
@@ -58,7 +83,7 @@ pub fn create(service: Rc<ConnectService>, handle: reactor::Handle)
         }
 
         let service = service.clone();
-        move |params: Params, mut meta: Arc<Session>|
+        move |params: Params, mut meta: Session|
         {
             let param_map = match params {
                 Params::Map(map) => map,
@@ -78,11 +103,7 @@ pub fn create(service: Rc<ConnectService>, handle: reactor::Handle)
                 .map_err( |e| types::Error::new(types::ErrorCode::InternalError) ) // TODO
                 .and_then( move |dapp_endpoint| {
                     let resp = Response{ profile_id: dapp_endpoint.selected_profile().into() };
-                    match Arc::get_mut(&mut meta) {
-                        Some(m) => *m.dapp_session_mut() = Some(dapp_endpoint),
-                        None => error!("Implementation error: failed to get mutable reference to save dApp session for JsonRpc"),
-                    }
-
+                    *meta.dapp_session_mut() = Some(dapp_endpoint);
                     serde_json::to_value(resp)
                         .map_err( |e| types::Error::new(types::ErrorCode::InternalError) )
                 } );
@@ -91,9 +112,9 @@ pub fn create(service: Rc<ConnectService>, handle: reactor::Handle)
     } );
 
     let service_clone = service.clone();
-    let mut pubsub = PubSubHandler::<Arc<Session>>::new(dispatcher);
+    let mut pubsub = PubSubHandler::<Session>::new(dispatcher);
     pubsub.add_subscription( "event",
-        ( "subscribe_events", move |params: Params, meta: Arc<Session>, subscriber: Subscriber|
+        ( "subscribe_events", move |params: Params, mut meta: Session, subscriber: Subscriber|
         {
             let sink = match subscriber.assign_id( SubscriptionId::String( "Uninitialized".to_owned() ) )
             {
@@ -106,6 +127,9 @@ pub fn create(service: Rc<ConnectService>, handle: reactor::Handle)
                 None => return
             };
 
+            let (cancel_tx, cancel_rx) = oneshot::channel();
+            *meta.cancel_events_mut() = Some(cancel_tx);
+
             let fwd_events_fut = dapp_session.checkin()
                 .map_err( |e| () ) // TODO
                 .and_then( |dapp_events| dapp_events
@@ -117,11 +141,16 @@ pub fn create(service: Rc<ConnectService>, handle: reactor::Handle)
                 )
                 .map( |_| () );
 
-            handle.spawn(fwd_events_fut)
+            let subscribe_fut = fwd_events_fut.select( cancel_rx.map_err( |_cancelled| () ) )
+                .map( |((),_pending)| () )
+                .map_err( |((),_pending)| () );
+
+            handle.spawn( subscribe_fut)
         } ),
         ( "unsubscribe_events", |_id: SubscriptionId|
         {
-            println!("Closing subscription");
+            // info!("Cancelling subscription");
+            // TODO send out cancel signal
             Ok( serde_json::Value::Bool(true) )
         }  )
     );
