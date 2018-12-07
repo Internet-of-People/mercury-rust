@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -32,33 +33,30 @@ impl SessionData
 #[derive(Clone)]
 pub struct Session
 {
-    inner: Rc<SessionData>
+    inner: Rc<RefCell<SessionData>>
 }
 
 impl Session
 {
     pub fn new(transport_tx: mpsc::Sender<String>) -> Self
-        { Self{ inner: Rc::new( SessionData::new(transport_tx) ) } }
-
-    fn inner_mut(&mut self) -> &mut SessionData
-        { Rc::get_mut(&mut self.inner).unwrap() } // TODO consider if this can ever fail
+        { Self{ inner: Rc::new( RefCell::new( SessionData::new(transport_tx) ) ) } }
 
     pub fn dapp_session(&self) -> Option<Rc<DAppSession>>
-        { self.inner.dapp_session.clone() }
-    pub fn dapp_session_mut(&mut self) -> &mut Option<Rc<DAppSession>>
-        { &mut self.inner_mut().dapp_session }
+        { self.inner.borrow().dapp_session.clone() }
+    pub fn set_dapp_session(&mut self, dapp_session: Rc<DAppSession>)
+        { self.inner.borrow_mut().dapp_session = Some(dapp_session) }
 
     pub fn take_cancel_events(&mut self) -> Option<oneshot::Sender<()>>
-        { self.inner_mut().cancel_events.take() }
-    pub fn cancel_events_mut(&mut self) -> &mut Option<oneshot::Sender<()>>
-        { &mut self.inner_mut().cancel_events }
+        { self.inner.borrow_mut().cancel_events.take() }
+    pub fn set_cancel_events(&mut self, cancel_events: oneshot::Sender<()>)
+        { self.inner.borrow_mut().cancel_events = Some(cancel_events) }
 }
 
 impl Metadata for Session {}
 
 impl PubSubMetadata for Session {
 	fn session(&self) -> Option<Arc<PubSubSession>> {
-		Some( self.inner.pubsub_session.clone() )
+		Some( self.inner.borrow().pubsub_session.clone() )
 	}
 }
 
@@ -103,7 +101,7 @@ pub fn create(service: Rc<ConnectService>, handle: reactor::Handle)
                 .map_err( |e| types::Error::new(types::ErrorCode::InternalError) ) // TODO
                 .and_then( move |dapp_endpoint| {
                     let resp = Response{ profile_id: dapp_endpoint.selected_profile().into() };
-                    *meta.dapp_session_mut() = Some(dapp_endpoint);
+                    meta.set_dapp_session(dapp_endpoint);
                     serde_json::to_value(resp)
                         .map_err( |e| types::Error::new(types::ErrorCode::InternalError) )
                 } );
@@ -128,7 +126,7 @@ pub fn create(service: Rc<ConnectService>, handle: reactor::Handle)
             };
 
             let (cancel_tx, cancel_rx) = oneshot::channel();
-            *meta.cancel_events_mut() = Some(cancel_tx);
+            meta.set_cancel_events(cancel_tx);
 
             let fwd_events_fut = dapp_session.checkin()
                 .map_err( |e| () ) // TODO
