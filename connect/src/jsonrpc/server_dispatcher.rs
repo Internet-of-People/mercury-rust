@@ -18,7 +18,7 @@ use ::jsonrpc::api;
 #[derive(Clone)]
 pub struct JsonRpcServer
 {
-    core_dispatcher: Rc< PubSubHandler<api::Session> >,
+    pubsub_dispatcher: Rc< PubSubHandler<api::Session> >,
 //    handle: reactor::Handle,
 }
 
@@ -27,7 +27,7 @@ pub struct JsonRpcServer
 impl JsonRpcServer
 {
     pub fn new(service: Rc<ConnectService>, handle: reactor::Handle) -> Self
-        { Self{ core_dispatcher: api::create(service, handle) } } //, handle } }
+        { Self{ pubsub_dispatcher: api::create(service, handle) } } //, handle } }
 
 
     pub fn serve_duplex_stream<S,C>(&self, duplex_stream: S, codec: C) -> AsyncResult<(),Error>
@@ -75,7 +75,7 @@ impl JsonRpcServer
     {
         let session = api::Session::new( resp_sink.clone() );
 
-        let dispatcher = self.core_dispatcher.clone();
+        let dispatcher = self.pubsub_dispatcher.clone();
         let client_fut = req_stream
             .map_err( |_e| () )
             .for_each( move |line|

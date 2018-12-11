@@ -44,12 +44,12 @@ impl Session
     pub fn dapp_session(&self) -> Option<Rc<DAppSession>>
         { self.inner.borrow().dapp_session.clone() }
     pub fn set_dapp_session(&mut self, dapp_session: Rc<DAppSession>)
-        { self.inner.borrow_mut().dapp_session = Some(dapp_session) }
+        { self.inner.borrow_mut().dapp_session.replace(dapp_session); }
 
     pub fn take_cancel_events(&mut self) -> Option<oneshot::Sender<()>>
         { self.inner.borrow_mut().cancel_events.take() }
     pub fn set_cancel_events(&mut self, cancel_events: oneshot::Sender<()>)
-        { self.inner.borrow_mut().cancel_events = Some(cancel_events) }
+        { self.inner.borrow_mut().cancel_events.replace(cancel_events); }
 }
 
 impl Metadata for Session {}
@@ -109,12 +109,12 @@ pub fn create(service: Rc<ConnectService>, handle: reactor::Handle)
         }
     } );
 
-    let service_clone = service.clone();
     let mut pubsub = PubSubHandler::<Session>::new(dispatcher);
     pubsub.add_subscription( "event",
         ( "subscribe_events", move |params: Params, mut meta: Session, subscriber: Subscriber|
         {
-            let sink = match subscriber.assign_id( SubscriptionId::String( "Uninitialized".to_owned() ) )
+            // TODO set a better ID
+            let sink = match subscriber.assign_id( SubscriptionId::String( "TODO_set_a_better_id_here".to_owned() ) )
             {
                 Ok(sink) => sink,
                 Err(()) => return warn!("Subscription failed"),
@@ -126,7 +126,7 @@ pub fn create(service: Rc<ConnectService>, handle: reactor::Handle)
             };
 
             let (cancel_tx, cancel_rx) = oneshot::channel();
-            meta.set_cancel_events(cancel_tx);
+            meta.set_cancel_events(cancel_tx); // NOTE on a repeated subscribe call this drops the previous tx causing rx to be cancelled
 
             let fwd_events_fut = dapp_session.checkin()
                 .map_err( |e| () ) // TODO
@@ -139,17 +139,20 @@ pub fn create(service: Rc<ConnectService>, handle: reactor::Handle)
                 )
                 .map( |_| () );
 
-            let subscribe_fut = fwd_events_fut.select( cancel_rx.map_err( |_cancelled| () ) )
+            let subscribe_fut = fwd_events_fut.select( cancel_rx.map_err( |_e| () ) ) // TODO
                 .map( |((),_pending)| () )
-                .map_err( |((),_pending)| () );
+                .map_err( |((),_pending)| () ); // TODO
 
             handle.spawn( subscribe_fut)
         } ),
-        ( "unsubscribe_events", |_id: SubscriptionId|
+        ( "unsubscribe_events", |id: SubscriptionId, mut meta: Session|
         {
             // info!("Cancelling subscription");
-            // TODO send out cancel signal
-            Ok( serde_json::Value::Bool(true) )
+            meta.take_cancel_events()
+                .ok_or( jsonrpc_core::Error::internal_error() ) // TODO
+                .and_then( |cancel| cancel.send( () )
+                    .map_err( |_sentitem| jsonrpc_core::Error::internal_error() ) )
+                .map( |_| serde_json::Value::Bool(true) )
         }  )
     );
 
