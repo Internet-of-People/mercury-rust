@@ -17,6 +17,9 @@ extern crate tokio_threadpool;
 extern crate mercury_home_protocol;
 
 #[macro_use]
+extern crate arrayref;
+
+#[macro_use]
 extern crate log;
 
 

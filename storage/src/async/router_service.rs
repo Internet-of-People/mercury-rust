@@ -28,7 +28,7 @@ use futures::sync::mpsc;
 use futures::stream::{SplitSink, SplitStream};
 use futures::future::{loop_fn, Loop};
 
-use self::multiaddr::Multiaddr;
+use self::multiaddr::{Multiaddr, ToMultiaddr};
 use self::byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
 use self::sha2::Sha512;
 use self::sha3::{Digest, Keccak256};
@@ -51,6 +51,13 @@ const SET_HOME_REQUEST_ID : u8 = 3;
 const HOME_ADDRESSES_QUERY_ID : u8 = 4;
 const PROFILE_HOMES_QUERY_ID : u8 = 5;
 
+fn from_slice(v: &[u8]) -> [u8; 32] {
+    if v.len() != 32 {
+        panic!(format!("unexpected profile id size: {}",v.len()));
+    }
+    array_ref!(v, 0, 32).clone()
+}
+
 struct RouterCodec {
     dest: SocketAddr,
 }
@@ -69,139 +76,96 @@ impl UdpCodec for RouterCodec {
     }
 }
 
+
+///
+/// RequestReplySocket is responsible for serializing requests and waiting for the responses
+///
+struct RequestReplySocket {
+    // 1. socket + codec
+    // 2. pending requests in a map
+}
+
+impl RequestReplySocket {
+    pub fn new() -> Self {
+        unimplemented!();
+    }
+
+    pub fn query<T: MercuryRouterQuery>(&mut self, qry: &Query<T>) -> AsyncResult<Reply> {
+        unimplemented!();
+    }
+}
+
+
 pub struct RouterServiceClient{
     host: Box<KeyValueStore<ProfileId, Profile>>,
     handle: reactor::Handle,
     server_address: SocketAddr,
-
+    sock : Rc<RefCell<RequestReplySocket>>,
 }
-
-
 
 impl RouterServiceClient {
     pub fn new(handle : reactor::Handle, host: Box<KeyValueStore<ProfileId, Profile>>, server_address : SocketAddr) -> std::io::Result<Self> {
-        Ok(RouterServiceClient { host, handle, server_address})
+        let sock = Rc::new(RefCell::new(RequestReplySocket::new()));
+        Ok(RouterServiceClient { host, handle, server_address, sock})
     }
 
-/*
-    pub fn new(handle : reactor::Handle, host_profile_repo: Box<KeyValueStore<ProfileId, Profile>>, server_address : SocketAddr) -> std::io::Result<Self> {
-        let (tx_events, rx_events) = mpsc::channel(10);
-        let sock = UdpSocket::bind(&SocketAddr::from_str("0.0.0.0:0").unwrap(), &handle)?;
-        let (sock_sink, sock_stream) = sock.framed(RouterCodec { dest: server_address }).split();
-
-        let (tx_nw_events, rx_nw_events) = mpsc::channel(10);
-        handle.spawn(Self::service_loop(handle.clone()));
-        Ok(Self {tx_events})
-    }
-
-    fn backend_handler() -> impl Future<Item=(), Error=()> {
-        Ok(()).into_future()
-    }
-
-    fn service_loop(handle : reactor::Handle) -> impl Future<Item=(), Error=()> {
-        // join ???
-        handle.spawn(Self::proxy_handler());
-        handle.spawn(Self::host_handler());
-
-
-
-        service_handler()
-
-//        rx_events.for_each(move |event| {
-//            match event {
-//                ServiceEvent::ProfileSyncRequest(profile) => {
-//                    let profile_id = profile.id.clone();
-//                    Box::new(host_profile_repo.set(profile_id, profile)
-//                        .and_then(|| {
-//                            let req = match profile.facet {
-//                                ProfileFacet::Persona(facet) => {
-//                                    // look up if we're hosting this profile version
-//                                    // add_persona
-//                                    Vec::new()
-//                                },
-//                                ProfileFacet::Home(facet) => {
-//                                    // check if this home is the signer
-//                                    // set_home
-//                                    Vec::new()
-//                                }
-//                            }
-//
-//                            sock.send_dgram(dgram, server_addr)
-//                                .map_err(|| /* timer + */)
-//                        })
-//                        .map_err(|_err| ())) as Box<Future<Item=_, Error=_>>
-//                },
-//                _ => {
-//                    Box::new(Ok(()).into_future())
-//                }
-//            }
-//
-//        })
-    }
-*/
-/*
-    pub fn new(handle : reactor::Handle, host_profile_repo : Box<KeyValueStore<ProfileId, Profile>>, signer : Box<MercurySigner>) -> std::io::Result<Self> {
-        /*
-        let hack_server = SocketAddr::from_str("127.0.0.1:4545").unwrap();
-        let addr = SocketAddr::from_str("0.0.0.0:0").unwrap();
-        let sock = UdpSocket::bind(&addr, &handle.clone())?;
-        let (tx, rx) = mpsc::channel(10);
-        let nonce = 0 as u64; // TODO: timestamp
-        let pending_requests = HashSet::new();
-        handle.spawn(Self::sync(nonce, hack_server, sock, rx, pending_requests));
-        */
-        Ok(Self {host_profile_repo, dirty_queue: Box::new(tx), sock, nonce, pending_requests, signer, handle})
-    }
-
-    fn sync(nonce: u64, server: SocketAddr, sock: UdpSocket, rx: mpsc::Receiver<ProfileId>, pending_requests : HashSet<ServiceRequestState>) -> Box<Future<Item=(), Error=()>> {
-        let res = loop_fn((nonce, sock, rx, pending_requests), |(mut nonce, sock, rx, mut pending_requests)| {
-            let dirty_fut = rx.into_future()
-                .and_then(|(id_opt, rx)| {
-                    if let Some(id) = id_opt {
-                        nonce += 1;
-                        pending_requests.insert(ServiceRequestState {
-                            nonce,
-                            timeout: None,
-                            profile_id: id,
-                        });
-                        let msg = Vec::new(); // TODO serialize requests
-                        let sent_fut = sock.send_dgram(msg, server)
-                            .and_then(|(sock, _)| Ok(Loop::Continue((nonce, sock, rx, pending_requests))).into_future());
-                    }
-                });
-        });
-        Box::new(res)
-    }
-*/
 }
 
 impl KeyValueStore<ProfileId,Profile>  for RouterServiceClient {
     fn set(&mut self, profile_id: ProfileId, profile: Profile) -> AsyncResult<()> {
-        self.host.set(profile_id, profile.clone());
-
-        match profile.facet {
-            ProfileFacet::Persona(facet) => {
-                unimplemented!()
-            },
-            ProfileFacet::Home(facet) => {
-                unimplemented!()
-            }
-            _ => {
-                unimplemented!()
-            }
-        }
+        unimplemented!();
     }
 
     fn get(&self, key: ProfileId) -> AsyncResult<Profile> {
-        unimplemented!()
+        // todo: 
+        // 1. issue a profile_homes request
+        let p = from_slice(key.0.as_slice());
+        let query = ProfileHomes::new(p);
+        let nonce : u64 = 1;
+        let query = Query::new(query, nonce);
+
+
+        Box::new(self.sock.borrow_mut()
+            .query(&query)
+            .map_err(|err| StorageError::StringError("query failed".to_string()))
+            .and_then(|reply| {
+                // process reply
+
+                if reply.code != 0 {
+                    return Err(StorageError::StringError("request failed with an error code".to_string()))
+                }
+
+
+                if reply.payload.is_none() {
+                    return Err(StorageError::StringError("no payload in reply".to_string()))
+                }
+
+                // 2. on success create a Home around the remote home
+                match reply.payload.unwrap() {
+                    ReplyPayload::Addresses(addrs) => {
+                        let addrs : Vec<Multiaddr>= addrs
+                            .iter()
+                            .map(|addrstr| {
+                                addrstr.to_multiaddr().unwrap()
+                            }).collect();
+                        unimplemented!();
+                    },
+                    _ => {
+                        return Err(StorageError::StringError("invalid payload type".to_string()));
+                    }
+                }
+
+                unimplemented!();
+
+
+            })
+        )
     }
 
     fn clear_local(&mut self, key: ProfileId) -> AsyncResult<()> {
-        unimplemented!()
+        unimplemented!();
     }
 }
-
-
 
 pub trait RequestPayload {
     fn request_type_id(&self) -> u8;
@@ -342,7 +306,7 @@ impl RequestPayload for DropPersonasRequest {
 
 
 pub trait MercuryRouterQuery {
-    fn request_type_id() -> u8;
+    fn request_type_id(&self) -> u8;
     fn serialize(&self, out : io::Cursor<Vec<u8>>) -> io::Result<io::Cursor<Vec<u8>>>;
 }
 
@@ -360,7 +324,7 @@ impl<T> Query<T> where T : Sized + MercuryRouterQuery {
     pub fn serialize(&self) -> io::Result<Vec<u8>> {
         let mut retval = io::Cursor::new(Vec::new());
         // request type id
-        retval.write_u8(T::request_type_id())?;
+        retval.write_u8(self.payload.request_type_id())?;
 
         // nonce
         retval.write_u64::<BigEndian>(self.nonce)?;
@@ -383,7 +347,7 @@ impl ProfileHomes {
 }
 
 impl MercuryRouterQuery for ProfileHomes {
-    fn request_type_id() -> u8 {
+    fn request_type_id(&self) -> u8 {
         PROFILE_HOMES_QUERY_ID
     }
 
@@ -405,7 +369,7 @@ impl HomeAddresses {
 }
 
 impl MercuryRouterQuery for HomeAddresses {
-    fn request_type_id() -> u8 {
+    fn request_type_id(&self) -> u8 {
         HOME_ADDRESSES_QUERY_ID
     }
 
