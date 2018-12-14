@@ -110,7 +110,7 @@ impl MyProfileImpl
         let home_conn_fut = prof_repo.load(home_profile_id)
             .inspect( move |home_profile| debug!("Finished loading details for home {}", home_profile.id) )
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
-            .and_then( move |home_profile| connector.connect(&home_profile, signer)
+            .and_then( move |home_profile| connector.connect_to_home(&home_profile, signer)
                 .map_err( |err| err.context(ErrorKind::ConnectionToHomeFailed).into() ) );
 
         Box::new(home_conn_fut)

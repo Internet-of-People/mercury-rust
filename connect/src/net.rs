@@ -68,16 +68,11 @@ impl SimpleTcpHomeConnector
 
 impl HomeConnector for SimpleTcpHomeConnector
 {
-    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        AsyncResult<Rc<Home>, mercury_home_protocol::error::Error>
-    {        
-        let addrs = match home_profile.facet {
-            ProfileFacet::Home(ref home_facet) => home_facet.addrs.clone(),
-            _ => return Box::new( future::err( mercury_home_protocol::error::ErrorKind::ProfileMismatch.into() ) ),
-        };
-
+    fn connect_to_addrs(&self, addresses: &[Multiaddr], signer: Rc<Signer>)
+        -> AsyncResult<Rc<Home>, mercury_home_protocol::error::Error>
+    {
         let handle_clone = self.handle.clone();
-        let tcp_conns = addrs.iter().map( move |addr| {
+        let tcp_conns = addresses.iter().map( move |addr| {
             SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone)
             .map_err(|err| err.context( mercury_home_protocol::error::ErrorKind::ConnectionToHomeFailed).into())
         });
@@ -94,8 +89,20 @@ impl HomeConnector for SimpleTcpHomeConnector
                 Rc::new( HomeClientCapnProto::new(reader, writer, handle_clone) ) as Rc<Home>
             });
 
-        
+
         Box::new(capnp_home)
+    }
+    
+
+    fn connect_to_home(&self, home_profile: &Profile, signer: Rc<Signer>)
+        -> AsyncResult<Rc<Home>, mercury_home_protocol::error::Error>
+    {        
+        let addrs = match home_profile.facet {
+            ProfileFacet::Home(ref home_facet) => home_facet.addrs.clone(),
+            _ => return Box::new( future::err( mercury_home_protocol::error::ErrorKind::ProfileMismatch.into() ) ),
+        };
+
+        self.connect_to_addrs(&addrs, signer)
     }
 }
 
