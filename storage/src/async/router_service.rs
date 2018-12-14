@@ -33,7 +33,7 @@ use self::multiaddr::{Multiaddr, ToMultiaddr};
 use self::byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
 use self::sha2::Sha512;
 use self::sha3::{Digest, Keccak256};
-use self::signatory::ed25519::{FromSeed, Seed, Signer };
+use self::signatory::ed25519::{FromSeed, Seed, Signer};
 use self::signatory_dalek::Ed25519Signer;
 use async::AsyncResult;
 use mercury_home_protocol::{ProfileId, Profile, ProfileFacet, ProfileRepo, net::HomeConnector};
@@ -103,13 +103,16 @@ pub struct RouterServiceClient{
     server_address: SocketAddr,
     sock : Rc<RefCell<RequestReplySocket>>,
     home_connector: Rc<HomeConnector>,
+    signer: Rc<MercurySigner>,
 }
 
 impl RouterServiceClient {
     pub fn new(handle : reactor::Handle, host: Box<KeyValueStore<ProfileId, Profile>>,
-               server_address : SocketAddr, home_connector: Rc<HomeConnector>) -> std::io::Result<Self> {
-        let sock = Rc::new(RefCell::new(RequestReplySocket::new()));
-        Ok(RouterServiceClient { host, handle, server_address, sock, home_connector})
+               server_address : SocketAddr, home_connector: Rc<HomeConnector>, signer: Rc<MercurySigner>)
+        -> std::io::Result<Self>
+    {
+        let sock = Rc::new(RefCell::new( RequestReplySocket::new()) );
+        Ok(RouterServiceClient { host, handle, server_address, sock, home_connector, signer})
     }
 
 }
@@ -127,11 +130,12 @@ impl KeyValueStore<ProfileId,Profile>  for RouterServiceClient {
         let nonce : u64 = 1;
         let query = Query::new(query, nonce);
 
-
+        let connector = self.home_connector.clone();
+        let signer = self.signer.clone();
         Box::new(self.sock.borrow_mut()
             .query(&query)
             .map_err(|err| StorageError::StringError("query failed".to_string()))
-            .and_then(|reply| {
+            .and_then(move |reply| {
                 // process reply
 
                 if reply.code != 0 {
@@ -146,11 +150,12 @@ impl KeyValueStore<ProfileId,Profile>  for RouterServiceClient {
                 // 2. on success create a Home around the remote home
                 match reply.payload.unwrap() {
                     ReplyPayload::Addresses(addrs) => {
-                        let addrs : Vec<Multiaddr>= addrs
-                            .iter()
-                            .map(|addrstr| {
-                                addrstr.to_multiaddr().unwrap()
-                            }).collect();
+                        let home = connector.connect_to_addrs(addrs.as_slice(), signer);
+//                        let addrs : Vec<Multiaddr> =
+//                            .iter()
+//                            .map(|addrstr| {
+//                                addrstr.to_multiaddr().unwrap()
+//                            }).collect();
                         unimplemented!();
                     },
                     _ => {
@@ -384,7 +389,7 @@ impl MercuryRouterQuery for HomeAddresses {
 
 enum ReplyPayload {
     Profiles(Vec<[u8; 32]>),
-    Addresses(Vec<String>)
+    Addresses(Vec<Multiaddr>)
 }
 
 pub struct Reply {

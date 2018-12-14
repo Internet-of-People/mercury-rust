@@ -24,7 +24,7 @@ pub trait HashSpace<ObjectType, ReadableHashType>
         -> Box< Future<Item=bool, Error=HashSpaceError> >;
 }
 
-type AsyncResult<T> = Box<Future<Item=T, Error=StorageError> + Send>;
+type AsyncResult<T> = Box<Future<Item=T, Error=StorageError>>;
 
 // TODO probably we should have references (e.g. maybe use AsRef) to keys whenever possible
 // NOTE this interface can be potentially implemented using a simple local in-memory storage
@@ -186,15 +186,12 @@ for KeyAdapter<AvailableKeyType, ValueType, T>
     where T: KeyValueStore<AvailableKeyType, ValueType>,
           PreferredKeyType: Into<AvailableKeyType>
 {
-    fn set(&mut self, key: PreferredKeyType, value: ValueType)
-        -> Box< Future<Item=(), Error=StorageError> + Send >
-    { self.store.set( key.into(), value) }
+    fn set(&mut self, key: PreferredKeyType, value: ValueType) -> AsyncResult<()>
+        { self.store.set( key.into(), value) }
 
-    fn get(&self, key: PreferredKeyType)
-        -> Box< Future<Item=ValueType, Error=StorageError> + Send >
-    { self.store.get( key.into() ) }
+    fn get(&self, key: PreferredKeyType) -> AsyncResult<ValueType>
+        { self.store.get( key.into() ) }
 
-    fn clear_local(&mut self, key: PreferredKeyType)
-        -> Box< Future<Item=(), Error=StorageError> + Send >
-    { self.store.clear_local( key.into() ) }
+    fn clear_local(&mut self, key: PreferredKeyType) -> AsyncResult<()>
+        { self.store.clear_local( key.into() ) }
 }

@@ -477,15 +477,13 @@ for InMemoryStore<KeyType, ValueType>
     where KeyType: Eq + Hash,
           ValueType: Clone + Send + 'static
 {
-    fn set(&mut self, key: KeyType, object: ValueType)
-        -> Box< Future<Item=(), Error=StorageError> + Send >
+    fn set(&mut self, key: KeyType, object: ValueType) -> AsyncResult<()>
     {
         self.map.insert(key, object );
         Box::new( Ok( () ).into_future() )
     }
 
-    fn get(&self, key: KeyType)
-        -> Box< Future<Item=ValueType, Error=StorageError> + Send >
+    fn get(&self, key: KeyType) -> AsyncResult<ValueType>
     {
         let result = match self.map.get(&key) {
             Some(val) => Ok( val.to_owned() ),
@@ -494,8 +492,7 @@ for InMemoryStore<KeyType, ValueType>
         Box::new( result.into_future() )
     }
 
-    fn clear_local(&mut self, key: KeyType)
-        -> Box< Future<Item=(), Error=StorageError> + Send >
+    fn clear_local(&mut self, key: KeyType) -> AsyncResult<()>
     {
         let result = self.map.remove(&key)
             .map( |_| () )

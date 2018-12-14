@@ -55,7 +55,7 @@ impl BlockingFileStore
 impl<V> KeyValueStore<String, V> for BlockingFileStore
     where  V: 'static + Serialize + DeserializeOwned + Send
 {
-    fn set(&mut self, key: String, value: V) -> Box< Future<Item=(), Error=StorageError> + Send >
+    fn set(&mut self, key: String, value: V) -> AsyncResult<()>
     {
         let bytes = match serde_json::to_vec(&value) {
             Ok(bytes) => bytes,
@@ -68,7 +68,7 @@ impl<V> KeyValueStore<String, V> for BlockingFileStore
 
     }
 
-    fn get(&self, key: String) -> Box< Future<Item=V, Error=StorageError> + Send >
+    fn get(&self, key: String) -> AsyncResult<V>
     {
         let bytes = match self.get_bytes(key) {
             Ok(bytes) => bytes,
@@ -80,7 +80,7 @@ impl<V> KeyValueStore<String, V> for BlockingFileStore
         Box::new( res.into_future() )
     }
 
-    fn clear_local(&mut self, key: String) -> Box< Future<Item=(), Error=StorageError> + Send >
+    fn clear_local(&mut self, key: String) -> AsyncResult<()>
     {
         let res = ::std::fs::remove_file( self.base_path.join(key) )
             .map_err( |e| StorageError::StringError( e.description().to_owned() ) );
@@ -130,7 +130,7 @@ impl AsyncFileStore
 impl<V> KeyValueStore<String, V> for AsyncFileStore
     where  V: 'static + Serialize + DeserializeOwned + Send
 {
-    fn set(&mut self, key: String, value: V) -> Box< Future<Item=(), Error=StorageError> + Send >
+    fn set(&mut self, key: String, value: V) -> AsyncResult<()>
     {
         let bytes = match serde_json::to_vec(&value) {
             Ok(bytes) => bytes,
@@ -150,7 +150,7 @@ impl<V> KeyValueStore<String, V> for AsyncFileStore
         Box::new( self.schedule(fut) )
     }
 
-    fn get(&self, key: String) -> Box< Future<Item=V, Error=StorageError> + Send >
+    fn get(&self, key: String) -> AsyncResult<V>
     {
         trace!("Got file reading request for key {}", key);
         let fut = ::tokio_fs::File::open( self.base_path.join(key) )
@@ -163,7 +163,7 @@ impl<V> KeyValueStore<String, V> for AsyncFileStore
         Box::new( self.schedule(fut) )
     }
 
-    fn clear_local(&mut self, key: String) -> Box< Future<Item=(), Error=StorageError> + Send >
+    fn clear_local(&mut self, key: String) -> AsyncResult<()>
     {
         let fut = ::tokio_fs::remove_file( self.base_path.join(key) )
             .map_err( |e| StorageError::StringError( e.description().to_owned() ) );

@@ -92,7 +92,7 @@ impl HomeConnector for SimpleTcpHomeConnector
 
         Box::new(capnp_home)
     }
-    
+
 
     fn connect_to_home(&self, home_profile: &Profile, signer: Rc<Signer>)
         -> AsyncResult<Rc<Home>, mercury_home_protocol::error::Error>
