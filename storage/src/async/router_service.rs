@@ -214,9 +214,11 @@ impl Request {
         retval = self.payload.serialize(retval)?;
         eprintln!("payload pos: {}", retval.position());
 
-        let seed = Seed::from_slice(self.secret_key.as_bytes()).unwrap();
+        let seed = Seed::from_slice(self.secret_key.as_bytes())
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err) )?;
         let signer = Ed25519Signer::from_seed(seed);
-        let signature = signer.sign(retval.get_ref()).unwrap();
+        let signature = signer.sign(retval.get_ref())
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err) )?;
 
         // pk
         retval.write_all(public_key.as_bytes())?;
