@@ -18,16 +18,16 @@ use std::str::FromStr;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::collections::{HashMap, HashSet};
-use std::net::SocketAddr;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::hash::{Hash, Hasher};
 
 use self::tokio_core::reactor;
 use self::tokio_core::net::{UdpSocket, UdpCodec, UdpFramed};
 use self::tokio_timer::Delay;
 use futures::prelude::*;
+use futures::future::{Either, loop_fn, Loop};
 use futures::sync::mpsc;
 use futures::stream::{SplitSink, SplitStream};
-use futures::future::{loop_fn, Loop};
 
 use self::multiaddr::{Multiaddr, ToMultiaddr};
 use self::byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
@@ -72,8 +72,16 @@ impl UdpCodec for RouterCodec {
     }
 
     fn encode(&mut self, msg: Request, buf: &mut Vec<u8>) -> SocketAddr {
-        buf.clone_from(&msg.serialize().unwrap() );
-        self.dest.clone()
+        match &msg.serialize() {
+            Ok(msgbuf) => {
+                buf.clone_from(msgbuf);
+                self.dest.clone()
+            },
+            Err(e) => {
+                error!("Failed to serialize message: {}", e);
+                SocketAddr::V4( SocketAddrV4::new( Ipv4Addr::UNSPECIFIED, 0) )
+            }
+        }
     }
 }
 
@@ -132,42 +140,33 @@ impl KeyValueStore<ProfileId,Profile>  for RouterServiceClient {
 
         let connector = self.home_connector.clone();
         let signer = self.signer.clone();
-        Box::new(self.sock.borrow_mut()
+        let get_fut = self.sock.borrow_mut()
             .query(&query)
             .map_err(|err| StorageError::StringError("query failed".to_string()))
             .and_then(move |reply| {
                 // process reply
-
                 if reply.code != 0 {
-                    return Err(StorageError::StringError("request failed with an error code".to_string()))
-                }
-
-
-                if reply.payload.is_none() {
-                    return Err(StorageError::StringError("no payload in reply".to_string()))
+                    return Either::A( Err(StorageError::StringError("request failed with an error code".to_string())).into_future() )
                 }
 
                 // 2. on success create a Home around the remote home
-                match reply.payload.unwrap() {
+                let payload = match reply.payload {
+                    Some(p) => p,
+                    None => return Either::A( Err(StorageError::StringError("no payload in reply".to_string())).into_future() )
+                };
+
+                match payload {
                     ReplyPayload::Addresses(addrs) => {
-                        let home = connector.connect_to_addrs(addrs.as_slice(), signer);
-//                        let addrs : Vec<Multiaddr> =
-//                            .iter()
-//                            .map(|addrstr| {
-//                                addrstr.to_multiaddr().unwrap()
-//                            }).collect();
-                        unimplemented!();
+                        let profile_fut = connector.connect_to_addrs(addrs.as_slice(), signer)
+                            .map_err( |e| StorageError::StringError( e.to_string() ) )
+                            .and_then( move |home| home.load(&key)
+                                .map_err( |e| StorageError::StringError( e.to_string() ) ) );
+                        Either::B(profile_fut)
                     },
-                    _ => {
-                        return Err(StorageError::StringError("invalid payload type".to_string()));
-                    }
+                    _ => Either::A( Err(StorageError::StringError("invalid payload type".to_string())).into_future() )
                 }
-
-                unimplemented!();
-
-
-            })
-        )
+            });
+        Box::new(get_fut)
     }
 
     fn clear_local(&mut self, key: ProfileId) -> AsyncResult<()> {
