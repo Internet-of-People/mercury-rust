@@ -9,7 +9,8 @@ use futures::future;
 use tokio_core::reactor;
 
 use super::*;
-use profile::{HomeConnector, MyProfile, MyProfileImpl};
+use mercury_home_protocol::net::HomeConnector;
+use profile::{MyProfile, MyProfileImpl};
 use sdk::DAppSessionImpl;
 
 

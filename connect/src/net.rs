@@ -8,44 +8,7 @@ use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 
 use super::*;
-use profile::HomeConnector;
-
-
-
-pub struct StunTurnTcpConnector
-{
-    // TODO
-}
-
-
-impl StunTurnTcpConnector
-{
-    pub fn connect(&self, _addr: &SocketAddr) -> AsyncResult<TcpStream, Error>
-    {
-        // TODO
-        unimplemented!()
-        // Box::new( future::err(ErrorToBeSpecified::TODO(String::from("StunTurnTcpConnector.connect "))) )
-    }
-}
-
-
-
-pub struct TcpHomeConnector
-{
-    // TODO
-}
-
-
-impl HomeConnector for TcpHomeConnector
-{
-    fn connect(&self, _home_profile: &Profile, _signer: Rc<Signer>) -> AsyncResult<Rc<Home>, Error>
-    {
-        unimplemented!()
-        // TODO in case of TCP addresses, use StunTurnTcpConnector to build an async TcpStream
-        //      to it and build a Home proxy on top of it
-        // Box::new( future::err(ErrorToBeSpecified::TODO(String::from("TcpHomeConnector.connect "))) )
-    }
-}
+use mercury_home_protocol::net::HomeConnector;
 
 
 
@@ -96,7 +59,8 @@ impl SimpleTcpHomeConnector
         };
 
         debug!("Connecting to socket address {}", tcp_addr);
-        let tcp_str = TcpStream::connect(&tcp_addr, handle).map_err( |err| err.context(ErrorKind::ConnectionFailed).into());
+        let tcp_str = TcpStream::connect(&tcp_addr, handle)
+            .map_err( |err| err.context(ErrorKind::ConnectionFailed).into());
         Box::new(tcp_str)
     }
 }
@@ -105,17 +69,17 @@ impl SimpleTcpHomeConnector
 impl HomeConnector for SimpleTcpHomeConnector
 {
     fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) ->
-        AsyncResult<Rc<Home>, Error>
+        AsyncResult<Rc<Home>, mercury_home_protocol::error::Error>
     {        
         let addrs = match home_profile.facet {
             ProfileFacet::Home(ref home_facet) => home_facet.addrs.clone(),
-            _ => return Box::new(future::err(ErrorKind::HomeProfileExpected.into())),
+            _ => return Box::new( future::err( mercury_home_protocol::error::ErrorKind::ProfileMismatch.into() ) ),
         };
 
         let handle_clone = self.handle.clone();
         let tcp_conns = addrs.iter().map( move |addr| {
             SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone)
-            .map_err(|err| err.context(ErrorKind::ConnectionFailed).into()) 
+            .map_err(|err| err.context( mercury_home_protocol::error::ErrorKind::ConnectionToHomeFailed).into())
         });
 
         let handle_clone = self.handle.clone();
@@ -124,7 +88,7 @@ impl HomeConnector for SimpleTcpHomeConnector
             {
                 use mercury_home_protocol::handshake::temp_tcp_handshake_until_tls_is_implemented;
                 temp_tcp_handshake_until_tls_is_implemented(tcp_stream, signer)
-                .map_err(|err| err.context(ErrorKind::HandshakeFailed).into())
+                .map_err(|err| err.context(mercury_home_protocol::error::ErrorKind::TlsHandshakeFailed).into())
             }).map( |(reader, writer, _peer_ctx)| {
                 use mercury_home_protocol::mercury_capnp::client_proxy::HomeClientCapnProto;
                 Rc::new( HomeClientCapnProto::new(reader, writer, handle_clone) ) as Rc<Home>
@@ -134,6 +98,43 @@ impl HomeConnector for SimpleTcpHomeConnector
         Box::new(capnp_home)
     }
 }
+
+
+
+//pub struct StunTurnTcpConnector
+//{
+//    // TODO
+//}
+//
+//
+//impl StunTurnTcpConnector
+//{
+//    pub fn connect(&self, _addr: &SocketAddr) -> AsyncResult<TcpStream, Error>
+//    {
+//        // TODO
+//        unimplemented!()
+//        // Box::new( future::err(ErrorToBeSpecified::TODO(String::from("StunTurnTcpConnector.connect "))) )
+//    }
+//}
+//
+//
+//
+//pub struct TcpHomeConnector
+//{
+//    // TODO
+//}
+//
+//
+//impl HomeConnector for TcpHomeConnector
+//{
+//    fn connect(&self, _home_profile: &Profile, _signer: Rc<Signer>) -> AsyncResult<Rc<Home>, Error>
+//    {
+//        unimplemented!()
+//        // TODO in case of TCP addresses, use StunTurnTcpConnector to build an async TcpStream
+//        //      to it and build a Home proxy on top of it
+//        // Box::new( future::err(ErrorToBeSpecified::TODO(String::from("TcpHomeConnector.connect "))) )
+//    }
+//}
 
 
 

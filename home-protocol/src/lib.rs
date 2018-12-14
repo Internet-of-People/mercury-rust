@@ -30,6 +30,7 @@ pub mod error;
 pub mod future;
 pub mod handshake;
 pub mod mercury_capnp;
+pub mod net;
 pub mod util;
 
 

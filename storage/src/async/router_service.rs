@@ -24,6 +24,7 @@ use std::hash::{Hash, Hasher};
 use self::tokio_core::reactor;
 use self::tokio_core::net::{UdpSocket, UdpCodec, UdpFramed};
 use self::tokio_timer::Delay;
+use futures::prelude::*;
 use futures::sync::mpsc;
 use futures::stream::{SplitSink, SplitStream};
 use futures::future::{loop_fn, Loop};
@@ -34,10 +35,10 @@ use self::sha2::Sha512;
 use self::sha3::{Digest, Keccak256};
 use self::signatory::ed25519::{FromSeed, Seed, Signer };
 use self::signatory_dalek::Ed25519Signer;
-use futures::prelude::*;
-use mercury_home_protocol::{ProfileId, Profile, ProfileFacet, ProfileRepo};
-use mercury_home_protocol::Signer as MercurySigner;
 use async::AsyncResult;
+use mercury_home_protocol::{ProfileId, Profile, ProfileFacet, ProfileRepo, net::HomeConnector};
+use mercury_home_protocol::Signer as MercurySigner;
+
 
 use super::StorageError;
 
@@ -101,12 +102,14 @@ pub struct RouterServiceClient{
     handle: reactor::Handle,
     server_address: SocketAddr,
     sock : Rc<RefCell<RequestReplySocket>>,
+    home_connector: Rc<HomeConnector>,
 }
 
 impl RouterServiceClient {
-    pub fn new(handle : reactor::Handle, host: Box<KeyValueStore<ProfileId, Profile>>, server_address : SocketAddr) -> std::io::Result<Self> {
+    pub fn new(handle : reactor::Handle, host: Box<KeyValueStore<ProfileId, Profile>>,
+               server_address : SocketAddr, home_connector: Rc<HomeConnector>) -> std::io::Result<Self> {
         let sock = Rc::new(RefCell::new(RequestReplySocket::new()));
-        Ok(RouterServiceClient { host, handle, server_address, sock})
+        Ok(RouterServiceClient { host, handle, server_address, sock, home_connector})
     }
 
 }

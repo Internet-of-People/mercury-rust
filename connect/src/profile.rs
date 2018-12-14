@@ -8,18 +8,8 @@ use futures::{future, sync::mpsc};
 use tokio_core::reactor;
 
 use super::*;
+use mercury_home_protocol::net::HomeConnector;
 use mercury_home_protocol::future as fut;
-
-
-
-pub trait HomeConnector
-{
-    /// Initiate a permanent connection to the home server defined by `home_profile`, or return an
-    /// existing, live `Home` immediately.
-    /// `home_profile` must have a HomeFacet with at least an address filled in.
-    /// `signer` belongs to me.
-    fn connect(&self, home_profile: &Profile, signer: Rc<Signer>) -> AsyncResult<Rc<Home>, Error>;
-}
 
 
 
@@ -120,7 +110,8 @@ impl MyProfileImpl
         let home_conn_fut = prof_repo.load(home_profile_id)
             .inspect( move |home_profile| debug!("Finished loading details for home {}", home_profile.id) )
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
-            .and_then( move |home_profile| connector.connect(&home_profile, signer) );
+            .and_then( move |home_profile| connector.connect(&home_profile, signer)
+                .map_err( |err| err.context(ErrorKind::ConnectionToHomeFailed).into() ) );
 
         Box::new(home_conn_fut)
     }
