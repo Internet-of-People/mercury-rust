@@ -145,4 +145,6 @@ fn main() -> Result<(), Error>
     let jsonrpc = jsonrpc::UdsServer::new( &config.uds_path, reactor.handle() ).unwrap();
     let jsonrpc_fut = jsonrpc.dispatch( LinesCodec::new(), service );
     reactor.run(jsonrpc_fut)
+
+    // TODO react to ctrl-c with proper cleanup (running drops) instead of abort
 }
