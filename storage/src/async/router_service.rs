@@ -11,8 +11,9 @@ extern crate tokio_io;
 extern crate tokio_timer;
 extern crate tokio_core;
 
+use std::error::Error;
 use std::io;
-use std::io::{Write, Read};
+use std::io::{Write, Read, Seek};
 use std::fmt;
 use std::str::FromStr;
 use std::cell::RefCell;
@@ -27,6 +28,7 @@ use self::tokio_timer::Delay;
 use futures::prelude::*;
 use futures::future::{Either, loop_fn, Loop};
 use futures::sync::mpsc;
+use futures::sync::{oneshot, oneshot::Sender};
 use futures::stream::{SplitSink, SplitStream};
 
 use self::multiaddr::{Multiaddr, ToMultiaddr};
@@ -46,11 +48,11 @@ use async::KeyValueStore;
 
 const PROFILE_SIZE : usize = 32;
 
-const ADD_PERSONAS_REQUEST_ID : u8 = 1;
-const DROP_PERSONAS_REQUEST_ID : u8 = 2;
-const SET_HOME_REQUEST_ID : u8 = 3;
-const HOME_ADDRESSES_QUERY_ID : u8 = 4;
-const PROFILE_HOMES_QUERY_ID : u8 = 5;
+const ADD_PERSONAS_REQUEST_ID           : u8 = 1;
+const DROP_PERSONAS_REQUEST_ID          : u8 = 2;
+const SET_HOME_REQUEST_ID               : u8 = 3;
+const HOME_ADDRESSES_QUERY_ID           : u8 = 4;
+const PROFILE_HOMES_QUERY_ID            : u8 = 5;
 
 fn from_slice(v: &[u8]) -> [u8; 32] {
     if v.len() != 32 {
@@ -92,15 +94,23 @@ impl UdpCodec for RouterCodec {
 struct RequestReplySocket {
     // 1. socket + codec
     // 2. pending requests in a map
+    last_nonce : u64,
+    sessions : HashMap<u64, Box<Sender<Reply>>>,
 }
 
 impl RequestReplySocket {
     pub fn new() -> Self {
-        unimplemented!();
+        let last_nonce = 0;
+        let sessions = HashMap::new();
+        RequestReplySocket {last_nonce, sessions}
     }
 
-    pub fn query<T: MercuryRouterQuery>(&mut self, qry: &Query<T>) -> AsyncResult<Reply> {
-        unimplemented!();
+    pub fn query<T: MercuryRouterQuery>(&mut self, qry: Query<T>) -> AsyncResult<Reply> {
+        // let request = Request::new();
+        let (tx, rx) = oneshot::channel();
+        Box::new(
+            rx.map_err(|err| StorageError::StringError(err.description().to_string()))
+        )
     }
 }
 
@@ -131,7 +141,6 @@ impl KeyValueStore<ProfileId,Profile>  for RouterServiceClient {
     }
 
     fn get(&self, key: ProfileId) -> AsyncResult<Profile> {
-        // todo: 
         // 1. issue a profile_homes request
         let p = from_slice(key.0.as_slice());
         let query = ProfileHomes::new(p);
@@ -141,7 +150,7 @@ impl KeyValueStore<ProfileId,Profile>  for RouterServiceClient {
         let connector = self.home_connector.clone();
         let signer = self.signer.clone();
         let get_fut = self.sock.borrow_mut()
-            .query(&query)
+            .query(query)
             .map_err(|err| StorageError::StringError("query failed".to_string()))
             .and_then(move |reply| {
                 // process reply
@@ -416,8 +425,36 @@ impl Reply {
         data.read_exact(&mut msg_raw)?;
         let msg= String::from_utf8(msg_raw).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
 
-        let payload = None;
+        let mut payload = None;
         match request_type_id {
+            PROFILE_HOMES_QUERY_ID => {
+                //
+            },
+            HOME_ADDRESSES_QUERY_ID => {
+                let pos = data.position();
+                data.seek(io::SeekFrom::End(0))?;
+                let endpos = data.position();
+                data.seek(io::SeekFrom::Start(pos));
+                let mut addrs = Vec::new();
+
+
+                while data.position() < endpos {
+                    let addr_size = data.read_u8()?;
+                    if (addr_size as u64> endpos - data.position()) {
+                        return Err(io::Error::new(io::ErrorKind::InvalidData, "unexpected end of packet"));
+                    }
+                    let mut addr_raw : Vec<u8> = Vec::new();
+                    addr_raw.resize(addr_size as usize, 0);
+                    data.read_exact(&mut addr_raw)?;
+                    let addr = String::from_utf8(addr_raw)
+                        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+                    let addr = Multiaddr::from_str(addr.as_str())
+                        .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+                    addrs.push(addr);
+                }
+
+                payload = Some(ReplyPayload::Addresses(addrs));
+            },
             _ => {
 
             }
