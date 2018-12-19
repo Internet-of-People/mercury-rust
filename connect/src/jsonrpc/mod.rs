@@ -14,6 +14,7 @@ use ::service::*;
 
 
 pub mod api;
+pub mod client_proxy;
 pub mod server_dispatcher;
 
 

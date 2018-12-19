@@ -4,7 +4,7 @@ extern crate capnp;
 #[macro_use]
 extern crate capnp_rpc;
 extern crate ed25519_dalek;
-#[macro_use]
+//#[macro_use]
 extern crate failure;
 extern crate futures;
 #[macro_use]

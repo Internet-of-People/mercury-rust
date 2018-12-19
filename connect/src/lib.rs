@@ -1,4 +1,5 @@
 extern crate failure;
+#[macro_use]
 extern crate futures;
 extern crate jsonrpc_core;
 extern crate jsonrpc_pubsub;
@@ -11,6 +12,8 @@ extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate serde_json;
+#[macro_use]
+extern crate state_machine_future;
 extern crate tokio_codec;
 extern crate tokio_core;
 extern crate tokio_io;

@@ -1,9 +1,63 @@
 use std::iter;
+use std::time::Duration;
 
 use futures::prelude::*;
 use futures::future::{self, loop_fn, poll_fn, Loop};
+use futures::stream::StreamFuture;
+use tokio_core::reactor;
 
 use ::AsyncResult;
+
+
+
+pub struct StreamWithDeadline<S : Stream>
+{
+    inner: StreamFuture<S>,
+    timeout : Duration,
+    timer: reactor::Timeout,
+    handle: reactor::Handle
+}
+
+impl<S : Stream> StreamWithDeadline<S>
+{
+    pub fn new(stream: S, timeout: Duration, handle: &reactor::Handle) -> Self
+    {
+        let inner = stream.into_future();
+        Self{ inner, timeout, handle : handle.clone(),
+              timer: reactor::Timeout::new(timeout, handle).unwrap() }
+    }
+}
+
+impl<S: Stream> Stream for StreamWithDeadline<S>
+{
+    type Item = S::Item;
+    type Error = S::Error;
+
+    fn poll(&mut self) -> Poll<Option<Self::Item>, Self::Error>
+    {
+        match self.timer.poll() {
+            Ok(Async::NotReady) => {},
+            Ok(Async::Ready(())) => return Ok(Async::Ready(Option::None)),
+            Err(_e) => return Ok(Async::Ready(Option::None)),
+        };
+
+        match self.inner.poll()
+        {
+            Ok(Async::NotReady) => Ok(Async::NotReady),
+
+            Ok(Async::Ready((x, stream))) => {
+                self.inner = stream.into_future();
+                self.timer = reactor::Timeout::new(self.timeout, &self.handle).unwrap();
+                Ok(Async::Ready(x))
+            },
+
+            Err((e, stream)) => {
+                self.inner = stream.into_future();
+                Err(From::from(e))
+            },
+        }
+    }
+}
 
 
 
@@ -86,6 +140,8 @@ where I: IntoIterator,
     Box::new(vec_fut)
 }
 
+
+
 // Alternative implementation with poll, just for comparison to the composite solution above
 pub fn collect_results2<I>(futures_iterator: I)
     -> impl Future<Item = Vec< Result< <I::Item as IntoFuture>::Item,
@@ -135,6 +191,8 @@ where I: IntoIterator,
         }
     })
 }
+
+
 
 #[cfg(test)]
 mod test
