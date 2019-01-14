@@ -1,0 +1,4 @@
+**/.idea
+**/Cargo.lock
+**/log
+**/target/
