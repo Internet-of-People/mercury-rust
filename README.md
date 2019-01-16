@@ -73,8 +73,8 @@ TODO what does `remove profile` mean? Is it possible at all? Is it needed?
 Details of profile id abcdef123456789:
   Public attributes:
     "username" = "test",
-    "account@twitter.com" = "cool-influencer",
-    "account@youtube.com" = "influence-channel",
+    "com.twitter.account" = "cool-influencer",
+    "com.youtube.account" = "influence-channel",
     ...
   Public links:
     id: "fff...aaa", type: follow, peer_id: feed....789
@@ -92,16 +92,16 @@ This profile belongs to your keyvault and is your currently active default one.
 ## Set attribute
 
 ```
-> prometheus set attribute --key=account@linkedin.com --value=tech-expert-123456 [--my_profile_id=abcdef123456789]
-Attribute "account@linkedin.com" was set to value "tech-expert-123456" for [active/specified] profile.
+> prometheus set attribute --key=com.linkedin.account --value=tech-expert-123456 [--my_profile_id=abcdef123456789]
+Attribute "com.linkedin.account" was set to value "tech-expert-123456" for [active/specified] profile.
 ```
 
 
 ## Clear attribute
 
 ```
-> prometheus clear attribute --key=account@linkedin.com  [--my_profile_id=abcdef123456789]
-Attribute "account@linkedin.com" was cleared from [active/specified] profile.
+> prometheus clear attribute --key=com.linkedin.account  [--my_profile_id=abcdef123456789]
+Attribute "com.linkedin.account" was cleared from [active/specified] profile.
 ```
 
 
@@ -131,10 +131,10 @@ Note that outgoing links (your subscriptions) are shown by command `show profile
 Profiles publicly following [active/specified] profile are:
   Profile id: baba...666
     Attributes:
-      "account@twitter.com" = "bestfan",
+      "com.twitter.account" = "bestfan",
       ...
   Profile id: beef...42
     Attributes:
-      "account@linkedin.com" = "btchodler",
+      "com.linkedin.account" = "btchodler",
       ...
 ```
