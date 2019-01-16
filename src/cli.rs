@@ -39,7 +39,7 @@ pub enum Command
     /// Set attribute
     Set(SetCommand),
 
-    #[structopt(name = "Clear")]
+    #[structopt(name = "clear")]
     /// Clear attribute
     Clear(ClearCommand),
 }
