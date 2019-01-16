@@ -1,0 +1,13 @@
+[package]
+name = "prometheus-cli"
+version = "0.0.1-alpha1"
+authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
+edition = "2018"
+
+[dependencies]
+log = "*"
+structopt = "*"
+
+#multiaddr = "*"
+#multibase = "*"
+#multihash = "*"

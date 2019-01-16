@@ -7,11 +7,12 @@ TODO ???remove profile???
 ```
 > prometheus help
 Subcommands are:
-  create (profile/link)
-  set attribute
-  remove (attribute/link)
-  show profile
   list (profiles/followers)
+  show profile
+  create (profile/link)
+  remove link
+  set attribute
+  clear attribute
   help
   version
 ```
