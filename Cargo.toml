@@ -6,8 +6,8 @@ edition = "2018"
 
 [dependencies]
 log = "*"
+multibase = "*"
+multihash = "*"
 structopt = "*"
 
 #multiaddr = "*"
-#multibase = "*"
-#multihash = "*"

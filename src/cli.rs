@@ -1,17 +1,31 @@
 use structopt::StructOpt;
 
+use crate::types::ProfileId;
+
+type LinkId = ProfileId;
+type AttributeId = String;
+type AttributeValue = String;
+
 
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "prometheus", about = "Command line interface of Prometheus")]
 pub enum Command
 {
+    #[structopt(name = "status")]
+    Status,
+
     #[structopt(name = "list")]
     /// List profiles or followers
     List(ListCommand),
 
     /// Show profile details
+    #[structopt(name = "show")]
     Show(ShowCommand),
+
+    /// Activate profile
+    #[structopt(name = "activate")]
+    Activate(ActivateCommand),
 
     #[structopt(name = "create")]
     /// Create profile or link
@@ -41,7 +55,12 @@ pub enum ListCommand
 
     #[structopt(name = "followers")]
     /// List followers
-    IncomingLinks,
+    IncomingLinks
+    {
+        #[structopt(long = "my_profile_id")]
+        /// List public followers of this profile of yours if other than the active one
+        my_profile_id: Option<ProfileId>,
+    },
 }
 
 
@@ -51,7 +70,28 @@ pub enum ShowCommand
 {
     #[structopt(name = "profile")]
     /// Show profile
-    Profile,
+    Profile
+    {
+        #[structopt(long = "profile_id")]
+        /// Profile id to be shown, either yours or remote
+        profile_id: ProfileId,
+    },
+}
+
+
+
+#[derive(Debug, StructOpt)]
+pub enum ActivateCommand
+{
+    #[structopt(name = "profile")]
+    /// Show profile
+    Profile
+    {
+        // TODO is activation by profile NUMBER needed or is this enough?
+        #[structopt(long = "my_profile_id")]
+        /// Profile id to be activated
+        my_profile_id: ProfileId,
+    },
 }
 
 
@@ -61,11 +101,22 @@ pub enum CreateCommand
 {
     #[structopt(name = "profile")]
     /// Create profile
-    Profile,
+    Profile, // TODO how to specify to keep current or new profile should be active/default
 
     #[structopt(name = "link")]
-    /// Create link
-    Link,
+    /// Create link to a remote profile
+    Link
+    {
+        #[structopt(long = "my_profile_id")]
+        /// Add link to this profile of yours if other than the active one
+        my_profile_id: Option<ProfileId>,
+
+        #[structopt(long = "peer_profile_id")]
+        /// Create link to this remote profile
+        peer_profile_id: ProfileId,
+
+        // TODO is an optional "relation_type" needed here?
+    },
 }
 
 
@@ -75,7 +126,16 @@ pub enum RemoveCommand
 {
     #[structopt(name = "link")]
     /// Remove link
-    Link,
+    Link
+    {
+        #[structopt(long = "my_profile_id")]
+        /// Remove link from this profile of yours if other than the active one
+        my_profile_id: Option<ProfileId>,
+
+        #[structopt(long = "link_id")]
+        /// ID of link to be removed
+        link_id: LinkId
+    },
 }
 
 
@@ -84,8 +144,21 @@ pub enum RemoveCommand
 pub enum SetCommand
 {
     #[structopt(name = "attribute")]
-    /// Set attribute
-    Attribute,
+    /// Set attribute with name to specified value
+    Attribute
+    {
+        #[structopt(long = "my_profile_id")]
+        /// Set attribute to this profile of yours if other than the active one
+        my_profile_id: Option<ProfileId>,
+
+        #[structopt(long = "key")]
+        /// Attribute name
+        key: AttributeId,
+
+        #[structopt(long = "value")]
+        /// Attribute value
+        value: AttributeValue,
+    },
 }
 
 
@@ -95,5 +168,14 @@ pub enum ClearCommand
 {
     #[structopt(name = "attribute")]
     /// Clear attribute
-    Attribute,
+    Attribute
+    {
+        #[structopt(long = "my_profile_id")]
+        /// Clear attribute from this profile of yours if other than the active one
+        my_profile_id: Option<ProfileId>,
+
+        #[structopt(long = "key")]
+        /// Attribute name
+        key: AttributeId,
+    }
 }
