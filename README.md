@@ -10,10 +10,9 @@ Subcommands are:
   status
   list (profiles/followers)
   show profile
-  activate profile
   create (profile/link)
   remove link
-  set attribute
+  set (active-profile/attribute)
   clear attribute
   help
   version
@@ -58,7 +57,7 @@ profile number 2, id: cab123...987
 ## Activate profile
 
 ```
-> prometheus activate profile [--number=1] or [--id=abcdef123456789]
+> prometheus set active-profile [--number=1] or [--id=abcdef123456789]
 Profile number 1, id: abcdef123456789 is now your active default profile.
 ```
 

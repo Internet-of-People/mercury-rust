@@ -1,10 +1,6 @@
 use structopt::StructOpt;
 
-use crate::types::ProfileId;
-
-type LinkId = ProfileId;
-type AttributeId = String;
-type AttributeValue = String;
+use crate::types::*;
 
 
 
@@ -23,10 +19,6 @@ pub enum Command
     #[structopt(name = "show")]
     Show(ShowCommand),
 
-    /// Activate profile
-    #[structopt(name = "activate")]
-    Activate(ActivateCommand),
-
     #[structopt(name = "create")]
     /// Create profile or link
     Create(CreateCommand),
@@ -36,7 +28,7 @@ pub enum Command
     Remove(RemoveCommand),
 
     #[structopt(name = "set")]
-    /// Set attribute
+    /// Set active profile or attribute
     Set(SetCommand),
 
     #[structopt(name = "clear")]
@@ -75,22 +67,6 @@ pub enum ShowCommand
         #[structopt(long = "profile_id")]
         /// Profile id to be shown, either yours or remote
         profile_id: ProfileId,
-    },
-}
-
-
-
-#[derive(Debug, StructOpt)]
-pub enum ActivateCommand
-{
-    #[structopt(name = "profile")]
-    /// Show profile
-    Profile
-    {
-        // TODO is activation by profile NUMBER needed or is this enough?
-        #[structopt(long = "my_profile_id")]
-        /// Profile id to be activated
-        my_profile_id: ProfileId,
     },
 }
 
@@ -143,6 +119,16 @@ pub enum RemoveCommand
 #[derive(Debug, StructOpt)]
 pub enum SetCommand
 {
+    #[structopt(name = "active-profile")]
+    /// Show profile
+    ActiveProfile
+    {
+        // TODO is activation by profile NUMBER needed or is this enough?
+        #[structopt(long = "my_profile_id")]
+        /// Profile id to be activated
+        my_profile_id: ProfileId,
+    },
+
     #[structopt(name = "attribute")]
     /// Set attribute with name to specified value
     Attribute

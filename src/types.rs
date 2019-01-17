@@ -1,6 +1,10 @@
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub struct ProfileId( pub Vec<u8> );
 
+pub type LinkId = ProfileId;
+pub type AttributeId = String;
+pub type AttributeValue = String;
+
 
 
 impl<'a> From<&'a ProfileId> for String
