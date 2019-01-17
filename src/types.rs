@@ -32,8 +32,3 @@ impl std::str::FromStr for ProfileId {
         Ok( ProfileId(binary) )
     }
 }
-
-//fn parse_profile_id(src: &str) -> Result<ProfileId, multibase::Error> {
-//    let (_base, binary) = multibase::decode(src)?;
-//    Ok( ProfileId(binary) )
-//}
