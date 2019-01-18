@@ -4,6 +4,8 @@ pub struct ProfileId( pub Vec<u8> );
 pub type LinkId = ProfileId;
 pub type AttributeId = String;
 pub type AttributeValue = String;
+pub type Signature = Vec<u8>;
+pub type PublicKey = Vec<u8>;
 
 
 
