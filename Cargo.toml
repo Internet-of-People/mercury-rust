@@ -6,8 +6,8 @@ edition = "2018"
 
 [dependencies]
 log = "*"
-morpheus-storage = { git="ssh://git@gitlab.libertaria.community:2200/iop-stack/communication/morpheus-storage-client-rust" }
-morpheus_keyvault = { git="ssh://git@gitlab.libertaria.community:2200/iop-stack/communication/keyvault-rust" }
+# morpheus-storage = { git="ssh://git@gitlab.libertaria.community:2200/iop-stack/communication/morpheus-storage-client-rust" }
+# morpheus_keyvault = { git="ssh://git@gitlab.libertaria.community:2200/iop-stack/communication/keyvault-rust" }
 multibase = "*"
 multihash = "*"
 structopt = "*"
