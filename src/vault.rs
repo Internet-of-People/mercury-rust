@@ -36,24 +36,6 @@ impl KeyVault
 }
 
 
-// TODO should all operations below be async?
-pub trait Profile
-{
-    fn id(&self) -> &ProfileId;
-    fn links(&self) -> &[Link];
-    fn metadata(&self) -> &HashMap<AttributeId,AttributeValue>;
-    fn followers(&self) -> &[Link];
-
-    fn create_link(&mut self, peer_profile: &ProfileId) -> Link;
-    fn remove_link(&mut self, id: &LinkId);
-
-    fn set_attribute(&mut self, key: AttributeId, value: AttributeValue);
-    fn clear_attribute(&mut self, key: &AttributeId);
-
-    //fn sign(&self, data: &[u8]) -> Signature;
-    //fn get_signer(&self) -> Rc<Signer>;
-}
-
 
 //pub trait ProfileVault
 //{
