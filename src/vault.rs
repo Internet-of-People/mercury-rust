@@ -1,7 +1,7 @@
-use std::collections::HashMap;
-use std::rc::Rc;
+//use std::collections::HashMap;
+//use std::rc::Rc;
 
-use crate::types::*;
+use morpheus_storage::*;
 
 
 
@@ -15,25 +15,25 @@ pub struct Link
 
 
 
-pub trait Signer
-{
-    fn profile_id(&self) -> &ProfileId;
-    fn public_key(&self) -> &PublicKey;
-    fn sign(&self, data: &[u8]) -> Signature;
-    //fn encrypt(&self, data: &[u8], target: &PublicKey) -> Vec<u8>;
-}
-
-
-pub struct KeyVault {}
-impl KeyVault
-{
-    pub fn list(&self) -> Vec<Rc<Signer>> { unimplemented!() }
-    pub fn get(&self, _profile_id: &ProfileId) -> Rc<Signer> { unimplemented!() }
-    pub fn create(&mut self) -> Rc<Signer> { unimplemented!() }
-
-    pub fn get_active(&self) -> Option<ProfileId> { unimplemented!() }
-    pub fn set_active(&mut self, _id: &ProfileId) { unimplemented!() }
-}
+//pub trait Signer
+//{
+//    fn profile_id(&self) -> &ProfileId;
+//    fn public_key(&self) -> &PublicKey;
+//    fn sign(&self, data: &[u8]) -> Signature;
+//    //fn encrypt(&self, data: &[u8], target: &PublicKey) -> Vec<u8>;
+//}
+//
+//
+//pub struct KeyVault {}
+//impl KeyVault
+//{
+//    pub fn list(&self) -> Vec<Rc<Signer>> { unimplemented!() }
+//    pub fn get(&self, _profile_id: &ProfileId) -> Rc<Signer> { unimplemented!() }
+//    pub fn create(&mut self) -> Rc<Signer> { unimplemented!() }
+//
+//    pub fn get_active(&self) -> Option<ProfileId> { unimplemented!() }
+//    pub fn set_active(&mut self, _id: &ProfileId) { unimplemented!() }
+//}
 
 
 
