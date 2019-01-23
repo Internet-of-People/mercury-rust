@@ -1,7 +1,7 @@
 use structopt::StructOpt;
 
 use morpheus_storage::{AttributeId, AttributeValue};
-use crate::types::{LinkId, ProfileId};
+use prometheus::types::{LinkId, ProfileId};
 
 
 
