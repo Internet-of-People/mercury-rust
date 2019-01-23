@@ -1,8 +1,4 @@
-pub mod types;
-pub mod vault;
-pub mod cli;
-
-use crate::cli::*;
+use prometheus::cli::*;
 
 
 

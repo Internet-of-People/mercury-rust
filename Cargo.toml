@@ -1,5 +1,5 @@
 [package]
-name = "prometheus-cli"
+name = "prometheus"
 version = "0.0.1-alpha1"
 authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 edition = "2018"
