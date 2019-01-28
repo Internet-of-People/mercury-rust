@@ -28,15 +28,17 @@ pub trait Signer
 
 
 
+// TODO several functions should return Result<> instead, but that needs building our own proper error data structures
 pub struct ProfileVault;
 impl ProfileVault
 {
-    pub fn list_profiles(&self) -> Vec<ProfileId> { unimplemented!() }
-    pub fn get_profile(&self, id: &ProfileId) -> Box<Profile> { unimplemented!() } // TODO or should list_profiles() return Vec<Profile> and drop this function?
-    pub fn create_profile(&self) -> Box<Profile> { unimplemented!() }
-    // TODO what does this mean? Purge related metadata from local storage?
-    // fn remove_profile(id: &ProfileId);
+    pub fn list(&self) -> Vec<ProfileId> { unimplemented!() } // TODO should this return an iterator instead?
+    pub fn get(&self, id: &ProfileId) -> Option< Box<Profile> > { unimplemented!() } // TODO or should list_profiles() return Vec<Profile> and drop this function?
+    pub fn create(&self) -> Box<Profile> { unimplemented!() }
+    // TODO what does this mean? Purge related metadata from local storage plus don't show it in the list,
+    //      or maybe also delete all links/follows with other profiles
+    fn remove(&self, id: &ProfileId) { unimplemented!() }
 
-    pub fn get_active_profile(&self) -> Option<ProfileId> { unimplemented!() }
-    pub fn set_active_profile(&self, id: &ProfileId) { unimplemented!() }
+    pub fn get_active(&self) -> Option<ProfileId> { unimplemented!() }
+    pub fn set_active(&self, id: &ProfileId) -> bool { unimplemented!() }
 }

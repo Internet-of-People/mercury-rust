@@ -16,11 +16,12 @@ fn main() -> Result<(), &'static str>
     let vault = ProfileVault{};
     match command {
         Command::Create(CreateCommand::Link{my_profile_id, peer_profile_id}) => {
-            let my_profile_id = match my_profile_id.or( vault.get_active_profile() ) {
-                Some(id) => id,
+            let profile_opt = my_profile_id.or( vault.get_active() )
+                .and_then( |profile_id| vault.get(&profile_id) );
+            let mut profile = match profile_opt {
+                Some(profile) => profile,
                 None => return Err("Command option my_profile_id is unspecified and no active default profile was found"),
             };
-            let mut profile = vault.get_profile(&my_profile_id);
             let link = profile.create_link(&peer_profile_id);
             println!("Created link: {:?}", link);
         },
