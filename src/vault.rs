@@ -1,20 +1,20 @@
 //use std::collections::HashMap;
-use std::rc::Rc;
+//use std::rc::Rc;
 
 use morpheus_storage::*;
-use crate::types::{Link, PublicKey, Signature};
+//use crate::types::{Link, PublicKey, Signature};
 
 
 
-pub trait Signer
-{
-    fn profile_id(&self) -> &ProfileId;
-    fn public_key(&self) -> &PublicKey;
-    fn sign(&self, data: &[u8]) -> Signature;
-    //fn encrypt(&self, data: &[u8], target: &PublicKey) -> Vec<u8>;
-}
-
-
+//pub trait Signer
+//{
+//    fn profile_id(&self) -> &ProfileId;
+//    fn public_key(&self) -> &PublicKey;
+//    fn sign(&self, data: &[u8]) -> Signature;
+//    //fn encrypt(&self, data: &[u8], target: &PublicKey) -> Vec<u8>;
+//}
+//
+//
 //pub struct KeyVault {}
 //impl KeyVault
 //{
