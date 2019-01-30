@@ -1,5 +1,5 @@
 //use std::collections::HashMap;
-//use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 use morpheus_storage::*;
 //use crate::types::{Link, PublicKey, Signature};
@@ -16,14 +16,12 @@ use morpheus_storage::*;
 //
 //
 //pub struct KeyVault {}
-//impl KeyVault
+//impl<K: KeyDerivationCrypto> KeyVault
 //{
-//    pub fn list(&self) -> Vec<Rc<Signer>> { unimplemented!() }
-//    pub fn get(&self, _profile_id: &ProfileId) -> Rc<Signer> { unimplemented!() }
+//    pub fn list(&self) -> Vec<ProfileId> { unimplemented!() }
+//    pub fn get_public(&self, _profile_id: &ProfileId) -> PublicKey { unimplemented!() }
+//    pub fn get(&self, _profile_id: &ProfileId, authentication: TODO) -> Rc<Signer> { unimplemented!() }
 //    pub fn create(&mut self) -> Rc<Signer> { unimplemented!() }
-//
-//    pub fn get_active(&self) -> Option<ProfileId> { unimplemented!() }
-//    pub fn set_active(&mut self, _id: &ProfileId) { unimplemented!() }
 //}
 
 
@@ -33,8 +31,8 @@ pub struct ProfileVault;
 impl ProfileVault
 {
     pub fn list(&self) -> Vec<ProfileId> { unimplemented!() } // TODO should this return an iterator instead?
-    pub fn get(&self, id: &ProfileId) -> Option< Box<Profile> > { unimplemented!() } // TODO or should list_profiles() return Vec<Profile> and drop this function?
-    pub fn create(&self) -> Box<Profile> { unimplemented!() }
+    pub fn get(&self, id: &ProfileId) -> Option< Arc<RwLock<Profile>> > { unimplemented!() } // TODO or should list_profiles() return Vec<Profile> and drop this function?
+    pub fn create(&self) -> Arc<RwLock<Profile>> { unimplemented!() }
     // TODO what does this mean? Purge related metadata from local storage plus don't show it in the list,
     //      or maybe also delete all links/follows with other profiles
     fn remove(&self, id: &ProfileId) { unimplemented!() }
