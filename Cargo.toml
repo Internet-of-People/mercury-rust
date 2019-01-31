@@ -10,6 +10,8 @@ morpheus-storage = { git="ssh://git@gitlab.libertaria.community:2200/iop-stack/c
 morpheus_keyvault = { git="ssh://git@gitlab.libertaria.community:2200/iop-stack/communication/keyvault-rust" }
 multibase = "*"
 multihash = "*"
-structopt = "*" # TODO this should be only a binary dependency, not needed for the library
+# TODO these should be only binary dependencies, not needed for the library
+structopt = "*"
+log4rs = "*"
 
 #multiaddr = "*"
