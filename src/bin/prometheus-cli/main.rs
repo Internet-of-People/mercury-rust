@@ -23,12 +23,12 @@ fn main() -> Result<(), &'static str>
     let command = Command::from_args();
     info!("Got command {:?}", command);
 
-//    let addr = "127.0.0.1:1234".parse().unwrap();
-//    let timeout = Duration::from_secs(5);
-//    info!("Initializing profile vault, connecting to {:?}", addr);
-//    let vault = DummyProfileVault::new(&addr, timeout).unwrap();
+    let addr = "127.0.0.1:6161".parse().unwrap();
+    let timeout = Duration::from_secs(5);
+    info!("Initializing profile vault, connecting to {:?}", addr);
+    let vault = DummyProfileVault::new(&addr, timeout).unwrap();
 
-    let vault = FailingProfileVault{};
+//    let vault = FailingProfileVault{};
 
     process_command(command, &vault)
 }
