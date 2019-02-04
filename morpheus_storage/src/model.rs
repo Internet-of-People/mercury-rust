@@ -65,13 +65,6 @@ pub(crate) fn deserialize_byte_vec<'de, D>(deser: D) -> Result<Vec<u8>, D::Error
     { deser.deserialize_bytes( BytesVisitor{} ) }
 
 
-pub(crate) fn serialize_profile_id<S>(data: &ProfileId, ser: S) -> Result<S::Ok, S::Error> where S: Serializer,
-    { ser.serialize_bytes(&data.id) }
-
-pub(crate) fn deserialize_profile_id<'de, D>(deser: D) -> Result<ProfileId, D::Error> where D: Deserializer<'de>,
-    { deser.deserialize_bytes( BytesVisitor{} ).map( |bytes| ProfileId{id: bytes} ) }
-
-
 struct BytesVisitor;
 
 impl<'de> Visitor<'de> for BytesVisitor{
@@ -87,3 +80,11 @@ impl<'de> Visitor<'de> for BytesVisitor{
     fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> where E: std::error::Error,
         { Ok(v) }
 }
+
+
+
+//pub(crate) fn serialize_profile_id<S>(data: &ProfileId, ser: S) -> Result<S::Ok, S::Error> where S: Serializer,
+//    { ser.serialize_bytes(&data.id) }
+//
+//pub(crate) fn deserialize_profile_id<'de, D>(deser: D) -> Result<ProfileId, D::Error> where D: Deserializer<'de>,
+//    { deser.deserialize_bytes( BytesVisitor{} ).map( |bytes| ProfileId{id: bytes} ) }
