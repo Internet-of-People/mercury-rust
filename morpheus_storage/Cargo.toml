@@ -1,0 +1,17 @@
+[package]
+name = "morpheus_storage"
+version = "0.0.1-alpha1"
+authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
+edition = "2018"
+
+[dependencies]
+log = "*"
+multibase = "*"
+multihash = "*"
+rmp-serde = "*"
+# rmp-serde = { version="*", git = "https://github.com/3Hren/msgpack-rust" }
+serde = "*"
+serde_derive = "*"
+
+# rmp = "*"
+# rmpv = { version="*", features=["with-serde"] }

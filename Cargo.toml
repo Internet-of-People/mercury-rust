@@ -1,17 +1,6 @@
-[package]
-name = "prometheus"
-version = "0.0.1-alpha1"
-authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
-edition = "2018"
-
-[dependencies]
-log = "*"
-morpheus-storage = { git="ssh://git@gitlab.libertaria.community:2200/iop-stack/communication/morpheus-storage-client-rust" }
-morpheus_keyvault = { git="ssh://git@gitlab.libertaria.community:2200/iop-stack/communication/keyvault-rust" }
-multibase = "*"
-multihash = "*"
-# TODO these should be only binary dependencies, not needed for the library
-structopt = "*"
-log4rs = "*"
-
-#multiaddr = "*"
+[workspace]
+members = [
+    "morpheus_keyvault",
+    "morpheus_storage",
+    "prometheus",
+]

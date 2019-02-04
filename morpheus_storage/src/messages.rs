@@ -1,0 +1,193 @@
+use serde::{Deserialize, Deserializer, Serializer, de::{SeqAccess, Visitor}};
+use serde_derive::{Deserialize, Serialize};
+
+use crate::model::*;
+
+
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Envelope
+{
+    target: String,
+
+    #[serde(serialize_with = "serialize_byte_vec")]
+    #[serde(deserialize_with = "deserialize_byte_vec")]
+    payload: Vec<u8>,
+}
+
+impl Envelope
+{
+    pub(crate) fn new(payload: Vec<u8>) -> Self
+        { Self{ target: "osg".to_owned(), payload } }
+
+    pub(crate) fn from<T: serde::Serialize>(payload: T) -> Result<Self, rmp_serde::encode::Error>
+        { rmp_serde::to_vec_named(&payload).map( |payload_bin| Self::new(payload_bin) ) }
+}
+
+
+fn serialize_byte_vec<S>(data: &Vec<u8>, ser: S) -> Result<S::Ok, S::Error> where S: Serializer,
+    { ser.serialize_bytes(data) }
+
+fn deserialize_byte_vec<'de, D>(deser: D) -> Result<Vec<u8>, D::Error> where D: Deserializer<'de>,
+    { deser.deserialize_bytes( PayloadVisitor{} ) }
+
+
+struct PayloadVisitor;
+
+impl<'de> Visitor<'de> for PayloadVisitor{
+    type Value = Vec<u8>;
+
+    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
+        formatter.write_str("[bytes]")
+    }
+
+    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E> where E: std::error::Error,
+        { Ok( v.to_owned() ) }
+
+    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> where E: std::error::Error,
+        { Ok(v) }
+}
+
+
+
+type MessageId = u32;
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Request<T>
+{
+    rid: u32,
+    method: String,
+    params: T,
+}
+
+impl<T> Request<T>
+{
+    pub(crate) fn new(method: &str, params: T) -> Self
+        { Self{ rid: Self::next_id(), method: method.to_owned(), params } }
+
+    fn next_id() -> MessageId { 1 } // TODO generate new id for each message
+}
+
+
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub(crate) struct Response
+{
+    rid: u32,
+    code: u32,
+    description: Option<String>,
+    reply: Vec<u8>,
+}
+
+impl Response
+{
+    pub(crate) fn new(rid: u32, code: u32, description: Option<String>, reply: Vec<u8>) -> Self
+        { Self{ rid, code, description, reply } }
+}
+
+
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct AddNodeParams
+{
+    pub(crate) id: ProfileId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct AddEdgeParams
+{
+    pub(crate) source: ProfileId,
+    pub(crate) target: ProfileId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct AddEdgeResult
+{
+    pub(crate) id: LinkId,
+//    pub(crate) source: ProfileId,
+//    pub(crate) target: ProfileId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct SetAttributeParams
+{
+    pub(crate) key: AttributeId,
+    pub(crate) value: AttributeValue,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct ClearAttributeParams
+{
+    pub(crate) key: AttributeId,
+}
+
+
+
+#[test]
+fn test_serialization_concept()
+{
+    let original_envelope = {
+        let params = AddEdgeParams{ source: ProfileId( vec![2] ), target: ProfileId( vec![42] ) };
+        let request = Request::new("add_edge", params);
+        // println!("request: {:#?}", request);
+        Envelope::from(request).expect("Failed to build envelope from request")
+    };
+
+    // println!("envelope: {:?}", original_envelope);
+    let envelope_bytes = rmp_serde::encode::to_vec_named(&original_envelope).expect("Failed to serialize envelope");
+
+//    use std::io::Cursor;
+//    let mut read_cursor = Cursor::new(&envelope_bytes);
+    let read_envelope: Envelope = rmp_serde::decode::from_slice(&envelope_bytes).expect("Failed to parse envelope");
+    assert_eq!(read_envelope, original_envelope);
+    // debug!("envelope: {:?}", read_envelope);
+}
+
+
+
+//fn value_serialization_experiment()
+//{
+//    use std::io::Cursor;
+//    let mut buffer = vec![0u8; 64];
+//    let mut write_cursor = Cursor::new(&mut buffer);
+//
+//    use rmpv::Value;
+//    let mut fields = Vec::new();
+//    fields.push( (Value::String( rmpv::Utf8String::from("egy") ), Value::Integer( rmpv::Integer::from(1) ) ) );
+//    let write_val = Value::Map( fields.clone() );
+//    rmpv::encode::write_value(&mut write_cursor, &write_val).unwrap();
+//
+//    let mut read_cursor = Cursor::new(&buffer);
+//    let read_val = rmpv::decode::read_value(&mut read_cursor).unwrap();
+//    assert_eq!(read_val, write_val);
+//    match read_val {
+//        Value::Map(map) => { assert_eq!(map, fields) },
+//        _ => { assert!(false) }
+//    }
+//}
+//
+//
+//fn manual_messagepack_parsing_experiment()
+//{
+//    use std::io::Cursor;
+//    let mut buffer = vec![0u8; 64];
+//    let mut cursor = Cursor::new(&mut buffer);
+//
+//    use rmp::decode;
+//    fn read_str<R: std::io::Read>(mut r: R) -> Option<String>
+//    {
+//        let str_length = decode::read_str_len(&mut r).ok()?;
+//        let mut content = Vec::new();
+//        content.resize(str_length as usize, 0);
+//        decode::read_str(&mut r, &mut content).ok()?;
+//        Some( String::from_utf8(content).ok()? )
+//    }
+//
+//    let map_length = decode::read_map_len(&mut cursor).unwrap();
+//    let name = read_str(&mut cursor).unwrap();
+//    match name.as_ref() {
+//        "target" => { let target = read_str(&mut cursor).unwrap(); }, // TODO save target somewhere
+//        "payload" => { let val = rmpv::decode::read_value(&mut cursor); }, // TODO save val somewhere
+//        _ => {}
+//    }
+//}

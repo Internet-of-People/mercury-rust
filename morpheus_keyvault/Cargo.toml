@@ -1,0 +1,17 @@
+[package]
+name = "morpheus_keyvault"
+version = "0.1.0"
+authors = ["wigy <wigy_opensource_developer@yahoo.com>"]
+license = "LGPL-3.0-or-later"
+repository = "https://github.com/internet-of-people/keyvault-rust"
+keywords = ["crypto", "wallet", "iop", "mercury", "morpheus", "prometheus"]
+edition = "2018"
+
+[dependencies]
+bip39 = { git = "https://github.com/Internet-of-People/bip39-rs", branch = "b0.5.1", default-features = false }
+failure = "0.1.5"
+hex = "0.3.2"
+log = "0.4.6"
+multibase = "0.6.0"
+signatory = "0.10.1"
+signatory-dalek = "0.10.0"
