@@ -25,30 +25,6 @@ impl Envelope
 }
 
 
-fn serialize_byte_vec<S>(data: &Vec<u8>, ser: S) -> Result<S::Ok, S::Error> where S: Serializer,
-    { ser.serialize_bytes(data) }
-
-fn deserialize_byte_vec<'de, D>(deser: D) -> Result<Vec<u8>, D::Error> where D: Deserializer<'de>,
-    { deser.deserialize_bytes( PayloadVisitor{} ) }
-
-
-struct PayloadVisitor;
-
-impl<'de> Visitor<'de> for PayloadVisitor{
-    type Value = Vec<u8>;
-
-    fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {
-        formatter.write_str("[bytes]")
-    }
-
-    fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E> where E: std::error::Error,
-        { Ok( v.to_owned() ) }
-
-    fn visit_byte_buf<E>(self, v: Vec<u8>) -> Result<Self::Value, E> where E: std::error::Error,
-        { Ok(v) }
-}
-
-
 
 type MessageId = u32;
 
@@ -127,7 +103,7 @@ pub(crate) struct ClearAttributeParams
 fn test_serialization_concept()
 {
     let original_envelope = {
-        let params = AddEdgeParams{ source: ProfileId( vec![2] ), target: ProfileId( vec![42] ) };
+        let params = AddEdgeParams{ source: ProfileId{id: vec![2]}, target: ProfileId{id: vec![42]} };
         let request = Request::new("add_edge", params);
         // println!("request: {:#?}", request);
         Envelope::from(request).expect("Failed to build envelope from request")

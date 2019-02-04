@@ -39,7 +39,7 @@ impl DummyProfileVault
         tcp_stream.set_write_timeout( Some( Duration::from_secs(5) ) )?;
         let tcp_stream_clone = tcp_stream.try_clone()?;
         let (send_req, recv_envelope) = run_rpc_network(tcp_stream, tcp_stream_clone);
-        let profile = RpcProfile::new( ProfileId(vec![42]), send_req );
+        let profile = RpcProfile::new( ProfileId{id: vec![42]}, send_req );
         Ok( Self{ profile: Arc::new( RwLock::new(profile) ) } )
     }
 }

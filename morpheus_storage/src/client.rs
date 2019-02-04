@@ -154,7 +154,7 @@ impl Profile for RpcProfile
         send_res.unwrap();
         // TODO wait for response and fill fields from that
         thread::sleep( std::time::Duration::from_secs(5) );
-        Link{ id: ProfileId(vec![]), peer_profile: peer_profile.to_owned() }
+        Link{ id: ProfileId{id: vec![]}, peer_profile: peer_profile.to_owned() }
     }
     fn remove_link(&mut self, id: &LinkId)  { unimplemented!() }
 
