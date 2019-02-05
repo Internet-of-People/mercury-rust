@@ -14,7 +14,7 @@ test:cargo:
     - du -hs target || true
     - du -hs cargo || true
     - rustup toolchain list || true
-    - rustup component list || true
+    - rustup component add rustfmt || true
     - rustc --version && cargo --version      # Print version info for debugging
     - export RUST_BACKTRACE=1
     - time cargo fmt --all -- --check
