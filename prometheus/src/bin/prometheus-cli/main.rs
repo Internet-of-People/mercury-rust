@@ -82,8 +82,9 @@ fn process_command(command: Command, vault: &ProfileVault) -> Fallible<()>
 
         Command::Clear(ClearCommand::Attribute{my_profile_id, key}) => {
             on_profile(vault, my_profile_id, |profile| {
-                profile.clear_attribute(&key)?;
-                Ok( info!("Cleared attribute: {:?}", key) )
+                info!("Clearing attribute: {:?}", key);
+                profile.clear_attribute(key)?;
+                Ok( () )
             } )?;
         },
 
@@ -98,7 +99,7 @@ fn process_command(command: Command, vault: &ProfileVault) -> Fallible<()>
         },
 
         Command::List(ListCommand::Profiles) => {
-            // TODO
+            // TODO implement listing profiles
         },
 
         Command::Remove(RemoveCommand::Link{my_profile_id, link_id}) => {
@@ -127,7 +128,7 @@ fn process_command(command: Command, vault: &ProfileVault) -> Fallible<()>
         },
 
         Command::Status => {
-            // TODO what status to display?
+            // TODO what status to display besides active (default) profile?
         },
     };
 

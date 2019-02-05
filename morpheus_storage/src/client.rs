@@ -23,7 +23,7 @@ pub trait Profile
     fn remove_link(&mut self, id: &LinkId) -> Fallible<()>;
 
     fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) -> Fallible<()>;
-    fn clear_attribute(&mut self, key: &AttributeId) -> Fallible<()>;
+    fn clear_attribute(&mut self, key: AttributeId) -> Fallible<()>;
 
     //fn sign(&self, data: &[u8]) -> Signature;
     //fn get_signer(&self) -> Arc<Signer>;
@@ -62,16 +62,26 @@ where R: 'static + Read,
         Ok( Link{ id: reply.id, peer_profile: peer_profile.to_owned() } )
     }
 
-    fn remove_link(&mut self, id: &LinkId) -> Fallible<()>  { unimplemented!() }
+    fn remove_link(&mut self, id: &LinkId) -> Fallible<()>
+    {
+        unimplemented!()
+    }
 
     fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) -> Fallible<()>
     {
         let params = SetAttributeParams{ key, value };
         let response = self.rpc.send_request("set_attribute", params)?;
+        // TODO do more validation for response contents (moslty reply field)
         Ok( () )
     }
 
-    fn clear_attribute(&mut self, key: &AttributeId) -> Fallible<()> { unimplemented!() }
+    fn clear_attribute(&mut self, key: AttributeId) -> Fallible<()>
+    {
+        let params = ClearAttributeParams{ key };
+        let response = self.rpc.send_request("clear_attribute", params)?;
+        // TODO do more validation for response contents (mostly reply field)
+        Ok( () )
+    }
 }
 
 
@@ -115,6 +125,9 @@ where R: 'static + Read,
         let response : Response = rmp_serde::from_slice(&resp_envelope.payload)?;
         if response.rid != req_rid
             { bail!("Expected response to request {}, Got response for {}", req_rid, response.rid); }
+
+        if response.code != 0
+            { bail!("Got error response with code {}, description {:?}", response.code, response.description); }
 
         debug!("Got response {:?}", response);
         Ok(response)

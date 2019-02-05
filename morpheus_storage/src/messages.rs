@@ -34,14 +34,14 @@ type MessageId = u32;
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Request<T>
 {
-    rid: u32,
+    rid: MessageId,
     method: String,
     params: T,
 }
 
 impl<T> Request<T> where T: serde::Serialize
 {
-    pub(crate) fn new(rid: u32, method: &str, params: T) -> Self
+    pub(crate) fn new(rid: MessageId, method: &str, params: T) -> Self
         { Self{ rid, method: method.to_owned(), params } }
 }
 
@@ -50,7 +50,7 @@ impl<T> Request<T> where T: serde::Serialize
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Response
 {
-    pub rid: u32,
+    pub rid: MessageId,
     pub code: u32,
     pub description: Option<String>,
     pub reply: rmpv::Value,
@@ -58,7 +58,7 @@ pub struct Response
 
 impl Response
 {
-    pub fn new(rid: u32, code: u32, description: Option<String>, reply: rmpv::Value) -> Self
+    pub fn new(rid: MessageId, code: u32, description: Option<String>, reply: rmpv::Value) -> Self
         { Self{ rid, code, description, reply } }
 }
 
