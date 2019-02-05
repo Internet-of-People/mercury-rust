@@ -1,4 +1,4 @@
-pub trait BaseEncodable : AsRef<[u8]> {
+pub trait BaseEncodable: AsRef<[u8]> {
     fn get_base_code(&self) -> char;
 }
 
@@ -8,10 +8,12 @@ impl<'a, T: BaseEncodable + ?Sized> BaseEncodable for &'a T {
     }
 }
 
-impl<'a> From<&'a BaseEncodable> for String
-{
+impl<'a> From<&'a BaseEncodable> for String {
     fn from(src: &'a BaseEncodable) -> Self {
-        ::multibase::encode(::multibase::Base::from_code(src.get_base_code()).unwrap(), src)
+        ::multibase::encode(
+            ::multibase::Base::from_code(src.get_base_code()).unwrap(),
+            src,
+        )
     }
 }
 
@@ -45,7 +47,6 @@ impl SomeAlgorithm {
         F::create(bin)
     }
 }
-
 
 #[test]
 fn test_factory() {

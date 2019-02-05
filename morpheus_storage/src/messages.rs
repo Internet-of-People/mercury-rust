@@ -3,11 +3,8 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::model::*;
 
-
-
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub(crate) struct Envelope
-{
+pub(crate) struct Envelope {
     pub(crate) target: String,
 
     #[serde(serialize_with = "serialize_byte_vec")]
@@ -15,115 +12,113 @@ pub(crate) struct Envelope
     pub(crate) payload: Vec<u8>,
 }
 
-impl Envelope
-{
-    pub(crate) fn new(target: &str, payload: Vec<u8>) -> Self
-        { Self{ target: target.to_owned(), payload } }
+impl Envelope {
+    pub(crate) fn new(target: &str, payload: Vec<u8>) -> Self {
+        Self {
+            target: target.to_owned(),
+            payload,
+        }
+    }
 
-    pub(crate) fn from<T: serde::Serialize>(target: &str, payload: T) -> Fallible<Self>
-    {
+    pub(crate) fn from<T: serde::Serialize>(target: &str, payload: T) -> Fallible<Self> {
         let payload_bin = rmp_serde::to_vec_named(&payload)?;
-        Ok( Self::new(target, payload_bin) )
+        Ok(Self::new(target, payload_bin))
     }
 }
-
-
 
 type MessageId = u32;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct Request<T>
-{
+pub struct Request<T> {
     rid: MessageId,
     method: String,
     params: T,
 }
 
-impl<T> Request<T> where T: serde::Serialize
+impl<T> Request<T>
+where
+    T: serde::Serialize,
 {
-    pub(crate) fn new(rid: MessageId, method: &str, params: T) -> Self
-        { Self{ rid, method: method.to_owned(), params } }
+    pub(crate) fn new(rid: MessageId, method: &str, params: T) -> Self {
+        Self {
+            rid,
+            method: method.to_owned(),
+            params,
+        }
+    }
 }
 
-
-
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct Response
-{
+pub struct Response {
     pub rid: MessageId,
     pub code: u32,
     pub description: Option<String>,
     pub reply: rmpv::Value,
 }
 
-impl Response
-{
-    pub fn new(rid: MessageId, code: u32, description: Option<String>, reply: rmpv::Value) -> Self
-        { Self{ rid, code, description, reply } }
+impl Response {
+    pub fn new(rid: MessageId, code: u32, description: Option<String>, reply: rmpv::Value) -> Self {
+        Self {
+            rid,
+            code,
+            description,
+            reply,
+        }
+    }
 }
 
-
-
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct AddNodeParams
-{
+pub(crate) struct AddNodeParams {
     pub(crate) id: ProfileId,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct AddEdgeParams
-{
+pub(crate) struct AddEdgeParams {
     pub(crate) source: ProfileId,
     pub(crate) target: ProfileId,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct AddEdgeReply
-{
+pub(crate) struct AddEdgeReply {
     pub(crate) id: LinkId,
-//    pub(crate) source: ProfileId,
-//    pub(crate) target: ProfileId,
+    //    pub(crate) source: ProfileId,
+    //    pub(crate) target: ProfileId,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct SetAttributeParams
-{
+pub(crate) struct SetAttributeParams {
     pub(crate) key: AttributeId,
     pub(crate) value: AttributeValue,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct ClearAttributeParams
-{
+pub(crate) struct ClearAttributeParams {
     pub(crate) key: AttributeId,
 }
 
-
-
 #[test]
-fn test_serialization_concept()
-{
+fn test_serialization_concept() {
     let original_envelope = {
-        let params = AddEdgeParams{ source: ProfileId{id: vec![2]}, target: ProfileId{id: vec![42]} };
+        let params = AddEdgeParams {
+            source: ProfileId { id: vec![2] },
+            target: ProfileId { id: vec![42] },
+        };
         let request = Request::new(1, "add_edge", params);
         // println!("request: {:#?}", request);
-        Envelope::from("target", request)
-            .expect("Failed to build envelope from request")
+        Envelope::from("target", request).expect("Failed to build envelope from request")
     };
 
     // println!("envelope: {:?}", original_envelope);
-    let envelope_bytes = rmp_serde::encode::to_vec_named(&original_envelope)
-        .expect("Failed to serialize envelope");
+    let envelope_bytes =
+        rmp_serde::encode::to_vec_named(&original_envelope).expect("Failed to serialize envelope");
 
-//    use std::io::Cursor;
-//    let mut read_cursor = Cursor::new(&envelope_bytes);
-    let read_envelope: Envelope = rmp_serde::decode::from_slice(&envelope_bytes)
-        .expect("Failed to parse envelope");
+    //    use std::io::Cursor;
+    //    let mut read_cursor = Cursor::new(&envelope_bytes);
+    let read_envelope: Envelope =
+        rmp_serde::decode::from_slice(&envelope_bytes).expect("Failed to parse envelope");
     assert_eq!(read_envelope, original_envelope);
     // debug!("envelope: {:?}", read_envelope);
 }
-
-
 
 //fn value_serialization_experiment()
 //{

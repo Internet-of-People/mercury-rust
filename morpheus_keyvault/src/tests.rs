@@ -1,6 +1,8 @@
 use super::Seed;
 
-const fn as_bytes(bits: usize) -> usize { bits / 8 }
+const fn as_bytes(bits: usize) -> usize {
+    bits / 8
+}
 
 #[test]
 fn seed_from_bytes_accepts_512_bits() {

@@ -2,10 +2,8 @@ mod client;
 mod messages;
 mod model;
 
-pub use model::*;
 pub use client::*;
-
-
+pub use model::*;
 
 //#[test]
 //fn test()

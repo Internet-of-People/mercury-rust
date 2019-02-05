@@ -4,19 +4,16 @@ use std::io::prelude::*;
 use failure::{bail, Fallible};
 use log::*;
 
-use crate::model::*;
 use crate::messages::*;
+use crate::model::*;
 
-
-
-const MORPHEUS_HANDLER : &str = "osg";
+const MORPHEUS_HANDLER: &str = "osg";
 
 // TODO should all operations below be async?
-pub trait Profile
-{
+pub trait Profile {
     fn id(&self) -> &ProfileId;
     fn links(&self) -> &[Link];
-    fn metadata(&self) -> &HashMap<AttributeId,AttributeValue>;
+    fn metadata(&self) -> &HashMap<AttributeId, AttributeValue>;
     fn followers(&self) -> &[Link];
 
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link>;
@@ -29,80 +26,89 @@ pub trait Profile
     //fn get_signer(&self) -> Arc<Signer>;
 }
 
-
-
-pub struct RpcProfile<R,W>
-{
+pub struct RpcProfile<R, W> {
     id: ProfileId,
-    rpc: MsgPackRpc<R,W>,
+    rpc: MsgPackRpc<R, W>,
 }
 
-
-impl<R,W> RpcProfile<R,W>
-{
-    pub fn new(id: ProfileId, rpc: MsgPackRpc<R,W>) -> Self
-        { Self{ id, rpc } }
-}
-
-
-impl<R,W> Profile for RpcProfile<R,W>
-where R: 'static + Read,
-      W: 'static + Write
-{
-    fn id(&self) -> &ProfileId { &self.id }
-    fn links(&self) -> &[Link]  { unimplemented!() }
-    fn metadata(&self) -> &HashMap<AttributeId,AttributeValue>  { unimplemented!() }
-    fn followers(&self) -> &[Link]  { unimplemented!() }
-
-    fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link>
-    {
-        let params = AddEdgeParams{ source: self.id().to_owned(), target: peer_profile.to_owned() };
-        let response = self.rpc.send_request("add_edge", params)?;
-        let reply : AddEdgeReply = rmpv::ext::from_value(response.reply)?;
-        Ok( Link{ id: reply.id, peer_profile: peer_profile.to_owned() } )
+impl<R, W> RpcProfile<R, W> {
+    pub fn new(id: ProfileId, rpc: MsgPackRpc<R, W>) -> Self {
+        Self { id, rpc }
     }
+}
 
-    fn remove_link(&mut self, id: &LinkId) -> Fallible<()>
-    {
+impl<R, W> Profile for RpcProfile<R, W>
+where
+    R: 'static + Read,
+    W: 'static + Write,
+{
+    fn id(&self) -> &ProfileId {
+        &self.id
+    }
+    fn links(&self) -> &[Link] {
+        unimplemented!()
+    }
+    fn metadata(&self) -> &HashMap<AttributeId, AttributeValue> {
+        unimplemented!()
+    }
+    fn followers(&self) -> &[Link] {
         unimplemented!()
     }
 
-    fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) -> Fallible<()>
-    {
-        let params = SetAttributeParams{ key, value };
-        let response = self.rpc.send_request("set_attribute", params)?;
-        // TODO do more validation for response contents (moslty reply field)
-        Ok( () )
+    fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link> {
+        let params = AddEdgeParams {
+            source: self.id().to_owned(),
+            target: peer_profile.to_owned(),
+        };
+        let response = self.rpc.send_request("add_edge", params)?;
+        let reply: AddEdgeReply = rmpv::ext::from_value(response.reply)?;
+        Ok(Link {
+            id: reply.id,
+            peer_profile: peer_profile.to_owned(),
+        })
     }
 
-    fn clear_attribute(&mut self, key: AttributeId) -> Fallible<()>
-    {
-        let params = ClearAttributeParams{ key };
+    fn remove_link(&mut self, id: &LinkId) -> Fallible<()> {
+        unimplemented!()
+    }
+
+    fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) -> Fallible<()> {
+        let params = SetAttributeParams { key, value };
+        let response = self.rpc.send_request("set_attribute", params)?;
+        // TODO do more validation for response contents (moslty reply field)
+        Ok(())
+    }
+
+    fn clear_attribute(&mut self, key: AttributeId) -> Fallible<()> {
+        let params = ClearAttributeParams { key };
         let response = self.rpc.send_request("clear_attribute", params)?;
         // TODO do more validation for response contents (mostly reply field)
-        Ok( () )
+        Ok(())
     }
 }
 
-
-
-pub struct MsgPackRpc<R,W>
-{
+pub struct MsgPackRpc<R, W> {
     reader: R,
     writer: W,
     next_rid: u32,
 }
 
-impl<R,W> MsgPackRpc<R,W>
-where R: 'static + Read,
-      W: 'static + Write
+impl<R, W> MsgPackRpc<R, W>
+where
+    R: 'static + Read,
+    W: 'static + Write,
 {
-    pub fn new(reader: R, writer: W) -> Self
-        { Self{reader, writer, next_rid: 1} }
-
+    pub fn new(reader: R, writer: W) -> Self {
+        Self {
+            reader,
+            writer,
+            next_rid: 1,
+        }
+    }
 
     pub fn send_request<T>(&mut self, method: &str, params: T) -> Fallible<Response>
-        where T: serde::Serialize + std::fmt::Debug
+    where
+        T: serde::Serialize + std::fmt::Debug,
     {
         let req_rid = self.next_rid;
         self.next_rid += 1;
@@ -113,28 +119,40 @@ where R: 'static + Read,
         let req_envelope_bytes = rmp_serde::encode::to_vec_named(&req_envelope)?;
         // debug!("Sending bytes {:?}", req_envelope_bytes);
 
-//        let mut req_file = std::fs::File::create("/tmp/messagepack_bytes.dat")?;
-//        req_file.write_all(&req_envelope_bytes)?;
+        //        let mut req_file = std::fs::File::create("/tmp/messagepack_bytes.dat")?;
+        //        req_file.write_all(&req_envelope_bytes)?;
         self.writer.write_all(&req_envelope_bytes)?;
 
         debug!("Request sent, reading resposne");
-        let resp_envelope : Envelope = rmp_serde::from_read(&mut self.reader)?;
-        if resp_envelope.target != MORPHEUS_HANDLER
-            { bail!("Unexpected target of response message: {}", resp_envelope.target); }
+        let resp_envelope: Envelope = rmp_serde::from_read(&mut self.reader)?;
+        if resp_envelope.target != MORPHEUS_HANDLER {
+            bail!(
+                "Unexpected target of response message: {}",
+                resp_envelope.target
+            );
+        }
 
-        let response : Response = rmp_serde::from_slice(&resp_envelope.payload)?;
-        if response.rid != req_rid
-            { bail!("Expected response to request {}, Got response for {}", req_rid, response.rid); }
+        let response: Response = rmp_serde::from_slice(&resp_envelope.payload)?;
+        if response.rid != req_rid {
+            bail!(
+                "Expected response to request {}, Got response for {}",
+                req_rid,
+                response.rid
+            );
+        }
 
-        if response.code != 0
-            { bail!("Got error response with code {}, description {:?}", response.code, response.description); }
+        if response.code != 0 {
+            bail!(
+                "Got error response with code {}, description {:?}",
+                response.code,
+                response.description
+            );
+        }
 
         debug!("Got response {:?}", response);
         Ok(response)
     }
 }
-
-
 
 // NOTE though this might be a good approach for the basics of a generic messaging event loop,
 //      it's enough to have something much simpler for an MVP command line app
