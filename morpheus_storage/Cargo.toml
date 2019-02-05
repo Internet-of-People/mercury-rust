@@ -5,6 +5,7 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 edition = "2018"
 
 [dependencies]
+failure = "*"
 log = "*"
 multibase = "*"
 multihash = "*"

@@ -1,4 +1,4 @@
-use serde::{Deserialize, Deserializer, Serializer, de::{SeqAccess, Visitor}};
+use serde::{Deserializer, Serializer, de::Visitor};
 use serde_derive::{Deserialize, Serialize};
 
 
@@ -67,7 +67,8 @@ pub(crate) fn deserialize_byte_vec<'de, D>(deser: D) -> Result<Vec<u8>, D::Error
 
 struct BytesVisitor;
 
-impl<'de> Visitor<'de> for BytesVisitor{
+impl<'de> Visitor<'de> for BytesVisitor
+{
     type Value = Vec<u8>;
 
     fn expecting(&self, formatter: &mut std::fmt::Formatter) -> std::fmt::Result {

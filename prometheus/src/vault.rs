@@ -3,6 +3,8 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
+//use failure::{bail, Fallible};
+
 //use morpheus_keyvault::*;
 use morpheus_storage::*;
 //use crate::types::{Link, PublicKey, Signature};
@@ -35,11 +37,12 @@ impl DummyProfileVault
     pub fn new(addr: &SocketAddr, timeout: Duration) -> std::io::Result<Self>
     {
         let tcp_stream = TcpStream::connect_timeout(addr, timeout)?;
+        // TODO make timeouts configurable
         tcp_stream.set_read_timeout( Some( Duration::from_secs(5) ) )?;
         tcp_stream.set_write_timeout( Some( Duration::from_secs(5) ) )?;
         let tcp_stream_clone = tcp_stream.try_clone()?;
-        let (send_req, recv_envelope) = run_rpc_network(tcp_stream, tcp_stream_clone);
-        let profile = RpcProfile::new( ProfileId{id: vec![42]}, send_req );
+        let rpc = MsgPackRpc::new(tcp_stream, tcp_stream_clone);
+        let profile = RpcProfile::new( ProfileId{id: vec![42]}, rpc );
         Ok( Self{ profile: Arc::new( RwLock::new(profile) ) } )
     }
 }

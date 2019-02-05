@@ -1,4 +1,3 @@
-use serde::{Deserialize, Deserializer, Serializer, de::{SeqAccess, Visitor}};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::model::*;
@@ -36,7 +35,7 @@ pub struct Request<T>
     params: T,
 }
 
-impl<T> Request<T>
+impl<T> Request<T> where T: serde::Serialize
 {
     pub(crate) fn new(method: &str, params: T) -> Self
         { Self{ rid: Self::next_id(), method: method.to_owned(), params } }
@@ -47,7 +46,7 @@ impl<T> Request<T>
 
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub(crate) struct Response
+pub struct Response
 {
     rid: u32,
     code: u32,
@@ -57,7 +56,7 @@ pub(crate) struct Response
 
 impl Response
 {
-    pub(crate) fn new(rid: u32, code: u32, description: Option<String>, reply: Vec<u8>) -> Self
+    pub fn new(rid: u32, code: u32, description: Option<String>, reply: Vec<u8>) -> Self
         { Self{ rid, code, description, reply } }
 }
 
