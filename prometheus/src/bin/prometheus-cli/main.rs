@@ -34,7 +34,7 @@ fn selected_profile(
     my_profile_option: Option<ProfileId>,
 ) -> Fallible<Arc<RwLock<Profile>>> {
     let profile_opt = my_profile_option
-        .or(vault.get_active())
+        .or_else(|| vault.get_active())
         .and_then(|profile_id| vault.get(&profile_id));
     let profile = match profile_opt {
         Some(profile) => profile,
