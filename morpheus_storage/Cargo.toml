@@ -10,9 +10,9 @@ log = "*"
 multibase = "*"
 multihash = "*"
 rmp-serde = "*"
-# rmp-serde = { version="*", git = "https://github.com/3Hren/msgpack-rust" }
+rmpv = { version="*", features=["with-serde"] }
 serde = "*"
 serde_derive = "*"
 
 # rmp = "*"
-# rmpv = { version="*", features=["with-serde"] }
+# rmp-serde = { version="*", git = "https://github.com/3Hren/msgpack-rust" }

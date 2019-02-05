@@ -1,3 +1,4 @@
+use failure::Fallible;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::model::*;
@@ -5,22 +6,25 @@ use crate::model::*;
 
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct Envelope
+pub(crate) struct Envelope
 {
-    target: String,
+    pub(crate) target: String,
 
     #[serde(serialize_with = "serialize_byte_vec")]
     #[serde(deserialize_with = "deserialize_byte_vec")]
-    payload: Vec<u8>,
+    pub(crate) payload: Vec<u8>,
 }
 
 impl Envelope
 {
-    pub(crate) fn new(payload: Vec<u8>) -> Self
-        { Self{ target: "osg".to_owned(), payload } }
+    pub(crate) fn new(target: &str, payload: Vec<u8>) -> Self
+        { Self{ target: target.to_owned(), payload } }
 
-    pub(crate) fn from<T: serde::Serialize>(payload: T) -> Result<Self, rmp_serde::encode::Error>
-        { rmp_serde::to_vec_named(&payload).map( |payload_bin| Self::new(payload_bin) ) }
+    pub(crate) fn from<T: serde::Serialize>(target: &str, payload: T) -> Fallible<Self>
+    {
+        let payload_bin = rmp_serde::to_vec_named(&payload)?;
+        Ok( Self::new(target, payload_bin) )
+    }
 }
 
 
@@ -37,10 +41,8 @@ pub struct Request<T>
 
 impl<T> Request<T> where T: serde::Serialize
 {
-    pub(crate) fn new(method: &str, params: T) -> Self
-        { Self{ rid: Self::next_id(), method: method.to_owned(), params } }
-
-    fn next_id() -> MessageId { 1 } // TODO generate new id for each message
+    pub(crate) fn new(rid: u32, method: &str, params: T) -> Self
+        { Self{ rid, method: method.to_owned(), params } }
 }
 
 
@@ -48,15 +50,15 @@ impl<T> Request<T> where T: serde::Serialize
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Response
 {
-    rid: u32,
-    code: u32,
-    description: Option<String>,
-    reply: Vec<u8>,
+    pub rid: u32,
+    pub code: u32,
+    pub description: Option<String>,
+    pub reply: rmpv::Value,
 }
 
 impl Response
 {
-    pub fn new(rid: u32, code: u32, description: Option<String>, reply: Vec<u8>) -> Self
+    pub fn new(rid: u32, code: u32, description: Option<String>, reply: rmpv::Value) -> Self
         { Self{ rid, code, description, reply } }
 }
 
@@ -76,7 +78,7 @@ pub(crate) struct AddEdgeParams
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct AddEdgeResult
+pub(crate) struct AddEdgeReply
 {
     pub(crate) id: LinkId,
 //    pub(crate) source: ProfileId,
@@ -103,17 +105,20 @@ fn test_serialization_concept()
 {
     let original_envelope = {
         let params = AddEdgeParams{ source: ProfileId{id: vec![2]}, target: ProfileId{id: vec![42]} };
-        let request = Request::new("add_edge", params);
+        let request = Request::new(1, "add_edge", params);
         // println!("request: {:#?}", request);
-        Envelope::from(request).expect("Failed to build envelope from request")
+        Envelope::from("target", request)
+            .expect("Failed to build envelope from request")
     };
 
     // println!("envelope: {:?}", original_envelope);
-    let envelope_bytes = rmp_serde::encode::to_vec_named(&original_envelope).expect("Failed to serialize envelope");
+    let envelope_bytes = rmp_serde::encode::to_vec_named(&original_envelope)
+        .expect("Failed to serialize envelope");
 
 //    use std::io::Cursor;
 //    let mut read_cursor = Cursor::new(&envelope_bytes);
-    let read_envelope: Envelope = rmp_serde::decode::from_slice(&envelope_bytes).expect("Failed to parse envelope");
+    let read_envelope: Envelope = rmp_serde::decode::from_slice(&envelope_bytes)
+        .expect("Failed to parse envelope");
     assert_eq!(read_envelope, original_envelope);
     // debug!("envelope: {:?}", read_envelope);
 }
@@ -161,8 +166,8 @@ fn test_serialization_concept()
 //    let map_length = decode::read_map_len(&mut cursor).unwrap();
 //    let name = read_str(&mut cursor).unwrap();
 //    match name.as_ref() {
-//        "target" => { let target = read_str(&mut cursor).unwrap(); }, // TODO save target somewhere
-//        "payload" => { let val = rmpv::decode::read_value(&mut cursor); }, // TODO save val somewhere
+//        "target" => { let target = read_str(&mut cursor).unwrap(); },
+//        "payload" => { let val = rmpv::decode::read_value(&mut cursor); },
 //        _ => {}
 //    }
 //}
