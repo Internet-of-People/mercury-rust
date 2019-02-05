@@ -58,7 +58,7 @@ pub struct Link
 
 
 
-pub(crate) fn serialize_byte_vec<S>(data: &Vec<u8>, ser: S) -> Result<S::Ok, S::Error> where S: Serializer,
+pub(crate) fn serialize_byte_vec<S>(data: &[u8], ser: S) -> Result<S::Ok, S::Error> where S: Serializer,
     { ser.serialize_bytes(data) }
 
 pub(crate) fn deserialize_byte_vec<'de, D>(deser: D) -> Result<Vec<u8>, D::Error> where D: Deserializer<'de>,
