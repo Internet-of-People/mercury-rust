@@ -20,7 +20,7 @@ use std::borrow::Borrow;
 /// which can be used to verify the authenticity of the sender of a message or to encrypt a message that
 /// can only be decrypted by a single recipient. In both cases this other party owns the [`PrivateKey`]
 /// part of the keypair and never shares it with anyone else.
-/// 
+///
 /// [`PrivateKey`]: trait.PrivateKey.html
 pub trait PublicKey<C: AsymmetricCrypto + ?Sized> {
     /// Calculates the ID (also called fingerprint or address in some literature) of the public key. In
@@ -30,7 +30,7 @@ pub trait PublicKey<C: AsymmetricCrypto + ?Sized> {
 
     /// This method can be used to verify if a given signature for a message was made using the private
     /// key that belongs to this public key. See also [`PrivateKey::sign`]
-    /// 
+    ///
     /// [`PrivateKey::sign`]: trait.PrivateKey.html#tymethod.sign
     fn verify<D: AsRef<[u8]>>(&self, data: D, sig: C::Signature) -> bool;
 }
@@ -42,12 +42,12 @@ pub trait PrivateKey<C: AsymmetricCrypto + ?Sized> {
     /// Calculates the [`PublicKey`] that belongs to this private key. These two keys together form an
     /// asymmetric keypair, where the private key cannot be calculated from the public key with a reasonable
     /// effort, but the public key can be calculated from the private key cheaply.
-    /// 
+    ///
     /// [`PublicKey`]: trait.PublicKey.html
     fn public_key(&self) -> C::PublicKey;
 
     /// Calculates the signature of a message that can be then verified using [`PublicKey::verify`]
-    /// 
+    ///
     /// [`PublicKey::verify`]: trait.PublicKey.html#tymethod.verify
     fn sign<D: AsRef<[u8]>>(&self, data: D) -> C::Signature;
 }
@@ -57,17 +57,17 @@ pub trait PrivateKey<C: AsymmetricCrypto + ?Sized> {
 pub trait AsymmetricCrypto {
     /// The ID (also called fingerprint or address in some literature) of the public key. See
     /// [`PublicKey::key_id`] for more details.
-    /// 
+    ///
     /// [`PublicKey::key_id`]: trait.PublicKey.html#tymethod.key_id
     type KeyId: std::hash::Hash + Eq;
 
     /// See [`PublicKey`] for more details.
-    /// 
+    ///
     /// [`PublicKey`]: trait.PublicKey.html
     type PublicKey: PublicKey<Self>;
 
     /// See [`PrivateKey`] for more details.
-    /// 
+    ///
     /// [`PrivateKey`]: trait.PrivateKey.html
     type PrivateKey: PrivateKey<Self>;
 

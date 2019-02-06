@@ -9,7 +9,6 @@ use failure::{bail, Fallible};
 use morpheus_storage::*;
 //use crate::types::{Link, PublicKey, Signature};
 
-
 pub trait ProfileVault {
     fn list(&self) -> Fallible<Vec<ProfileId>>; // TODO should this return an iterator instead?
     fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>>; // TODO or should list_profiles() return Vec<Profile> and drop this function?
@@ -46,10 +45,10 @@ impl ProfileVault for DummyProfileVault {
         let active_opt = self.get_active()?;
         Ok(vec![active_opt.unwrap()])
     }
-    fn get(&self, id: &ProfileId) -> Option< Arc<RwLock<Profile>> > {
+    fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>> {
         Some(self.profile.clone())
     }
-    fn create(&self) -> Fallible< Arc<RwLock<Profile>> > {
+    fn create(&self) -> Fallible<Arc<RwLock<Profile>>> {
         unimplemented!()
     }
     fn remove(&self, id: &ProfileId) -> Fallible<()> {
