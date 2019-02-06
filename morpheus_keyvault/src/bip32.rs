@@ -198,9 +198,9 @@ mod tests {
         fn public_key(&self) -> TestPublicKey {
             TestPublicKey(self.0.clone())
         }
-        fn sign(&self, data: &[u8]) -> TestSignature {
+        fn sign<D: AsRef<[u8]>>(&self, data: D) -> TestSignature {
             TestSignature {
-                data: data.to_owned(),
+                data: data.as_ref().to_owned(),
                 pub_key: self.public_key(),
             }
         }
@@ -219,8 +219,8 @@ mod tests {
         fn key_id(&self) -> TestKeyId {
             TestKeyId(format!("id({0})", self.0))
         }
-        fn verify(&self, data: &[u8], sig: TestSignature) -> bool {
-            sig.data.as_slice() == data && *self == sig.pub_key
+        fn verify<D: AsRef<[u8]>>(&self, data: D, sig: TestSignature) -> bool {
+            sig.data.as_slice() == data.as_ref() && *self == sig.pub_key
         }
     }
 

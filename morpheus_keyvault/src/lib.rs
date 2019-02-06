@@ -12,25 +12,67 @@ mod bip39;
 pub mod ed25519;
 #[cfg(test)]
 mod tests;
-mod wrappers;
 
 use failure::{bail, Fallible};
 use std::borrow::Borrow;
 
+/// A public key (also called shared key or pk in some literature) is that part of an asymmetric keypair
+/// which can be used to verify the authenticity of the sender of a message or to encrypt a message that
+/// can only be decrypted by a single recipient. In both cases this other party owns the [`PrivateKey`]
+/// part of the keypair and never shares it with anyone else.
+/// 
+/// [`PrivateKey`]: trait.PrivateKey.html
 pub trait PublicKey<C: AsymmetricCrypto + ?Sized> {
+    /// Calculates the ID (also called fingerprint or address in some literature) of the public key. In
+    /// some algorithms the public key is only revealed in point-to-point communications and a keypair is
+    /// identified only by the digest of the public key in all other channels.
     fn key_id(&self) -> C::KeyId;
-    fn verify(&self, data: &[u8], sig: C::Signature) -> bool;
+
+    /// This method can be used to verify if a given signature for a message was made using the private
+    /// key that belongs to this public key. See also [`PrivateKey::sign`]
+    /// 
+    /// [`PrivateKey::sign`]: trait.PrivateKey.html#tymethod.sign
+    fn verify<D: AsRef<[u8]>>(&self, data: D, sig: C::Signature) -> bool;
 }
 
+/// A private key (also called secret key or sk in some literature) is the part of an asymmetric keypair
+/// which is never shared with anyone. It is used to sign a message sent to any recipient or to decrypt a
+/// message that was sent encrypted from any recipients.
 pub trait PrivateKey<C: AsymmetricCrypto + ?Sized> {
+    /// Calculates the [`PublicKey`] that belongs to this private key. These two keys together form an
+    /// asymmetric keypair, where the private key cannot be calculated from the public key with a reasonable
+    /// effort, but the public key can be calculated from the private key cheaply.
+    /// 
+    /// [`PublicKey`]: trait.PublicKey.html
     fn public_key(&self) -> C::PublicKey;
-    fn sign(&self, data: &[u8]) -> C::Signature;
+
+    /// Calculates the signature of a message that can be then verified using [`PublicKey::verify`]
+    /// 
+    /// [`PublicKey::verify`]: trait.PublicKey.html#tymethod.verify
+    fn sign<D: AsRef<[u8]>>(&self, data: D) -> C::Signature;
 }
 
+/// An implementation of this trait defines a family of types that fit together perfectly to form a
+/// cryptography using asymmetric keypairs.
 pub trait AsymmetricCrypto {
+    /// The ID (also called fingerprint or address in some literature) of the public key. See
+    /// [`PublicKey::key_id`] for more details.
+    /// 
+    /// [`PublicKey::key_id`]: trait.PublicKey.html#tymethod.key_id
     type KeyId: std::hash::Hash + Eq;
+
+    /// See [`PublicKey`] for more details.
+    /// 
+    /// [`PublicKey`]: trait.PublicKey.html
     type PublicKey: PublicKey<Self>;
+
+    /// See [`PrivateKey`] for more details.
+    /// 
+    /// [`PrivateKey`]: trait.PrivateKey.html
     type PrivateKey: PrivateKey<Self>;
+
+    /// The signature of a given message with a given private key. Its size and representation is up
+    /// to the implementation.
     type Signature;
 }
 
