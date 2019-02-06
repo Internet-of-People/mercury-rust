@@ -9,9 +9,12 @@ edition = "2018"
 
 [dependencies]
 bip39 = { git = "https://github.com/Internet-of-People/bip39-rs", branch = "master", default-features = false }
+digest = "0.8.0"
 failure = "0.1.5"
 hex = "0.3.2"
+hmac = "0.7.0"
+sha2 = "0.8.0"
 log = "0.4.6"
 multibase = "0.6.0"
-signatory = "0.10.1"
-signatory-dalek = "0.10.0"
+signatory = { version = "0.10.1", features = [ "digest", "ed25519" ] }
+signatory-dalek = { version = "0.10.0" }
