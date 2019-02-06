@@ -26,7 +26,8 @@ impl Envelope {
     }
 }
 
-type MessageId = u32;
+pub type MessageId = u32;
+pub type ResponseCode = u32;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Request<T> {
@@ -51,13 +52,18 @@ where
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Response {
     pub rid: MessageId,
-    pub code: u32,
+    pub code: ResponseCode,
     pub description: Option<String>,
-    pub reply: rmpv::Value,
+    pub reply: rmpv::Value, // TODO handle this as an Option<>
 }
 
 impl Response {
-    pub fn new(rid: MessageId, code: u32, description: Option<String>, reply: rmpv::Value) -> Self {
+    pub fn new(
+        rid: MessageId,
+        code: ResponseCode,
+        description: Option<String>,
+        reply: rmpv::Value,
+    ) -> Self {
         Self {
             rid,
             code,

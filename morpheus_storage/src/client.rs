@@ -8,6 +8,7 @@ use crate::messages::*;
 use crate::model::*;
 
 const MORPHEUS_HANDLER: &str = "osg";
+const RESPONSE_CODE_OK: u32 = 0;
 
 // TODO should all operations below be async?
 pub trait Profile {
@@ -75,14 +76,12 @@ where
     fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) -> Fallible<()> {
         let params = SetAttributeParams { key, value };
         let response = self.rpc.send_request("set_attribute", params)?;
-        // TODO do more validation for response contents (moslty reply field)
         Ok(())
     }
 
     fn clear_attribute(&mut self, key: AttributeId) -> Fallible<()> {
         let params = ClearAttributeParams { key };
         let response = self.rpc.send_request("clear_attribute", params)?;
-        // TODO do more validation for response contents (mostly reply field)
         Ok(())
     }
 }
@@ -90,7 +89,7 @@ where
 pub struct MsgPackRpc<R, W> {
     reader: R,
     writer: W,
-    next_rid: u32,
+    next_rid: MessageId,
 }
 
 impl<R, W> MsgPackRpc<R, W>
@@ -141,7 +140,7 @@ where
             );
         }
 
-        if response.code != 0 {
+        if response.code != RESPONSE_CODE_OK {
             bail!(
                 "Got error response with code {}, description {:?}",
                 response.code,
