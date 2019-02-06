@@ -12,19 +12,17 @@ use prometheus::vault::*;
 mod cli;
 
 fn main() -> Fallible<()> {
-    // TODO fix all these unwraps with proper error handling
-    log4rs::init_file("log4rs.yml", Default::default()).unwrap();
+    log4rs::init_file("log4rs.yml", Default::default())?;
 
     use structopt::StructOpt;
     let command = Command::from_args();
     info!("Got command {:?}", command);
 
-    let addr = "127.0.0.1:6161".parse().unwrap();
+    let addr = "127.0.0.1:6161".parse()?;
     let timeout = Duration::from_secs(5);
     info!("Initializing profile vault, connecting to {:?}", addr);
-    let vault = DummyProfileVault::new(&addr, timeout).unwrap();
-
-    //    let vault = FailingProfileVault{};
+    let vault = DummyProfileVault::new(&addr, timeout)?;
+    // let vault = FailingProfileVault{};
 
     process_command(command, &vault)
 }
@@ -34,7 +32,7 @@ fn selected_profile(
     my_profile_option: Option<ProfileId>,
 ) -> Fallible<Arc<RwLock<Profile>>> {
     let profile_opt = my_profile_option
-        .or_else(|| vault.get_active())
+        .or(vault.get_active()?)
         .and_then(|profile_id| vault.get(&profile_id));
     let profile = match profile_opt {
         Some(profile) => profile,
@@ -53,7 +51,7 @@ where
     let result = match profile_ptr.write() {
         Ok(mut profile) => f(&mut *profile),
         Err(e) => bail!(
-            "Implementation error: failed to get write selected profile: {}",
+            "Implementation error: failed to get write access to selected profile: {}",
             e
         ),
     };
@@ -74,7 +72,7 @@ fn process_command(command: Command, vault: &ProfileVault) -> Fallible<()> {
         }
 
         Command::Create(CreateCommand::Profile) => {
-            let created_profile_ptr = vault.create();
+            let created_profile_ptr = vault.create()?;
             let created_profile = match created_profile_ptr.read() {
                 Ok(profile) => profile,
                 Err(e) => bail!(
@@ -119,7 +117,7 @@ fn process_command(command: Command, vault: &ProfileVault) -> Fallible<()> {
         }
 
         Command::Set(SetCommand::ActiveProfile { my_profile_id }) => {
-            vault.set_active(&my_profile_id);
+            vault.set_active(&my_profile_id)?;
             info!("Active profile was set to {:?}", my_profile_id);
         }
 

@@ -3,23 +3,23 @@ use std::net::{SocketAddr, TcpStream};
 use std::sync::{Arc, RwLock};
 use std::time::Duration;
 
-//use failure::{bail, Fallible};
+use failure::{bail, Fallible};
 
 //use morpheus_keyvault::*;
 use morpheus_storage::*;
 //use crate::types::{Link, PublicKey, Signature};
 
-// TODO several functions should return Result<> instead, but that needs building our own proper error data structures
+
 pub trait ProfileVault {
-    fn list(&self) -> Vec<ProfileId>; // TODO should this return an iterator instead?
+    fn list(&self) -> Fallible<Vec<ProfileId>>; // TODO should this return an iterator instead?
     fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>>; // TODO or should list_profiles() return Vec<Profile> and drop this function?
-    fn create(&self) -> Arc<RwLock<Profile>>;
+    fn create(&self) -> Fallible<Arc<RwLock<Profile>>>;
     // TODO what does this mean? Purge related metadata from local storage plus don't show it in the list,
     //      or maybe also delete all links/follows with other profiles
-    fn remove(&self, id: &ProfileId);
+    fn remove(&self, id: &ProfileId) -> Fallible<()>;
 
-    fn get_active(&self) -> Option<ProfileId>;
-    fn set_active(&self, id: &ProfileId) -> bool;
+    fn get_active(&self) -> Fallible<Option<ProfileId>>;
+    fn set_active(&self, id: &ProfileId) -> Fallible<()>;
 }
 
 pub struct DummyProfileVault {
@@ -42,48 +42,31 @@ impl DummyProfileVault {
 }
 
 impl ProfileVault for DummyProfileVault {
-    fn list(&self) -> Vec<ProfileId> {
-        vec![self.get_active().unwrap()]
+    fn list(&self) -> Fallible<Vec<ProfileId>> {
+        let active_opt = self.get_active()?;
+        Ok(vec![active_opt.unwrap()])
     }
-    fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>> {
+    fn get(&self, id: &ProfileId) -> Option< Arc<RwLock<Profile>> > {
         Some(self.profile.clone())
     }
-    fn create(&self) -> Arc<RwLock<Profile>> {
+    fn create(&self) -> Fallible< Arc<RwLock<Profile>> > {
         unimplemented!()
     }
-    fn remove(&self, id: &ProfileId) {
-        unimplemented!()
-    }
-
-    fn get_active(&self) -> Option<ProfileId> {
-        Some(self.profile.read().unwrap().id().to_owned())
-    }
-    fn set_active(&self, id: &ProfileId) -> bool {
-        unimplemented!()
-    }
-}
-
-// TODO remove this when something else works and can be tested
-pub struct FailingProfileVault {}
-
-impl ProfileVault for FailingProfileVault {
-    fn list(&self) -> Vec<ProfileId> {
-        unimplemented!()
-    }
-    fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>> {
-        unimplemented!()
-    }
-    fn create(&self) -> Arc<RwLock<Profile>> {
-        unimplemented!()
-    }
-    fn remove(&self, id: &ProfileId) {
+    fn remove(&self, id: &ProfileId) -> Fallible<()> {
         unimplemented!()
     }
 
-    fn get_active(&self) -> Option<ProfileId> {
-        unimplemented!()
+    fn get_active(&self) -> Fallible<Option<ProfileId>> {
+        let profile_id = match self.profile.read() {
+            Ok(profile) => profile.id().to_owned(),
+            Err(e) => bail!(
+                "Implementation error: failed to get read access to selected profile: {}",
+                e
+            ),
+        };
+        Ok(Some(profile_id))
     }
-    fn set_active(&self, id: &ProfileId) -> bool {
+    fn set_active(&self, id: &ProfileId) -> Fallible<()> {
         unimplemented!()
     }
 }
