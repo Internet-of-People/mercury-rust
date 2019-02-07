@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 use std::io::prelude::*;
+use std::sync::{Arc, RwLock};
 
 use failure::{bail, Fallible};
 use log::*;
@@ -9,6 +10,14 @@ use crate::model::*;
 
 const MORPHEUS_HANDLER: &str = "osg";
 const RESPONSE_CODE_OK: u32 = 0;
+
+pub trait ProfileStore {
+    fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>>; // TODO or should list_profiles() return Vec<Profile> and drop this function?
+    fn create(&self) -> Fallible<Arc<RwLock<Profile>>>;
+    // TODO what does this mean? Purge related metadata from local storage plus don't show it in the list,
+    //      or maybe also delete all links/follows with other profiles
+    fn remove(&self, id: &ProfileId) -> Fallible<()>;
+}
 
 // TODO should all operations below be async?
 pub trait Profile {

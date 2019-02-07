@@ -9,13 +9,8 @@ use failure::{bail, Fallible};
 use morpheus_storage::*;
 //use crate::types::{Link, PublicKey, Signature};
 
-pub trait ProfileVault {
+pub trait ProfileVault: ProfileStore {
     fn list(&self) -> Fallible<Vec<ProfileId>>; // TODO should this return an iterator instead?
-    fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>>; // TODO or should list_profiles() return Vec<Profile> and drop this function?
-    fn create(&self) -> Fallible<Arc<RwLock<Profile>>>;
-    // TODO what does this mean? Purge related metadata from local storage plus don't show it in the list,
-    //      or maybe also delete all links/follows with other profiles
-    fn remove(&self, id: &ProfileId) -> Fallible<()>;
 
     fn get_active(&self) -> Fallible<Option<ProfileId>>;
     fn set_active(&self, id: &ProfileId) -> Fallible<()>;
@@ -40,11 +35,7 @@ impl DummyProfileVault {
     }
 }
 
-impl ProfileVault for DummyProfileVault {
-    fn list(&self) -> Fallible<Vec<ProfileId>> {
-        let active_opt = self.get_active()?;
-        Ok(vec![active_opt.unwrap()])
-    }
+impl ProfileStore for DummyProfileVault {
     fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>> {
         Some(self.profile.clone())
     }
@@ -53,6 +44,13 @@ impl ProfileVault for DummyProfileVault {
     }
     fn remove(&self, id: &ProfileId) -> Fallible<()> {
         unimplemented!()
+    }
+}
+
+impl ProfileVault for DummyProfileVault {
+    fn list(&self) -> Fallible<Vec<ProfileId>> {
+        let active_opt = self.get_active()?;
+        Ok(vec![active_opt.unwrap()])
     }
 
     fn get_active(&self) -> Fallible<Option<ProfileId>> {
