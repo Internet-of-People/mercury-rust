@@ -61,8 +61,8 @@ impl KeyDerivationCrypto for Ed25519 {
 }
 
 impl EdPublicKey {
-    fn as_bytes(&self) -> &[u8] {
-        self.0.as_bytes()
+    fn to_bytes(&self) -> [u8; ed::PUBLIC_KEY_LENGTH] {
+        self.0.to_bytes()
     }
 }
 
@@ -95,8 +95,8 @@ impl Clone for EdPrivateKey {
 }
 
 impl EdPrivateKey {
-    fn as_bytes(&self) -> &[u8] {
-        self.0.secret.as_ref()
+    fn to_bytes(&self) -> [u8; ed::SECRET_KEY_LENGTH] {
+        self.0.secret.to_bytes()
     }
 }
 
@@ -183,7 +183,7 @@ mod tests {
         let master = Ed25519::master(&seed);
         let chain_code = (master.0).0;
         let sk = master.as_private_key();
-        let sk_bytes = sk.as_bytes();
+        let sk_bytes = sk.to_bytes();
         assert_eq!(
             hex::encode(chain_code),
             "ef70a74db9c3a5af931b5fe73ed8e1a53464133654fd55e7a66f8570b8e33c3b"
@@ -211,9 +211,9 @@ mod tests {
         let sk = EdPrivateKey::from(sk_bytes.as_slice());
 
         let pk = sk.public_key();
-        let pk_bytes = pk.as_bytes();
+        let pk_bytes = pk.to_bytes();
         assert_eq!(
-            hex::encode(pk_bytes),
+            hex::encode(&pk_bytes[..]),
             "278117fc144c72340f67d0f2316e8386ceffbf2b2428c9c51fef7c597f1d426e"
         );
 
@@ -285,6 +285,31 @@ mod tests {
         let sig = sk.sign(message.as_slice());
         let sig_bytes = sig.to_bytes();
         assert_eq!(hex::encode(&sig_bytes[..]), "0aab4c900501b3e24d7cdf4663326a3a87df5e4843b2cbdb67cbf6e460fec350aa5371b1508f9f4528ecea23c436d94b5e8fcd4f681e30a6ac00a9704a188a03");
+
+        assert!(pk.verify(message, sig));
+    }
+
+    #[test]
+    fn test_sign_verify_2() {
+        use super::EdPrivateKey;
+
+        let sk_bytes =
+            hex::decode("9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60")
+                .unwrap();
+        let sk = EdPrivateKey::from(sk_bytes.as_slice());
+
+        let pk = sk.public_key();
+        let pk_bytes = pk.to_bytes();
+        assert_eq!(
+            hex::encode(&pk_bytes[..]),
+            "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a"
+        );
+
+        let message_hex = "";
+        let message = hex::decode(message_hex.replace(' ', "")).unwrap();
+        let sig = sk.sign(message.as_slice());
+        let sig_bytes = sig.to_bytes();
+        assert_eq!(hex::encode(&sig_bytes[..]), "e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e065224901555fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b");
 
         assert!(pk.verify(message, sig));
     }

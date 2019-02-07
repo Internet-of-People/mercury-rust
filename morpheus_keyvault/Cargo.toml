@@ -17,6 +17,7 @@ sha2 = "0.8.0"
 log = "0.4.6"
 multibase = "0.6.0"
 ed25519-dalek = { version = "1.0.0-pre.1", default-features = false, features = ["u64_backend"] }
+curve25519-dalek = "1.0.3"
 
 # [dev-dependencies]
 # hex-literal = "0.1.2"
