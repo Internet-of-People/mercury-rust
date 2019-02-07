@@ -1,12 +1,9 @@
 //! SLIP-0010 compatible Ed25519 cryptography that allows child key derivation. There are alternative
 //! Ed25519-based implementations in other projects that are incompatible with SLIP-0010, so make sure
 //! this is the right derivation method for your use-case.
-use digest::generic_array::typenum::{U32, U64};
-use digest::generic_array::GenericArray;
+use ed25519_dalek as ed;
 use failure::Fallible;
-use hmac::{Hmac, Mac};
-use sha2::Sha512;
-use signatory_dalek::{Ed25519Signer, Ed25519Verifier};
+use hmac::Mac;
 
 use super::{
     AsymmetricCrypto, ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PrivateKey,
@@ -20,16 +17,16 @@ pub struct Ed25519 {}
 
 /// Implementation of Ed25519::KeyId
 #[derive(Clone, Hash, Eq, PartialEq)]
-pub struct KeyId([u8; 32]);
+pub struct KeyId([u8; KEY_ID_SIZE]);
 /// Implementation of Ed25519::PrivateKey
-#[derive(Clone)]
-pub struct EdPrivateKey(signatory::ed25519::Seed);
+pub struct EdPrivateKey(ed::Keypair);
 /// Implementation of Ed25519::PublicKey
-pub struct EdPublicKey(Ed25519Verifier);
+pub struct EdPublicKey(ed::PublicKey);
 /// Implementation of Ed25519::Signature
-pub struct EdSignature(signatory::ed25519::Signature);
+pub struct EdSignature(ed::Signature);
 /// Chain key for key derivation in Ed25519 extended private and public keys.
-struct ChainCode(GenericArray<u8, U32>);
+#[derive(Clone)]
+struct ChainCode([u8; CHAIN_CODE_SIZE]);
 /// Implementation of Ed25519::ExtendedPrivateKey
 pub struct EdExtPrivateKey(ChainCode, EdPrivateKey);
 /// Implementation of Ed25519::ExtendedPublicKey
@@ -42,20 +39,38 @@ impl AsymmetricCrypto for Ed25519 {
     type Signature = EdSignature;
 }
 
+const KEY_ID_SIZE: usize = 32;
+const CHAIN_CODE_SIZE: usize = 32;
 const SLIP10_SEED_HASH_SALT: &[u8] = b"ed25519 seed";
+type HmacSha512 = hmac::Hmac<sha2::Sha512>;
 
 impl KeyDerivationCrypto for Ed25519 {
     type ExtendedPrivateKey = EdExtPrivateKey;
     type ExtendedPublicKey = EdExtPublicKey;
 
     fn master(seed: &Seed) -> EdExtPrivateKey {
-        let mut hasher = Hmac::<Sha512>::new_varkey(SLIP10_SEED_HASH_SALT).unwrap();
+        let mut hasher = HmacSha512::new_varkey(SLIP10_SEED_HASH_SALT).unwrap();
         hasher.input(seed.as_bytes());
         let hash = hasher.result().code();
         let r = hash.as_slice();
-        let sk = &r[0..32];
-        let c = GenericArray::<u8, U32>::from_slice(&r[32..64]);
-        EdExtPrivateKey(ChainCode(*c), EdPrivateKey::from(sk))
+        let sk = &r[..ed::SECRET_KEY_LENGTH];
+        let mut c: [u8; CHAIN_CODE_SIZE] = Default::default();
+        c.copy_from_slice(&r[ed::SECRET_KEY_LENGTH..]);
+        EdExtPrivateKey(ChainCode(c), EdPrivateKey::from(sk))
+    }
+}
+
+impl EdPublicKey {
+    fn as_bytes(&self) -> &[u8] {
+        self.0.as_bytes()
+    }
+}
+
+impl Clone for EdPublicKey {
+    fn clone(&self) -> Self {
+        let public_bytes = self.0.as_bytes();
+        let public = ed::PublicKey::from_bytes(public_bytes).unwrap();
+        Self(public)
     }
 }
 
@@ -64,45 +79,65 @@ impl PublicKey<Ed25519> for EdPublicKey {
         unimplemented!()
     }
     fn verify<D: AsRef<[u8]>>(&self, data: D, sig: EdSignature) -> bool {
-        let verifier = &self.0;
-        signatory::ed25519::verify(verifier, data.as_ref(), &sig.0).is_ok()
+        let res = self.0.verify(data.as_ref(), &sig.0);
+        res.is_ok()
+    }
+}
+
+impl Clone for EdPrivateKey {
+    fn clone(&self) -> Self {
+        let secret_bytes = self.0.secret.as_bytes();
+        let public_bytes = self.0.public.as_bytes();
+        let secret = ed::SecretKey::from_bytes(secret_bytes).unwrap();
+        let public = ed::PublicKey::from_bytes(public_bytes).unwrap();
+        Self(ed::Keypair { secret, public })
+    }
+}
+
+impl EdPrivateKey {
+    fn as_bytes(&self) -> &[u8] {
+        self.0.secret.as_ref()
     }
 }
 
 impl PrivateKey<Ed25519> for EdPrivateKey {
     fn public_key(&self) -> EdPublicKey {
-        let signer = Ed25519Signer::from(&self.0);
-        let pk = &signatory::ed25519::public_key(&signer).unwrap();
-        EdPublicKey(pk.into())
+        let pk = self.0.public;
+        EdPublicKey(pk)
     }
     fn sign<D: AsRef<[u8]>>(&self, data: D) -> EdSignature {
-        let signer = Ed25519Signer::from(&self.0);
-        let sig = signatory::ed25519::sign(&signer, data.as_ref()).unwrap();
+        let sig = self.0.sign(data.as_ref());
         EdSignature(sig)
     }
 }
 
+/// # Panics
+/// If `bytes` is rejected by `ed25519_dalek::SecretKey::from_bytes`
 impl<D: AsRef<[u8]>> From<D> for EdPrivateKey {
     fn from(bytes: D) -> Self {
-        EdPrivateKey(signatory::ed25519::Seed::from_bytes(bytes).unwrap())
+        let secret = ed::SecretKey::from_bytes(bytes.as_ref()).unwrap();
+        let public = ed::PublicKey::from(&secret);
+        let key_pair = ed::Keypair { secret, public };
+        EdPrivateKey(key_pair)
     }
 }
 
-impl AsRef<[u8]> for EdSignature {
-    fn as_ref(&self) -> &[u8] {
-        self.0.as_ref()
+impl EdSignature {
+    fn to_bytes(&self) -> [u8; ed::SIGNATURE_LENGTH] {
+        self.0.to_bytes()
     }
 }
 
 impl ExtendedPrivateKey<Ed25519> for EdExtPrivateKey {
-    fn derive_normal_child(&self, idx: i32) -> Fallible<EdExtPrivateKey> {
-        unimplemented!()
+    fn derive_normal_child(&self, _idx: i32) -> Fallible<EdExtPrivateKey> {
+        bail!("Normal derivation of Ed25519 is invalid based on SLIP-0010.")
     }
     fn derive_hardened_child(&self, idx: i32) -> Fallible<EdExtPrivateKey> {
+        // https://doc.rust-lang.org/std/primitive.u32.html#method.to_be_bytes
         unimplemented!()
     }
     fn neuter(&self) -> EdExtPublicKey {
-        unimplemented!()
+        EdExtPublicKey(self.0.clone(), self.1.public_key())
     }
     fn as_private_key(&self) -> EdPrivateKey {
         self.1.clone()
@@ -114,7 +149,7 @@ impl ExtendedPublicKey<Ed25519> for EdExtPublicKey {
         unimplemented!()
     }
     fn as_public_key(&self) -> EdPublicKey {
-        unimplemented!()
+        self.1.clone()
     }
 }
 
@@ -148,22 +183,26 @@ mod tests {
         let master = Ed25519::master(&seed);
         let chain_code = (master.0).0;
         let sk = master.as_private_key();
-        let sk_bytes = (sk.0).as_secret_slice();
+        let sk_bytes = sk.as_bytes();
         assert_eq!(
             hex::encode(chain_code),
             "ef70a74db9c3a5af931b5fe73ed8e1a53464133654fd55e7a66f8570b8e33c3b"
         );
         assert_eq!(
-            hex::encode(sk_bytes),
+            hex::encode(&sk_bytes[..]),
             "171cb88b1b3c1db25add599712e36245d75bc65a1a5c9e18d76f9f2b1eab4012"
         );
-        // let pk = master.neuter().as_public_key().0.as_bytes();
-        // assert_eq!(hex::encode(pk), "00a4b2856bfec510abab89753fac1ac0e1112364e7d250545963f135f2a33188ed");
+        // let pk = master.neuter().as_public_key();
+        // let pk_bytes = pk.0.as_bytes();
+        // assert_eq!(
+        //     hex::encode(pk_bytes),
+        //     "00a4b2856bfec510abab89753fac1ac0e1112364e7d250545963f135f2a33188ed"
+        // );
     }
 
     // https://tools.ietf.org/html/rfc8032#page-24
     #[test]
-    fn test_sign() {
+    fn test_sign_verify() {
         use super::EdPrivateKey;
 
         let sk_bytes =
@@ -171,9 +210,12 @@ mod tests {
                 .unwrap();
         let sk = EdPrivateKey::from(sk_bytes.as_slice());
 
-        // let pk = sk.public_key();
-        // let pk_bytes = pk.as_bytes();
-        // assert_eq!(hex::encode(pk_bytes), "278117fc144c72340f67d0f2316e8386ceffbf2b2428c9c51fef7c597f1d426e");
+        let pk = sk.public_key();
+        let pk_bytes = pk.as_bytes();
+        assert_eq!(
+            hex::encode(pk_bytes),
+            "278117fc144c72340f67d0f2316e8386ceffbf2b2428c9c51fef7c597f1d426e"
+        );
 
         let message_hex = "08b8b2b733424243760fe426a4b54908 \
                            632110a66c2f6591eabd3345e3e4eb98 \
@@ -241,6 +283,9 @@ mod tests {
                            c60c905c15fc910840b94c00a0b9d0";
         let message = hex::decode(message_hex.replace(' ', "")).unwrap();
         let sig = sk.sign(message.as_slice());
-        assert_eq!(hex::encode(sig.as_ref()), "0aab4c900501b3e24d7cdf4663326a3a87df5e4843b2cbdb67cbf6e460fec350aa5371b1508f9f4528ecea23c436d94b5e8fcd4f681e30a6ac00a9704a188a03");
+        let sig_bytes = sig.to_bytes();
+        assert_eq!(hex::encode(&sig_bytes[..]), "0aab4c900501b3e24d7cdf4663326a3a87df5e4843b2cbdb67cbf6e460fec350aa5371b1508f9f4528ecea23c436d94b5e8fcd4f681e30a6ac00a9704a188a03");
+
+        assert!(pk.verify(message, sig));
     }
 }
