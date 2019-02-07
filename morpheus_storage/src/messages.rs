@@ -91,13 +91,15 @@ pub(crate) struct RemoveEdgeParams {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct SetAttributeParams {
+pub(crate) struct SetNodeAttributeParams {
+    pub(crate) id: ProfileId,
     pub(crate) key: AttributeId,
     pub(crate) value: AttributeValue,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct ClearAttributeParams {
+pub(crate) struct ClearNodeAttributeParams {
+    pub(crate) id: ProfileId,
     pub(crate) key: AttributeId,
 }
 

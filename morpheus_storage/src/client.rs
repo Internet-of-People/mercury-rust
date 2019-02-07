@@ -81,19 +81,26 @@ where
             source: self.id().to_owned(),
             target: peer_profile.to_owned(),
         };
-        let _response = self.rpc.send_request("add_edge", params)?;
+        let _response = self.rpc.send_request("remove_edge", params)?;
         Ok(())
     }
 
     fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) -> Fallible<()> {
-        let params = SetAttributeParams { key, value };
-        let _response = self.rpc.send_request("set_attribute", params)?;
+        let params = SetNodeAttributeParams {
+            id: self.id.to_owned(),
+            key,
+            value,
+        };
+        let _response = self.rpc.send_request("set_node_attribute", params)?;
         Ok(())
     }
 
     fn clear_attribute(&mut self, key: AttributeId) -> Fallible<()> {
-        let params = ClearAttributeParams { key };
-        let _response = self.rpc.send_request("clear_attribute", params)?;
+        let params = ClearNodeAttributeParams {
+            id: self.id.to_owned(),
+            key,
+        };
+        let _response = self.rpc.send_request("clear_node_attribute", params)?;
         Ok(())
     }
 }
@@ -130,8 +137,8 @@ where
         let req_envelope_bytes = rmp_serde::encode::to_vec_named(&req_envelope)?;
         // debug!("Sending bytes {:?}", req_envelope_bytes);
 
-        let mut req_file = std::fs::File::create("/tmp/messagepack_bytes.dat")?;
-        req_file.write_all(&req_envelope_bytes)?;
+        // let mut req_file = std::fs::File::create("/tmp/messagepack_bytes.dat")?;
+        // req_file.write_all(&req_envelope_bytes)?;
         self.writer.write_all(&req_envelope_bytes)?;
 
         debug!("Request sent, reading resposne");

@@ -1,7 +1,7 @@
 use structopt::StructOpt;
 
 use morpheus_storage::{AttributeId, AttributeValue};
-use prometheus::types::{LinkId, ProfileId};
+use prometheus::types::ProfileId;
 
 #[derive(Debug, StructOpt)]
 #[structopt(name = "prometheus", about = "Command line interface of Prometheus")]
@@ -67,14 +67,14 @@ pub enum CreateCommand {
     Profile, // TODO how to specify to keep current or new profile should be active/default
 
     #[structopt(name = "link")]
-    /// Create link to a remote profile
+    /// Create link, i.e. follow/subscribe to a remote profile
     Link {
         #[structopt(long = "my_profile_id")]
         /// Add link to this profile of yours if other than the active one
         my_profile_id: Option<ProfileId>,
 
         #[structopt(long = "peer_profile_id")]
-        /// Create link to (follow/subscribe) this remote profile
+        /// Create link to this remote profile
         peer_profile_id: ProfileId,
         // TODO is an optional "relation_type" needed here?
     },
@@ -83,14 +83,14 @@ pub enum CreateCommand {
 #[derive(Debug, StructOpt)]
 pub enum RemoveCommand {
     #[structopt(name = "link")]
-    /// Remove link
+    /// Remove link, i.e. unfollow/unsubscribe from another profile
     Link {
         #[structopt(long = "my_profile_id")]
         /// Remove link from this profile of yours if other than the active one
         my_profile_id: Option<ProfileId>,
 
         #[structopt(long = "peer_profile_id")]
-        /// Remove link (unfollow/unsubscribe) from this remote profile
+        /// Remove link with this remote profile
         peer_profile_id: ProfileId,
     },
 }

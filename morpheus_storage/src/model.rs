@@ -10,7 +10,6 @@ pub struct ProfileId {
 }
 
 //pub type ProfileId = Vec<u8>;
-pub type LinkId = ProfileId;
 pub type AttributeId = String;
 pub type AttributeValue = String;
 pub type Signature = Vec<u8>;
@@ -41,6 +40,8 @@ impl std::str::FromStr for ProfileId {
         Ok(ProfileId { id: binary })
     }
 }
+
+//pub type LinkId = ProfileId;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Link {
