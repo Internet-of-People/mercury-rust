@@ -85,6 +85,12 @@ pub(crate) struct AddEdgeParams {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct RemoveEdgeParams {
+    pub(crate) source: ProfileId,
+    pub(crate) target: ProfileId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct SetAttributeParams {
     pub(crate) key: AttributeId,
     pub(crate) value: AttributeValue,

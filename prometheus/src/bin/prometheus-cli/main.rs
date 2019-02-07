@@ -66,7 +66,7 @@ fn process_command(command: Command, vault: &ProfileVault) -> Fallible<()> {
         }) => {
             on_profile(vault, my_profile_id, |profile| {
                 let link = profile.create_link(&peer_profile_id);
-                info!("Created link: {:?}", link);
+                info!("Created link to pfofile {:?}", link);
                 Ok(())
             })?;
         }
@@ -107,11 +107,11 @@ fn process_command(command: Command, vault: &ProfileVault) -> Fallible<()> {
 
         Command::Remove(RemoveCommand::Link {
             my_profile_id,
-            link_id,
+            peer_profile_id,
         }) => {
             on_profile(vault, my_profile_id, |profile| {
-                profile.remove_link(&link_id)?;
-                info!("Removed link: {:?}", link_id);
+                profile.remove_link(&peer_profile_id)?;
+                info!("Removed link from profile {:?}", peer_profile_id);
                 Ok(())
             })?;
         }

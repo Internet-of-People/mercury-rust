@@ -74,7 +74,7 @@ pub enum CreateCommand {
         my_profile_id: Option<ProfileId>,
 
         #[structopt(long = "peer_profile_id")]
-        /// Create link to this remote profile
+        /// Create link to (follow/subscribe) this remote profile
         peer_profile_id: ProfileId,
         // TODO is an optional "relation_type" needed here?
     },
@@ -89,9 +89,9 @@ pub enum RemoveCommand {
         /// Remove link from this profile of yours if other than the active one
         my_profile_id: Option<ProfileId>,
 
-        #[structopt(long = "link_id")]
-        /// ID of link to be removed
-        link_id: LinkId,
+        #[structopt(long = "peer_profile_id")]
+        /// Remove link (unfollow/unsubscribe) from this remote profile
+        peer_profile_id: ProfileId,
     },
 }
 

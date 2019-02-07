@@ -27,7 +27,7 @@ pub trait Profile {
     fn followers(&self) -> &[Link];
 
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link>;
-    fn remove_link(&mut self, id: &LinkId) -> Fallible<()>;
+    fn remove_link(&mut self, peer_profile: &ProfileId) -> Fallible<()>;
 
     fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) -> Fallible<()>;
     fn clear_attribute(&mut self, key: AttributeId) -> Fallible<()>;
@@ -76,8 +76,13 @@ where
         })
     }
 
-    fn remove_link(&mut self, id: &LinkId) -> Fallible<()> {
-        unimplemented!()
+    fn remove_link(&mut self, peer_profile: &ProfileId) -> Fallible<()> {
+        let params = RemoveEdgeParams {
+            source: self.id().to_owned(),
+            target: peer_profile.to_owned(),
+        };
+        let _response = self.rpc.send_request("add_edge", params)?;
+        Ok(())
     }
 
     fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) -> Fallible<()> {
@@ -125,8 +130,8 @@ where
         let req_envelope_bytes = rmp_serde::encode::to_vec_named(&req_envelope)?;
         // debug!("Sending bytes {:?}", req_envelope_bytes);
 
-        //        let mut req_file = std::fs::File::create("/tmp/messagepack_bytes.dat")?;
-        //        req_file.write_all(&req_envelope_bytes)?;
+        let mut req_file = std::fs::File::create("/tmp/messagepack_bytes.dat")?;
+        req_file.write_all(&req_envelope_bytes)?;
         self.writer.write_all(&req_envelope_bytes)?;
 
         debug!("Request sent, reading resposne");
