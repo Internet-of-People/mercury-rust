@@ -54,7 +54,7 @@ pub struct Response {
     pub rid: MessageId,
     pub code: ResponseCode,
     pub description: Option<String>,
-    pub reply: rmpv::Value, // TODO handle this as an Option<>
+    pub reply: Option<rmpv::Value>,
 }
 
 impl Response {
@@ -62,7 +62,7 @@ impl Response {
         rid: MessageId,
         code: ResponseCode,
         description: Option<String>,
-        reply: rmpv::Value,
+        reply: Option<rmpv::Value>,
     ) -> Self {
         Self {
             rid,
@@ -82,13 +82,6 @@ pub(crate) struct AddNodeParams {
 pub(crate) struct AddEdgeParams {
     pub(crate) source: ProfileId,
     pub(crate) target: ProfileId,
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct AddEdgeReply {
-    pub(crate) id: LinkId,
-    //    pub(crate) source: ProfileId,
-    //    pub(crate) target: ProfileId,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]

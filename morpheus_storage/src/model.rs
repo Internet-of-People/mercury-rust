@@ -44,10 +44,10 @@ impl std::str::FromStr for ProfileId {
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Link {
-    pub id: LinkId,
-    //    pub source_profile: ProfileId, // NOTE this might be needed when serialized, but redundant when in-memory
     pub peer_profile: ProfileId,
-    //    pub metadata: HashMap<AttributeId,AttributeValue>,
+    // pub id: LinkId,
+    // pub source_profile: ProfileId, // NOTE this might be needed when serialized, but redundant when in-memory
+    // pub metadata: HashMap<AttributeId,AttributeValue>,
 }
 
 pub(crate) fn serialize_byte_vec<S>(data: &[u8], ser: S) -> Result<S::Ok, S::Error>

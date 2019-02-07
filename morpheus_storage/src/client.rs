@@ -70,10 +70,8 @@ where
             source: self.id().to_owned(),
             target: peer_profile.to_owned(),
         };
-        let response = self.rpc.send_request("add_edge", params)?;
-        let reply: AddEdgeReply = rmpv::ext::from_value(response.reply)?;
+        let _response = self.rpc.send_request("add_edge", params)?;
         Ok(Link {
-            id: reply.id,
             peer_profile: peer_profile.to_owned(),
         })
     }
@@ -84,13 +82,13 @@ where
 
     fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) -> Fallible<()> {
         let params = SetAttributeParams { key, value };
-        let response = self.rpc.send_request("set_attribute", params)?;
+        let _response = self.rpc.send_request("set_attribute", params)?;
         Ok(())
     }
 
     fn clear_attribute(&mut self, key: AttributeId) -> Fallible<()> {
         let params = ClearAttributeParams { key };
-        let response = self.rpc.send_request("clear_attribute", params)?;
+        let _response = self.rpc.send_request("clear_attribute", params)?;
         Ok(())
     }
 }
