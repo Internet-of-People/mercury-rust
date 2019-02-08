@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::io::prelude::*;
 use std::sync::{Arc, Mutex, RwLock};
 
-use failure::{bail, Fallible};
+use failure::{bail, err_msg, Fallible};
 use log::*;
 
 use crate::messages::*;
@@ -46,10 +46,10 @@ where
 
 // TODO should all operations below be async?
 pub trait Profile {
-    fn id(&self) -> &ProfileId;
-    fn links(&self) -> &[Link];
-    fn metadata(&self) -> &HashMap<AttributeId, AttributeValue>;
-    fn followers(&self) -> &[Link];
+    fn id(&self) -> ProfileId;
+    fn links(&self) -> Fallible<Vec<Link>>;
+    fn metadata(&self) -> Fallible<HashMap<AttributeId, AttributeValue>>;
+    fn followers(&self) -> Fallible<Vec<Link>>;
 
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link>;
     fn remove_link(&mut self, peer_profile: &ProfileId) -> Fallible<()>;
@@ -98,17 +98,39 @@ where
     R: 'static + Read,
     W: 'static + Write,
 {
-    fn id(&self) -> &ProfileId {
-        &self.id
+    fn id(&self) -> ProfileId {
+        self.id.clone()
     }
-    fn links(&self) -> &[Link] {
+    fn links(&self) -> Fallible<Vec<Link>> {
         unimplemented!()
     }
-    fn metadata(&self) -> &HashMap<AttributeId, AttributeValue> {
+    fn metadata(&self) -> Fallible<HashMap<AttributeId, AttributeValue>> {
         unimplemented!()
     }
-    fn followers(&self) -> &[Link] {
-        unimplemented!()
+    fn followers(&self) -> Fallible<Vec<Link>> {
+        let params = ListInEdgesParams {
+            id: self.id().clone(),
+        };
+        let response = self.send_request("list_inedges", params)?;
+        let reply_val = response
+            .reply
+            .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
+        let reply: ListInEdgesReply = rmpv::ext::from_value(reply_val)?;
+        let followers = reply
+            .edges
+            .into_iter()
+            .filter_map(|edge| {
+                if edge.target == self.id {
+                    Some(Link {
+                        peer_profile: edge.source,
+                    })
+                } else {
+                    warn!("Server returned wrong follower relation");
+                    None
+                }
+            })
+            .collect();
+        Ok(followers)
     }
 
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link> {

@@ -79,13 +79,31 @@ pub(crate) struct AddNodeParams {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct ListInEdgesParams {
+    pub(crate) id: ProfileId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct Edge {
+    pub(crate) source: ProfileId,
+    pub(crate) target: ProfileId,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct ListInEdgesReply {
+    pub(crate) edges: Vec<Edge>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct AddEdgeParams {
+    // TODO shouldn't we use Edge here instead?
     pub(crate) source: ProfileId,
     pub(crate) target: ProfileId,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct RemoveEdgeParams {
+    // TODO shouldn't we use Edge here instead?
     pub(crate) source: ProfileId,
     pub(crate) target: ProfileId,
 }

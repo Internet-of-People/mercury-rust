@@ -93,9 +93,10 @@ fn process_command(command: Command, vault: &ProfileVault) -> Fallible<()> {
 
         Command::List(ListCommand::IncomingLinks { my_profile_id }) => {
             on_profile(vault, my_profile_id, |profile| {
-                let followers = profile.followers();
-                for follower in followers {
-                    info!("  Follower: {:?}", follower);
+                let followers = profile.followers()?;
+                info!("Received {} followers", followers.len());
+                for (idx, follower) in followers.iter().enumerate() {
+                    info!("  {}: {:?}", idx, follower);
                 }
                 Ok(())
             })?;

@@ -1,4 +1,3 @@
-use failure::Fail;
 use serde::{de::Visitor, Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
