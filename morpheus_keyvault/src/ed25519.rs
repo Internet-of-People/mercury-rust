@@ -18,19 +18,32 @@ pub struct Ed25519 {}
 /// Implementation of Ed25519::KeyId
 #[derive(Clone, Hash, Eq, PartialEq)]
 pub struct KeyId([u8; KEY_ID_SIZE]);
+
 /// Implementation of Ed25519::PrivateKey
 pub struct EdPrivateKey(ed::Keypair);
+
 /// Implementation of Ed25519::PublicKey
 pub struct EdPublicKey(ed::PublicKey);
+
 /// Implementation of Ed25519::Signature
 pub struct EdSignature(ed::Signature);
+
 /// Chain key for key derivation in Ed25519 extended private and public keys.
 #[derive(Clone)]
 struct ChainCode([u8; CHAIN_CODE_SIZE]);
+
 /// Implementation of Ed25519::ExtendedPrivateKey
-pub struct EdExtPrivateKey(ChainCode, EdPrivateKey);
+pub struct EdExtPrivateKey {
+    chain_code: ChainCode,
+    sk: EdPrivateKey,
+}
+
 /// Implementation of Ed25519::ExtendedPublicKey
-pub struct EdExtPublicKey(ChainCode, EdPublicKey);
+pub struct EdExtPublicKey {
+    #[allow(dead_code)]
+    chain_code: ChainCode,
+    pk: EdPublicKey,
+}
 
 impl AsymmetricCrypto for Ed25519 {
     type KeyId = KeyId;
@@ -50,18 +63,27 @@ impl KeyDerivationCrypto for Ed25519 {
 
     fn master(seed: &Seed) -> EdExtPrivateKey {
         let mut hasher = HmacSha512::new_varkey(SLIP10_SEED_HASH_SALT).unwrap();
+
         hasher.input(seed.as_bytes());
-        let hash = hasher.result().code();
-        let r = hash.as_slice();
-        let sk = &r[..ed::SECRET_KEY_LENGTH];
-        let mut c: [u8; CHAIN_CODE_SIZE] = Default::default();
-        c.copy_from_slice(&r[ed::SECRET_KEY_LENGTH..]);
-        EdExtPrivateKey(ChainCode(c), EdPrivateKey::from(sk))
+
+        let hash_arr = hasher.result().code();
+        let hash_bytes = hash_arr.as_slice();
+
+        let sk_bytes = &hash_bytes[..ed::SECRET_KEY_LENGTH];
+        let mut c_bytes: [u8; CHAIN_CODE_SIZE] = Default::default();
+        c_bytes.copy_from_slice(&hash_bytes[ed::SECRET_KEY_LENGTH..]);
+
+        let chain_code = ChainCode(c_bytes);
+        let sk = EdPrivateKey::from(sk_bytes);
+        EdExtPrivateKey { chain_code, sk }
     }
 }
 
 impl EdPublicKey {
-    fn to_bytes(&self) -> [u8; ed::PUBLIC_KEY_LENGTH] {
+    /// The public key serialized in a format that can be fed to [`from::<AsRef<[u8]>>`]
+    ///
+    /// [`from::<AsRef<[u8]>>`]: #impl-From<D>
+    pub fn to_bytes(&self) -> [u8; ed::PUBLIC_KEY_LENGTH] {
         self.0.to_bytes()
     }
 }
@@ -71,6 +93,19 @@ impl Clone for EdPublicKey {
         let public_bytes = self.0.as_bytes();
         let public = ed::PublicKey::from_bytes(public_bytes).unwrap();
         Self(public)
+    }
+}
+
+impl<D: AsRef<[u8]>> From<D> for EdPublicKey {
+    /// Creates a public key from a byte slice possibly returned by the [`to_bytes`] method.
+    ///
+    /// # Panics
+    /// If `bytes` is rejected by `ed25519_dalek::PublicKey::from_bytes`
+    ///
+    /// [`to_bytes`]: #method.to_bytes
+    fn from(bytes: D) -> Self {
+        let pk = ed::PublicKey::from_bytes(bytes.as_ref()).unwrap();
+        EdPublicKey(pk)
     }
 }
 
@@ -84,6 +119,15 @@ impl PublicKey<Ed25519> for EdPublicKey {
     }
 }
 
+impl EdPrivateKey {
+    /// The private key serialized in a format that can be fed to [`from::<AsRef<[u8]>>`]
+    ///
+    /// [`from::<AsRef<[u8]>>`]: #impl-From<D>
+    pub fn to_bytes(&self) -> [u8; ed::SECRET_KEY_LENGTH] {
+        self.0.secret.to_bytes()
+    }
+}
+
 impl Clone for EdPrivateKey {
     fn clone(&self) -> Self {
         let secret_bytes = self.0.secret.as_bytes();
@@ -94,9 +138,18 @@ impl Clone for EdPrivateKey {
     }
 }
 
-impl EdPrivateKey {
-    fn to_bytes(&self) -> [u8; ed::SECRET_KEY_LENGTH] {
-        self.0.secret.to_bytes()
+impl<D: AsRef<[u8]>> From<D> for EdPrivateKey {
+    /// Creates a public key from a byte slice possibly returned by the [`to_bytes`] method.
+    ///
+    /// # Panics
+    /// If `bytes` is rejected by `ed25519_dalek::SecretKey::from_bytes`
+    ///
+    /// [`to_bytes`]: #method.to_bytes
+    fn from(bytes: D) -> Self {
+        let secret = ed::SecretKey::from_bytes(bytes.as_ref()).unwrap();
+        let public = ed::PublicKey::from(&secret);
+        let key_pair = ed::Keypair { secret, public };
+        EdPrivateKey(key_pair)
     }
 }
 
@@ -111,20 +164,32 @@ impl PrivateKey<Ed25519> for EdPrivateKey {
     }
 }
 
-/// # Panics
-/// If `bytes` is rejected by `ed25519_dalek::SecretKey::from_bytes`
-impl<D: AsRef<[u8]>> From<D> for EdPrivateKey {
-    fn from(bytes: D) -> Self {
-        let secret = ed::SecretKey::from_bytes(bytes.as_ref()).unwrap();
-        let public = ed::PublicKey::from(&secret);
-        let key_pair = ed::Keypair { secret, public };
-        EdPrivateKey(key_pair)
+impl ChainCode {
+    /// The chain code serialized.
+    pub fn to_bytes(&self) -> [u8; CHAIN_CODE_SIZE] {
+        self.0
     }
 }
 
 impl EdSignature {
-    fn to_bytes(&self) -> [u8; ed::SIGNATURE_LENGTH] {
+    /// The signature serialized in a format that can be fed to [`from::<AsRef<[u8]>>`]
+    ///
+    /// [`from::<AsRef<[u8]>>`]: #impl-From<D>
+    pub fn to_bytes(&self) -> [u8; ed::SIGNATURE_LENGTH] {
         self.0.to_bytes()
+    }
+}
+
+impl<D: AsRef<[u8]>> From<D> for EdSignature {
+    /// Creates a signature from a byte slice possibly returned by the [`to_bytes`] method.
+    ///
+    /// # Panics
+    /// If `bytes` is rejected by `ed25519_dalek::SecretKey::from_bytes`
+    ///
+    /// [`to_bytes`]: #method.to_bytes
+    fn from(bytes: D) -> Self {
+        let sig = ed::Signature::from_bytes(bytes.as_ref()).unwrap();
+        EdSignature(sig)
     }
 }
 
@@ -133,46 +198,64 @@ impl ExtendedPrivateKey<Ed25519> for EdExtPrivateKey {
         bail!("Normal derivation of Ed25519 is invalid based on SLIP-0010.")
     }
     fn derive_hardened_child(&self, idx: i32) -> Fallible<EdExtPrivateKey> {
-        // https://doc.rust-lang.org/std/primitive.u32.html#method.to_be_bytes
-        unimplemented!()
+        ensure!(idx >= 0, "Derivation index cannot be negative");
+        let idx = unsafe { std::mem::transmute::<i32, u32>(idx) };
+
+        let mut hasher = HmacSha512::new_varkey(&self.chain_code.to_bytes()).unwrap();
+
+        hasher.input(&[0x00u8]);
+        hasher.input(&self.sk.to_bytes());
+        hasher.input(&(0x8000_0000u32 + idx).to_be_bytes());
+
+        let hash_arr = hasher.result().code();
+        let hash_bytes = hash_arr.as_slice();
+
+        let sk_bytes = &hash_bytes[..ed::SECRET_KEY_LENGTH];
+        let mut c_bytes: [u8; CHAIN_CODE_SIZE] = Default::default();
+        c_bytes.copy_from_slice(&hash_bytes[ed::SECRET_KEY_LENGTH..]);
+
+        let chain_code = ChainCode(c_bytes);
+        let sk = EdPrivateKey::from(sk_bytes);
+
+        let xprv = EdExtPrivateKey { chain_code, sk };
+
+        Ok(xprv)
     }
     fn neuter(&self) -> EdExtPublicKey {
-        EdExtPublicKey(self.0.clone(), self.1.public_key())
+        let chain_code = self.chain_code.clone();
+        let pk = self.sk.public_key();
+        EdExtPublicKey { chain_code, pk }
     }
     fn as_private_key(&self) -> EdPrivateKey {
-        self.1.clone()
+        self.sk.clone()
     }
 }
 
 impl ExtendedPublicKey<Ed25519> for EdExtPublicKey {
-    fn derive_normal_child(&self, idx: i32) -> Fallible<EdExtPublicKey> {
-        unimplemented!()
+    fn derive_normal_child(&self, _idx: i32) -> Fallible<EdExtPublicKey> {
+        bail!("Normal derivation of Ed25519 is invalid based on SLIP-0010.")
     }
     fn as_public_key(&self) -> EdPublicKey {
-        self.1.clone()
+        self.pk.clone()
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::Ed25519;
-    use crate::{
-        ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PrivateKey, PublicKey, Seed,
-    };
+    use crate::{ExtendedPrivateKey, KeyDerivationCrypto, PrivateKey, PublicKey, Seed};
 
     fn m_263f_1_1<T: KeyDerivationCrypto>(seed: &Seed) -> T::ExtendedPrivateKey {
         let master = T::master(seed);
         let mercury = master.derive_hardened_child(0x263F).unwrap();
         let first_profile = mercury.derive_hardened_child(1).unwrap();
-        let first_app_in_first_profile = first_profile.derive_hardened_child(1).unwrap();
-        first_app_in_first_profile
+        first_profile.derive_hardened_child(1).unwrap()
     }
 
-    #[should_panic(expected = "not yet implemented")]
     #[test]
     fn test_generic() {
         let seed = Seed::generate_new();
-        let first_app_in_first_profile = m_263f_1_1::<Ed25519>(&seed);
+        let _first_app_in_first_profile = m_263f_1_1::<Ed25519>(&seed);
     }
 
     // https://github.com/satoshilabs/slips/blob/master/slip-0010.md#test-vector-2-for-ed25519
@@ -181,15 +264,15 @@ mod tests {
         let bytes = hex::decode("fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542").unwrap();
         let seed = Seed::from_bytes(&bytes).unwrap();
         let master = Ed25519::master(&seed);
-        let chain_code = (master.0).0;
+        let chain_code = master.chain_code.to_bytes();
         let sk = master.as_private_key();
         let sk_bytes = sk.to_bytes();
         assert_eq!(
-            hex::encode(chain_code),
+            hex::encode(&chain_code),
             "ef70a74db9c3a5af931b5fe73ed8e1a53464133654fd55e7a66f8570b8e33c3b"
         );
         assert_eq!(
-            hex::encode(&sk_bytes[..]),
+            hex::encode(&sk_bytes),
             "171cb88b1b3c1db25add599712e36245d75bc65a1a5c9e18d76f9f2b1eab4012"
         );
         // let pk = master.neuter().as_public_key();
@@ -198,6 +281,15 @@ mod tests {
         //     hex::encode(pk_bytes),
         //     "00a4b2856bfec510abab89753fac1ac0e1112364e7d250545963f135f2a33188ed"
         // );
+    }
+
+    #[test]
+    fn test_public_from_bytes() {
+        use super::EdPublicKey;
+        let pk_bytes =
+            hex::decode("278117fc144c72340f67d0f2316e8386ceffbf2b2428c9c51fef7c597f1d426e")
+                .unwrap();
+        let _pk = EdPublicKey::from(&pk_bytes);
     }
 
     // https://tools.ietf.org/html/rfc8032#page-24
