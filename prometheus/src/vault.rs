@@ -1,6 +1,6 @@
 //use std::collections::HashMap;
 use std::net::{SocketAddr, TcpStream};
-use std::sync::{Arc, RwLock};
+use std::sync::{Arc, Mutex, RwLock};
 use std::time::Duration;
 
 use failure::{bail, Fallible};
@@ -16,6 +16,7 @@ pub trait ProfileVault: ProfileStore {
     fn set_active(&self, id: &ProfileId) -> Fallible<()>;
 }
 
+// TODO remove this dummy implementation completely and use the RpcProfileStore instead
 pub struct DummyProfileVault {
     profile: Arc<RwLock<Profile>>,
 }
@@ -28,7 +29,7 @@ impl DummyProfileVault {
         tcp_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
         let tcp_stream_clone = tcp_stream.try_clone()?;
         let rpc = MsgPackRpc::new(tcp_stream, tcp_stream_clone);
-        let profile = RpcProfile::new(ProfileId { id: vec![42] }, rpc);
+        let profile = RpcProfile::new(&ProfileId { id: vec![42] }, Arc::new(Mutex::new(rpc)));
         Ok(Self {
             profile: Arc::new(RwLock::new(profile)),
         })

@@ -1,3 +1,4 @@
+use failure::Fail;
 use serde::{de::Visitor, Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
@@ -11,7 +12,7 @@ pub struct ProfileId {
 
 //pub type ProfileId = Vec<u8>;
 pub type AttributeId = String;
-pub type AttributeValue = String;
+pub type AttributeValue = String; // TODO change this to binary
 pub type Signature = Vec<u8>;
 pub type PublicKey = Vec<u8>;
 
