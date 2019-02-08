@@ -62,20 +62,9 @@ impl KeyDerivationCrypto for Ed25519 {
     type ExtendedPublicKey = EdExtPublicKey;
 
     fn master(seed: &Seed) -> EdExtPrivateKey {
-        let mut hasher = HmacSha512::new_varkey(SLIP10_SEED_HASH_SALT).unwrap();
-
-        hasher.input(seed.as_bytes());
-
-        let hash_arr = hasher.result().code();
-        let hash_bytes = hash_arr.as_slice();
-
-        let sk_bytes = &hash_bytes[..ed::SECRET_KEY_LENGTH];
-        let mut c_bytes: [u8; CHAIN_CODE_SIZE] = Default::default();
-        c_bytes.copy_from_slice(&hash_bytes[ed::SECRET_KEY_LENGTH..]);
-
-        let chain_code = ChainCode(c_bytes);
-        let sk = EdPrivateKey::from(sk_bytes);
-        EdExtPrivateKey { chain_code, sk }
+        EdExtPrivateKey::cook_new(SLIP10_SEED_HASH_SALT, |hasher| {
+            hasher.input(seed.as_bytes());
+        })
     }
 }
 
@@ -193,19 +182,11 @@ impl<D: AsRef<[u8]>> From<D> for EdSignature {
     }
 }
 
-impl ExtendedPrivateKey<Ed25519> for EdExtPrivateKey {
-    fn derive_normal_child(&self, _idx: i32) -> Fallible<EdExtPrivateKey> {
-        bail!("Normal derivation of Ed25519 is invalid based on SLIP-0010.")
-    }
-    fn derive_hardened_child(&self, idx: i32) -> Fallible<EdExtPrivateKey> {
-        ensure!(idx >= 0, "Derivation index cannot be negative");
-        let idx = unsafe { std::mem::transmute::<i32, u32>(idx) };
+impl EdExtPrivateKey {
+    fn cook_new<F: Fn(&mut HmacSha512) -> ()>(salt: &[u8], recipe: F) -> Self {
+        let mut hasher = HmacSha512::new_varkey(salt).unwrap();
 
-        let mut hasher = HmacSha512::new_varkey(&self.chain_code.to_bytes()).unwrap();
-
-        hasher.input(&[0x00u8]);
-        hasher.input(&self.sk.to_bytes());
-        hasher.input(&(0x8000_0000u32 + idx).to_be_bytes());
+        recipe(&mut hasher);
 
         let hash_arr = hasher.result().code();
         let hash_bytes = hash_arr.as_slice();
@@ -217,7 +198,23 @@ impl ExtendedPrivateKey<Ed25519> for EdExtPrivateKey {
         let chain_code = ChainCode(c_bytes);
         let sk = EdPrivateKey::from(sk_bytes);
 
-        let xprv = EdExtPrivateKey { chain_code, sk };
+        Self { chain_code, sk }
+    }
+}
+
+impl ExtendedPrivateKey<Ed25519> for EdExtPrivateKey {
+    fn derive_normal_child(&self, _idx: i32) -> Fallible<EdExtPrivateKey> {
+        bail!("Normal derivation of Ed25519 is invalid based on SLIP-0010.")
+    }
+    fn derive_hardened_child(&self, idx: i32) -> Fallible<EdExtPrivateKey> {
+        ensure!(idx >= 0, "Derivation index cannot be negative");
+        let idx = unsafe { std::mem::transmute::<i32, u32>(idx) };
+
+        let xprv = EdExtPrivateKey::cook_new(&self.chain_code.to_bytes(), |hasher| {
+            hasher.input(&[0x00u8]);
+            hasher.input(&self.sk.to_bytes());
+            hasher.input(&(0x8000_0000u32 + idx).to_be_bytes());
+        });
 
         Ok(xprv)
     }
@@ -242,10 +239,8 @@ impl ExtendedPublicKey<Ed25519> for EdExtPublicKey {
 
 #[cfg(test)]
 mod tests {
-    use super::Ed25519;
-    use crate::{
-        ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PrivateKey, PublicKey, Seed,
-    };
+    use crate::ed25519::{Ed25519, EdExtPrivateKey};
+    use crate::{ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, Seed};
 
     fn m_263f_1_1<T: KeyDerivationCrypto>(seed: &Seed) -> T::ExtendedPrivateKey {
         let master = T::master(seed);
@@ -260,60 +255,95 @@ mod tests {
         let _first_app_in_first_profile = m_263f_1_1::<Ed25519>(&seed);
     }
 
+    struct TestDerivation {
+        xprv: EdExtPrivateKey,
+    }
+
+    impl TestDerivation {
+        fn new(seed_hex: &str) -> Self {
+            let seed_bytes = hex::decode(seed_hex).unwrap();
+            let seed = Seed::from_bytes(&seed_bytes).unwrap();
+            let master = Ed25519::master(&seed);
+            Self { xprv: master }
+        }
+
+        fn assert_state(&self, chain_code_hex: &str, sk_hex: &str, pk_hex: &str) {
+            let xprv = &self.xprv;
+
+            let chain_code_bytes = xprv.chain_code.to_bytes();
+            assert_eq!(hex::encode(chain_code_bytes), chain_code_hex);
+
+            let sk = xprv.as_private_key();
+            let sk_bytes = sk.to_bytes();
+            assert_eq!(hex::encode(sk_bytes), sk_hex);
+
+            let pk = xprv.neuter().as_public_key();
+            let pk_bytes = pk.to_bytes();
+            assert_eq!(hex::encode(pk_bytes), pk_hex);
+        }
+
+        fn derive(&mut self, idx: i32) {
+            let xprv = self.xprv.derive_hardened_child(idx).unwrap();
+            self.xprv = xprv;
+        }
+    }
+
     // https://github.com/satoshilabs/slips/blob/master/slip-0010.md#test-vector-2-for-ed25519
     #[test]
-    fn test_master() {
-        let bytes = hex::decode("fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542").unwrap();
-        let seed = Seed::from_bytes(&bytes).unwrap();
-        let master = Ed25519::master(&seed);
-        let chain_code = master.chain_code.to_bytes();
-        let sk = master.as_private_key();
-        let sk_bytes = sk.to_bytes();
-        assert_eq!(
-            hex::encode(chain_code),
-            "ef70a74db9c3a5af931b5fe73ed8e1a53464133654fd55e7a66f8570b8e33c3b"
+    fn test_slip_0010_vector2() {
+        let mut t = TestDerivation::new("fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542");
+        t.assert_state(
+            "ef70a74db9c3a5af931b5fe73ed8e1a53464133654fd55e7a66f8570b8e33c3b",
+            "171cb88b1b3c1db25add599712e36245d75bc65a1a5c9e18d76f9f2b1eab4012",
+            "8fe9693f8fa62a4305a140b9764c5ee01e455963744fe18204b4fb948249308a",
         );
-        assert_eq!(
-            hex::encode(sk_bytes),
-            "171cb88b1b3c1db25add599712e36245d75bc65a1a5c9e18d76f9f2b1eab4012"
+        t.derive(0);
+        t.assert_state(
+            "0b78a3226f915c082bf118f83618a618ab6dec793752624cbeb622acb562862d",
+            "1559eb2bbec5790b0c65d8693e4d0875b1747f4970ae8b650486ed7470845635",
+            "86fab68dcb57aa196c77c5f264f215a112c22a912c10d123b0d03c3c28ef1037",
         );
-        let pk = master.neuter().as_public_key();
-        let pk_bytes = pk.to_bytes();
-        assert_eq!(
-            hex::encode(pk_bytes),
-            "8fe9693f8fa62a4305a140b9764c5ee01e455963744fe18204b4fb948249308a" // TODO"00a4b2856bfec510abab89753fac1ac0e1112364e7d250545963f135f2a33188ed"
+        t.derive(2_147_483_647);
+        t.assert_state(
+            "138f0b2551bcafeca6ff2aa88ba8ed0ed8de070841f0c4ef0165df8181eaad7f",
+            "ea4f5bfe8694d8bb74b7b59404632fd5968b774ed545e810de9c32a4fb4192f4",
+            "5ba3b9ac6e90e83effcd25ac4e58a1365a9e35a3d3ae5eb07b9e4d90bcf7506d",
+        );
+        t.derive(1);
+        t.assert_state(
+            "73bd9fff1cfbde33a1b846c27085f711c0fe2d66fd32e139d3ebc28e5a4a6b90",
+            "3757c7577170179c7868353ada796c839135b3d30554bbb74a4b1e4a5a58505c",
+            "2e66aa57069c86cc18249aecf5cb5a9cebbfd6fadeab056254763874a9352b45",
+        );
+        t.derive(2_147_483_646);
+        t.assert_state(
+            "0902fe8a29f9140480a00ef244bd183e8a13288e4412d8389d140aac1794825a",
+            "5837736c89570de861ebc173b1086da4f505d4adb387c6a1b1342d5e4ac9ec72",
+            "e33c0f7d81d843c572275f287498e8d408654fdf0d1e065b84e2e6f157aab09b",
+        );
+        t.derive(2);
+        t.assert_state(
+            "5d70af781f3a37b829f0d060924d5e960bdc02e85423494afc0b1a41bbe196d4",
+            "551d333177df541ad876a60ea71f00447931c0a9da16f227c11ea080d7391b8d",
+            "47150c75db263559a70d5778bf36abbab30fb061ad69f69ece61a72b0cfa4fc0",
         );
     }
 
     #[test]
-    fn test_derivation() {
-        use crate::bip32::{Bip32Path, Path};
-        use crate::ExtendedPublicKey;
+    fn test_private_from_bytes() {
+        use super::EdPrivateKey;
+        use crate::PrivateKey;
 
-        let bytes = hex::decode("fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542").unwrap();
-        let seed = Seed::from_bytes(&bytes).unwrap();
-        let path = "m/0'".parse::<Path>().unwrap();
-        let xprv = Ed25519::calc_ext_priv_key(&seed, &path).unwrap();
+        let sk_bytes =
+            hex::decode("171cb88b1b3c1db25add599712e36245d75bc65a1a5c9e18d76f9f2b1eab4012")
+                .unwrap();
+        let sk = EdPrivateKey::from(sk_bytes);
 
-        let sk = xprv.as_private_key();
-        let sk_bytes = sk.to_bytes();
-        assert_eq!(
-            hex::encode(sk_bytes),
-            "1559eb2bbec5790b0c65d8693e4d0875b1747f4970ae8b650486ed7470845635"
-        );
-
-        let c = &xprv.chain_code;
-        let c_bytes = c.to_bytes();
-        assert_eq!(
-            hex::encode(c_bytes),
-            "0b78a3226f915c082bf118f83618a618ab6dec793752624cbeb622acb562862d"
-        );
-
-        let pk = xprv.neuter().as_public_key();
+        let pk = sk.public_key();
         let pk_bytes = pk.to_bytes();
         assert_eq!(
             hex::encode(pk_bytes),
-            "86fab68dcb57aa196c77c5f264f215a112c22a912c10d123b0d03c3c28ef1037" // TODO "0086fab68dcb57aa196c77c5f264f215a112c22a912c10d123b0d03c3c28ef1037"
+            "8fe9693f8fa62a4305a140b9764c5ee01e455963744fe18204b4fb948249308a"
         );
     }
 
@@ -329,13 +359,12 @@ mod tests {
     macro_rules! test_sign_verify {
         ($($name:ident($sk:expr,$pk:expr,$msg:expr,$sig:expr));+) => {
             mod sign_verify {
+                use crate::{PublicKey,PrivateKey};
+                use crate::ed25519::EdPrivateKey;
 
             $(
                 #[test]
                 fn $name() {
-                    use $crate::{PublicKey,PrivateKey};
-                    use $crate::ed25519::EdPrivateKey;
-
                     let sk_bytes = hex::decode($sk).unwrap();
                     let sk = EdPrivateKey::from(sk_bytes.as_slice());
 
