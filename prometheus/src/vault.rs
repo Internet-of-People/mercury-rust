@@ -56,7 +56,7 @@ impl ProfileVault for DummyProfileVault {
     }
 
     fn create_id(&self) -> Fallible<ProfileId> {
-        unimplemented!()
+        Ok(self.get_active()?.unwrap())
     }
 
     fn get_active(&self) -> Fallible<Option<ProfileId>> {
