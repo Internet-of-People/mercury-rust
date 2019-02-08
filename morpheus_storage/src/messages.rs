@@ -94,7 +94,9 @@ pub(crate) struct RemoveEdgeParams {
 pub(crate) struct SetNodeAttributeParams {
     pub(crate) id: ProfileId,
     pub(crate) key: AttributeId,
-    pub(crate) value: AttributeValue,
+    #[serde(serialize_with = "serialize_byte_vec")]
+    #[serde(deserialize_with = "deserialize_byte_vec")]
+    pub(crate) value: Vec<u8>,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]

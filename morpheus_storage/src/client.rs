@@ -135,7 +135,7 @@ where
         let params = SetNodeAttributeParams {
             id: self.id.to_owned(),
             key,
-            value,
+            value: value.as_bytes().to_owned(),
         };
         let _response = self.send_request("set_node_attribute", params)?;
         Ok(())

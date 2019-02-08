@@ -2,6 +2,12 @@ use failure::Fail;
 use serde::{de::Visitor, Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
+//pub type ProfileId = Vec<u8>;
+pub type AttributeId = String;
+pub type AttributeValue = String;
+pub type Signature = Vec<u8>;
+pub type PublicKey = Vec<u8>;
+
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
 pub struct ProfileId {
@@ -9,12 +15,6 @@ pub struct ProfileId {
     #[serde(deserialize_with = "deserialize_byte_vec")]
     pub id: Vec<u8>,
 }
-
-//pub type ProfileId = Vec<u8>;
-pub type AttributeId = String;
-pub type AttributeValue = String; // TODO change this to binary
-pub type Signature = Vec<u8>;
-pub type PublicKey = Vec<u8>;
 
 impl<'a> From<&'a ProfileId> for String {
     fn from(src: &'a ProfileId) -> Self {
