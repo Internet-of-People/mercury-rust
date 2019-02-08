@@ -72,7 +72,8 @@ fn process_command(command: Command, vault: &ProfileVault) -> Fallible<()> {
         }
 
         Command::Create(CreateCommand::Profile) => {
-            let created_profile_ptr = vault.create()?;
+            let new_profile_id = vault.create_id()?;
+            let created_profile_ptr = vault.create(&new_profile_id)?;
             let created_profile = match created_profile_ptr.read() {
                 Ok(profile) => profile,
                 Err(e) => bail!(

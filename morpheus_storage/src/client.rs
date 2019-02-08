@@ -14,7 +14,7 @@ const RESPONSE_CODE_OK: u32 = 0;
 // TODO should all operations below be async?
 pub trait ProfileStore {
     fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>>; // TODO or should list_profiles() return Vec<Profile> and drop this function?
-    fn create(&self) -> Fallible<Arc<RwLock<Profile>>>;
+    fn create(&self, id: &ProfileId) -> Fallible<Arc<RwLock<Profile>>>;
     // TODO what does this mean? Purge related metadata from local storage plus don't show it in the list,
     //      or maybe also delete all links/follows with other profiles
     fn remove(&self, id: &ProfileId) -> Fallible<()>;
@@ -36,7 +36,7 @@ where
         //      consider caching instances and return just a clone of the Arc
         Some(Arc::new(RwLock::new(RpcProfile::new(id, self.rpc.clone()))))
     }
-    fn create(&self) -> Fallible<Arc<RwLock<Profile>>> {
+    fn create(&self, id: &ProfileId) -> Fallible<Arc<RwLock<Profile>>> {
         unimplemented!()
     }
     fn remove(&self, id: &ProfileId) -> Fallible<()> {

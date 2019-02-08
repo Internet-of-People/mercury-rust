@@ -10,7 +10,8 @@ use morpheus_storage::*;
 //use crate::types::{Link, PublicKey, Signature};
 
 pub trait ProfileVault: ProfileStore {
-    fn list(&self) -> Fallible<Vec<ProfileId>>; // TODO should this return an iterator instead?
+    fn list(&self) -> Fallible<Vec<ProfileId>>;
+    fn create_id(&self) -> Fallible<ProfileId>;
 
     fn get_active(&self) -> Fallible<Option<ProfileId>>;
     fn set_active(&self, id: &ProfileId) -> Fallible<()>;
@@ -40,7 +41,7 @@ impl ProfileStore for DummyProfileVault {
     fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>> {
         Some(self.profile.clone())
     }
-    fn create(&self) -> Fallible<Arc<RwLock<Profile>>> {
+    fn create(&self, id: &ProfileId) -> Fallible<Arc<RwLock<Profile>>> {
         unimplemented!()
     }
     fn remove(&self, id: &ProfileId) -> Fallible<()> {
@@ -52,6 +53,10 @@ impl ProfileVault for DummyProfileVault {
     fn list(&self) -> Fallible<Vec<ProfileId>> {
         let active_opt = self.get_active()?;
         Ok(vec![active_opt.unwrap()])
+    }
+
+    fn create_id(&self) -> Fallible<ProfileId> {
+        unimplemented!()
     }
 
     fn get_active(&self) -> Fallible<Option<ProfileId>> {
