@@ -17,7 +17,7 @@ pub struct ProfileId {
 
 impl<'a> From<&'a ProfileId> for String {
     fn from(src: &'a ProfileId) -> Self {
-        ::multibase::encode(::multibase::Base::Base64url, &src.id)
+        morpheus_keyvault::mbase::mbase58_encode(&src.id)
     }
 }
 
@@ -34,9 +34,9 @@ impl std::fmt::Display for ProfileId {
 }
 
 impl std::str::FromStr for ProfileId {
-    type Err = multibase::Error;
+    type Err = failure::Error;
     fn from_str(src: &str) -> Result<Self, Self::Err> {
-        let (_base, binary) = ::multibase::decode(src)?;
+        let binary = morpheus_keyvault::mbase::mbase_decode(src)?;
         Ok(ProfileId { id: binary })
     }
 }

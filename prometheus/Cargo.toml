@@ -9,8 +9,6 @@ failure = "*"
 log = "*"
 morpheus_keyvault = { path="../morpheus_keyvault" }
 morpheus_storage = { path="../morpheus_storage" }
-multibase = "*"
-multihash = "*"
 # TODO these should be only binary dependencies, not needed for the library
 structopt = "*"
 log4rs = "*"
