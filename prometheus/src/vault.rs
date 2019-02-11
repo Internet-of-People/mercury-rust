@@ -9,7 +9,7 @@ use failure::{bail, Fallible};
 use morpheus_storage::*;
 //use crate::types::{Link, PublicKey, Signature};
 
-pub trait ProfileVault: ProfileStore {
+pub trait ProfileVault {
     fn list(&self) -> Fallible<Vec<ProfileId>>;
     fn create_id(&self) -> Fallible<ProfileId>;
 
