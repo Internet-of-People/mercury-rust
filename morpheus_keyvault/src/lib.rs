@@ -10,7 +10,6 @@ extern crate failure;
 pub mod bip32;
 mod bip39;
 pub mod ed25519;
-mod fingerprint;
 #[cfg(test)]
 mod tests;
 

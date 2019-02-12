@@ -10,7 +10,6 @@ edition = "2018"
 [dependencies]
 bip39 = { git = "https://github.com/Internet-of-People/bip39-rs", branch = "master", default-features = false }
 blake2 = "0.8.0"
-digest = "0.8.0"
 ed25519-dalek = "1.0.0-pre.1"
 failure = "0.1.5"
 hex = "0.3.2"
