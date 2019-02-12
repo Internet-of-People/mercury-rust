@@ -44,7 +44,12 @@ fn selected_profile(
     Ok(profile)
 }
 
-fn on_profile<F>(vault: &ProfileVault, store: &ProfileStore, my_profile: Option<ProfileId>, f: F) -> Fallible<()>
+fn on_profile<F>(
+    vault: &ProfileVault,
+    store: &ProfileStore,
+    my_profile: Option<ProfileId>,
+    f: F,
+) -> Fallible<()>
 where
     F: FnOnce(&mut Profile) -> Fallible<()>,
 {

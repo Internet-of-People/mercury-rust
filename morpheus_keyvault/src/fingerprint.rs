@@ -3,13 +3,11 @@ use blake2::{
     VarBlake2b,
 };
 
-use super::mbase::mbase58_encode;
-
 pub fn fingerprint<B: AsRef<[u8]>>(data: B) -> String {
     let mut hasher = VarBlake2b::new(16).unwrap();
     hasher.input(data);
     let hash = hasher.vec_result();
-    let mut output = mbase58_encode(&hash);
+    let mut output = multibase::encode(multibase::Base58btc, &hash);
     output.insert(0, 'I');
     output
 }

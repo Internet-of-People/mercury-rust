@@ -7,7 +7,7 @@ edition = "2018"
 [dependencies]
 failure = "*"
 log = "*"
-morpheus_keyvault = { path = "../morpheus_keyvault" }
+multibase = "0.6.0"
 rmp-serde = "*"
 rmpv = { version="*", features=["with-serde"] }
 serde = "*"

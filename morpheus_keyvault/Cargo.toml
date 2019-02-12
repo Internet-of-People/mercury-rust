@@ -8,7 +8,6 @@ keywords = ["crypto", "wallet", "iop", "mercury", "morpheus", "prometheus"]
 edition = "2018"
 
 [dependencies]
-base-x = "0.2.4"
 bip39 = { git = "https://github.com/Internet-of-People/bip39-rs", branch = "master", default-features = false }
 blake2 = "0.8.0"
 digest = "0.8.0"
@@ -17,7 +16,5 @@ failure = "0.1.5"
 hex = "0.3.2"
 hmac = "0.7.0"
 log = "0.4.6"
+multibase = "0.6.0"
 sha2 = "0.8.0"
-
-# [dev-dependencies]
-# hex-literal = "0.1.2"

@@ -11,7 +11,6 @@ pub mod bip32;
 mod bip39;
 pub mod ed25519;
 mod fingerprint;
-pub mod mbase;
 #[cfg(test)]
 mod tests;
 
