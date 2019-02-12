@@ -1,3 +1,4 @@
+use failure::ensure;
 use serde::{de::Visitor, Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
@@ -17,7 +18,9 @@ pub struct ProfileId {
 
 impl<'a> From<&'a ProfileId> for String {
     fn from(src: &'a ProfileId) -> Self {
-        multibase::encode(multibase::Base58btc, &src.id)
+        let mut output = multibase::encode(multibase::Base58btc, &src.id);
+        output.insert(0, 'I');
+        output
     }
 }
 
@@ -36,7 +39,12 @@ impl std::fmt::Display for ProfileId {
 impl std::str::FromStr for ProfileId {
     type Err = failure::Error;
     fn from_str(src: &str) -> Result<Self, Self::Err> {
-        let (_base, binary) = multibase::decode(src)?;
+        let mut chars = src.chars();
+        ensure!(
+            chars.next() == Some('I'),
+            "Profile identifier must start with 'I'"
+        );
+        let (_base, binary) = multibase::decode(chars.as_str())?;
         Ok(ProfileId { id: binary })
     }
 }
