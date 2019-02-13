@@ -9,10 +9,7 @@ use ed25519_dalek as ed;
 use failure::Fallible;
 use hmac::Mac;
 
-use super::{
-    AsymmetricCrypto, ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PrivateKey,
-    PublicKey, Seed,
-};
+use super::*;
 
 /// This elliptic curve cryptography implements both the [AsymmetricCrypto](AsymmetricCrypto) and
 /// [KeyDerivationCrypto](KeyDerivationCrypto) traits so it can be used in EcDSA, Cardano and of course,
@@ -42,13 +39,6 @@ pub struct EdExtPrivateKey {
     sk: EdPrivateKey,
 }
 
-/// Implementation of Ed25519::ExtendedPublicKey
-pub struct EdExtPublicKey {
-    #[allow(dead_code)]
-    chain_code: ChainCode,
-    pk: EdPublicKey,
-}
-
 impl AsymmetricCrypto for Ed25519 {
     type KeyId = KeyId;
     type PublicKey = EdPublicKey;
@@ -56,15 +46,16 @@ impl AsymmetricCrypto for Ed25519 {
     type Signature = EdSignature;
 }
 
+const VERSION_SIZE: usize = 1;
 const KEY_ID_SALT: &[u8] = b"open social graph";
-const KEY_ID_SIZE: usize = 16;
+const KEY_ID_SIZE: usize = 16 + VERSION_SIZE;
 const CHAIN_CODE_SIZE: usize = 32;
 const SLIP10_SEED_HASH_SALT: &[u8] = b"ed25519 seed";
 type HmacSha512 = hmac::Hmac<sha2::Sha512>;
 
 impl KeyDerivationCrypto for Ed25519 {
     type ExtendedPrivateKey = EdExtPrivateKey;
-    type ExtendedPublicKey = EdExtPublicKey;
+    type ExtendedPublicKey = EdPublicKey; // No need for extension, because there is no derivation
 
     fn master(seed: &Seed) -> EdExtPrivateKey {
         EdExtPrivateKey::cook_new(SLIP10_SEED_HASH_SALT, |hasher| {
@@ -105,10 +96,11 @@ impl<D: AsRef<[u8]>> From<D> for EdPublicKey {
 
 impl PublicKey<Ed25519> for EdPublicKey {
     fn key_id(&self) -> KeyId {
-        let mut hasher = VarBlake2b::new_keyed(KEY_ID_SALT, KEY_ID_SIZE);
+        let mut hasher = VarBlake2b::new_keyed(KEY_ID_SALT, KEY_ID_SIZE - VERSION_SIZE);
         hasher.input(self.0.as_bytes());
         let mut hash = [0u8; KEY_ID_SIZE];
-        hasher.variable_result(|h| hash.copy_from_slice(h));
+        hash[..VERSION_SIZE].copy_from_slice(b"\x01");
+        hasher.variable_result(|h| hash[VERSION_SIZE..].copy_from_slice(h));
         KeyId(hash)
     }
     fn verify<D: AsRef<[u8]>>(&self, data: D, sig: EdSignature) -> bool {
@@ -227,22 +219,20 @@ impl ExtendedPrivateKey<Ed25519> for EdExtPrivateKey {
 
         Ok(xprv)
     }
-    fn neuter(&self) -> EdExtPublicKey {
-        let chain_code = self.chain_code.clone();
-        let pk = self.sk.public_key();
-        EdExtPublicKey { chain_code, pk }
+    fn neuter(&self) -> EdPublicKey {
+        self.sk.public_key()
     }
     fn as_private_key(&self) -> EdPrivateKey {
         self.sk.clone()
     }
 }
 
-impl ExtendedPublicKey<Ed25519> for EdExtPublicKey {
-    fn derive_normal_child(&self, _idx: i32) -> Fallible<EdExtPublicKey> {
+impl ExtendedPublicKey<Ed25519> for EdPublicKey {
+    fn derive_normal_child(&self, _idx: i32) -> Fallible<EdPublicKey> {
         bail!("Normal derivation of Ed25519 is invalid based on SLIP-0010.")
     }
     fn as_public_key(&self) -> EdPublicKey {
-        self.pk.clone()
+        self.clone()
     }
 }
 
@@ -313,7 +303,7 @@ mod tests {
         fn case0() {
             test(
                 "0000000000000000000000000000000000000000000000000000000000000000",
-                "0f0fd1fbe13e7e585ee8a14a27221225",
+                "010f0fd1fbe13e7e585ee8a14a27221225",
             );
         }
 
@@ -321,7 +311,7 @@ mod tests {
         fn case1() {
             test(
                 "8fe9693f8fa62a4305a140b9764c5ee01e455963744fe18204b4fb948249308a",
-                "82d4ecfc12c5ad8efa5ef494f47e5285",
+                "0182d4ecfc12c5ad8efa5ef494f47e5285",
             );
         }
 
@@ -329,7 +319,7 @@ mod tests {
         fn case2() {
             test(
                 "8ee9693f8fa62a4305a140b9764c5ee01e455963744fe18204b4fb948249308a",
-                "d8245272e2317ef53b26407e925edf7e",
+                "01d8245272e2317ef53b26407e925edf7e",
             );
         }
     }
