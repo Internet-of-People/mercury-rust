@@ -54,8 +54,8 @@ pub trait Profile {
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link>;
     fn remove_link(&mut self, peer_profile: &ProfileId) -> Fallible<()>;
 
-    fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) -> Fallible<()>;
-    fn clear_attribute(&mut self, key: AttributeId) -> Fallible<()>;
+    fn set_attribute(&mut self, key: &AttributeId, value: &AttributeValue) -> Fallible<()>;
+    fn clear_attribute(&mut self, key: &AttributeId) -> Fallible<()>;
 
     //fn sign(&self, data: &[u8]) -> Signature;
     //fn get_signer(&self) -> Arc<Signer>;
@@ -153,20 +153,20 @@ where
         Ok(())
     }
 
-    fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) -> Fallible<()> {
+    fn set_attribute(&mut self, key: &AttributeId, value: &AttributeValue) -> Fallible<()> {
         let params = SetNodeAttributeParams {
             id: self.id.to_owned(),
-            key,
-            value: value.as_bytes().to_owned(),
+            key: key.clone(),
+            value: value.as_bytes().to_owned(), // TODO There is a hidden data structure between the CLI and MsgPack serializations
         };
         let _response = self.send_request("set_node_attribute", params)?;
         Ok(())
     }
 
-    fn clear_attribute(&mut self, key: AttributeId) -> Fallible<()> {
+    fn clear_attribute(&mut self, key: &AttributeId) -> Fallible<()> {
         let params = ClearNodeAttributeParams {
             id: self.id.to_owned(),
-            key,
+            key: key.clone(),
         };
         let _response = self.send_request("clear_node_attribute", params)?;
         Ok(())

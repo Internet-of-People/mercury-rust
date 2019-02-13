@@ -4,7 +4,7 @@ use serde_derive::{Deserialize, Serialize};
 
 //pub type ProfileId = Vec<u8>;
 pub type AttributeId = String;
-pub type AttributeValue = String;
+pub type AttributeValue = String; // StructOpt needs FromStr, MessagePack needs Vec<u8>
 pub type Signature = Vec<u8>;
 pub type PublicKey = Vec<u8>;
 
