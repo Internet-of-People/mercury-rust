@@ -7,8 +7,7 @@ use crate::model::*;
 pub(crate) struct Envelope {
     pub(crate) target: String,
 
-    #[serde(serialize_with = "serialize_byte_vec")]
-    #[serde(deserialize_with = "deserialize_byte_vec")]
+    #[serde(with = "serde_bytes")]
     pub(crate) payload: Vec<u8>,
 }
 
@@ -112,8 +111,7 @@ pub(crate) struct RemoveEdgeParams {
 pub(crate) struct SetNodeAttributeParams {
     pub(crate) id: ProfileId,
     pub(crate) key: AttributeId,
-    #[serde(serialize_with = "serialize_byte_vec")]
-    #[serde(deserialize_with = "deserialize_byte_vec")]
+    #[serde(with = "serde_bytes")]
     pub(crate) value: Vec<u8>,
 }
 
@@ -127,8 +125,8 @@ pub(crate) struct ClearNodeAttributeParams {
 fn test_serialization_concept() {
     let original_envelope = {
         let params = AddEdgeParams {
-            source: ProfileId { id: vec![2] },
-            target: ProfileId { id: vec![42] },
+            source: "Iez21JXEtMzXjbCK6BAYFU9ewX".parse::<ProfileId>().unwrap(),
+            target: "IezpmXKKc2QRZpXbzGV62MgKe".parse::<ProfileId>().unwrap(),
         };
         let request = Request::new(1, "add_edge", params);
         // println!("request: {:#?}", request);

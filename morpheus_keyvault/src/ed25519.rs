@@ -8,6 +8,7 @@ use blake2::{
 use ed25519_dalek as ed;
 use failure::Fallible;
 use hmac::Mac;
+use serde_derive::{Deserialize, Serialize};
 
 use super::*;
 
@@ -17,8 +18,9 @@ use super::*;
 pub struct Ed25519 {}
 
 /// Implementation of Ed25519::KeyId
-#[derive(Clone, Hash, Eq, PartialEq)]
-pub struct KeyId([u8; KEY_ID_SIZE]);
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[serde(transparent)]
+pub struct KeyId(#[serde(with = "serde_bytes")] Vec<u8>);
 
 /// Implementation of Ed25519::PrivateKey
 pub struct EdPrivateKey(ed::Keypair);
@@ -48,6 +50,7 @@ impl AsymmetricCrypto for Ed25519 {
 
 const VERSION_SIZE: usize = 1;
 const KEY_ID_SALT: &[u8] = b"open social graph";
+const KEY_ID_VERSION1: u8 = b'\x01';
 const KEY_ID_SIZE: usize = 16 + VERSION_SIZE;
 const CHAIN_CODE_SIZE: usize = 32;
 const SLIP10_SEED_HASH_SALT: &[u8] = b"ed25519 seed";
@@ -61,6 +64,81 @@ impl KeyDerivationCrypto for Ed25519 {
         EdExtPrivateKey::cook_new(SLIP10_SEED_HASH_SALT, |hasher| {
             hasher.input(seed.as_bytes());
         })
+    }
+}
+
+impl KeyId {
+    /// The public key serialized in a format that can be fed to [`from::<AsRef<[u8]>>`]
+    ///
+    /// [`from::<AsRef<[u8]>>`]: #impl-From<D>
+    pub fn to_bytes(&self) -> [u8; KEY_ID_SIZE] {
+        let mut res = [0; KEY_ID_SIZE];
+        res.copy_from_slice(&self.0);
+        res
+    }
+}
+
+impl<D: AsRef<[u8]>> From<D> for KeyId {
+    /// Creates a key id from a byte slice possibly returned by the [`to_bytes`] method.
+    ///
+    /// # Panics
+    /// If `bytes` is not the right size or not the right version.
+    ///
+    /// [`to_bytes`]: #method.to_bytes
+    fn from(bytes: D) -> Self {
+        let bytes = bytes.as_ref();
+        assert_eq!(bytes.len(), KEY_ID_SIZE);
+        assert_eq!(bytes[0], KEY_ID_VERSION1);
+        KeyId(bytes.to_owned())
+    }
+}
+
+impl From<&EdPublicKey> for KeyId {
+    fn from(pk: &EdPublicKey) -> KeyId {
+        let mut hasher = VarBlake2b::new_keyed(KEY_ID_SALT, KEY_ID_SIZE - VERSION_SIZE);
+        hasher.input(pk.0.as_bytes());
+        let mut hash = Vec::with_capacity(KEY_ID_SIZE);
+        hash.push(KEY_ID_VERSION1);
+        hasher.variable_result(|h| hash.extend_from_slice(h));
+        KeyId(hash)
+    }
+}
+
+impl std::str::FromStr for KeyId {
+    type Err = failure::Error;
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        let mut chars = src.chars();
+        ensure!(chars.next() == Some('I'), "Identifiers must start with 'I'");
+        ensure!(
+            chars.next() == Some('e'),
+            "Only Ed25519 cipher is supported"
+        );
+        let (_base, binary) = multibase::decode(chars.as_str())?;
+        ensure!(
+            binary[0] == KEY_ID_VERSION1,
+            "Only identifier version {:x} is supported",
+            KEY_ID_VERSION1
+        );
+        ensure!(
+            binary.len() == KEY_ID_SIZE,
+            "Identifier length is not {}",
+            KEY_ID_SIZE
+        );
+        Ok(KeyId(binary))
+    }
+}
+
+impl From<&KeyId> for String {
+    fn from(src: &KeyId) -> Self {
+        let mut output = multibase::encode(multibase::Base58btc, &src.0);
+        output.insert_str(0, "Ie"); // Logically 'I' and 'e' belongs to different concepts
+        output
+    }
+}
+
+impl std::fmt::Display for KeyId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", String::from(self))
     }
 }
 
@@ -96,12 +174,7 @@ impl<D: AsRef<[u8]>> From<D> for EdPublicKey {
 
 impl PublicKey<Ed25519> for EdPublicKey {
     fn key_id(&self) -> KeyId {
-        let mut hasher = VarBlake2b::new_keyed(KEY_ID_SALT, KEY_ID_SIZE - VERSION_SIZE);
-        hasher.input(self.0.as_bytes());
-        let mut hash = [0u8; KEY_ID_SIZE];
-        hash[..VERSION_SIZE].copy_from_slice(b"\x01");
-        hasher.variable_result(|h| hash[VERSION_SIZE..].copy_from_slice(h));
-        KeyId(hash)
+        KeyId::from(self)
     }
     fn verify<D: AsRef<[u8]>>(&self, data: D, sig: EdSignature) -> bool {
         let res = self.0.verify(data.as_ref(), &sig.0);
@@ -320,6 +393,35 @@ mod tests {
             test(
                 "8ee9693f8fa62a4305a140b9764c5ee01e455963744fe18204b4fb948249308a",
                 "01d8245272e2317ef53b26407e925edf7e",
+            );
+        }
+    }
+
+    mod parse_key_id {
+        use crate::ed25519::KeyId;
+
+        fn test(input: &str, key_id_hex: &str) {
+            let key_id_bytes = hex::decode(key_id_hex).unwrap();
+            let id1 = KeyId::from(&key_id_bytes);
+            assert_eq!(id1.to_string(), input);
+
+            let id2 = input.parse::<KeyId>().unwrap();
+            assert_eq!(hex::encode(&id2.to_bytes()), key_id_hex);
+        }
+
+        #[test]
+        fn test_1() {
+            test(
+                "Iez21JXEtMzXjbCK6BAYFU9ewX",
+                "01d8245272e2317ef53b26407e925edf7e",
+            );
+        }
+
+        #[test]
+        fn test_2() {
+            test(
+                "IezpmXKKc2QRZpXbzGV62MgKe",
+                "0182d4ecfc12c5ad8efa5ef494f47e5285",
             );
         }
     }

@@ -30,7 +30,8 @@ impl DummyProfileVault {
         tcp_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
         let tcp_stream_clone = tcp_stream.try_clone()?;
         let rpc = MsgPackRpc::new(tcp_stream, tcp_stream_clone);
-        let profile = RpcProfile::new(&ProfileId { id: vec![42] }, Arc::new(Mutex::new(rpc)));
+        let id = "Iez21JXEtMzXjbCK6BAYFU9ewX".parse::<ProfileId>().unwrap();
+        let profile = RpcProfile::new(&id, Arc::new(Mutex::new(rpc)));
         Ok(Self {
             profile: Arc::new(RwLock::new(profile)),
         })
