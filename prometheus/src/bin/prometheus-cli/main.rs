@@ -1,10 +1,9 @@
-//use std::net::SocketAddr;
-use std::time::Duration;
-
 use failure::Fallible;
 use log::*;
+use std::time::Duration;
 
 use crate::cli::*;
+use prometheus::store::*;
 use prometheus::vault::*;
 
 mod cli;
