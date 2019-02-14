@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::io::prelude::*;
-use std::sync::{Arc, Mutex, RwLock};
+use std::rc::Rc;
+use std::cell::RefCell;
 
 use failure::{bail, err_msg, Fallible};
 use log::*;
@@ -13,35 +14,11 @@ const RESPONSE_CODE_OK: u32 = 0;
 
 // TODO should all operations below be async?
 pub trait ProfileStore {
-    fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>>; // TODO or should list_profiles() return Vec<Profile> and drop this function?
-    fn create(&self, id: &ProfileId) -> Fallible<Arc<RwLock<Profile>>>;
+    fn get(&self, id: &ProfileId) -> Option<Rc<Profile>>; // TODO or should list_profiles() return Vec<Profile> and drop this function?
+    fn create(&self, id: &ProfileId) -> Fallible<Rc<Profile>>;
     // TODO what does this mean? Purge related metadata from local storage plus don't show it in the list,
     //      or maybe also delete all links/follows with other profiles
     fn remove(&self, id: &ProfileId) -> Fallible<()>;
-}
-
-pub struct RpcProfileStore<R, W> {
-    rpc: Arc<Mutex<MsgPackRpc<R, W>>>,
-}
-
-// TODO with the current construction of RpcProfile, the type does not need locking protection,
-//      consider removing Arc<RwLock<Profile>> from this interface
-impl<R, W> ProfileStore for RpcProfileStore<R, W>
-where
-    R: 'static + Read,
-    W: 'static + Write,
-{
-    fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>> {
-        // TODO this should load up related keys from the KeyVault to validate the id and
-        //      consider caching instances and return just a clone of the Arc
-        Some(Arc::new(RwLock::new(RpcProfile::new(id, self.rpc.clone()))))
-    }
-    fn create(&self, id: &ProfileId) -> Fallible<Arc<RwLock<Profile>>> {
-        unimplemented!()
-    }
-    fn remove(&self, id: &ProfileId) -> Fallible<()> {
-        unimplemented!()
-    }
 }
 
 // TODO should all operations below be async?
@@ -63,7 +40,7 @@ pub trait Profile {
 
 pub struct RpcProfile<R, W> {
     id: ProfileId,
-    rpc: Arc<Mutex<MsgPackRpc<R, W>>>,
+    rpc: Rc<RefCell<MsgPackRpc<R, W>>>,
 }
 
 impl<R, W> RpcProfile<R, W>
@@ -71,7 +48,7 @@ where
     R: 'static + Read,
     W: 'static + Write,
 {
-    pub fn new(id: &ProfileId, rpc: Arc<Mutex<MsgPackRpc<R, W>>>) -> Self {
+    pub fn new(id: &ProfileId, rpc: Rc<RefCell<MsgPackRpc<R, W>>>) -> Self {
         Self {
             id: id.to_owned(),
             rpc,
@@ -82,14 +59,7 @@ where
     where
         T: serde::Serialize + std::fmt::Debug,
     {
-        let mut rpc = match self.rpc.lock() {
-            Ok(rpc) => rpc,
-            Err(e) => bail!(
-                "Implementation error: failed to get lock to storage RPC: {}",
-                e
-            ),
-        };
-        rpc.send_request(method, params)
+        self.rpc.borrow_mut().send_request(method, params)
     }
 }
 
