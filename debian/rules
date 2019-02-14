@@ -1,0 +1,14 @@
+#!/usr/bin/make -f
+
+DH_VERBOSE = 1
+
+%:
+	dh $@
+
+override_dh_auto_build:
+	# assert the binary has been already built:
+	[ -f target/debug/prometheus-cli ]
+
+override_dh_auto_install:
+	install -d debian/prometheus/usr/bin
+	install -m 755 target/debug/prometheus-cli debian/prometheus/usr/bin

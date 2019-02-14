@@ -1,0 +1,3 @@
+Steps to create a debian package:
+1. Compile the thing, run `cargo build` in git root
+2. run `dpkg-buildpackage --no-sign`
