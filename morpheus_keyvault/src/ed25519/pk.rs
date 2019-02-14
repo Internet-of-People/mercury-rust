@@ -49,3 +49,12 @@ impl PublicKey<Ed25519> for EdPublicKey {
         res.is_ok()
     }
 }
+
+impl ExtendedPublicKey<Ed25519> for EdPublicKey {
+    fn derive_normal_child(&self, _idx: i32) -> Fallible<EdPublicKey> {
+        bail!("Normal derivation of Ed25519 is invalid based on SLIP-0010.")
+    }
+    fn as_public_key(&self) -> EdPublicKey {
+        self.clone()
+    }
+}
