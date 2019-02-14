@@ -3,7 +3,7 @@ use log::*;
 use std::time::Duration;
 
 use crate::cli::*;
-use prometheus::store::*;
+use morpheus_storage::DummyProfileStore;
 use prometheus::vault::*;
 
 mod cli;
@@ -19,10 +19,8 @@ fn main() -> Fallible<()> {
     let timeout = Duration::from_secs(5);
     info!("Initializing profile vault, connecting to {:?}", addr);
 
-    let mut vault = DummyProfileVault::new();
-    let store = DummyProfileStore::new(/*&mut vault, */ &addr, timeout)?;
-
-    // let vault = FailingProfileVault{};
+    let vault = DummyProfileVault::new();
+    let store = DummyProfileStore::new(&addr, timeout)?;
 
     let mut ctx = CommandContext::new(Box::new(vault), Box::new(store));
     command.execute(&mut ctx)

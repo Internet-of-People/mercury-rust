@@ -15,13 +15,14 @@ pub trait ProfileVault {
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
 }
 
-// TODO remove this dummy implementation completely and use the RpcProfileStore instead
+// TODO Restore this state from a JSON file or something similar
 pub struct DummyProfileVault {
     pub seed: Seed,
     pub indexes: Vec<i32>,
     pub active_idx: Option<i32>,
 }
 
+#[allow(clippy::new_without_default)]
 impl DummyProfileVault {
     pub fn new() -> Self {
         let seed = Seed::from_bip39("include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already").unwrap();

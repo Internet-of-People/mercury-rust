@@ -14,11 +14,11 @@ const RESPONSE_CODE_OK: u32 = 0;
 
 // TODO should all operations below be async?
 pub trait ProfileStore {
-    fn get(&self, id: &ProfileId) -> Option<Rc<RefCell<Profile>>>; // TODO or should list_profiles() return Vec<Profile> and drop this function?
-    fn create(&self, id: &ProfileId) -> Fallible<Rc<RefCell<Profile>>>;
+    fn get(&self, id: &ProfileId) -> Option<ProfilePtr>;
+    fn create(&mut self, id: &ProfileId) -> Fallible<ProfilePtr>;
     // TODO what does this mean? Purge related metadata from local storage plus don't show it in the list,
     //      or maybe also delete all links/follows with other profiles
-    fn remove(&self, id: &ProfileId) -> Fallible<()>;
+    fn remove(&mut self, id: &ProfileId) -> Fallible<()>;
 }
 
 // TODO should all operations below be async?
@@ -203,9 +203,9 @@ where
 
         if response.code != RESPONSE_CODE_OK {
             bail!(
-                "Got error response with code {}, description {:?}",
+                "Got error response with code {}, description: {}",
                 response.code,
-                response.description
+                response.description.unwrap_or_else(|| "None".to_owned())
             );
         }
 

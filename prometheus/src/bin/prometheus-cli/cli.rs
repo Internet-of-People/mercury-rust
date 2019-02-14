@@ -1,11 +1,8 @@
-use failure::{bail, ensure, Fallible};
+use failure::{ensure, Fallible};
 use log::*;
-use std::cell::RefCell;
-use std::rc::Rc;
 use structopt::StructOpt;
 
-use morpheus_storage::{AttributeId, AttributeValue};
-use prometheus::types::*;
+use morpheus_storage::*;
 use prometheus::vault::*;
 
 pub struct CommandContext {
@@ -88,20 +85,20 @@ impl Command {
                 peer_profile_id,
             }) => {
                 let profile = selected_profile(ctx, my_profile_id)?;
-                let link = profile.borrow_mut().create_link(&peer_profile_id);
-                info!("Created link to pfofile {:?}", link);
+                let link = profile.borrow_mut().create_link(&peer_profile_id)?;
+                info!("Created link to profile {:?}", link);
             }
 
             Command::Create(CreateCommand::Profile) => {
                 let new_profile_id = ctx.mut_vault().create_id()?;
-                let created_profile_ptr = ctx.store().create(&new_profile_id)?;
+                let created_profile_ptr = ctx.mut_store().create(&new_profile_id)?;
                 let created_profile = created_profile_ptr.borrow();
                 info!("Created profile with id {}", created_profile.id());
             }
 
             Command::Clear(ClearCommand::Attribute { my_profile_id, key }) => {
                 let profile = selected_profile(ctx, my_profile_id)?;
-                info!("Clearing attribute: {:?}", key);
+                info!("Clearing attribute: {}", key);
                 profile.borrow_mut().clear_attribute(&key)?;
             }
 
@@ -110,7 +107,7 @@ impl Command {
                 let followers = profile.borrow().followers()?;
                 info!("Received {} followers", followers.len());
                 for (idx, follower) in followers.iter().enumerate() {
-                    info!("  {}: {:?}", idx, follower);
+                    info!("  {}: {}", idx, follower);
                 }
             }
 
@@ -124,12 +121,12 @@ impl Command {
             }) => {
                 let profile = selected_profile(ctx, my_profile_id)?;
                 profile.borrow_mut().remove_link(&peer_profile_id)?;
-                info!("Removed link from profile {:?}", peer_profile_id);
+                info!("Removed link from profile {}", peer_profile_id);
             }
 
             Command::Set(SetCommand::ActiveProfile { my_profile_id }) => {
                 ctx.mut_vault().set_active(&my_profile_id)?;
-                info!("Active profile was set to {:?}", my_profile_id);
+                info!("Active profile was set to {}", my_profile_id);
             }
 
             Command::Set(SetCommand::Attribute {
@@ -145,6 +142,15 @@ impl Command {
             Command::Show(ShowCommand::Profile { profile_id }) => {
                 // TODO display profile
                 // NOTE must also work with a profile that is not ours
+                let profile_ptr_opt = ctx.store().get(&profile_id);
+                match profile_ptr_opt {
+                    None => info!("Could not find profile {}", profile_id),
+                    Some(profile_ptr) => {
+                        // TODO this seems to do extra roundtrips to server
+                        let links = profile_ptr.borrow().links()?;
+                        let metadata = profile_ptr.borrow().metadata()?;
+                    }
+                }
             }
 
             Command::Status => {
