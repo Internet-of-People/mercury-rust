@@ -107,12 +107,17 @@ impl Command {
                 let followers = profile.borrow().followers()?;
                 info!("Received {} followers", followers.len());
                 for (idx, follower) in followers.iter().enumerate() {
-                    info!("  {}: {}", idx, follower);
+                    info!("  {}: {:?}", idx, follower);
                 }
             }
 
             Command::List(ListCommand::Profiles) => {
                 // TODO implement listing profiles
+                let profile_ids = ctx.vault().list()?;
+                info!("Has {} profiles", profile_ids.len());
+                for (i, profile_id) in profile_ids.iter().enumerate() {
+                    info!("  {}: {}", i, profile_id);
+                }
             }
 
             Command::Remove(RemoveCommand::Link {

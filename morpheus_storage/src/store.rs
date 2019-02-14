@@ -1,4 +1,5 @@
 use failure::Fallible;
+use log::*;
 use std::cell::RefCell;
 use std::net::{SocketAddr, TcpStream};
 use std::rc::Rc;
@@ -32,6 +33,8 @@ impl DummyProfileStore {
 
     fn rpc(&self) -> Fallible<RpcPtr<TcpStream, TcpStream>> {
         if self.rpc.borrow().is_none() {
+            info!("Connecting to {:?}", self.addr);
+
             let tcp_stream = TcpStream::connect_timeout(&self.addr, self.connect_timeout)?;
             // TODO make timeouts configurable
             tcp_stream.set_read_timeout(Some(Duration::from_secs(5)))?;

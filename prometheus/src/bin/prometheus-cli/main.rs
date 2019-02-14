@@ -17,7 +17,6 @@ fn main() -> Fallible<()> {
 
     let addr = "127.0.0.1:6161".parse()?;
     let timeout = Duration::from_secs(5);
-    info!("Initializing profile vault, connecting to {:?}", addr);
 
     let vault = DummyProfileVault::new();
     let store = DummyProfileStore::new(&addr, timeout)?;

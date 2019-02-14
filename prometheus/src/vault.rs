@@ -1,4 +1,5 @@
 use failure::{bail, Fallible};
+use log::*;
 
 use morpheus_keyvault::{
     ed25519::{Ed25519, EdExtPrivateKey},
@@ -25,6 +26,8 @@ pub struct DummyProfileVault {
 #[allow(clippy::new_without_default)]
 impl DummyProfileVault {
     pub fn new() -> Self {
+        info!("Initializing profile vault");
+
         let seed = Seed::from_bip39("include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already").unwrap();
         let indexes = vec![0, 2, 3];
         Self {
