@@ -1,6 +1,7 @@
 use failure::{bail, ensure, Fallible};
 use log::*;
-use std::sync::{Arc, RwLock};
+use std::cell::RefCell;
+use std::rc::Rc;
 use structopt::StructOpt;
 
 use morpheus_storage::{AttributeId, AttributeValue};
@@ -68,7 +69,7 @@ pub enum Command {
 fn selected_profile(
     ctx: &CommandContext,
     my_profile_option: Option<ProfileId>,
-) -> Fallible<Arc<RwLock<Profile>>> {
+) -> Fallible<ProfilePtr> {
     let profile_opt = my_profile_option
         .or(ctx.vault().get_active()?)
         .and_then(|profile_id| ctx.store().get(&profile_id));
@@ -79,22 +80,6 @@ fn selected_profile(
     Ok(profile_opt.unwrap())
 }
 
-#[allow(clippy::let_and_return)] // borrow checker releases write guard too early
-fn on_profile<F>(ctx: &CommandContext, my_profile: Option<ProfileId>, f: F) -> Fallible<()>
-where
-    F: FnOnce(&mut Profile) -> Fallible<()>,
-{
-    let profile_ptr = selected_profile(ctx, my_profile)?;
-    let result = match profile_ptr.write() {
-        Ok(mut profile) => f(&mut *profile),
-        Err(e) => bail!(
-            "Implementation error: failed to get write access to selected profile: {}",
-            e
-        ),
-    };
-    result
-}
-
 impl Command {
     pub fn execute(self, ctx: &mut CommandContext) -> Fallible<()> {
         match self {
@@ -102,43 +87,31 @@ impl Command {
                 my_profile_id,
                 peer_profile_id,
             }) => {
-                on_profile(ctx, my_profile_id, |profile| {
-                    let link = profile.create_link(&peer_profile_id);
-                    info!("Created link to pfofile {:?}", link);
-                    Ok(())
-                })?;
+                let profile = selected_profile(ctx, my_profile_id)?;
+                let link = profile.borrow_mut().create_link(&peer_profile_id);
+                info!("Created link to pfofile {:?}", link);
             }
 
             Command::Create(CreateCommand::Profile) => {
                 let new_profile_id = ctx.mut_vault().create_id()?;
                 let created_profile_ptr = ctx.store().create(&new_profile_id)?;
-                let created_profile = match created_profile_ptr.read() {
-                    Ok(profile) => profile,
-                    Err(e) => bail!(
-                        "Implementation error: failed to read created profile: {}",
-                        e
-                    ),
-                };
+                let created_profile = created_profile_ptr.borrow();
                 info!("Created profile with id {}", created_profile.id());
             }
 
             Command::Clear(ClearCommand::Attribute { my_profile_id, key }) => {
-                on_profile(ctx, my_profile_id, |profile| {
-                    info!("Clearing attribute: {:?}", key);
-                    profile.clear_attribute(&key)?;
-                    Ok(())
-                })?;
+                let profile = selected_profile(ctx, my_profile_id)?;
+                info!("Clearing attribute: {:?}", key);
+                profile.borrow_mut().clear_attribute(&key)?;
             }
 
             Command::List(ListCommand::IncomingLinks { my_profile_id }) => {
-                on_profile(ctx, my_profile_id, |profile| {
-                    let followers = profile.followers()?;
-                    info!("Received {} followers", followers.len());
-                    for (idx, follower) in followers.iter().enumerate() {
-                        info!("  {}: {:?}", idx, follower);
-                    }
-                    Ok(())
-                })?;
+                let profile = selected_profile(ctx, my_profile_id)?;
+                let followers = profile.borrow().followers()?;
+                info!("Received {} followers", followers.len());
+                for (idx, follower) in followers.iter().enumerate() {
+                    info!("  {}: {:?}", idx, follower);
+                }
             }
 
             Command::List(ListCommand::Profiles) => {
@@ -149,11 +122,9 @@ impl Command {
                 my_profile_id,
                 peer_profile_id,
             }) => {
-                on_profile(ctx, my_profile_id, |profile| {
-                    profile.remove_link(&peer_profile_id)?;
-                    info!("Removed link from profile {:?}", peer_profile_id);
-                    Ok(())
-                })?;
+                let profile = selected_profile(ctx, my_profile_id)?;
+                profile.borrow_mut().remove_link(&peer_profile_id)?;
+                info!("Removed link from profile {:?}", peer_profile_id);
             }
 
             Command::Set(SetCommand::ActiveProfile { my_profile_id }) => {
@@ -166,11 +137,9 @@ impl Command {
                 key,
                 value,
             }) => {
-                on_profile(ctx, my_profile_id, |profile| {
-                    info!("Setting attribute {} to {}", key, value);
-                    profile.set_attribute(&key, &value)?;
-                    Ok(())
-                })?;
+                let profile = selected_profile(ctx, my_profile_id)?;
+                info!("Setting attribute {} to {}", key, value);
+                profile.borrow_mut().set_attribute(&key, &value)?;
             }
 
             Command::Show(ShowCommand::Profile { profile_id }) => {

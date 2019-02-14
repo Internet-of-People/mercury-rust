@@ -20,7 +20,7 @@ fn main() -> Fallible<()> {
     info!("Initializing profile vault, connecting to {:?}", addr);
 
     let mut vault = DummyProfileVault::new();
-    let store = DummyProfileStore::new(&mut vault, &addr, timeout)?;
+    let store = DummyProfileStore::new(/*&mut vault, */ &addr, timeout)?;
 
     // let vault = FailingProfileVault{};
 

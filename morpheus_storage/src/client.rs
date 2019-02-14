@@ -1,7 +1,7 @@
+use std::cell::RefCell;
 use std::collections::HashMap;
 use std::io::prelude::*;
 use std::rc::Rc;
-use std::cell::RefCell;
 
 use failure::{bail, err_msg, Fallible};
 use log::*;
@@ -14,8 +14,8 @@ const RESPONSE_CODE_OK: u32 = 0;
 
 // TODO should all operations below be async?
 pub trait ProfileStore {
-    fn get(&self, id: &ProfileId) -> Option<Rc<Profile>>; // TODO or should list_profiles() return Vec<Profile> and drop this function?
-    fn create(&self, id: &ProfileId) -> Fallible<Rc<Profile>>;
+    fn get(&self, id: &ProfileId) -> Option<Rc<RefCell<Profile>>>; // TODO or should list_profiles() return Vec<Profile> and drop this function?
+    fn create(&self, id: &ProfileId) -> Fallible<Rc<RefCell<Profile>>>;
     // TODO what does this mean? Purge related metadata from local storage plus don't show it in the list,
     //      or maybe also delete all links/follows with other profiles
     fn remove(&self, id: &ProfileId) -> Fallible<()>;
@@ -37,6 +37,8 @@ pub trait Profile {
     //fn sign(&self, data: &[u8]) -> Signature;
     //fn get_signer(&self) -> Arc<Signer>;
 }
+
+pub type ProfilePtr = Rc<RefCell<Profile>>;
 
 pub struct RpcProfile<R, W> {
     id: ProfileId,
@@ -142,6 +144,8 @@ where
         Ok(())
     }
 }
+
+pub type RpcPtr<R, W> = Rc<RefCell<MsgPackRpc<R, W>>>;
 
 pub struct MsgPackRpc<R, W> {
     reader: R,
