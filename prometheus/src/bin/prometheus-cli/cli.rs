@@ -7,9 +7,23 @@ use morpheus_storage::{AttributeId, AttributeValue};
 use prometheus::types::*;
 use prometheus::vault::*;
 
-pub struct CommandContext<'a> {
-    pub vault: &'a ProfileVault,
-    pub store: &'a ProfileStore,
+pub struct CommandContext {
+    vault: Box<ProfileVault>,
+    store: Box<ProfileStore>,
+}
+
+impl CommandContext {
+    pub fn new(vault: Box<ProfileVault>, store: Box<ProfileStore>) -> Self {
+        Self { vault, store }
+    }
+
+    pub fn vault(&self) -> &ProfileVault {
+        self.vault.as_ref()
+    }
+
+    pub fn store(&self) -> &ProfileStore {
+        self.store.as_ref()
+    }
 }
 
 #[derive(Debug, StructOpt)]
@@ -88,8 +102,8 @@ impl Command {
             }
 
             Command::Create(CreateCommand::Profile) => {
-                let new_profile_id = ctx.vault.create_id()?;
-                let created_profile_ptr = ctx.store.create(&new_profile_id)?;
+                let new_profile_id = ctx.vault().create_id()?;
+                let created_profile_ptr = ctx.store().create(&new_profile_id)?;
                 let created_profile = match created_profile_ptr.read() {
                     Ok(profile) => profile,
                     Err(e) => bail!(

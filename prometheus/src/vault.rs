@@ -19,26 +19,41 @@ pub trait ProfileVault {
 
 // TODO remove this dummy implementation completely and use the RpcProfileStore instead
 pub struct DummyProfileVault {
+    pub profile_id: ProfileId,
+}
+
+pub struct DummyProfileStore {
     profile: Arc<RwLock<Profile>>,
 }
 
 impl DummyProfileVault {
-    pub fn new(addr: &SocketAddr, timeout: Duration) -> std::io::Result<Self> {
+    pub fn new() -> Self {
+        let profile_id = "Iez21JXEtMzXjbCK6BAYFU9ewX".parse::<ProfileId>().unwrap();
+        Self { profile_id }
+    }
+}
+
+impl DummyProfileStore {
+    pub fn new(
+        vault: &DummyProfileVault,
+        addr: &SocketAddr,
+        timeout: Duration,
+    ) -> std::io::Result<Self> {
         let tcp_stream = TcpStream::connect_timeout(addr, timeout)?;
         // TODO make timeouts configurable
         tcp_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
         tcp_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
         let tcp_stream_clone = tcp_stream.try_clone()?;
         let rpc = MsgPackRpc::new(tcp_stream, tcp_stream_clone);
-        let id = "Iez21JXEtMzXjbCK6BAYFU9ewX".parse::<ProfileId>().unwrap();
-        let profile = RpcProfile::new(&id, Arc::new(Mutex::new(rpc)));
+        let id = &vault.profile_id;
+        let profile = RpcProfile::new(id, Arc::new(Mutex::new(rpc)));
         Ok(Self {
             profile: Arc::new(RwLock::new(profile)),
         })
     }
 }
 
-impl ProfileStore for DummyProfileVault {
+impl ProfileStore for DummyProfileStore {
     fn get(&self, id: &ProfileId) -> Option<Arc<RwLock<Profile>>> {
         Some(self.profile.clone())
     }
@@ -61,14 +76,7 @@ impl ProfileVault for DummyProfileVault {
     }
 
     fn get_active(&self) -> Fallible<Option<ProfileId>> {
-        let profile_id = match self.profile.read() {
-            Ok(profile) => profile.id().to_owned(),
-            Err(e) => bail!(
-                "Implementation error: failed to get read access to selected profile: {}",
-                e
-            ),
-        };
-        Ok(Some(profile_id))
+        Ok(Some(self.profile_id.clone()))
     }
     fn set_active(&self, id: &ProfileId) -> Fallible<()> {
         unimplemented!()

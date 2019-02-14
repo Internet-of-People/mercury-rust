@@ -19,12 +19,12 @@ fn main() -> Fallible<()> {
     let addr = "127.0.0.1:6161".parse()?;
     let timeout = Duration::from_secs(5);
     info!("Initializing profile vault, connecting to {:?}", addr);
-    let vault = DummyProfileVault::new(&addr, timeout)?;
+
+    let vault = DummyProfileVault::new();
+    let store = DummyProfileStore::new(&vault, &addr, timeout)?;
+
     // let vault = FailingProfileVault{};
 
-    let ctx = CommandContext {
-        vault: &vault,
-        store: &vault,
-    };
+    let ctx = CommandContext::new(Box::new(vault), Box::new(store));
     command.execute(&ctx)
 }
