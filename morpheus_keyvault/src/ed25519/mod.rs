@@ -2,13 +2,13 @@
 //! Ed25519-based implementations in other projects that are incompatible with SLIP-0010, so make sure
 //! this is the right derivation method for your use-case.
 
+mod cc;
+mod ext_sk;
 mod id;
 mod pk;
 mod sig;
 mod sk;
 
-use ed25519_dalek as ed;
-use failure::Fallible;
 use hmac::Mac;
 
 use super::*;
@@ -18,20 +18,12 @@ use super::*;
 /// Mopheus/Prometheus/Mercury.
 pub struct Ed25519 {}
 
+pub use cc::{ChainCode, CHAIN_CODE_SIZE};
+pub use ext_sk::EdExtPrivateKey;
 pub use id::{KeyId, KEY_ID_SALT, KEY_ID_SIZE, KEY_ID_VERSION1};
 pub use pk::EdPublicKey;
 pub use sig::EdSignature;
 pub use sk::EdPrivateKey;
-
-/// Chain key for key derivation in Ed25519 extended private and public keys.
-#[derive(Clone)]
-struct ChainCode([u8; CHAIN_CODE_SIZE]);
-
-/// Implementation of Ed25519::ExtendedPrivateKey
-pub struct EdExtPrivateKey {
-    chain_code: ChainCode,
-    sk: EdPrivateKey,
-}
 
 impl AsymmetricCrypto for Ed25519 {
     type KeyId = KeyId;
@@ -39,11 +31,6 @@ impl AsymmetricCrypto for Ed25519 {
     type PrivateKey = EdPrivateKey;
     type Signature = EdSignature;
 }
-
-const VERSION_SIZE: usize = 1;
-const CHAIN_CODE_SIZE: usize = 32;
-const SLIP10_SEED_HASH_SALT: &[u8] = b"ed25519 seed";
-type HmacSha512 = hmac::Hmac<sha2::Sha512>;
 
 impl KeyDerivationCrypto for Ed25519 {
     type ExtendedPrivateKey = EdExtPrivateKey;
@@ -56,70 +43,21 @@ impl KeyDerivationCrypto for Ed25519 {
     }
 }
 
-impl ChainCode {
-    /// The chain code serialized.
-    pub fn to_bytes(&self) -> [u8; CHAIN_CODE_SIZE] {
-        self.0
-    }
-}
+/// Since Wigy could not find any constant expression for the length of `u8` in bytes
+/// (`std::u8::LEN` could be a good place), this is some manual trickery to define our
+/// "standard version byte length in bytes"
+pub const VERSION_SIZE: usize = 1;
 
-impl EdExtPrivateKey {
-    fn cook_new<F: Fn(&mut HmacSha512) -> ()>(salt: &[u8], recipe: F) -> Self {
-        let mut hasher = HmacSha512::new_varkey(salt).unwrap();
+/// SLIP-0010 defines keyed hashing for master key derivation. This does domain separation
+/// for different cryptographic algorithms. This is the standard key for Ed25519
+pub const SLIP10_SEED_HASH_SALT: &[u8] = b"ed25519 seed";
 
-        recipe(&mut hasher);
-
-        let hash_arr = hasher.result().code();
-        let hash_bytes = hash_arr.as_slice();
-
-        let sk_bytes = &hash_bytes[..ed::SECRET_KEY_LENGTH];
-        let mut c_bytes: [u8; CHAIN_CODE_SIZE] = Default::default();
-        c_bytes.copy_from_slice(&hash_bytes[ed::SECRET_KEY_LENGTH..]);
-
-        let chain_code = ChainCode(c_bytes);
-        let sk = EdPrivateKey::from_bytes(sk_bytes);
-
-        Self { chain_code, sk }
-    }
-}
-
-impl ExtendedPrivateKey<Ed25519> for EdExtPrivateKey {
-    fn derive_normal_child(&self, _idx: i32) -> Fallible<EdExtPrivateKey> {
-        bail!("Normal derivation of Ed25519 is invalid based on SLIP-0010.")
-    }
-    fn derive_hardened_child(&self, idx: i32) -> Fallible<EdExtPrivateKey> {
-        ensure!(idx >= 0, "Derivation index cannot be negative");
-        let idx = unsafe { std::mem::transmute::<i32, u32>(idx) };
-
-        let xprv = EdExtPrivateKey::cook_new(&self.chain_code.to_bytes(), |hasher| {
-            hasher.input(&[0x00u8]);
-            hasher.input(&self.sk.to_bytes());
-            hasher.input(&(0x8000_0000u32 + idx).to_be_bytes());
-        });
-
-        Ok(xprv)
-    }
-    fn neuter(&self) -> EdPublicKey {
-        self.sk.public_key()
-    }
-    fn as_private_key(&self) -> EdPrivateKey {
-        self.sk.clone()
-    }
-}
-
-impl ExtendedPublicKey<Ed25519> for EdPublicKey {
-    fn derive_normal_child(&self, _idx: i32) -> Fallible<EdPublicKey> {
-        bail!("Normal derivation of Ed25519 is invalid based on SLIP-0010.")
-    }
-    fn as_public_key(&self) -> EdPublicKey {
-        self.clone()
-    }
-}
+type HmacSha512 = hmac::Hmac<sha2::Sha512>;
 
 #[cfg(test)]
 mod tests {
-    use crate::ed25519::{Ed25519, EdExtPrivateKey};
-    use crate::{ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, Seed};
+    use crate::ed25519::Ed25519;
+    use crate::{ExtendedPrivateKey, KeyDerivationCrypto, Seed};
 
     fn m_263f_1_1<T: KeyDerivationCrypto>(seed: &Seed) -> T::ExtendedPrivateKey {
         let master = T::master(seed);
@@ -132,39 +70,6 @@ mod tests {
     fn test_generic() {
         let seed = Seed::generate_new();
         let _first_app_in_first_profile = m_263f_1_1::<Ed25519>(&seed);
-    }
-
-    struct TestDerivation {
-        xprv: EdExtPrivateKey,
-    }
-
-    impl TestDerivation {
-        fn new(seed_hex: &str) -> Self {
-            let seed_bytes = hex::decode(seed_hex).unwrap();
-            let seed = Seed::from_bytes(&seed_bytes).unwrap();
-            let master = Ed25519::master(&seed);
-            Self { xprv: master }
-        }
-
-        fn assert_state(&self, chain_code_hex: &str, sk_hex: &str, pk_hex: &str) {
-            let xprv = &self.xprv;
-
-            let chain_code_bytes = xprv.chain_code.to_bytes();
-            assert_eq!(hex::encode(chain_code_bytes), chain_code_hex);
-
-            let sk = xprv.as_private_key();
-            let sk_bytes = sk.to_bytes();
-            assert_eq!(hex::encode(sk_bytes), sk_hex);
-
-            let pk = xprv.neuter().as_public_key();
-            let pk_bytes = pk.to_bytes();
-            assert_eq!(hex::encode(pk_bytes), pk_hex);
-        }
-
-        fn derive(&mut self, idx: i32) {
-            let xprv = self.xprv.derive_hardened_child(idx).unwrap();
-            self.xprv = xprv;
-        }
     }
 
     mod key_id {
@@ -233,45 +138,84 @@ mod tests {
         }
     }
 
-    // https://github.com/satoshilabs/slips/blob/master/slip-0010.md#test-vector-2-for-ed25519
-    #[test]
-    fn test_slip_0010_vector2() {
-        let mut t = TestDerivation::new("fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542");
-        t.assert_state(
-            "ef70a74db9c3a5af931b5fe73ed8e1a53464133654fd55e7a66f8570b8e33c3b",
-            "171cb88b1b3c1db25add599712e36245d75bc65a1a5c9e18d76f9f2b1eab4012",
-            "8fe9693f8fa62a4305a140b9764c5ee01e455963744fe18204b4fb948249308a",
-        );
-        t.derive(0);
-        t.assert_state(
-            "0b78a3226f915c082bf118f83618a618ab6dec793752624cbeb622acb562862d",
-            "1559eb2bbec5790b0c65d8693e4d0875b1747f4970ae8b650486ed7470845635",
-            "86fab68dcb57aa196c77c5f264f215a112c22a912c10d123b0d03c3c28ef1037",
-        );
-        t.derive(2_147_483_647);
-        t.assert_state(
-            "138f0b2551bcafeca6ff2aa88ba8ed0ed8de070841f0c4ef0165df8181eaad7f",
-            "ea4f5bfe8694d8bb74b7b59404632fd5968b774ed545e810de9c32a4fb4192f4",
-            "5ba3b9ac6e90e83effcd25ac4e58a1365a9e35a3d3ae5eb07b9e4d90bcf7506d",
-        );
-        t.derive(1);
-        t.assert_state(
-            "73bd9fff1cfbde33a1b846c27085f711c0fe2d66fd32e139d3ebc28e5a4a6b90",
-            "3757c7577170179c7868353ada796c839135b3d30554bbb74a4b1e4a5a58505c",
-            "2e66aa57069c86cc18249aecf5cb5a9cebbfd6fadeab056254763874a9352b45",
-        );
-        t.derive(2_147_483_646);
-        t.assert_state(
-            "0902fe8a29f9140480a00ef244bd183e8a13288e4412d8389d140aac1794825a",
-            "5837736c89570de861ebc173b1086da4f505d4adb387c6a1b1342d5e4ac9ec72",
-            "e33c0f7d81d843c572275f287498e8d408654fdf0d1e065b84e2e6f157aab09b",
-        );
-        t.derive(2);
-        t.assert_state(
-            "5d70af781f3a37b829f0d060924d5e960bdc02e85423494afc0b1a41bbe196d4",
-            "551d333177df541ad876a60ea71f00447931c0a9da16f227c11ea080d7391b8d",
-            "47150c75db263559a70d5778bf36abbab30fb061ad69f69ece61a72b0cfa4fc0",
-        );
+    mod derivation {
+        use crate::{
+            ed25519::{Ed25519, EdExtPrivateKey},
+            ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, Seed,
+        };
+        struct TestDerivation {
+            xprv: EdExtPrivateKey,
+        }
+
+        impl TestDerivation {
+            fn new(seed_hex: &str) -> Self {
+                let seed_bytes = hex::decode(seed_hex).unwrap();
+                let seed = Seed::from_bytes(&seed_bytes).unwrap();
+                let master = Ed25519::master(&seed);
+                Self { xprv: master }
+            }
+
+            fn assert_state(&self, chain_code_hex: &str, sk_hex: &str, pk_hex: &str) {
+                let xprv = &self.xprv;
+
+                let chain_code_bytes = xprv.chain_code().to_bytes();
+                assert_eq!(hex::encode(chain_code_bytes), chain_code_hex);
+
+                let sk = xprv.as_private_key();
+                let sk_bytes = sk.to_bytes();
+                assert_eq!(hex::encode(sk_bytes), sk_hex);
+
+                let pk = xprv.neuter().as_public_key();
+                let pk_bytes = pk.to_bytes();
+                assert_eq!(hex::encode(pk_bytes), pk_hex);
+            }
+
+            fn derive(&mut self, idx: i32) {
+                let xprv = self.xprv.derive_hardened_child(idx).unwrap();
+                self.xprv = xprv;
+            }
+        }
+
+        // https://github.com/satoshilabs/slips/blob/master/slip-0010.md#test-vector-2-for-ed25519
+        #[test]
+        fn test_slip_0010_vector2() {
+            let mut t = TestDerivation::new("fffcf9f6f3f0edeae7e4e1dedbd8d5d2cfccc9c6c3c0bdbab7b4b1aeaba8a5a29f9c999693908d8a8784817e7b7875726f6c696663605d5a5754514e4b484542");
+            t.assert_state(
+                "ef70a74db9c3a5af931b5fe73ed8e1a53464133654fd55e7a66f8570b8e33c3b",
+                "171cb88b1b3c1db25add599712e36245d75bc65a1a5c9e18d76f9f2b1eab4012",
+                "8fe9693f8fa62a4305a140b9764c5ee01e455963744fe18204b4fb948249308a",
+            );
+            t.derive(0);
+            t.assert_state(
+                "0b78a3226f915c082bf118f83618a618ab6dec793752624cbeb622acb562862d",
+                "1559eb2bbec5790b0c65d8693e4d0875b1747f4970ae8b650486ed7470845635",
+                "86fab68dcb57aa196c77c5f264f215a112c22a912c10d123b0d03c3c28ef1037",
+            );
+            t.derive(2_147_483_647);
+            t.assert_state(
+                "138f0b2551bcafeca6ff2aa88ba8ed0ed8de070841f0c4ef0165df8181eaad7f",
+                "ea4f5bfe8694d8bb74b7b59404632fd5968b774ed545e810de9c32a4fb4192f4",
+                "5ba3b9ac6e90e83effcd25ac4e58a1365a9e35a3d3ae5eb07b9e4d90bcf7506d",
+            );
+            t.derive(1);
+            t.assert_state(
+                "73bd9fff1cfbde33a1b846c27085f711c0fe2d66fd32e139d3ebc28e5a4a6b90",
+                "3757c7577170179c7868353ada796c839135b3d30554bbb74a4b1e4a5a58505c",
+                "2e66aa57069c86cc18249aecf5cb5a9cebbfd6fadeab056254763874a9352b45",
+            );
+            t.derive(2_147_483_646);
+            t.assert_state(
+                "0902fe8a29f9140480a00ef244bd183e8a13288e4412d8389d140aac1794825a",
+                "5837736c89570de861ebc173b1086da4f505d4adb387c6a1b1342d5e4ac9ec72",
+                "e33c0f7d81d843c572275f287498e8d408654fdf0d1e065b84e2e6f157aab09b",
+            );
+            t.derive(2);
+            t.assert_state(
+                "5d70af781f3a37b829f0d060924d5e960bdc02e85423494afc0b1a41bbe196d4",
+                "551d333177df541ad876a60ea71f00447931c0a9da16f227c11ea080d7391b8d",
+                "47150c75db263559a70d5778bf36abbab30fb061ad69f69ece61a72b0cfa4fc0",
+            );
+        }
     }
 
     #[test]
