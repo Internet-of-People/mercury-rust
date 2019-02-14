@@ -13,7 +13,6 @@ pub(crate) fn generate_new(password: &str) -> Fallible<Vec<u8>> {
     )
 }
 
-pub(crate) fn from_phrase<T: Borrow<str>>(words: &[T], password: &str) -> Fallible<Vec<u8>> {
-    let phrase = words.join(" ");
+pub(crate) fn from_phrase<T: Into<String>>(phrase: T, password: &str) -> Fallible<Vec<u8>> {
     as_fallible_vec(Mnemonic::from_phrase(phrase, Language::English), password)
 }

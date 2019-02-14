@@ -104,41 +104,17 @@ impl Seed {
     ///
     /// ```
     /// # use morpheus_keyvault::Seed;
-    /// let words = [
-    ///   "plastic",
-    ///   "attend",
-    ///   "shadow",
-    ///   "hill",
-    ///   "conduct",
-    ///   "whip",
-    ///   "staff",
-    ///   "shoe",
-    ///   "achieve",
-    ///   "repair",
-    ///   "museum",
-    ///   "improve",
-    ///   "below",
-    ///   "inform",
-    ///   "youth",
-    ///   "alpha",
-    ///   "above",
-    ///   "limb",
-    ///   "paddle",
-    ///   "derive",
-    ///   "spoil",
-    ///   "offer",
-    ///   "hospital",
-    ///   "advance",];
+    /// let phrase = "plastic attend shadow hill conduct whip staff shoe achieve repair museum improve below inform youth alpha above limb paddle derive spoil offer hospital advance";
     /// let seed_expected = "86f07ba8b38f3de2080912569a07b21ca4ae2275bc305a14ff928c7dc5407f32a1a3a26d4e2c4d9d5e434209c1db3578d94402cf313f3546344d0e4661c9f8d9";
-    /// let seed_res = Seed::from_bip39(&words);
+    /// let seed_res = Seed::from_bip39(phrase);
     /// assert!(seed_res.is_ok());
     /// assert_eq!(hex::encode(seed_res.unwrap().as_bytes()), seed_expected);
     /// ```
-    pub fn from_bip39<T: Borrow<str>>(words: &[T]) -> Fallible<Self> {
-        if words.len() != Self::MNEMONIC_WORDS {
+    pub fn from_bip39(phrase: &str) -> Fallible<Self> {
+        if phrase.split(' ').count() != Self::MNEMONIC_WORDS {
             bail!("Only {}-word mnemonics are supported", Self::MNEMONIC_WORDS)
         }
-        let bytes = bip39::from_phrase(words, Self::PASSWORD)?;
+        let bytes = bip39::from_phrase(phrase, Self::PASSWORD)?;
         Ok(Self { bytes })
     }
 
@@ -184,3 +160,6 @@ pub trait KeyDerivationCrypto: AsymmetricCrypto {
 
     fn master(seed: &Seed) -> Self::ExtendedPrivateKey;
 }
+
+/// Unicode code point for planet mercury
+pub const BIP43_PURPOSE_MERCURY: i32 = 0x263F;

@@ -19,11 +19,11 @@ fn main() -> Fallible<()> {
     let timeout = Duration::from_secs(5);
     info!("Initializing profile vault, connecting to {:?}", addr);
 
-    let vault = DummyProfileVault::new();
-    let store = DummyProfileStore::new(&vault, &addr, timeout)?;
+    let mut vault = DummyProfileVault::new();
+    let store = DummyProfileStore::new(&mut vault, &addr, timeout)?;
 
     // let vault = FailingProfileVault{};
 
-    let ctx = CommandContext::new(Box::new(vault), Box::new(store));
-    command.execute(&ctx)
+    let mut ctx = CommandContext::new(Box::new(vault), Box::new(store));
+    command.execute(&mut ctx)
 }

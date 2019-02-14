@@ -21,8 +21,16 @@ impl CommandContext {
         self.vault.as_ref()
     }
 
+    pub fn mut_vault(&mut self) -> &mut ProfileVault {
+        self.vault.as_mut()
+    }
+
     pub fn store(&self) -> &ProfileStore {
         self.store.as_ref()
+    }
+
+    pub fn mut_store(&mut self) -> &mut ProfileStore {
+        self.store.as_mut()
     }
 }
 
@@ -62,8 +70,8 @@ fn selected_profile(
     my_profile_option: Option<ProfileId>,
 ) -> Fallible<Arc<RwLock<Profile>>> {
     let profile_opt = my_profile_option
-        .or(ctx.vault.get_active()?)
-        .and_then(|profile_id| ctx.store.get(&profile_id));
+        .or(ctx.vault().get_active()?)
+        .and_then(|profile_id| ctx.store().get(&profile_id));
     ensure!(
         profile_opt.is_some(),
         "Command option my_profile_id is unspecified and no active default profile was found"
@@ -88,7 +96,7 @@ where
 }
 
 impl Command {
-    pub fn execute(self, ctx: &CommandContext) -> Fallible<()> {
+    pub fn execute(self, ctx: &mut CommandContext) -> Fallible<()> {
         match self {
             Command::Create(CreateCommand::Link {
                 my_profile_id,
@@ -102,7 +110,7 @@ impl Command {
             }
 
             Command::Create(CreateCommand::Profile) => {
-                let new_profile_id = ctx.vault().create_id()?;
+                let new_profile_id = ctx.mut_vault().create_id()?;
                 let created_profile_ptr = ctx.store().create(&new_profile_id)?;
                 let created_profile = match created_profile_ptr.read() {
                     Ok(profile) => profile,
@@ -149,7 +157,7 @@ impl Command {
             }
 
             Command::Set(SetCommand::ActiveProfile { my_profile_id }) => {
-                ctx.vault.set_active(&my_profile_id)?;
+                ctx.mut_vault().set_active(&my_profile_id)?;
                 info!("Active profile was set to {:?}", my_profile_id);
             }
 
