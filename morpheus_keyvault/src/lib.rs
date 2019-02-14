@@ -32,7 +32,7 @@ pub trait PublicKey<C: AsymmetricCrypto + ?Sized> {
     /// key that belongs to this public key. See also [`PrivateKey::sign`]
     ///
     /// [`PrivateKey::sign`]: trait.PrivateKey.html#tymethod.sign
-    fn verify<D: AsRef<[u8]>>(&self, data: D, sig: C::Signature) -> bool;
+    fn verify<D: AsRef<[u8]>>(&self, data: D, sig: &C::Signature) -> bool;
 }
 
 /// A private key (also called secret key or sk in some literature) is the part of an asymmetric keypair

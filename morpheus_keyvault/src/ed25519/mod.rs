@@ -1,14 +1,15 @@
 //! SLIP-0010 compatible Ed25519 cryptography that allows child key derivation. There are alternative
 //! Ed25519-based implementations in other projects that are incompatible with SLIP-0010, so make sure
 //! this is the right derivation method for your use-case.
-use blake2::{
-    digest::{Input, VariableOutput},
-    VarBlake2b,
-};
+
+mod id;
+mod pk;
+mod sig;
+mod sk;
+
 use ed25519_dalek as ed;
 use failure::Fallible;
 use hmac::Mac;
-use serde_derive::{Deserialize, Serialize};
 
 use super::*;
 
@@ -17,19 +18,10 @@ use super::*;
 /// Mopheus/Prometheus/Mercury.
 pub struct Ed25519 {}
 
-/// Implementation of Ed25519::KeyId
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-#[serde(transparent)]
-pub struct KeyId(#[serde(with = "serde_bytes")] Vec<u8>);
-
-/// Implementation of Ed25519::PrivateKey
-pub struct EdPrivateKey(ed::Keypair);
-
-/// Implementation of Ed25519::PublicKey
-pub struct EdPublicKey(ed::PublicKey);
-
-/// Implementation of Ed25519::Signature
-pub struct EdSignature(ed::Signature);
+pub use id::{KeyId, KEY_ID_SALT, KEY_ID_SIZE, KEY_ID_VERSION1};
+pub use pk::EdPublicKey;
+pub use sig::EdSignature;
+pub use sk::EdPrivateKey;
 
 /// Chain key for key derivation in Ed25519 extended private and public keys.
 #[derive(Clone)]
@@ -49,9 +41,6 @@ impl AsymmetricCrypto for Ed25519 {
 }
 
 const VERSION_SIZE: usize = 1;
-const KEY_ID_SALT: &[u8] = b"open social graph";
-const KEY_ID_VERSION1: u8 = b'\x01';
-const KEY_ID_SIZE: usize = 16 + VERSION_SIZE;
 const CHAIN_CODE_SIZE: usize = 32;
 const SLIP10_SEED_HASH_SALT: &[u8] = b"ed25519 seed";
 type HmacSha512 = hmac::Hmac<sha2::Sha512>;
@@ -67,192 +56,10 @@ impl KeyDerivationCrypto for Ed25519 {
     }
 }
 
-impl KeyId {
-    /// The public key serialized in a format that can be fed to [`from::<AsRef<[u8]>>`]
-    ///
-    /// [`from::<AsRef<[u8]>>`]: #impl-From<D>
-    pub fn to_bytes(&self) -> [u8; KEY_ID_SIZE] {
-        let mut res = [0; KEY_ID_SIZE];
-        res.copy_from_slice(&self.0);
-        res
-    }
-}
-
-impl<D: AsRef<[u8]>> From<D> for KeyId {
-    /// Creates a key id from a byte slice possibly returned by the [`to_bytes`] method.
-    ///
-    /// # Panics
-    /// If `bytes` is not the right size or not the right version.
-    ///
-    /// [`to_bytes`]: #method.to_bytes
-    fn from(bytes: D) -> Self {
-        let bytes = bytes.as_ref();
-        assert_eq!(bytes.len(), KEY_ID_SIZE);
-        assert_eq!(bytes[0], KEY_ID_VERSION1);
-        KeyId(bytes.to_owned())
-    }
-}
-
-impl From<&EdPublicKey> for KeyId {
-    fn from(pk: &EdPublicKey) -> KeyId {
-        let mut hasher = VarBlake2b::new_keyed(KEY_ID_SALT, KEY_ID_SIZE - VERSION_SIZE);
-        hasher.input(pk.0.as_bytes());
-        let mut hash = Vec::with_capacity(KEY_ID_SIZE);
-        hash.push(KEY_ID_VERSION1);
-        hasher.variable_result(|h| hash.extend_from_slice(h));
-        KeyId(hash)
-    }
-}
-
-impl std::str::FromStr for KeyId {
-    type Err = failure::Error;
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        let mut chars = src.chars();
-        ensure!(chars.next() == Some('I'), "Identifiers must start with 'I'");
-        ensure!(
-            chars.next() == Some('e'),
-            "Only Ed25519 cipher is supported"
-        );
-        let (_base, binary) = multibase::decode(chars.as_str())?;
-        ensure!(
-            binary[0] == KEY_ID_VERSION1,
-            "Only identifier version {:x} is supported",
-            KEY_ID_VERSION1
-        );
-        ensure!(
-            binary.len() == KEY_ID_SIZE,
-            "Identifier length is not {}",
-            KEY_ID_SIZE
-        );
-        Ok(KeyId(binary))
-    }
-}
-
-impl From<&KeyId> for String {
-    fn from(src: &KeyId) -> Self {
-        let mut output = multibase::encode(multibase::Base58btc, &src.0);
-        output.insert_str(0, "Ie"); // Logically 'I' and 'e' belongs to different concepts
-        output
-    }
-}
-
-impl std::fmt::Display for KeyId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", String::from(self))
-    }
-}
-
-impl EdPublicKey {
-    /// The public key serialized in a format that can be fed to [`from::<AsRef<[u8]>>`]
-    ///
-    /// [`from::<AsRef<[u8]>>`]: #impl-From<D>
-    pub fn to_bytes(&self) -> [u8; ed::PUBLIC_KEY_LENGTH] {
-        self.0.to_bytes()
-    }
-}
-
-impl Clone for EdPublicKey {
-    fn clone(&self) -> Self {
-        let public_bytes = self.0.as_bytes();
-        let public = ed::PublicKey::from_bytes(public_bytes).unwrap();
-        Self(public)
-    }
-}
-
-impl<D: AsRef<[u8]>> From<D> for EdPublicKey {
-    /// Creates a public key from a byte slice possibly returned by the [`to_bytes`] method.
-    ///
-    /// # Panics
-    /// If `bytes` is rejected by `ed25519_dalek::PublicKey::from_bytes`
-    ///
-    /// [`to_bytes`]: #method.to_bytes
-    fn from(bytes: D) -> Self {
-        let pk = ed::PublicKey::from_bytes(bytes.as_ref()).unwrap();
-        EdPublicKey(pk)
-    }
-}
-
-impl PublicKey<Ed25519> for EdPublicKey {
-    fn key_id(&self) -> KeyId {
-        KeyId::from(self)
-    }
-    fn verify<D: AsRef<[u8]>>(&self, data: D, sig: EdSignature) -> bool {
-        let res = self.0.verify(data.as_ref(), &sig.0);
-        res.is_ok()
-    }
-}
-
-impl EdPrivateKey {
-    /// The private key serialized in a format that can be fed to [`from::<AsRef<[u8]>>`]
-    ///
-    /// [`from::<AsRef<[u8]>>`]: #impl-From<D>
-    pub fn to_bytes(&self) -> [u8; ed::SECRET_KEY_LENGTH] {
-        self.0.secret.to_bytes()
-    }
-}
-
-impl Clone for EdPrivateKey {
-    fn clone(&self) -> Self {
-        let secret_bytes = self.0.secret.as_bytes();
-        let public_bytes = self.0.public.as_bytes();
-        let secret = ed::SecretKey::from_bytes(secret_bytes).unwrap();
-        let public = ed::PublicKey::from_bytes(public_bytes).unwrap();
-        Self(ed::Keypair { secret, public })
-    }
-}
-
-impl<D: AsRef<[u8]>> From<D> for EdPrivateKey {
-    /// Creates a public key from a byte slice possibly returned by the [`to_bytes`] method.
-    ///
-    /// # Panics
-    /// If `bytes` is rejected by `ed25519_dalek::SecretKey::from_bytes`
-    ///
-    /// [`to_bytes`]: #method.to_bytes
-    fn from(bytes: D) -> Self {
-        let secret = ed::SecretKey::from_bytes(bytes.as_ref()).unwrap();
-        let public = ed::PublicKey::from(&secret);
-        let key_pair = ed::Keypair { secret, public };
-        EdPrivateKey(key_pair)
-    }
-}
-
-impl PrivateKey<Ed25519> for EdPrivateKey {
-    fn public_key(&self) -> EdPublicKey {
-        let pk = self.0.public;
-        EdPublicKey(pk)
-    }
-    fn sign<D: AsRef<[u8]>>(&self, data: D) -> EdSignature {
-        let sig = self.0.sign(data.as_ref());
-        EdSignature(sig)
-    }
-}
-
 impl ChainCode {
     /// The chain code serialized.
     pub fn to_bytes(&self) -> [u8; CHAIN_CODE_SIZE] {
         self.0
-    }
-}
-
-impl EdSignature {
-    /// The signature serialized in a format that can be fed to [`from::<AsRef<[u8]>>`]
-    ///
-    /// [`from::<AsRef<[u8]>>`]: #impl-From<D>
-    pub fn to_bytes(&self) -> [u8; ed::SIGNATURE_LENGTH] {
-        self.0.to_bytes()
-    }
-}
-
-impl<D: AsRef<[u8]>> From<D> for EdSignature {
-    /// Creates a signature from a byte slice possibly returned by the [`to_bytes`] method.
-    ///
-    /// # Panics
-    /// If `bytes` is rejected by `ed25519_dalek::SecretKey::from_bytes`
-    ///
-    /// [`to_bytes`]: #method.to_bytes
-    fn from(bytes: D) -> Self {
-        let sig = ed::Signature::from_bytes(bytes.as_ref()).unwrap();
-        EdSignature(sig)
     }
 }
 
@@ -270,7 +77,7 @@ impl EdExtPrivateKey {
         c_bytes.copy_from_slice(&hash_bytes[ed::SECRET_KEY_LENGTH..]);
 
         let chain_code = ChainCode(c_bytes);
-        let sk = EdPrivateKey::from(sk_bytes);
+        let sk = EdPrivateKey::from_bytes(sk_bytes);
 
         Self { chain_code, sk }
     }
@@ -365,11 +172,11 @@ mod tests {
 
         fn test(pk_hex: &str, key_id_hex: &str) {
             let pk_bytes = hex::decode(pk_hex).unwrap();
-            let pk = EdPublicKey::from(pk_bytes);
+            let pk = EdPublicKey::from_bytes(pk_bytes);
 
             let key_id = pk.key_id();
 
-            assert_eq!(hex::encode(&key_id.0), key_id_hex)
+            assert_eq!(hex::encode(&key_id.to_bytes()), key_id_hex)
         }
 
         #[test]
@@ -475,7 +282,7 @@ mod tests {
         let sk_bytes =
             hex::decode("171cb88b1b3c1db25add599712e36245d75bc65a1a5c9e18d76f9f2b1eab4012")
                 .unwrap();
-        let sk = EdPrivateKey::from(sk_bytes);
+        let sk = EdPrivateKey::from_bytes(sk_bytes);
 
         let pk = sk.public_key();
         let pk_bytes = pk.to_bytes();
@@ -491,7 +298,7 @@ mod tests {
         let pk_bytes =
             hex::decode("278117fc144c72340f67d0f2316e8386ceffbf2b2428c9c51fef7c597f1d426e")
                 .unwrap();
-        let _pk = EdPublicKey::from(&pk_bytes);
+        let _pk = EdPublicKey::from_bytes(&pk_bytes);
     }
 
     /// Test vectors based on https://tools.ietf.org/html/rfc8032#page-24
@@ -501,7 +308,7 @@ mod tests {
 
         fn test(sk_hex: &str, pk_hex: &str, msg_hex: &str, sig_hex: &str) {
             let sk_bytes = hex::decode(sk_hex).unwrap();
-            let sk = EdPrivateKey::from(sk_bytes.as_slice());
+            let sk = EdPrivateKey::from_bytes(sk_bytes.as_slice());
 
             let pk = sk.public_key();
             let pk_bytes = pk.to_bytes();
@@ -512,7 +319,7 @@ mod tests {
             let sig_bytes = sig.to_bytes();
             assert_eq!(hex::encode(&sig_bytes[..]), sig_hex.replace(' ', ""));
 
-            assert!(pk.verify(msg, sig));
+            assert!(pk.verify(msg, &sig));
         }
 
         #[test]

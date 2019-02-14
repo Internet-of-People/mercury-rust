@@ -219,7 +219,7 @@ mod tests {
         fn key_id(&self) -> TestKeyId {
             TestKeyId(format!("id({0})", self.0))
         }
-        fn verify<D: AsRef<[u8]>>(&self, data: D, sig: TestSignature) -> bool {
+        fn verify<D: AsRef<[u8]>>(&self, data: D, sig: &TestSignature) -> bool {
             sig.data.as_slice() == data.as_ref() && *self == sig.pub_key
         }
     }
