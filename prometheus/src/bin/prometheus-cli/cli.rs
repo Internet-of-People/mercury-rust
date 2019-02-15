@@ -1,4 +1,4 @@
-use failure::{ensure, Fallible};
+use failure::{ensure, err_msg, Fallible};
 use log::*;
 use structopt::StructOpt;
 
@@ -144,16 +144,21 @@ impl Command {
             }
 
             Command::Show(ShowCommand::Profile { profile_id }) => {
-                // TODO display profile
                 // NOTE must also work with a profile that is not ours
                 let profile_ptr_opt = ctx.store().get(&profile_id);
-                match profile_ptr_opt {
-                    None => info!("Could not find profile {}", profile_id),
-                    Some(profile_ptr) => {
-                        // TODO this seems to do extra roundtrips to server
-                        let links = profile_ptr.borrow().links()?;
-                        let metadata = profile_ptr.borrow().metadata()?;
-                    }
+                let profile_ptr =
+                    profile_ptr_opt.ok_or_else(|| err_msg("Failed to retrieve profile"))?;
+                let links = profile_ptr.borrow().links()?;
+                let metadata = profile_ptr.borrow().metadata()?;
+
+                info!("Details of profile id {}", profile_id);
+                info!("  {} attributes:", metadata.len());
+                for (i, attribute) in metadata.iter().enumerate() {
+                    info!("    {}: {:?}", i, attribute);
+                }
+                info!("  {} subscriptions:", links.len());
+                for (i, peer_id) in links.iter().enumerate() {
+                    info!("    {}: {:?}", i, peer_id);
                 }
             }
 

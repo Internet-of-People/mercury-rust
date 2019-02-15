@@ -87,12 +87,8 @@ pub(crate) struct Edge {
     pub(crate) target: ProfileId,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct ListInEdgesReply {
-    pub(crate) edges: Vec<Edge>,
-}
-
-pub(crate) type ListOutEdgesReply = ListInEdgesReply;
+pub(crate) type ListInEdgesReply = Vec<ProfileId>;
+pub(crate) type ListOutEdgesReply = Vec<ProfileId>;
 
 pub(crate) type AddEdgeParams = Edge;
 pub(crate) type RemoveEdgeParams = Edge;

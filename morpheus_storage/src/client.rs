@@ -85,24 +85,14 @@ where
         let params = ListOutEdgesParams {
             id: self.id().clone(),
         };
-        let response = self.send_request("list_inedges", params)?;
+        let response = self.send_request("list_outedges", params)?;
         let reply_val = response
             .reply
             .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
         let reply: ListOutEdgesReply = rmpv::ext::from_value(reply_val)?;
         let links = reply
-            .edges
             .into_iter()
-            .filter_map(|edge| {
-                if edge.source == self.id {
-                    Some(Link {
-                        peer_profile: edge.target,
-                    })
-                } else {
-                    warn!("Server returned wrong follower relation");
-                    None
-                }
-            })
+            .map(|peer_profile| Link { peer_profile })
             .collect();
         Ok(links)
     }
@@ -117,18 +107,8 @@ where
             .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
         let reply: ListInEdgesReply = rmpv::ext::from_value(reply_val)?;
         let followers = reply
-            .edges
             .into_iter()
-            .filter_map(|edge| {
-                if edge.target == self.id {
-                    Some(Link {
-                        peer_profile: edge.source,
-                    })
-                } else {
-                    warn!("Server returned wrong follower relation");
-                    None
-                }
-            })
+            .map(|peer_profile| Link { peer_profile })
             .collect();
         Ok(followers)
     }
