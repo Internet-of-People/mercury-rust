@@ -47,6 +47,19 @@ impl DummyProfileVault {
         let profile_xsk = xsk.derive_hardened_child(idx)?;
         Ok(profile_xsk.neuter().as_public_key().key_id())
     }
+
+    pub fn load(cfg_dir: &std::path::Path, filename: &str) -> Fallible<Self> {
+        let cfg_file = std::fs::File::open(&cfg_dir)?;
+        let vault: DummyProfileVault = serde_json::from_reader(&cfg_file)?;
+        Ok(vault)
+    }
+
+    pub fn save(&self, cfg_dir: &std::path::Path, filename: &str) -> Fallible<()> {
+        std::fs::create_dir_all(&cfg_dir)?;
+        let cfg_file = std::fs::File::create(&cfg_dir.join(filename))?;
+        serde_json::to_writer_pretty(&cfg_file, self)?;
+        Ok(())
+    }
 }
 
 impl ProfileVault for DummyProfileVault {
