@@ -68,6 +68,7 @@ fn selected_profile(
     my_profile_option: Option<ProfileId>,
 ) -> Fallible<ProfilePtr> {
     let profile_opt = my_profile_option
+        // TODO ideally this should be or_else, but that fails to compile after trivial transformations, Fallible seems to be problematic here
         .or(ctx.vault().get_active()?)
         .and_then(|profile_id| ctx.store().get(&profile_id));
     ensure!(

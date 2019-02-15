@@ -5,6 +5,9 @@ appenders:
   # An appender named "stdout" that writes to stdout
   stdout:
     kind: console
+    encoder:
+      pattern: "{m}{n}"
+      # pattern: "{d(%Y-%m-%d %H:%M:%S)} {h({l})} {M}{f}{L} - {m}{n}"
 
 # Set the default logging level and attach appenders to the root
 root:
