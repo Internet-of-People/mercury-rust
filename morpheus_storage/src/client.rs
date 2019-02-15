@@ -24,8 +24,8 @@ pub trait ProfileStore {
 // TODO should all operations below be async?
 pub trait Profile {
     fn id(&self) -> ProfileId;
-    fn links(&self) -> Fallible<Vec<Link>>;
     fn metadata(&self) -> Fallible<HashMap<AttributeId, AttributeValue>>;
+    fn links(&self) -> Fallible<Vec<Link>>;
     fn followers(&self) -> Fallible<Vec<Link>>;
 
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link>;
@@ -73,12 +73,40 @@ where
     fn id(&self) -> ProfileId {
         self.id.clone()
     }
-    fn links(&self) -> Fallible<Vec<Link>> {
-        unimplemented!()
-    }
+
     fn metadata(&self) -> Fallible<HashMap<AttributeId, AttributeValue>> {
-        unimplemented!()
+        // TODO implement this properly by calling the server
+        Ok(HashMap::default())
     }
+
+    fn links(&self) -> Fallible<Vec<Link>> {
+        // TODO remove this Lava code
+        // Ok( Vec::default() )
+        let params = ListOutEdgesParams {
+            id: self.id().clone(),
+        };
+        let response = self.send_request("list_inedges", params)?;
+        let reply_val = response
+            .reply
+            .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
+        let reply: ListOutEdgesReply = rmpv::ext::from_value(reply_val)?;
+        let links = reply
+            .edges
+            .into_iter()
+            .filter_map(|edge| {
+                if edge.source == self.id {
+                    Some(Link {
+                        peer_profile: edge.target,
+                    })
+                } else {
+                    warn!("Server returned wrong follower relation");
+                    None
+                }
+            })
+            .collect();
+        Ok(links)
+    }
+
     fn followers(&self) -> Fallible<Vec<Link>> {
         let params = ListInEdgesParams {
             id: self.id().clone(),
@@ -166,6 +194,18 @@ where
         }
     }
 
+    // TODO this should probably return a different error type to differentiate
+    //      between different errors returned by the server.
+    //      They are currently defined as the following in the server:
+    //
+    //  enum class error_code : uint8_t {
+    //    ok                  = 0,
+    //    key_not_found       = 1,
+    //    key_already_exists  = 2,
+    //    attribute_not_found = 3,
+    //    source_not_found    = 4,
+    //    target_not_found    = 5,
+    //  };
     pub fn send_request<T>(&mut self, method: &str, params: T) -> Fallible<Response>
     where
         T: serde::Serialize + std::fmt::Debug,

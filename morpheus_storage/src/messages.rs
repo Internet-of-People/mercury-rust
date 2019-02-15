@@ -73,14 +73,13 @@ impl Response {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct AddNodeParams {
+pub(crate) struct Node {
     pub(crate) id: ProfileId,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct ListInEdgesParams {
-    pub(crate) id: ProfileId,
-}
+pub(crate) type AddNodeParams = Node;
+pub(crate) type ListInEdgesParams = Node;
+pub(crate) type ListOutEdgesParams = Node;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct Edge {
@@ -93,19 +92,10 @@ pub(crate) struct ListInEdgesReply {
     pub(crate) edges: Vec<Edge>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct AddEdgeParams {
-    // TODO shouldn't we use Edge here instead?
-    pub(crate) source: ProfileId,
-    pub(crate) target: ProfileId,
-}
+pub(crate) type ListOutEdgesReply = ListInEdgesReply;
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct RemoveEdgeParams {
-    // TODO shouldn't we use Edge here instead?
-    pub(crate) source: ProfileId,
-    pub(crate) target: ProfileId,
-}
+pub(crate) type AddEdgeParams = Edge;
+pub(crate) type RemoveEdgeParams = Edge;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct SetNodeAttributeParams {

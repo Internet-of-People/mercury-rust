@@ -112,7 +112,6 @@ impl Command {
             }
 
             Command::List(ListCommand::Profiles) => {
-                // TODO implement listing profiles
                 let profile_ids = ctx.vault().list()?;
                 info!("Has {} profiles", profile_ids.len());
                 for (i, profile_id) in profile_ids.iter().enumerate() {
