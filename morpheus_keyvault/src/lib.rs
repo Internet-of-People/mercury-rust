@@ -14,7 +14,7 @@ pub mod ed25519;
 mod tests;
 
 use failure::{bail, Fallible};
-use std::borrow::Borrow;
+use serde_derive::{Deserialize, Serialize};
 
 /// A public key (also called shared key or pk in some literature) is that part of an asymmetric keypair
 /// which can be used to verify the authenticity of the sender of a message or to encrypt a message that
@@ -76,8 +76,9 @@ pub trait AsymmetricCrypto {
     type Signature;
 }
 
+// TODO consider de/serialize attributes here, currently only needed for demo
 /// The seed used for BIP32 derivations.
-#[derive(Debug)]
+#[derive(Debug, Deserialize, Serialize)]
 pub struct Seed {
     bytes: Vec<u8>,
 }

@@ -1,5 +1,6 @@
 use failure::{bail, Fallible};
 use log::*;
+use serde_derive::{Deserialize, Serialize};
 
 use morpheus_keyvault::{
     ed25519::{Ed25519, EdExtPrivateKey},
@@ -16,7 +17,7 @@ pub trait ProfileVault {
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
 }
 
-// TODO Restore this state from a JSON file or something similar
+#[derive(Debug, Deserialize, Serialize)]
 pub struct DummyProfileVault {
     pub seed: Seed,
     pub indexes: Vec<i32>,

@@ -9,9 +9,10 @@ failure = "*"
 log = "*"
 morpheus_keyvault = { path="../morpheus_keyvault" }
 morpheus_storage = { path="../morpheus_storage" }
+serde = "*"
+#serde_bytes = "*"
+serde_derive = "*"
 # TODO these should be only binary dependencies, not needed for the library
 dirs = "*"
 log4rs = "*"
 structopt = "*"
-
-#multiaddr = "*"
