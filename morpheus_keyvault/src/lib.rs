@@ -10,6 +10,7 @@ extern crate failure;
 pub mod bip32;
 mod bip39;
 pub mod ed25519;
+pub mod multicipher;
 #[cfg(test)]
 mod tests;
 
