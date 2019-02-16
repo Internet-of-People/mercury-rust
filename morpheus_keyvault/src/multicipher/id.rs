@@ -36,3 +36,25 @@ impl Hash for MKeyId {
         visit!(hash(self, state));
     }
 }
+
+macro_rules! into_str {
+    ($suite:ident, $self_:expr) => {
+        (stringify!($suite), reify!($suite, id, $self_).to_bytes())
+    };
+}
+
+impl From<&MKeyId> for String {
+    fn from(src: &MKeyId) -> Self {
+        let (discriminator, bytes) = visit!(into_str(src));
+        let mut output = multibase::encode(multibase::Base58btc, &bytes);
+        output.insert_str(0, discriminator);
+        output.insert(0, 'I');
+        output
+    }
+}
+
+impl std::fmt::Display for MKeyId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", String::from(self))
+    }
+}
