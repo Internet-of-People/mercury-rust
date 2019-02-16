@@ -41,76 +41,6 @@ pub enum CipherSuite {
     TotallyNotEd25519,
 }
 
-/// See the [module-level description](index.html).
-pub struct MultiCipher {}
-
-#[allow(clippy::new_without_default_derive)]
-impl MultiCipher {
-    /// Creates a new instance, combining all ciphers that were implemented at compile-time of this
-    /// crate.
-    pub fn new() -> Self {
-        Self {}
-    }
-}
-
-impl AsymmetricCrypto for MultiCipher {
-    type KeyId = MKeyId;
-    type PublicKey = MPublicKey;
-    type PrivateKey = MPrivateKey;
-    type Signature = MSignature;
-}
-
-/// Type-erased key id
-#[derive(Debug)]
-pub struct MKeyId {
-    suite: CipherSuite,
-    erased: Box<Any>,
-}
-
-impl PartialEq<MKeyId> for MKeyId {
-    fn eq(&self, other: &Self) -> bool {
-        if self.suite != other.suite {
-            return false;
-        }
-        match self.suite {
-            CipherSuite::Ed25519 => {
-                let self_reified = self.erased.downcast_ref::<ed25519::KeyId>().unwrap();
-                let other_reified = other.erased.downcast_ref::<ed25519::KeyId>().unwrap();
-                self_reified.eq(other_reified)
-            }
-            CipherSuite::TotallyNotEd25519 => {
-                let self_reified = self.erased.downcast_ref::<ed25519::KeyId>().unwrap();
-                let other_reified = other.erased.downcast_ref::<ed25519::KeyId>().unwrap();
-                self_reified.eq(other_reified)
-            }
-        }
-    }
-}
-
-impl Eq for MKeyId {}
-
-impl Hash for MKeyId {
-    fn hash<H: Hasher>(&self, state: &mut H) {
-        self.suite.hash(state);
-        match self.suite {
-            CipherSuite::Ed25519 => {
-                let c_self = self.erased.downcast_ref::<ed25519::KeyId>().unwrap();
-                c_self.hash(state)
-            }
-            CipherSuite::TotallyNotEd25519 => {
-                let c_self = self.erased.downcast_ref::<ed25519::KeyId>().unwrap();
-                c_self.hash(state)
-            }
-        }
-    }
-}
-
-/// Type-erased public key
-pub struct MPublicKey {
-    suite: CipherSuite,
-    erased: Box<Any>,
-}
-
 macro_rules! e {
     (variant) => {
         CipherSuite::Ed25519
@@ -120,6 +50,9 @@ macro_rules! e {
     };
     (pk) => {
         EdPublicKey
+    };
+    (sk) => {
+        EdPrivateKey
     };
     (sig) => {
         EdSignature
@@ -135,6 +68,9 @@ macro_rules! f {
     };
     (pk) => {
         EdPublicKey
+    };
+    (sk) => {
+        EdPrivateKey
     };
     (sig) => {
         EdSignature
@@ -175,14 +111,76 @@ macro_rules! multi {
     };
 }
 
-macro_rules! key_id {
+/// See the [module-level description](index.html).
+pub struct MultiCipher {}
+
+#[allow(clippy::new_without_default_derive)]
+impl MultiCipher {
+    /// Creates a new instance, combining all ciphers that were implemented at compile-time of this
+    /// crate.
+    pub fn new() -> Self {
+        Self {}
+    }
+}
+
+impl AsymmetricCrypto for MultiCipher {
+    type KeyId = MKeyId;
+    type PublicKey = MPublicKey;
+    type PrivateKey = MPrivateKey;
+    type Signature = MSignature;
+}
+
+/// Type-erased key id
+#[derive(Debug)]
+pub struct MKeyId {
+    suite: CipherSuite,
+    erased: Box<Any>,
+}
+
+macro_rules! mkeyid_eq {
+    ($suite:ident, $self_:tt, $other:ident) => {
+        reify!($suite, id, $self_).eq(reify!($suite, id, $other))
+    };
+}
+
+impl PartialEq<MKeyId> for MKeyId {
+    fn eq(&self, other: &Self) -> bool {
+        if self.suite != other.suite {
+            return false;
+        }
+        multi!(mkeyid_eq(self, other))
+    }
+}
+
+impl Eq for MKeyId {}
+
+macro_rules! mkeyid_hash {
+    ($suite:ident, $self_:tt, $state:expr) => {
+        reify!($suite, id, $self_).hash($state)
+    };
+}
+
+impl Hash for MKeyId {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.suite.hash(state);
+        multi!(mkeyid_hash(self, state));
+    }
+}
+
+/// Type-erased public key
+pub struct MPublicKey {
+    suite: CipherSuite,
+    erased: Box<Any>,
+}
+
+macro_rules! pk_key_id {
     ($suite:ident, $self_:tt) => {{
         let result = reify!($suite, pk, $self_).key_id();
         erase!($suite, MKeyId, result)
     }};
 }
 
-macro_rules! verify {
+macro_rules! pk_verify {
     ($suite:ident, $self_:tt, $data:ident, $sig:ident) => {
         reify!($suite, pk, $self_).verify($data, reify!($suite, sig, $sig))
     };
@@ -190,13 +188,13 @@ macro_rules! verify {
 
 impl PublicKey<MultiCipher> for MPublicKey {
     fn key_id(&self) -> MKeyId {
-        multi!(key_id(self))
+        multi!(pk_key_id(self))
     }
     fn verify<D: AsRef<[u8]>>(&self, data: D, sig: &MSignature) -> bool {
         if self.suite != sig.suite {
             return false;
         }
-        multi!(verify(self, data, sig))
+        multi!(pk_verify(self, data, sig))
     }
 }
 
@@ -206,46 +204,26 @@ pub struct MPrivateKey {
     erased: Box<Any>,
 }
 
+macro_rules! sk_public_key {
+    ($suite:ident, $self_:tt) => {{
+        let result = reify!($suite, sk, $self_).public_key();
+        erase!($suite, MPublicKey, result)
+    }};
+}
+
+macro_rules! sk_sign {
+    ($suite:ident, $self_:tt, $data:ident) => {{
+        let result = reify!($suite, sk, $self_).sign($data);
+        erase!($suite, MSignature, result)
+    }};
+}
+
 impl PrivateKey<MultiCipher> for MPrivateKey {
     fn public_key(&self) -> MPublicKey {
-        match self.suite {
-            CipherSuite::Ed25519 => {
-                let self_reified = self.erased.downcast_ref::<EdPrivateKey>().unwrap();
-                let result = self_reified.public_key();
-                MPublicKey {
-                    suite: CipherSuite::Ed25519,
-                    erased: Box::new(result),
-                }
-            }
-            CipherSuite::TotallyNotEd25519 => {
-                let self_reified = self.erased.downcast_ref::<EdPrivateKey>().unwrap();
-                let result = self_reified.public_key();
-                MPublicKey {
-                    suite: CipherSuite::TotallyNotEd25519,
-                    erased: Box::new(result),
-                }
-            }
-        }
+        multi!(sk_public_key(self))
     }
     fn sign<D: AsRef<[u8]>>(&self, data: D) -> MSignature {
-        match self.suite {
-            CipherSuite::Ed25519 => {
-                let self_reified = self.erased.downcast_ref::<EdPrivateKey>().unwrap();
-                let result = self_reified.sign(data);
-                MSignature {
-                    suite: CipherSuite::Ed25519,
-                    erased: Box::new(result),
-                }
-            }
-            CipherSuite::TotallyNotEd25519 => {
-                let self_reified = self.erased.downcast_ref::<EdPrivateKey>().unwrap();
-                let result = self_reified.sign(data);
-                MSignature {
-                    suite: CipherSuite::TotallyNotEd25519,
-                    erased: Box::new(result),
-                }
-            }
-        }
+        multi!(sk_sign(self, data))
     }
 }
 
