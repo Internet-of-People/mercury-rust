@@ -17,13 +17,13 @@ impl EdPublicKey {
 
     /// Creates a public key from a byte slice possibly returned by the [`to_bytes`] method.
     ///
-    /// # Panics
+    /// # Error
     /// If `bytes` is rejected by `ed25519_dalek::PublicKey::from_bytes`
     ///
     /// [`to_bytes`]: #method.to_bytes
-    pub fn from_bytes<D: AsRef<[u8]>>(bytes: D) -> Self {
-        let pk = ed::PublicKey::from_bytes(bytes.as_ref()).unwrap();
-        Self(pk)
+    pub fn from_bytes<D: AsRef<[u8]>>(bytes: D) -> Fallible<Self> {
+        let pk = ed::PublicKey::from_bytes(bytes.as_ref())?;
+        Ok(Self(pk))
     }
 }
 

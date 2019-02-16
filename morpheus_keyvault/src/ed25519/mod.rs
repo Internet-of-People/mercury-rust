@@ -79,7 +79,7 @@ mod tests {
 
         fn test(pk_hex: &str, key_id_hex: &str) {
             let pk_bytes = hex::decode(pk_hex).unwrap();
-            let pk = EdPublicKey::from_bytes(pk_bytes);
+            let pk = EdPublicKey::from_bytes(pk_bytes).unwrap();
 
             let key_id = pk.key_id();
 
@@ -228,7 +228,7 @@ mod tests {
         let sk_bytes =
             hex::decode("171cb88b1b3c1db25add599712e36245d75bc65a1a5c9e18d76f9f2b1eab4012")
                 .unwrap();
-        let sk = EdPrivateKey::from_bytes(sk_bytes);
+        let sk = EdPrivateKey::from_bytes(sk_bytes).unwrap();
 
         let pk = sk.public_key();
         let pk_bytes = pk.to_bytes();
@@ -254,7 +254,7 @@ mod tests {
 
         fn test(sk_hex: &str, pk_hex: &str, msg_hex: &str, sig_hex: &str) {
             let sk_bytes = hex::decode(sk_hex).unwrap();
-            let sk = EdPrivateKey::from_bytes(sk_bytes.as_slice());
+            let sk = EdPrivateKey::from_bytes(sk_bytes.as_slice()).unwrap();
 
             let pk = sk.public_key();
             let pk_bytes = pk.to_bytes();

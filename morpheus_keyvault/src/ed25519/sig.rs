@@ -1,5 +1,7 @@
 use ed25519_dalek as ed;
 
+use super::*;
+
 /// Implementation of Ed25519::Signature
 pub struct EdSignature(ed::Signature);
 
@@ -13,19 +15,19 @@ impl EdSignature {
 
     /// Creates a signature from a byte slice possibly returned by the [`to_bytes`] method.
     ///
-    /// # Panics
+    /// # Error
     /// If `bytes` is rejected by `ed25519_dalek::SecretKey::from_bytes`
     ///
     /// [`to_bytes`]: #method.to_bytes
-    pub fn from_bytes<D: AsRef<[u8]>>(bytes: D) -> Self {
-        let sig = ed::Signature::from_bytes(bytes.as_ref()).unwrap();
-        EdSignature(sig)
+    pub fn from_bytes<D: AsRef<[u8]>>(bytes: D) -> Fallible<Self> {
+        let sig = ed::Signature::from_bytes(bytes.as_ref())?;
+        Ok(Self(sig))
     }
 }
 
 impl From<ed::Signature> for EdSignature {
     fn from(sig: ed::Signature) -> Self {
-        EdSignature(sig)
+        Self(sig)
     }
 }
 

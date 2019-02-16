@@ -1,3 +1,5 @@
+use super::*;
+
 /// Size of the chain code in bytes
 pub const CHAIN_CODE_SIZE: usize = 32;
 
@@ -18,14 +20,20 @@ impl ChainCode {
 
     /// Creates a chain code from a byte slice possibly returned by the [`to_bytes`] method.
     ///
-    /// # Panics
+    /// # Error
     /// If `bytes` is not [`CHAIN_CODE_SIZE`] long
     ///
     /// [`to_bytes`]: #method.to_bytes
     /// [`CHAIN_CODE_SIZE`]: ../constant.CHAIN_CODE_SIZE
-    pub fn from_bytes<D: AsRef<[u8]>>(bytes: D) -> Self {
+    pub fn from_bytes<D: AsRef<[u8]>>(bytes: D) -> Fallible<Self> {
+        let bytes = bytes.as_ref();
+        ensure! {
+            bytes.len() == CHAIN_CODE_SIZE,
+            "Chain code length is not {}",
+            CHAIN_CODE_SIZE
+        }
         let mut cc = [0u8; CHAIN_CODE_SIZE];
-        cc.copy_from_slice(bytes.as_ref());
-        Self(cc)
+        cc.copy_from_slice(bytes);
+        Ok(Self(cc))
     }
 }

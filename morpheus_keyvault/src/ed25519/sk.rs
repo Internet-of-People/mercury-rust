@@ -15,15 +15,15 @@ impl EdPrivateKey {
 
     /// Creates a public key from a byte slice possibly returned by the [`to_bytes`] method.
     ///
-    /// # Panics
+    /// # Error
     /// If `bytes` is rejected by `ed25519_dalek::SecretKey::from_bytes`
     ///
     /// [`to_bytes`]: #method.to_bytes
-    pub fn from_bytes<D: AsRef<[u8]>>(bytes: D) -> Self {
-        let secret = ed::SecretKey::from_bytes(bytes.as_ref()).unwrap();
+    pub fn from_bytes<D: AsRef<[u8]>>(bytes: D) -> Fallible<Self> {
+        let secret = ed::SecretKey::from_bytes(bytes.as_ref())?;
         let public = ed::PublicKey::from(&secret);
         let key_pair = ed::Keypair { secret, public };
-        EdPrivateKey(key_pair)
+        Ok(Self(key_pair))
     }
 }
 

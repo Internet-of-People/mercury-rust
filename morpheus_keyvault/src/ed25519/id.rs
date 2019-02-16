@@ -36,16 +36,24 @@ impl KeyId {
 
     /// Creates a chain code from a byte slice possibly returned by the [`to_bytes`] method.
     ///
-    /// # Panics
+    /// # Error
     /// If `bytes` is not [`KEY_ID_SIZE`] long
     ///
     /// [`to_bytes`]: #method.to_bytes
     /// [`KEY_ID_SIZE`]: ../constant.KEY_ID_SIZE
-    pub fn from_bytes<D: AsRef<[u8]>>(bytes: D) -> Self {
+    pub fn from_bytes<D: AsRef<[u8]>>(bytes: D) -> Fallible<Self> {
         let bytes = bytes.as_ref();
-        assert_eq!(bytes.len(), KEY_ID_SIZE);
-        assert_eq!(bytes[0], KEY_ID_VERSION1);
-        Self(bytes.to_owned())
+        ensure!(
+            bytes.len() == KEY_ID_SIZE,
+            "Identifier length is not {}",
+            KEY_ID_SIZE
+        );
+        ensure!(
+            bytes[0] == KEY_ID_VERSION1,
+            "Only identifier version {:x} is supported",
+            KEY_ID_VERSION1
+        );
+        Ok(Self(bytes.to_owned()))
     }
 }
 
@@ -85,17 +93,7 @@ impl std::str::FromStr for KeyId {
             "Only Ed25519 cipher is supported"
         );
         let (_base, binary) = multibase::decode(chars.as_str())?;
-        ensure!(
-            binary[0] == KEY_ID_VERSION1,
-            "Only identifier version {:x} is supported",
-            KEY_ID_VERSION1
-        );
-        ensure!(
-            binary.len() == KEY_ID_SIZE,
-            "Identifier length is not {}",
-            KEY_ID_SIZE
-        );
-        Ok(KeyId(binary))
+        KeyId::from_bytes(&binary)
     }
 }
 

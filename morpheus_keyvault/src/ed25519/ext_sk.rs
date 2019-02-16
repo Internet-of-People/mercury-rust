@@ -23,8 +23,8 @@ impl EdExtPrivateKey {
         let sk_bytes = &hash_bytes[..ed::SECRET_KEY_LENGTH];
         let cc_bytes = &hash_bytes[ed::SECRET_KEY_LENGTH..];
 
-        let chain_code = ChainCode::from_bytes(cc_bytes);
-        let sk = EdPrivateKey::from_bytes(sk_bytes);
+        let chain_code = ChainCode::from_bytes(cc_bytes).unwrap();
+        let sk = EdPrivateKey::from_bytes(sk_bytes).unwrap();
 
         Self { chain_code, sk }
     }
