@@ -33,7 +33,7 @@ impl CommandContext {
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "prometheus", about = "Command line interface of Prometheus")]
+#[structopt(name = "prometheus", about = "Command line interface for Prometheus")]
 pub enum Command {
     #[structopt(name = "status")]
     Status,

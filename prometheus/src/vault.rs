@@ -15,6 +15,9 @@ pub trait ProfileVault {
 
     fn get_active(&self) -> Fallible<Option<ProfileId>>;
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
+
+    // TODO this should not be on this interface, adding it here as fast hack for MVP demo
+    fn save(&self, cfg_dir: &std::path::Path, filename: &str) -> Fallible<()>;
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -49,17 +52,17 @@ impl DummyProfileVault {
     }
 
     pub fn load(cfg_dir: &std::path::Path, filename: &str) -> Fallible<Self> {
-        let cfg_file = std::fs::File::open(&cfg_dir)?;
+        let cfg_file = std::fs::File::open(&cfg_dir.join(filename))?;
         let vault: DummyProfileVault = serde_json::from_reader(&cfg_file)?;
         Ok(vault)
     }
 
-    pub fn save(&self, cfg_dir: &std::path::Path, filename: &str) -> Fallible<()> {
-        std::fs::create_dir_all(&cfg_dir)?;
-        let cfg_file = std::fs::File::create(&cfg_dir.join(filename))?;
-        serde_json::to_writer_pretty(&cfg_file, self)?;
-        Ok(())
-    }
+    //    pub fn save(&self, cfg_dir: &std::path::Path, filename: &str) -> Fallible<()> {
+    //        std::fs::create_dir_all(&cfg_dir)?;
+    //        let cfg_file = std::fs::File::create(&cfg_dir.join(filename))?;
+    //        serde_json::to_writer_pretty(&cfg_file, self)?;
+    //        Ok(())
+    //    }
 }
 
 impl ProfileVault for DummyProfileVault {
@@ -91,6 +94,7 @@ impl ProfileVault for DummyProfileVault {
             Ok(Option::None)
         }
     }
+
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()> {
         if let Some(pos) = self
             .list()?
@@ -102,5 +106,13 @@ impl ProfileVault for DummyProfileVault {
         } else {
             bail!("Profile Id '{}' not found", id)
         }
+    }
+
+    fn save(&self, cfg_dir: &std::path::Path, filename: &str) -> Fallible<()> {
+        info!("Saving profile vault to store state");
+        std::fs::create_dir_all(&cfg_dir)?;
+        let cfg_file = std::fs::File::create(&cfg_dir.join(filename))?;
+        serde_json::to_writer_pretty(&cfg_file, self)?;
+        Ok(())
     }
 }
