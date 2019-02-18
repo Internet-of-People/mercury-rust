@@ -83,7 +83,7 @@ impl ProfileVault for DummyProfileVault {
         let xsk = self.mercury_xsk()?;
         let profile_id = Self::profile_id(&xsk, next_idx)?;
         self.indexes.push(next_idx);
-        info!("Setting active profile to {}", profile_id);
+        debug!("Setting active profile to {}", profile_id);
         self.active_idx = Option::Some(next_idx);
         Ok(profile_id)
     }
@@ -111,7 +111,7 @@ impl ProfileVault for DummyProfileVault {
     }
 
     fn save(&self, cfg_dir: &std::path::Path, filename: &str) -> Fallible<()> {
-        info!("Saving profile vault to store state");
+        debug!("Saving profile vault to store state");
         std::fs::create_dir_all(&cfg_dir)?;
         let cfg_file = std::fs::File::create(&cfg_dir.join(filename))?;
         serde_json::to_writer_pretty(&cfg_file, self)?;

@@ -119,6 +119,7 @@ impl Command {
                 let profile_ids = ctx.vault().list()?;
                 info!("Has {} profiles", profile_ids.len());
                 for (i, profile_id) in profile_ids.iter().enumerate() {
+                    // TODO mark active profile somehow
                     info!("  {}: {}", i, profile_id);
                 }
             }
@@ -167,6 +168,11 @@ impl Command {
             }
 
             Command::Status => {
+                let active_profile_opt = ctx.vault.get_active()?;
+                match active_profile_opt {
+                    Some(active_prof) => info!("Your active profile is {}", active_prof),
+                    None => info!("You still don't have an active profile set"),
+                };
                 // TODO what status to display besides active (default) profile?
             }
         };
