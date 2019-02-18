@@ -25,7 +25,7 @@ impl Envelope {
     }
 }
 
-pub type MessageId = u32;
+pub type MessageId = u64;
 pub type ResponseCode = u32;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
