@@ -94,7 +94,10 @@ impl Command {
                 let new_profile_id = ctx.mut_vault().create_id()?;
                 let created_profile_ptr = ctx.mut_store().create(&new_profile_id)?;
                 let created_profile = created_profile_ptr.borrow();
-                info!("Created profile with id {}", created_profile.id());
+                info!(
+                    "Created and activated profile with id {}",
+                    created_profile.id()
+                );
             }
 
             Command::Clear(ClearCommand::Attribute { my_profile_id, key }) => {

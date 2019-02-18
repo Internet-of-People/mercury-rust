@@ -83,6 +83,7 @@ impl ProfileVault for DummyProfileVault {
         let xsk = self.mercury_xsk()?;
         let profile_id = Self::profile_id(&xsk, next_idx)?;
         self.indexes.push(next_idx);
+        info!("Setting active profile to {}", profile_id);
         self.active_idx = Option::Some(next_idx);
         Ok(profile_id)
     }
