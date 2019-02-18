@@ -32,8 +32,9 @@ impl DummyProfileVault {
     pub fn new() -> Self {
         info!("Initializing profile vault");
 
+        // TODO this should be Seed::generate but then the phrase list must be forced to be saved to be able to restore profiles
         let seed = Seed::from_bip39("include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already").unwrap();
-        let indexes = vec![0, 2, 3];
+        let indexes = Vec::default();
         Self {
             seed,
             indexes,
