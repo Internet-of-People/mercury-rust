@@ -88,14 +88,17 @@ impl Seed {
     const MNEMONIC_WORDS: usize = 24;
     const BITS: usize = 512;
 
+    /// Creates a new
+    pub fn generate_bip39() -> String {
+        bip39::generate_new_phrase(Self::MNEMONIC_WORDS)
+    }
+
     /// Creates new 512-bit seed from hardware entropy.
     /// # Panics
     /// bip39-rs v0.5.1 uses rand::os_rng that might fail on filesystem related issues. This panic will go
     /// away when we upgrade to bip39-rs v0.6.
     pub fn generate_new() -> Self {
-        let bytes = bip39::generate_new(Self::PASSWORD).expect(
-            "This will not fail after we upgrade to bip39-rs v0.6 that uses rand::thread_rng",
-        );
+        let bytes = bip39::generate_new(Self::PASSWORD);
         Self { bytes }
     }
 

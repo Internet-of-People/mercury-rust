@@ -6,21 +6,25 @@ use morpheus_storage::*;
 use prometheus::vault::*;
 
 pub struct CommandContext {
-    vault: Box<ProfileVault>,
+    vault: Option<Box<ProfileVault>>,
     store: Box<ProfileStore>,
 }
 
 impl CommandContext {
-    pub fn new(vault: Box<ProfileVault>, store: Box<ProfileStore>) -> Self {
+    pub fn new(vault: Option<Box<ProfileVault>>, store: Box<ProfileStore>) -> Self {
         Self { vault, store }
     }
 
+    /// # Panic
+    /// If there is no vault given to `new`
     pub fn vault(&self) -> &ProfileVault {
-        self.vault.as_ref()
+        self.vault.as_ref().unwrap().as_ref()
     }
 
+    /// # Panic
+    /// If there is no vault given to `new`
     pub fn mut_vault(&mut self) -> &mut ProfileVault {
-        self.vault.as_mut()
+        self.vault.as_mut().unwrap().as_mut()
     }
 
     pub fn store(&self) -> &ProfileStore {
@@ -61,6 +65,9 @@ pub enum Command {
     #[structopt(name = "clear")]
     /// Clear attribute
     Clear(ClearCommand),
+
+    #[structopt(name = "vault")]
+    Vault(VaultCommand),
 }
 
 fn selected_profile(
@@ -68,7 +75,7 @@ fn selected_profile(
     my_profile_option: Option<ProfileId>,
 ) -> Fallible<ProfilePtr> {
     let profile_opt = my_profile_option
-        // TODO ideally this should be or_else, but that fails to compile after trivial transformations, Fallible seems to be problematic here
+        // TODO ideally this should be or_else, but mixing Option<T> with Result<Option<T>,E> is complex
         .or(ctx.vault().get_active()?)
         .and_then(|profile_id| ctx.store().get(&profile_id));
     ensure!(
@@ -79,6 +86,13 @@ fn selected_profile(
 }
 
 impl Command {
+    pub fn needs_vault(&self) -> bool {
+        match self {
+            Command::Vault(_) => false,
+            _ => true,
+        }
+    }
+
     pub fn execute(self, ctx: &mut CommandContext) -> Fallible<()> {
         match self {
             Command::Create(CreateCommand::Link {
@@ -168,12 +182,20 @@ impl Command {
             }
 
             Command::Status => {
-                let active_profile_opt = ctx.vault.get_active()?;
+                let active_profile_opt = ctx.vault().get_active()?;
                 match active_profile_opt {
                     Some(active_prof) => info!("Your active profile is {}", active_prof),
                     None => info!("You still don't have an active profile set"),
                 };
                 // TODO what status to display besides active (default) profile?
+            }
+
+            Command::Vault(VaultCommand::Generate) => {
+                VaultCommand::generate();
+            }
+
+            Command::Vault(VaultCommand::Restore) => {
+                VaultCommand::restore();
             }
         };
 
@@ -283,4 +305,29 @@ pub enum ClearCommand {
         /// Attribute name
         key: AttributeId,
     },
+}
+
+#[derive(Debug, StructOpt)]
+pub enum VaultCommand {
+    #[structopt(name = "generate")]
+    Generate,
+
+    #[structopt(name = "restore")]
+    Restore,
+}
+
+impl VaultCommand {
+    pub fn generate() {
+        let new_bip39_phrase = morpheus_keyvault::Seed::generate_bip39();
+        let words = new_bip39_phrase.split(' ');
+        info!(
+            r#"Make sure you back these words up somewhere safe
+and rerun the application with the restore parameter!"#
+        );
+        words
+            .enumerate()
+            .for_each(|(i, word)| info!("    {:2}: {}", i + 1, word));
+    }
+
+    pub fn restore() {}
 }
