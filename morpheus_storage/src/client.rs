@@ -12,6 +12,8 @@ use crate::model::*;
 const MORPHEUS_HANDLER: &str = "osg";
 const RESPONSE_CODE_OK: u32 = 0;
 
+pub type AttributeMap = HashMap<AttributeId, AttributeValue>;
+
 // TODO should all operations below be async?
 pub trait ProfileStore {
     fn get(&self, id: &ProfileId) -> Option<ProfilePtr>;
@@ -24,7 +26,7 @@ pub trait ProfileStore {
 // TODO should all operations below be async?
 pub trait Profile {
     fn id(&self) -> ProfileId;
-    fn metadata(&self) -> Fallible<HashMap<AttributeId, AttributeValue>>;
+    fn metadata(&self) -> Fallible<AttributeMap>;
     fn links(&self) -> Fallible<Vec<Link>>;
     fn followers(&self) -> Fallible<Vec<Link>>;
 
@@ -63,6 +65,35 @@ where
     {
         self.rpc.borrow_mut().send_request(method, params)
     }
+
+    const INFLUENCER_ATTRIBUTE: &'static str = "influencer";
+
+    pub fn get_attribute_map(&self) -> Fallible<AttributeMap> {
+        let params = GetNodeAttributeParams {
+            id: self.id.to_owned(),
+            key: Self::INFLUENCER_ATTRIBUTE.to_owned(),
+        };
+        let response = self.send_request("get_node_attribute", params)?;
+        let reply_bin = response
+            .reply
+            .ok_or_else(|| err_msg("Server returned no reply content for query"))
+            .and_then(|resp_val| match resp_val {
+                rmpv::Value::Binary(bin) => Ok(bin),
+                _ => bail!("Server returned unexpected attribute type"),
+            })?;
+        let attributes = serde_json::from_slice(&reply_bin)?;
+        Ok(attributes)
+    }
+
+    pub fn set_attribute_map(&self, attributes: AttributeMap) -> Fallible<()> {
+        let params = SetNodeAttributeParams {
+            id: self.id.to_owned(),
+            key: Self::INFLUENCER_ATTRIBUTE.to_owned(),
+            value: serde_json::to_vec(&attributes)?,
+        };
+        let _response = self.send_request("set_node_attribute", params)?;
+        Ok(())
+    }
 }
 
 impl<R, W> Profile for RpcProfile<R, W>
@@ -74,14 +105,11 @@ where
         self.id.clone()
     }
 
-    fn metadata(&self) -> Fallible<HashMap<AttributeId, AttributeValue>> {
-        // TODO implement this properly by calling the server
-        Ok(HashMap::default())
+    fn metadata(&self) -> Fallible<AttributeMap> {
+        self.get_attribute_map()
     }
 
     fn links(&self) -> Fallible<Vec<Link>> {
-        // TODO remove this Lava code
-        // Ok( Vec::default() )
         let params = ListOutEdgesParams {
             id: self.id().clone(),
         };
@@ -133,23 +161,18 @@ where
         Ok(())
     }
 
+    // TODO get and set_attr() consist of two remote operations. If any of those fail,
+    //      wallet and storage backend states might easily get unsynchronized.
     fn set_attribute(&mut self, key: &AttributeId, value: &AttributeValue) -> Fallible<()> {
-        let params = SetNodeAttributeParams {
-            id: self.id.to_owned(),
-            key: key.clone(),
-            value: value.as_bytes().to_owned(), // TODO There is a hidden data structure between the CLI and MsgPack serializations
-        };
-        let _response = self.send_request("set_node_attribute", params)?;
-        Ok(())
+        let mut attr_map = self.get_attribute_map()?;
+        attr_map.insert(key.to_owned(), value.to_owned());
+        self.set_attribute_map(attr_map)
     }
 
     fn clear_attribute(&mut self, key: &AttributeId) -> Fallible<()> {
-        let params = ClearNodeAttributeParams {
-            id: self.id.to_owned(),
-            key: key.clone(),
-        };
-        let _response = self.send_request("clear_node_attribute", params)?;
-        Ok(())
+        let mut attr_map = self.get_attribute_map()?;
+        attr_map.remove(key);
+        self.set_attribute_map(attr_map)
     }
 }
 

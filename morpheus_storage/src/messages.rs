@@ -102,10 +102,13 @@ pub(crate) struct SetNodeAttributeParams {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct ClearNodeAttributeParams {
+pub(crate) struct NodeAttribute {
     pub(crate) id: ProfileId,
     pub(crate) key: AttributeId,
 }
+
+pub(crate) type GetNodeAttributeParams = NodeAttribute;
+//pub(crate) type ClearNodeAttributeParams = NodeAttribute;
 
 #[test]
 fn test_serialization_concept() {
