@@ -346,7 +346,30 @@ and rerun the application with the restore vault arguments!"#
 }
 
 fn read_phrase() -> Fallible<String> {
-    bail!("Bad luck, not implemented yet")
+    use std::io::BufRead;
+    use std::io::Write;
+
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
+    let mut stdin_lock = stdin.lock();
+    let mut stdout_lock = stdout.lock();
+    stdout_lock.write_fmt(format_args!(
+        "Please type the words you backed up one-by-one pressing enter after each:\n"
+    ))?;
+
+    let mut words = Vec::with_capacity(24);
+    for i in 1..=24 {
+        stdout_lock.write_fmt(format_args!("  {:2}> ", i))?; // no newline at the end for this prompt!
+        stdout_lock.flush()?; // without this, nothing is written on the console
+        let mut buffer = String::with_capacity(10);
+        stdin_lock.read_line(&mut buffer)?;
+        words.push(buffer.trim().to_owned())
+    }
+    let phrase = words.join(" ");
+
+    debug!("You entered: {}", phrase);
+
+    Ok(phrase)
 }
 
 fn restore_vault(ctx: &mut CommandContext, demo: bool) -> Fallible<()> {
