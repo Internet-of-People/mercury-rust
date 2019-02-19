@@ -1,5 +1,5 @@
-prometheus (1.0) buster; urgency=medium
+prometheus (0.1) buster; urgency=medium
 
   * Initial release
 
- -- Istvan Zolyomi <istvan@iop-ventures.com>  Fri, 08 Feb 2019 15:59:48 +0100
+ -- Rache Bartmoss <bartmoss@tutanota.com>  Fri, 22 Feb 2019 15:59:48 +0100

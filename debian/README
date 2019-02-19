@@ -1,3 +1,5 @@
 Steps to create a debian package:
-1. Compile the thing, run `cargo build` in git root
-2. run `dpkg-buildpackage --no-sign`
+1. Make sure you have the Rust toolchain installed, use `rustup` from https://rustup.rs/ if not so.
+2. Compile the project by running `cargo build --release` in git root to build binaries.
+3. Install packaging tools using e.g. `sudo apt install dpkg-dev debhelper dh-systemd`
+2. Run `dpkg-buildpackage --no-sign` to build the Debian package.
