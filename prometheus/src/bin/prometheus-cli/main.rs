@@ -17,30 +17,30 @@ fn main() -> Fallible<()> {
     log4rs::init_file("log4rs.yml", Default::default())?;
 
     let command = Command::from_args();
-    info!("Got command {:?}", command);
+    debug!("Got command {:?}", command);
 
     let cfg_dir = dirs::config_dir()
         .ok_or_else(|| err_msg("Failed to detect platform-dependent directory for app config"))?;
     let app_cfg_dir = Path::new(&cfg_dir).join("prometheus");
     let vault_file = "vault.dat";
     let vault_path = app_cfg_dir.join(vault_file);
-    info!("Looking for app config in {:?}", vault_path);
+    debug!("Looking for profile vault in {:?}", vault_path);
 
     let vault_exists = vault_path.exists();
     if command.needs_vault() && !vault_exists {
         VaultCommand::generate();
-        bail!("Have to initialize vault before running {:?}", command);
+        bail!("You have to initialize vault before running {:?}", command);
     }
 
     let mut vault: Option<Box<ProfileVault>> = None;
     if vault_exists {
-        info!("Found vault, loading");
+        info!("Found profile vault, loading {:?}", vault_path.to_str());
         vault = Some(Box::new(DummyProfileVault::load(
             &app_cfg_dir,
             &vault_file,
         )?))
     } else {
-        info!("No config found");
+        debug!("No profile vault found");
     }
 
     // TODO make address and timeout configurable
