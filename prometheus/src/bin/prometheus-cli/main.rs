@@ -51,8 +51,9 @@ fn main() -> Fallible<()> {
     let mut ctx = CommandContext::new(vault, Box::new(store));
     command.execute(&mut ctx)?;
 
-    if vault_exists {
-        ctx.vault().save(&app_cfg_dir, &vault_file)?;
+    let vault_opt = ctx.take_vault();
+    if let Some(vault) = vault_opt {
+        vault.save(&app_cfg_dir, &vault_file)?;
     }
     Ok(())
 }

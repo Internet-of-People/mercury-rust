@@ -27,6 +27,14 @@ impl CommandContext {
         self.vault.as_mut().unwrap().as_mut()
     }
 
+    pub fn take_vault(&mut self) -> Option<Box<ProfileVault>> {
+        self.vault.take()
+    }
+
+    pub fn replace_vault(&mut self, new_vault: Box<ProfileVault>) -> Option<Box<ProfileVault>> {
+        self.vault.replace(new_vault)
+    }
+
     pub fn store(&self) -> &ProfileStore {
         self.store.as_ref()
     }
@@ -194,8 +202,8 @@ impl Command {
                 VaultCommand::generate();
             }
 
-            Command::Vault(VaultCommand::Restore) => {
-                VaultCommand::restore();
+            Command::Vault(VaultCommand::Restore { demo }) => {
+                VaultCommand::restore(ctx, demo);
             }
         };
 
@@ -313,7 +321,10 @@ pub enum VaultCommand {
     Generate,
 
     #[structopt(name = "restore")]
-    Restore,
+    Restore {
+        #[structopt(long = "demo")]
+        demo: bool,
+    },
 }
 
 impl VaultCommand {
@@ -329,5 +340,9 @@ and rerun the application with the restore parameter!"#
             .for_each(|(i, word)| info!("    {:2}: {}", i + 1, word));
     }
 
-    pub fn restore() {}
+    pub fn restore(ctx: &mut CommandContext, demo: bool) {
+        let seed = morpheus_keyvault::Seed::from_bip39("include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already").unwrap();
+        let vault = DummyProfileVault::create(seed);
+        ctx.replace_vault(Box::new(vault));
+    }
 }

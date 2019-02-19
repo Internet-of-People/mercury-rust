@@ -27,17 +27,12 @@ pub struct DummyProfileVault {
     pub active_idx: Option<i32>,
 }
 
-#[allow(clippy::new_without_default)]
 impl DummyProfileVault {
-    pub fn new() -> Self {
-        info!("Initializing profile vault");
-
-        // TODO this should be Seed::generate but then the phrase list must be forced to be saved to be able to restore profiles
-        let seed = Seed::from_bip39("include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already").unwrap();
-        let indexes = Vec::default();
+    pub fn create(seed: Seed) -> Self {
+        info!("Initializing new vault");
         Self {
             seed,
-            indexes,
+            indexes: Vec::default(),
             active_idx: Option::None,
         }
     }
