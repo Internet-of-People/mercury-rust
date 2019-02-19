@@ -1,4 +1,4 @@
-use failure::{ensure, err_msg, Fallible};
+use failure::{bail, ensure, err_msg, Fallible};
 use log::*;
 use structopt::StructOpt;
 
@@ -74,8 +74,11 @@ pub enum Command {
     /// Clear attribute
     Clear(ClearCommand),
 
-    #[structopt(name = "vault")]
-    Vault(VaultCommand),
+    #[structopt(name = "generate")]
+    Generate(GenerateCommand),
+
+    #[structopt(name = "restore")]
+    Restore(RestoreCommand),
 }
 
 fn selected_profile(
@@ -96,7 +99,7 @@ fn selected_profile(
 impl Command {
     pub fn needs_vault(&self) -> bool {
         match self {
-            Command::Vault(_) => false,
+            Command::Generate(_) | Command::Restore(_) => false,
             _ => true,
         }
     }
@@ -198,12 +201,12 @@ impl Command {
                 // TODO what status to display besides active (default) profile?
             }
 
-            Command::Vault(VaultCommand::Generate) => {
-                VaultCommand::generate();
+            Command::Generate(GenerateCommand::Vault) => {
+                generate_vault();
             }
 
-            Command::Vault(VaultCommand::Restore { demo }) => {
-                VaultCommand::restore(ctx, demo);
+            Command::Restore(RestoreCommand::Vault { demo }) => {
+                restore_vault(ctx, demo)?;
             }
         };
 
@@ -316,33 +319,45 @@ pub enum ClearCommand {
 }
 
 #[derive(Debug, StructOpt)]
-pub enum VaultCommand {
-    #[structopt(name = "generate")]
-    Generate,
+pub enum GenerateCommand {
+    #[structopt(name = "vault")]
+    Vault,
+}
 
-    #[structopt(name = "restore")]
-    Restore {
+#[derive(Debug, StructOpt)]
+pub enum RestoreCommand {
+    #[structopt(name = "vault")]
+    Vault {
         #[structopt(long = "demo")]
         demo: bool,
     },
 }
 
-impl VaultCommand {
-    pub fn generate() {
-        let new_bip39_phrase = morpheus_keyvault::Seed::generate_bip39();
-        let words = new_bip39_phrase.split(' ');
-        info!(
-            r#"Make sure you back these words up somewhere safe
-and rerun the application with the restore parameter!"#
-        );
-        words
-            .enumerate()
-            .for_each(|(i, word)| info!("    {:2}: {}", i + 1, word));
-    }
+pub fn generate_vault() {
+    let new_bip39_phrase = morpheus_keyvault::Seed::generate_bip39();
+    let words = new_bip39_phrase.split(' ');
+    info!(
+        r#"Make sure you back these words up somewhere safe
+and rerun the application with the restore vault arguments!"#
+    );
+    words
+        .enumerate()
+        .for_each(|(i, word)| info!("    {:2}: {}", i + 1, word));
+}
 
-    pub fn restore(ctx: &mut CommandContext, demo: bool) {
-        let seed = morpheus_keyvault::Seed::from_bip39("include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already").unwrap();
-        let vault = DummyProfileVault::create(seed);
-        ctx.replace_vault(Box::new(vault));
-    }
+fn read_phrase() -> Fallible<String> {
+    bail!("Bad luck, not implemented yet")
+}
+
+fn restore_vault(ctx: &mut CommandContext, demo: bool) -> Fallible<()> {
+    let phrase = if demo {
+        "include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already".to_owned()
+    } else {
+        read_phrase()?
+    };
+
+    let seed = morpheus_keyvault::Seed::from_bip39(&phrase).unwrap();
+    let vault = DummyProfileVault::create(seed);
+    ctx.replace_vault(Box::new(vault));
+    Ok(())
 }

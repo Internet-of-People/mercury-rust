@@ -28,13 +28,16 @@ fn main() -> Fallible<()> {
 
     let vault_exists = vault_path.exists();
     if command.needs_vault() && !vault_exists {
-        VaultCommand::generate();
+        cli::generate_vault();
         bail!("You have to initialize vault before running {:?}", command);
     }
 
     let mut vault: Option<Box<ProfileVault>> = None;
     if vault_exists {
-        info!("Found profile vault, loading {:?}", vault_path.to_str());
+        info!(
+            "Found profile vault, loading {}",
+            vault_path.to_string_lossy()
+        );
         vault = Some(Box::new(DummyProfileVault::load(
             &app_cfg_dir,
             &vault_file,
