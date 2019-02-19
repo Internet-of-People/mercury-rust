@@ -16,6 +16,8 @@ mod tests;
 use failure::{bail, Fallible};
 use serde_derive::{Deserialize, Serialize};
 
+pub use crate::bip39::Bip39ErrorKind;
+
 /// A public key (also called shared key or pk in some literature) is that part of an asymmetric keypair
 /// which can be used to verify the authenticity of the sender of a message or to encrypt a message that
 /// can only be decrypted by a single recipient. In both cases this other party owns the [`PrivateKey`]
@@ -120,6 +122,10 @@ impl Seed {
         }
         let bytes = bip39::from_phrase(phrase, Self::PASSWORD)?;
         Ok(Self { bytes })
+    }
+
+    pub fn check_word(word: &str) -> bool {
+        bip39::check_word(word)
     }
 
     /// Creates seed from a raw 512-bit binary seed

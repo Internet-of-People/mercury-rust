@@ -359,11 +359,22 @@ fn read_phrase() -> Fallible<String> {
 
     let mut words = Vec::with_capacity(24);
     for i in 1..=24 {
-        stdout_lock.write_fmt(format_args!("  {:2}> ", i))?; // no newline at the end for this prompt!
-        stdout_lock.flush()?; // without this, nothing is written on the console
-        let mut buffer = String::with_capacity(10);
-        stdin_lock.read_line(&mut buffer)?;
-        words.push(buffer.trim().to_owned())
+        loop {
+            let mut buffer = String::with_capacity(10);
+            stdout_lock.write_fmt(format_args!("  {:2}> ", i))?; // no newline at the end for this prompt!
+            stdout_lock.flush()?; // without this, nothing is written on the console
+            stdin_lock.read_line(&mut buffer)?;
+            buffer = buffer.trim().to_owned();
+            if morpheus_keyvault::Seed::check_word(&buffer) {
+                words.push(buffer);
+                break;
+            } else {
+                stdout_lock.write_fmt(format_args!(
+                    "{} is not in the dictionary, please retry entering it\n",
+                    buffer
+                ))?;
+            }
+        }
     }
     let phrase = words.join(" ");
 
@@ -379,7 +390,19 @@ fn restore_vault(ctx: &mut CommandContext, demo: bool) -> Fallible<()> {
         read_phrase()?
     };
 
-    let seed = morpheus_keyvault::Seed::from_bip39(&phrase).unwrap();
+    let seed_res = morpheus_keyvault::Seed::from_bip39(&phrase);
+    let seed = match seed_res {
+        Ok(seed) => Ok(seed),
+        Err(e) => {
+            if let Some(morpheus_keyvault::Bip39ErrorKind::InvalidChecksum) =
+                e.find_root_cause().downcast_ref()
+            {
+                Err(err_msg("All the words entered were valid, still the checksum was wrong.\nIs the order of the words correct?"))
+            } else {
+                Err(e)
+            }
+        }
+    }?;
     let vault = DummyProfileVault::create(seed);
     ctx.replace_vault(Box::new(vault));
     Ok(())

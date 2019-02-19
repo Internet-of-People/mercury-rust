@@ -1,6 +1,8 @@
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use failure::Fallible;
 
+pub use bip39::ErrorKind as Bip39ErrorKind;
+
 pub(crate) fn generate_new_phrase(words: usize) -> String {
     let mnemonic = Mnemonic::new(
         MnemonicType::for_word_count(words).unwrap(),
@@ -17,4 +19,8 @@ pub(crate) fn generate_new(password: &str) -> Vec<u8> {
 pub(crate) fn from_phrase<T: Into<String>>(phrase: T, password: &str) -> Fallible<Vec<u8>> {
     let mnemonic_res = Mnemonic::from_phrase(phrase, Language::English);
     mnemonic_res.map(|m| Seed::new(&m, password).as_bytes().to_owned())
+}
+
+pub(crate) fn check_word(word: &str) -> bool {
+    Language::English.wordmap().get_bits(word).is_ok()
 }
