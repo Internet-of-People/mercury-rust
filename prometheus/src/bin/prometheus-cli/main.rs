@@ -14,7 +14,7 @@ mod cli;
 
 fn main() {
     match run() {
-        Ok(()) => {}, // println!("OK"),
+        Ok(()) => {} // println!("OK"),
         Err(e) => eprintln!("Error: {}", e),
     };
 }
@@ -35,9 +35,15 @@ fn run() -> Fallible<()> {
 
     let vault_exists = vault_path.exists();
     if command.needs_vault() && !vault_exists {
-        info!("Profile vault is required but not found at {}", vault_path.to_string_lossy());
+        info!(
+            "Profile vault is required but not found at {}",
+            vault_path.to_string_lossy()
+        );
         cli::generate_vault();
-        bail!("First you need a profile vault initialized to run {:?}", command);
+        bail!(
+            "First you need a profile vault initialized to run {:?}",
+            command
+        );
     }
 
     let mut vault: Option<Box<ProfileVault>> = None;

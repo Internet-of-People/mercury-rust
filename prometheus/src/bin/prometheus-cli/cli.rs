@@ -90,7 +90,7 @@ fn selected_profile(
     my_profile_option: Option<ProfileId>,
 ) -> Fallible<ProfilePtr> {
     let profile_opt = my_profile_option
-        .or_else( || ctx.vault().get_active().ok()? )
+        .or_else(|| ctx.vault().get_active().ok()?)
         .and_then(|profile_id| {
             info!("Your active profile is {}", profile_id);
             ctx.store().get(&profile_id)
@@ -106,7 +106,7 @@ impl Command {
     pub fn needs_vault(&self) -> bool {
         match self {
             Command::Generate(_) | Command::Restore(_) => false,
-            Command::Show(ShowCommand::Profile{..}) => false,
+            Command::Show(ShowCommand::Profile { .. }) => false,
             _ => true,
         }
     }
