@@ -2,7 +2,7 @@ Source: prometheus
 Maintainer: IoP Ventures LLC <info@iop-ventures.com>
 Section: misc
 Standards-Version: 3.9.8
-Build-Depends: debhelper (>= 9), dh-systemd
+Build-Depends: debhelper (>= 9)
 
 Package: prometheus
 Architecture: all
