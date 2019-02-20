@@ -20,7 +20,7 @@ pub const KEY_ID_SIZE: usize = 16 + VERSION_SIZE;
 pub const KEY_ID_VERSION1: u8 = b'\x01';
 
 /// Implementation of Ed25519::KeyId
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 #[serde(transparent)]
 pub struct KeyId(#[serde(with = "serde_bytes")] Vec<u8>);
 
@@ -110,5 +110,11 @@ impl From<&KeyId> for String {
 impl std::fmt::Display for KeyId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", String::from(self))
+    }
+}
+
+impl std::fmt::Debug for KeyId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        (self as &std::fmt::Display).fmt(f)
     }
 }
