@@ -8,7 +8,3 @@ DH_VERBOSE = 1
 override_dh_auto_build:
 	# assert the binary has been already built:
 	[ -f target/release/prometheus-cli ]
-
-override_dh_auto_install:
-	install -d debian/prometheus/usr/bin
-	install -m 755 target/release/prometheus-cli debian/prometheus/usr/bin
