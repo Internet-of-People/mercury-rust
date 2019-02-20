@@ -1,18 +1,28 @@
 use failure::{ensure, err_msg, Fallible};
 use log::*;
+use std::path::PathBuf;
 use structopt::StructOpt;
 
 use morpheus_storage::*;
 use prometheus::vault::*;
 
 pub struct CommandContext {
+    vault_path: PathBuf,
     vault: Option<Box<ProfileVault>>,
     store: Box<ProfileStore>,
 }
 
 impl CommandContext {
-    pub fn new(vault: Option<Box<ProfileVault>>, store: Box<ProfileStore>) -> Self {
-        Self { vault, store }
+    pub fn new(
+        vault_path: PathBuf,
+        vault: Option<Box<ProfileVault>>,
+        store: Box<ProfileStore>,
+    ) -> Self {
+        Self {
+            vault_path,
+            vault,
+            store,
+        }
     }
 
     // TODO there should be no version of vault getters that panic
@@ -395,6 +405,15 @@ fn read_phrase() -> Fallible<String> {
 }
 
 fn restore_vault(ctx: &mut CommandContext, demo: bool) -> Fallible<()> {
+    let old_vault_op = ctx.take_vault();
+    ensure!(
+        old_vault_op.is_none(),
+        r#"You already have an active vault.
+Please delete {}
+before trying to restore another vault."#,
+        ctx.vault_path.to_string_lossy()
+    );
+
     let phrase = if demo {
         "include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already".to_owned()
     } else {
@@ -414,7 +433,7 @@ fn restore_vault(ctx: &mut CommandContext, demo: bool) -> Fallible<()> {
             }
         }
     }?;
-    let vault = DummyProfileVault::create(seed);
-    ctx.replace_vault(Box::new(vault));
+    let new_vault = DummyProfileVault::create(seed);
+    ctx.replace_vault(Box::new(new_vault));
     Ok(())
 }

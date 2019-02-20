@@ -65,7 +65,7 @@ fn run() -> Fallible<()> {
     let timeout = Duration::from_secs(5);
     let store = DummyProfileStore::new(&addr, timeout)?;
 
-    let mut ctx = CommandContext::new(vault, Box::new(store));
+    let mut ctx = CommandContext::new(vault_path, vault, Box::new(store));
     command.execute(&mut ctx)?;
 
     let vault_opt = ctx.take_vault();
