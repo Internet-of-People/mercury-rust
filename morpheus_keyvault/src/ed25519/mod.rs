@@ -61,7 +61,9 @@ mod tests {
 
     fn m_mercury_1_1<T: KeyDerivationCrypto>(seed: &Seed) -> T::ExtendedPrivateKey {
         let master = T::master(seed);
-        let mercury = master.derive_hardened_child(crate::BIP43_PURPOSE_MERCURY).unwrap();
+        let mercury = master
+            .derive_hardened_child(crate::BIP43_PURPOSE_MERCURY)
+            .unwrap();
         let first_profile = mercury.derive_hardened_child(1).unwrap();
         first_profile.derive_hardened_child(1).unwrap()
     }
