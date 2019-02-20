@@ -59,9 +59,9 @@ mod tests {
     use crate::ed25519::Ed25519;
     use crate::{ExtendedPrivateKey, KeyDerivationCrypto, Seed};
 
-    fn m_263f_1_1<T: KeyDerivationCrypto>(seed: &Seed) -> T::ExtendedPrivateKey {
+    fn m_mercury_1_1<T: KeyDerivationCrypto>(seed: &Seed) -> T::ExtendedPrivateKey {
         let master = T::master(seed);
-        let mercury = master.derive_hardened_child(0x263F).unwrap();
+        let mercury = master.derive_hardened_child(crate::BIP43_PURPOSE_MERCURY).unwrap();
         let first_profile = mercury.derive_hardened_child(1).unwrap();
         first_profile.derive_hardened_child(1).unwrap()
     }
@@ -69,7 +69,7 @@ mod tests {
     #[test]
     fn test_generic() {
         let seed = Seed::generate_new();
-        let _first_app_in_first_profile = m_263f_1_1::<Ed25519>(&seed);
+        let _first_app_in_first_profile = m_mercury_1_1::<Ed25519>(&seed);
     }
 
     mod key_id {

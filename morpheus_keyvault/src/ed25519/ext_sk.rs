@@ -38,9 +38,12 @@ impl ExtendedPrivateKey<Ed25519> for EdExtPrivateKey {
     fn derive_normal_child(&self, _idx: i32) -> Fallible<EdExtPrivateKey> {
         bail!("Normal derivation of Ed25519 is invalid based on SLIP-0010.")
     }
+    /// There is a potential [vulnerability](https://forum.web3.foundation/t/key-recovery-attack-on-bip32-ed25519/44) in 
+    /// that might affect all SLIP-0010 compatible Ed25519 wallets. We should never assume that there is only 1
+    /// public key that can verify a given signature. Actually, there are 8 public keys.
     fn derive_hardened_child(&self, idx: i32) -> Fallible<EdExtPrivateKey> {
         ensure!(idx >= 0, "Derivation index cannot be negative");
-        let idx = unsafe { std::mem::transmute::<i32, u32>(idx) };
+        let idx = idx as u32;
 
         let xprv = EdExtPrivateKey::cook_new(&self.chain_code.to_bytes(), |hasher| {
             hasher.input(&[0x00u8]);

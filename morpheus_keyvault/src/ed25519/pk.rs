@@ -37,6 +37,8 @@ impl PublicKey<Ed25519> for EdPublicKey {
     fn key_id(&self) -> KeyId {
         KeyId::from(self)
     }
+    /// We should never assume that there is only 1 public key that can verify a given
+    /// signature. Actually, there are 8 public keys.
     fn verify<D: AsRef<[u8]>>(&self, data: D, sig: &EdSignature) -> bool {
         let res = self.0.verify(data.as_ref(), sig.into());
         res.is_ok()

@@ -2,6 +2,9 @@
 pub const CHAIN_CODE_SIZE: usize = 32;
 
 /// Chain code for key derivation in Ed25519 extended private and public keys.
+/// This is a 256-bit secret key that is completely independent of the private
+/// key and is used as an extension to the cryptographic domain, basically an
+/// extra state during iteration.
 #[derive(Clone)]
 pub struct ChainCode([u8; CHAIN_CODE_SIZE]);
 
