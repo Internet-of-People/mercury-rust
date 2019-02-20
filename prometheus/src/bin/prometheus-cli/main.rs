@@ -12,11 +12,19 @@ use prometheus::vault::*;
 
 mod cli;
 
-fn main() -> Fallible<()> {
+fn main() {
+    match run() {
+        Ok(()) => {}, // println!("OK"),
+        Err(e) => eprintln!("Error: {}", e),
+    };
+}
+
+fn run() -> Fallible<()> {
+    let command = Command::from_args();
+
     // TODO make log config path configurable or at least this should not fail if file is not available
     log4rs::init_file("log4rs.yml", Default::default())?;
 
-    let command = Command::from_args();
     debug!("Got command {:?}", command);
 
     let cfg_dir = dirs::config_dir()
@@ -24,12 +32,12 @@ fn main() -> Fallible<()> {
     let app_cfg_dir = Path::new(&cfg_dir).join("prometheus");
     let vault_file = "vault.dat";
     let vault_path = app_cfg_dir.join(vault_file);
-    debug!("Looking for profile vault in {:?}", vault_path);
 
     let vault_exists = vault_path.exists();
     if command.needs_vault() && !vault_exists {
+        info!("Profile vault is required but not found at {}", vault_path.to_string_lossy());
         cli::generate_vault();
-        bail!("You have to initialize vault before running {:?}", command);
+        bail!("First you need a profile vault initialized to run {:?}", command);
     }
 
     let mut vault: Option<Box<ProfileVault>> = None;

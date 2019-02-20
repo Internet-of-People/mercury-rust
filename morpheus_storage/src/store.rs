@@ -30,7 +30,7 @@ impl DummyProfileStore {
 
     fn rpc(&self) -> Fallible<RpcPtr<TcpStream, TcpStream>> {
         if self.rpc.borrow().is_none() {
-            info!("Connecting to {:?}", self.addr);
+            debug!("Connecting to {:?}", self.addr);
 
             let tcp_stream = TcpStream::connect_timeout(&self.addr, self.connect_timeout)?;
             // TODO make timeouts configurable

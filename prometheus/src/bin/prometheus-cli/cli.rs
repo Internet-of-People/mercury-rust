@@ -1,4 +1,4 @@
-use failure::{bail, ensure, err_msg, Fallible};
+use failure::{ensure, err_msg, Fallible};
 use log::*;
 use structopt::StructOpt;
 
@@ -15,6 +15,7 @@ impl CommandContext {
         Self { vault, store }
     }
 
+    // TODO there should be no version of vault getters that panic
     /// # Panic
     /// If there is no vault given to `new`
     pub fn vault(&self) -> &ProfileVault {
@@ -47,7 +48,16 @@ impl CommandContext {
 #[derive(Debug, StructOpt)]
 #[structopt(name = "prometheus", about = "Command line interface for Prometheus")]
 pub enum Command {
+    #[structopt(name = "generate")]
+    /// Generate a phraselist needed to create a profile vault
+    Generate(GenerateCommand),
+
+    #[structopt(name = "restore")]
+    /// Restore profile vault from a phraselist
+    Restore(RestoreCommand),
+
     #[structopt(name = "status")]
+    /// Show the status of your profile vault
     Status,
 
     #[structopt(name = "list")]
@@ -73,12 +83,6 @@ pub enum Command {
     #[structopt(name = "clear")]
     /// Clear attribute
     Clear(ClearCommand),
-
-    #[structopt(name = "generate")]
-    Generate(GenerateCommand),
-
-    #[structopt(name = "restore")]
-    Restore(RestoreCommand),
 }
 
 fn selected_profile(
@@ -86,9 +90,11 @@ fn selected_profile(
     my_profile_option: Option<ProfileId>,
 ) -> Fallible<ProfilePtr> {
     let profile_opt = my_profile_option
-        // TODO ideally this should be or_else, but mixing Option<T> with Result<Option<T>,E> is complex
-        .or(ctx.vault().get_active()?)
-        .and_then(|profile_id| ctx.store().get(&profile_id));
+        .or_else( || ctx.vault().get_active().ok()? )
+        .and_then(|profile_id| {
+            info!("Your active profile is {}", profile_id);
+            ctx.store().get(&profile_id)
+        });
     ensure!(
         profile_opt.is_some(),
         "Command option my_profile_id is unspecified and no active default profile was found"
@@ -100,6 +106,7 @@ impl Command {
     pub fn needs_vault(&self) -> bool {
         match self {
             Command::Generate(_) | Command::Restore(_) => false,
+            Command::Show(ShowCommand::Profile{..}) => false,
             _ => true,
         }
     }
@@ -112,7 +119,8 @@ impl Command {
             }) => {
                 let profile = selected_profile(ctx, my_profile_id)?;
                 let link = profile.borrow_mut().create_link(&peer_profile_id)?;
-                info!("Created link to profile {:?}", link);
+                debug!("Created link: {:?}", link);
+                info!("Created link to peer profile {}", peer_profile_id);
             }
 
             Command::Create(CreateCommand::Profile) => {
@@ -134,7 +142,7 @@ impl Command {
             Command::List(ListCommand::IncomingLinks { my_profile_id }) => {
                 let profile = selected_profile(ctx, my_profile_id)?;
                 let followers = profile.borrow().followers()?;
-                info!("Received {} followers", followers.len());
+                info!("You have {} followers", followers.len());
                 for (idx, follower) in followers.iter().enumerate() {
                     info!("  {}: {:?}", idx, follower);
                 }
@@ -142,7 +150,7 @@ impl Command {
 
             Command::List(ListCommand::Profiles) => {
                 let profile_ids = ctx.vault().list()?;
-                info!("Has {} profiles", profile_ids.len());
+                info!("You have {} profiles", profile_ids.len());
                 for (i, profile_id) in profile_ids.iter().enumerate() {
                     // TODO mark active profile somehow
                     info!("  {}: {}", i, profile_id);
@@ -281,6 +289,7 @@ pub enum SetCommand {
     /// Show profile
     ActiveProfile {
         // TODO is activation by profile NUMBER needed or is this enough?
+        //      If enough, should be a mandatory positional parameter instead of a named one.
         #[structopt(long = "my_profile_id")]
         /// Profile id to be activated
         my_profile_id: ProfileId,
@@ -321,12 +330,14 @@ pub enum ClearCommand {
 #[derive(Debug, StructOpt)]
 pub enum GenerateCommand {
     #[structopt(name = "vault")]
+    /// Generate a phraselist needed to create a profile vault
     Vault,
 }
 
 #[derive(Debug, StructOpt)]
 pub enum RestoreCommand {
     #[structopt(name = "vault")]
+    /// (Re)build a profile vault (needed for most commands) from a phraselist
     Vault {
         #[structopt(long = "demo")]
         demo: bool,
@@ -336,9 +347,9 @@ pub enum RestoreCommand {
 pub fn generate_vault() {
     let new_bip39_phrase = morpheus_keyvault::Seed::generate_bip39();
     let words = new_bip39_phrase.split(' ');
-    info!(
+    warn!(
         r#"Make sure you back these words up somewhere safe
-and rerun the application with the restore vault arguments!"#
+and run the 'restore vault' command of this application first!"#
     );
     words
         .enumerate()

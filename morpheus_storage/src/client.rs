@@ -216,17 +216,17 @@ where
         let req_rid = self.next_rid;
         self.next_rid += 1;
         let request = Request::new(req_rid, method, params);
-        debug!("Sending request {:?}", request);
+        trace!("Sending request {:?}", request);
 
         let req_envelope = Envelope::from(MORPHEUS_HANDLER, request)?;
         let req_envelope_bytes = rmp_serde::encode::to_vec_named(&req_envelope)?;
-        // debug!("Sending bytes {:?}", req_envelope_bytes);
+        trace!("Sending bytes {:?}", req_envelope_bytes);
 
         // let mut req_file = std::fs::File::create("/tmp/messagepack_bytes.dat")?;
         // req_file.write_all(&req_envelope_bytes)?;
         self.writer.write_all(&req_envelope_bytes)?;
 
-        debug!("Request sent, reading response");
+        trace!("Request sent, reading response");
         let resp_envelope: Envelope = rmp_serde::from_read(&mut self.reader)?;
         if resp_envelope.target != MORPHEUS_HANDLER {
             bail!(
@@ -252,7 +252,7 @@ where
             );
         }
 
-        debug!("Got response {:?}", response);
+        trace!("Got response {:?}", response);
         Ok(response)
     }
 }
