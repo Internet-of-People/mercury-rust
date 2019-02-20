@@ -11,6 +11,8 @@ pub struct EdExtPrivateKey {
 
 impl EdExtPrivateKey {
     pub(crate) fn cook_new<F: Fn(&mut HmacSha512) -> ()>(salt: &[u8], recipe: F) -> Self {
+        // This unwrap would only panic if the digest algorithm had some inconsistent
+        // generic parameters, but the SHA512 we use is consistent with itself
         let mut hasher = HmacSha512::new_varkey(salt).unwrap();
 
         recipe(&mut hasher);

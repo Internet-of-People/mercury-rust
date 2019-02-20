@@ -124,6 +124,8 @@ impl FromStr for Path {
             );
         }
 
+        // because of the above partitioning, successes only contain parse results
+        // that can be unwrapped without causing a panic
         let path = successes.drain(..).map(|(_p, i)| i.unwrap()).collect();
         Ok(Path { path })
     }

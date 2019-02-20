@@ -3,6 +3,8 @@ use failure::Fallible;
 
 pub use bip39::ErrorKind as Bip39ErrorKind;
 
+/// #Panics
+/// If words is not in {12, 15, 18, 21, 24}
 pub(crate) fn generate_new_phrase(words: usize) -> String {
     let mnemonic = Mnemonic::new(
         MnemonicType::for_word_count(words).unwrap(),

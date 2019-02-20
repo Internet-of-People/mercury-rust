@@ -4,6 +4,7 @@ use super::{Ed25519, EdSignature, KeyId};
 use crate::*;
 
 /// Implementation of Ed25519::PublicKey
+#[derive(Clone)]
 pub struct EdPublicKey(ed::PublicKey);
 
 impl EdPublicKey {
@@ -23,14 +24,6 @@ impl EdPublicKey {
     pub fn from_bytes<D: AsRef<[u8]>>(bytes: D) -> Self {
         let pk = ed::PublicKey::from_bytes(bytes.as_ref()).unwrap();
         Self(pk)
-    }
-}
-
-impl Clone for EdPublicKey {
-    fn clone(&self) -> Self {
-        let public_bytes = self.0.as_bytes();
-        let public = ed::PublicKey::from_bytes(public_bytes).unwrap();
-        Self(public)
     }
 }
 
