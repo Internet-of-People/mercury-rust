@@ -1,10 +1,10 @@
 [package]
 name = "morpheus_keyvault"
 version = "0.1.0"
-authors = ["wigy <wigy_opensource_developer@yahoo.com>"]
+authors = ["IoP Ventures LLC <info@iop-ventures.com>", "wigy <wigy_opensource_developer@yahoo.com>"]
 license = "LGPL-3.0-or-later"
-repository = "https://github.com/internet-of-people/keyvault-rust"
-keywords = ["crypto", "wallet", "iop", "mercury", "morpheus", "prometheus"]
+repository = "https://github.com/internet-of-people/prometheus"
+keywords = ["crypto", "wallet", "iop", "mercury", "morpheus", "prometheus", "vault", "key-vault"]
 edition = "2018"
 
 [dependencies]
