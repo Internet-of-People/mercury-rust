@@ -78,20 +78,6 @@ pub(crate) struct Node {
 }
 
 pub(crate) type AddNodeParams = Node;
-pub(crate) type ListInEdgesParams = Node;
-pub(crate) type ListOutEdgesParams = Node;
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct Edge {
-    pub(crate) source: ProfileId,
-    pub(crate) target: ProfileId,
-}
-
-pub(crate) type ListInEdgesReply = Vec<ProfileId>;
-pub(crate) type ListOutEdgesReply = Vec<ProfileId>;
-
-pub(crate) type AddEdgeParams = Edge;
-pub(crate) type RemoveEdgeParams = Edge;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct SetNodeAttributeParams {
@@ -108,7 +94,46 @@ pub(crate) struct NodeAttribute {
 }
 
 pub(crate) type GetNodeAttributeParams = NodeAttribute;
-//pub(crate) type ClearNodeAttributeParams = NodeAttribute;
+pub(crate) type ClearNodeAttributeParams = NodeAttribute;
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct ListNodesParams {
+    pub(crate) dummy: Option<i32>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct Edge {
+    pub(crate) source: ProfileId,
+    pub(crate) target: ProfileId,
+}
+
+pub(crate) type ListInEdgesParams = Node;
+pub(crate) type ListInEdgesReply = Vec<ProfileId>;
+
+pub(crate) type ListOutEdgesParams = Node;
+pub(crate) type ListOutEdgesReply = Vec<ProfileId>;
+
+pub(crate) type AddEdgeParams = Edge;
+pub(crate) type RemoveEdgeParams = Edge;
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct SetEdgeAttributeParams {
+    pub(crate) source: ProfileId,
+    pub(crate) target: ProfileId,
+    pub(crate) key: AttributeId,
+    #[serde(with = "serde_bytes")]
+    pub(crate) value: Vec<u8>,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub(crate) struct EdgeAttribute {
+    pub(crate) source: ProfileId,
+    pub(crate) target: ProfileId,
+    pub(crate) key: AttributeId,
+}
+
+pub(crate) type GetEdgeAttributeParams = EdgeAttribute;
+pub(crate) type ClearEdgeAttributeParams = EdgeAttribute;
 
 #[test]
 fn test_serialization_concept() {

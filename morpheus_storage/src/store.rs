@@ -65,7 +65,7 @@ impl ProfileStore for DummyProfileStore {
             let _res = rpc.borrow_mut().send_request("add_node", request)?;
             let profile = RpcProfile::new(id, rpc_clone);
             // TODO this shouldn't belong here, querying an empty attribute set shouldn't be an error
-            profile.set_attribute_map(AttributeMap::default())?;
+            profile.set_osg_attribute_map(AttributeMap::default())?;
             Ok(Rc::new(RefCell::new(profile)) as ProfilePtr)
         })
     }

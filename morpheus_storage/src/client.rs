@@ -66,32 +66,116 @@ where
         self.rpc.borrow_mut().send_request(method, params)
     }
 
-    const INFLUENCER_ATTRIBUTE: &'static str = "influencer";
+    pub fn list_nodes(&self) -> Fallible<Vec<ProfileId>> {
+        let params = ListNodesParams { dummy: None };
+        let response = self.send_request("list_nodes", params)?;
+        let node_vals = response
+            .reply
+            .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
+        let nodes = rmpv::ext::from_value(node_vals)?;
+        Ok(nodes)
+    }
 
-    pub fn get_attribute_map(&self) -> Fallible<AttributeMap> {
+    pub fn get_node_attribute(&self, key: AttributeId) -> Fallible<Vec<u8>> {
         let params = GetNodeAttributeParams {
             id: self.id.to_owned(),
-            key: Self::INFLUENCER_ATTRIBUTE.to_owned(),
+            key: key,
         };
         let response = self.send_request("get_node_attribute", params)?;
-        let reply_bin = response
+        let attr_val = response
             .reply
             .ok_or_else(|| err_msg("Server returned no reply content for query"))
             .and_then(|resp_val| match resp_val {
                 rmpv::Value::Binary(bin) => Ok(bin),
                 _ => bail!("Server returned unexpected attribute type"),
             })?;
-        let attributes = serde_json::from_slice(&reply_bin)?;
+        Ok(attr_val)
+    }
+
+    pub fn set_node_attribute(&self, key: AttributeId, value: Vec<u8>) -> Fallible<()> {
+        let params = SetNodeAttributeParams {
+            id: self.id.to_owned(),
+            key,
+            value,
+        };
+        let _response = self.send_request("set_node_attribute", params)?;
+        Ok(())
+    }
+
+    pub fn clear_node_attribute(&self, key: String) -> Fallible<()> {
+        let params = ClearNodeAttributeParams {
+            id: self.id.to_owned(),
+            key,
+        };
+        let _response = self.send_request("clear_node_attribute", params)?;
+        Ok(())
+    }
+
+    const OPEN_SOCIAL_GRAPH_ATTRIBUTE: &'static str = "osg";
+
+    pub fn get_osg_attribute_map(&self) -> Fallible<AttributeMap> {
+        let attr_map_bin = self.get_node_attribute(Self::OPEN_SOCIAL_GRAPH_ATTRIBUTE.to_owned())?;
+        let attributes = serde_json::from_slice(&attr_map_bin)?;
         Ok(attributes)
     }
 
-    pub fn set_attribute_map(&self, attributes: AttributeMap) -> Fallible<()> {
-        let params = SetNodeAttributeParams {
-            id: self.id.to_owned(),
-            key: Self::INFLUENCER_ATTRIBUTE.to_owned(),
-            value: serde_json::to_vec(&attributes)?,
+    pub fn set_osg_attribute_map(&self, attributes: AttributeMap) -> Fallible<()> {
+        let attr_map_bin = serde_json::to_vec(&attributes)?;
+        self.set_node_attribute(Self::OPEN_SOCIAL_GRAPH_ATTRIBUTE.to_owned(), attr_map_bin)
+    }
+
+    // TODO consider if we also should hide all attributes behind a separate "namespace" key and Json-like document as for node attributes
+    pub fn get_edge_attribute(
+        &self,
+        source: ProfileId,
+        target: ProfileId,
+        key: AttributeId,
+    ) -> Fallible<Vec<u8>> {
+        let params = GetEdgeAttributeParams {
+            source,
+            target,
+            key,
         };
-        let _response = self.send_request("set_node_attribute", params)?;
+        let response = self.send_request("get_edge_attribute", params)?;
+        let attr_val = response
+            .reply
+            .ok_or_else(|| err_msg("Server returned no reply content for query"))
+            .and_then(|resp_val| match resp_val {
+                rmpv::Value::Binary(bin) => Ok(bin),
+                _ => bail!("Server returned unexpected attribute type"),
+            })?;
+        Ok(attr_val)
+    }
+
+    pub fn set_edge_attribute(
+        &self,
+        source: ProfileId,
+        target: ProfileId,
+        key: AttributeId,
+        value: Vec<u8>,
+    ) -> Fallible<()> {
+        let params = SetEdgeAttributeParams {
+            source,
+            target,
+            key,
+            value,
+        };
+        let _response = self.send_request("set_edge_attribute", params)?;
+        Ok(())
+    }
+
+    pub fn clear_edge_attribute(
+        &self,
+        source: ProfileId,
+        target: ProfileId,
+        key: AttributeId,
+    ) -> Fallible<()> {
+        let params = ClearEdgeAttributeParams {
+            source,
+            target,
+            key,
+        };
+        let _response = self.send_request("clear_edge_attribute", params)?;
         Ok(())
     }
 }
@@ -106,7 +190,7 @@ where
     }
 
     fn metadata(&self) -> Fallible<AttributeMap> {
-        self.get_attribute_map()
+        self.get_osg_attribute_map()
     }
 
     fn links(&self) -> Fallible<Vec<Link>> {
@@ -164,15 +248,15 @@ where
     // TODO get and set_attr() consist of two remote operations. If any of those fail,
     //      wallet and storage backend states might easily get unsynchronized.
     fn set_attribute(&mut self, key: &AttributeId, value: &AttributeValue) -> Fallible<()> {
-        let mut attr_map = self.get_attribute_map()?;
+        let mut attr_map = self.get_osg_attribute_map()?;
         attr_map.insert(key.to_owned(), value.to_owned());
-        self.set_attribute_map(attr_map)
+        self.set_osg_attribute_map(attr_map)
     }
 
     fn clear_attribute(&mut self, key: &AttributeId) -> Fallible<()> {
-        let mut attr_map = self.get_attribute_map()?;
+        let mut attr_map = self.get_osg_attribute_map()?;
         attr_map.remove(key);
-        self.set_attribute_map(attr_map)
+        self.set_osg_attribute_map(attr_map)
     }
 }
 
