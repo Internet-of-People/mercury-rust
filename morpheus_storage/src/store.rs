@@ -5,6 +5,8 @@ use std::net::{SocketAddr, TcpStream};
 use std::rc::Rc;
 use std::time::Duration;
 
+use failure::err_msg;
+
 use crate::client::AttributeMap;
 use crate::{messages, MsgPackRpc, ProfileId, ProfilePtr, ProfileStore, RpcProfile, RpcPtr};
 
@@ -29,6 +31,8 @@ impl DummyProfileStore {
     }
 
     fn rpc(&self) -> Fallible<RpcPtr<TcpStream, TcpStream>> {
+        // TODO is really a lazy singleton init needed here? It makes types and
+        //      everything much more complex, would be simpler in constructor
         if self.rpc.borrow().is_none() {
             debug!("Connecting to storage backend server {:?}", self.addr);
 
@@ -43,6 +47,17 @@ impl DummyProfileStore {
         }
 
         Ok(self.rpc.borrow().clone().unwrap())
+    }
+
+    pub fn list_nodes(&self) -> Fallible<Vec<ProfileId>> {
+        let params = messages::ListNodesParams {};
+        let rpc = self.rpc()?;
+        let response = rpc.borrow_mut().send_request("list_nodes", params)?;
+        let node_vals = response
+            .reply
+            .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
+        let nodes = rmpv::ext::from_value(node_vals)?;
+        Ok(nodes)
     }
 }
 
@@ -71,7 +86,7 @@ impl ProfileStore for DummyProfileStore {
     }
 
     /// There is no call specified for this method
-    fn remove(&mut self, id: &ProfileId) -> Fallible<()> {
+    fn remove(&mut self, _id: &ProfileId) -> Fallible<()> {
         unimplemented!()
     }
 }

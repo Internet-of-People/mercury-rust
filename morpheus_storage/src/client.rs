@@ -41,10 +41,11 @@ pub trait Profile {
 }
 
 pub type ProfilePtr = Rc<RefCell<Profile>>;
+pub type RpcPtr<R, W> = Rc<RefCell<MsgPackRpc<R, W>>>;
 
 pub struct RpcProfile<R, W> {
     id: ProfileId,
-    rpc: Rc<RefCell<MsgPackRpc<R, W>>>,
+    rpc: RpcPtr<R, W>,
 }
 
 impl<R, W> RpcProfile<R, W>
@@ -52,7 +53,7 @@ where
     R: 'static + Read,
     W: 'static + Write,
 {
-    pub fn new(id: &ProfileId, rpc: Rc<RefCell<MsgPackRpc<R, W>>>) -> Self {
+    pub fn new(id: &ProfileId, rpc: RpcPtr<R, W>) -> Self {
         Self {
             id: id.to_owned(),
             rpc,
@@ -64,16 +65,6 @@ where
         T: serde::Serialize + std::fmt::Debug,
     {
         self.rpc.borrow_mut().send_request(method, params)
-    }
-
-    pub fn list_nodes(&self) -> Fallible<Vec<ProfileId>> {
-        let params = ListNodesParams { dummy: None };
-        let response = self.send_request("list_nodes", params)?;
-        let node_vals = response
-            .reply
-            .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
-        let nodes = rmpv::ext::from_value(node_vals)?;
-        Ok(nodes)
     }
 
     pub fn get_node_attribute(&self, key: AttributeId) -> Fallible<Vec<u8>> {
@@ -124,7 +115,10 @@ where
         self.set_node_attribute(Self::OPEN_SOCIAL_GRAPH_ATTRIBUTE.to_owned(), attr_map_bin)
     }
 
-    // TODO consider if we also should hide all attributes behind a separate "namespace" key and Json-like document as for node attributes
+    // TOOD either source or target should be self.id but how to differentiate incoming and outgoing edges?
+    //      Maybe separate calls?
+    // TODO consider if we also should hide all attributes behind a separate "namespace" key
+    //      and Json-like document as for node attributes
     pub fn get_edge_attribute(
         &self,
         source: ProfileId,
@@ -260,8 +254,6 @@ where
     }
 }
 
-pub type RpcPtr<R, W> = Rc<RefCell<MsgPackRpc<R, W>>>;
-
 pub struct MsgPackRpc<R, W> {
     reader: R,
     writer: W,
@@ -338,5 +330,32 @@ where
 
         trace!("Got response {:?}", response);
         Ok(response)
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use super::*;
+    use crate::model::ProfileId;
+    use crate::store::DummyProfileStore;
+    use std::str::FromStr;
+    use std::time::Duration;
+
+    //#[test]
+    fn test_server_calls() -> Fallible<()> {
+        let addr = "127.0.0.1:6161".parse()?;
+        let timeout = Duration::from_secs(5);
+        let mut store = DummyProfileStore::new(&addr, timeout)?;
+
+        let nodes = store.list_nodes()?;
+        assert_eq!(nodes.len(), 0);
+
+        let me = store.create(&ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?)?;
+        let peer = store.create(&ProfileId::from_str("Iez25N5WZ1Q6TQpgpyYgiu9gTX")?)?;
+
+        let nodes = store.list_nodes()?;
+        assert_eq!(nodes.len(), 2);
+
+        Ok(())
     }
 }

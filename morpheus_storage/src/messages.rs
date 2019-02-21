@@ -97,9 +97,7 @@ pub(crate) type GetNodeAttributeParams = NodeAttribute;
 pub(crate) type ClearNodeAttributeParams = NodeAttribute;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub(crate) struct ListNodesParams {
-    pub(crate) dummy: Option<i32>,
-}
+pub(crate) struct ListNodesParams {}
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct Edge {
