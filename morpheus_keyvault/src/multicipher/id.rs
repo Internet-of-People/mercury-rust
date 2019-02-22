@@ -58,3 +58,9 @@ impl std::fmt::Display for MKeyId {
         write!(f, "{}", String::from(self))
     }
 }
+
+impl std::fmt::Debug for MKeyId {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        (self as &std::fmt::Display).fmt(f)
+    }
+}

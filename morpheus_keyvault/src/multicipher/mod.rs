@@ -58,7 +58,6 @@ macro_rules! f {
 macro_rules! erased_type {
     ($(#[$meta:meta])* $v:vis struct $type:ident {}) => {
         $(#[$meta])*
-        #[derive(Debug)]
         $v struct $type {
             pub(super) suite: CipherSuite,
             pub(super) erased: Box<Any>,

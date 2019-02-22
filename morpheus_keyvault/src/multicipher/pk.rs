@@ -4,6 +4,7 @@ erased_type! {
     /// Type-erased [`PublicKey`]
     ///
     /// [`PublicKey`]: ../trait.AsymmetricCrypto.html#associatedtype.PublicKey
+    #[derive(Debug)]
     pub struct MPublicKey {}
 }
 
