@@ -12,10 +12,10 @@
 //! [`MultiCipher`]: struct.MultiCipher.html
 //! [`AsymmetricCrypto`]: ../trait.AsymmetricCrypto.html
 //! [`KeyDerivationCrypto`]: ../trait.KeyDerivationCrypto.html
-//! [`KeyId`]: ../trait.KeyId.html
+//! [`KeyId`]: ../trait.AsymmetricCrypto.html#associatedtype.KeyId
 //! [`PublicKey`]: ../trait.PublicKey.html
 //! [`PrivateKey`]: ../trait.PrivateKey.html
-//! [`Signature`]: ../trait.Signature.html
+//! [`Signature`]: ../trait.AsymmetricCrypto.html#associatedtype.Signature
 //! [`ExtendedPrivateKey`]: ../trait.ExtendedPrivateKey.html
 //! [`ExtendedPublicKey`]: ../trait.ExtendedPublicKey.html
 

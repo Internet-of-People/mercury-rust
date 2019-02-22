@@ -3,7 +3,7 @@ use super::*;
 erased_type! {
     /// Type-erased [`KeyId`]
     ///
-    /// [`KeyId`]: trait.AsymmetricCrypto.html#associatedtype.KeyId
+    /// [`KeyId`]: ../trait.AsymmetricCrypto.html#associatedtype.KeyId
     pub struct MKeyId {}
 }
 
