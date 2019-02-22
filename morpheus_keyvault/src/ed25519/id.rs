@@ -2,7 +2,7 @@ use blake2::{
     digest::{Input, VariableOutput},
     VarBlake2b,
 };
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use super::*;
 
@@ -25,7 +25,7 @@ pub const KEY_ID_VERSION1: u8 = b'\x01';
 pub struct KeyId(#[serde(with = "serde_bytes")] Vec<u8>);
 
 impl KeyId {
-    /// The public key serialized in a format that can be fed to [`from_bytes`]
+    /// The key id serialized in a format that can be fed to [`from_bytes`]
     ///
     /// [`from_bytes`]: #method.from_bytes
     pub fn to_bytes(&self) -> [u8; KEY_ID_SIZE] {
@@ -34,7 +34,7 @@ impl KeyId {
         res
     }
 
-    /// Creates a chain code from a byte slice possibly returned by the [`to_bytes`] method.
+    /// Creates a key id from a byte slice possibly returned by the [`to_bytes`] method.
     ///
     /// # Error
     /// If `bytes` is not [`KEY_ID_SIZE`] long

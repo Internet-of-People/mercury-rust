@@ -15,7 +15,7 @@ pub mod multicipher;
 mod tests;
 
 use failure::{bail, Fallible};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 pub use crate::bip39::Bip39ErrorKind;
 
