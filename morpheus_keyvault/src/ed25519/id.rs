@@ -57,21 +57,6 @@ impl KeyId {
     }
 }
 
-impl<D: AsRef<[u8]>> From<D> for KeyId {
-    /// Creates a key id from a byte slice possibly returned by the [`to_bytes`] method.
-    ///
-    /// # Panics
-    /// If `bytes` is not the right size or not the right version.
-    ///
-    /// [`to_bytes`]: #method.to_bytes
-    fn from(bytes: D) -> Self {
-        let bytes = bytes.as_ref();
-        assert_eq!(bytes.len(), KEY_ID_SIZE);
-        assert_eq!(bytes[0], KEY_ID_VERSION1);
-        KeyId(bytes.to_owned())
-    }
-}
-
 impl From<&EdPublicKey> for KeyId {
     fn from(pk: &EdPublicKey) -> KeyId {
         let mut hasher = VarBlake2b::new_keyed(KEY_ID_SALT, KEY_ID_SIZE - VERSION_SIZE);

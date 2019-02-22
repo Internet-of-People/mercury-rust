@@ -116,7 +116,7 @@ mod tests {
 
         fn test(input: &str, key_id_hex: &str) {
             let key_id_bytes = hex::decode(key_id_hex).unwrap();
-            let id1 = KeyId::from(&key_id_bytes);
+            let id1 = KeyId::from_bytes(&key_id_bytes).unwrap();
             assert_eq!(id1.to_string(), input);
 
             let id2 = input.parse::<KeyId>().unwrap();
