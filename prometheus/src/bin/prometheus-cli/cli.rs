@@ -1,6 +1,8 @@
+use std::net::SocketAddr;
+use std::path::PathBuf;
+
 use failure::{ensure, err_msg, Fallible};
 use log::*;
-use std::path::PathBuf;
 use structopt::StructOpt;
 
 use morpheus_storage::*;
@@ -56,7 +58,29 @@ impl CommandContext {
 }
 
 #[derive(Debug, StructOpt)]
-#[structopt(name = "prometheus", about = "Command line interface for Prometheus")]
+#[structopt(
+    name = "prometheus",
+    about = "Command line interface for Prometheus",
+    raw(setting = "structopt::clap::AppSettings::ColoredHelp")
+)]
+pub struct Options {
+    #[structopt(
+        long = "storage",
+        default_value = "127.0.0.1:6161",
+        raw(value_name = r#""ADDRESS""#)
+    )]
+    /// IPv4/6 address of the storage backend used for this demo
+    pub storage_address: SocketAddr,
+
+    #[structopt(long = "timeout", default_value = "10", raw(value_name = r#""SECS""#))]
+    /// Number of seconds used for network timeouts
+    pub network_timeout_secs: u64,
+
+    #[structopt(subcommand)]
+    pub command: Command,
+}
+
+#[derive(Debug, StructOpt)]
 pub enum Command {
     #[structopt(name = "generate")]
     /// Generate a phraselist needed to create a profile vault

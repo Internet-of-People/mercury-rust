@@ -20,7 +20,8 @@ fn main() {
 }
 
 fn run() -> Fallible<()> {
-    let command = Command::from_args();
+    let options = Options::from_args();
+    let command = options.command;
 
     // TODO make log config path configurable or at least this should not fail if file is not available
     log4rs::init_file("log4rs.yml", Default::default())?;
@@ -60,10 +61,8 @@ fn run() -> Fallible<()> {
         debug!("No profile vault found");
     }
 
-    // TODO make address and timeout configurable
-    let addr = "127.0.0.1:6161".parse()?;
-    let timeout = Duration::from_secs(5);
-    let store = DummyProfileStore::new(&addr, timeout)?;
+    let timeout = Duration::from_secs(options.network_timeout_secs);
+    let store = DummyProfileStore::new(&options.storage_address, timeout)?;
 
     let mut ctx = CommandContext::new(vault_path, vault, Box::new(store));
     command.execute(&mut ctx)?;
