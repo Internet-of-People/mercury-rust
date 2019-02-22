@@ -119,7 +119,7 @@ pub use sk::MPrivateKey;
 /// A discriminator type that is used to keep the type-safety of the erased types in [`multicipher`]
 ///
 /// [`multicipher`]: index.html
-#[derive(Clone, Debug, Hash, Eq, PartialEq)]
+#[derive(Clone, Debug, Hash, Eq, PartialEq, PartialOrd)]
 pub enum CipherSuite {
     /// The object tagged with this variant belongs to the [`ed25519`] module
     ///
