@@ -117,8 +117,8 @@ impl Seed {
     /// assert!(seed_res.is_ok());
     /// assert_eq!(hex::encode(seed_res.unwrap().as_bytes()), seed_expected);
     /// ```
-    pub fn from_bip39(phrase: &str) -> Fallible<Self> {
-        if phrase.split(' ').count() != Self::MNEMONIC_WORDS {
+    pub fn from_bip39<S: AsRef<str>>(phrase: S) -> Fallible<Self> {
+        if phrase.as_ref().split(' ').count() != Self::MNEMONIC_WORDS {
             bail!("Only {}-word mnemonics are supported", Self::MNEMONIC_WORDS)
         }
         let bytes = bip39::from_phrase(phrase, Self::PASSWORD)?;

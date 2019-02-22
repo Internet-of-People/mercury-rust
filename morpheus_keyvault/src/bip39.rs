@@ -18,8 +18,8 @@ pub(crate) fn generate_new(password: &str) -> Vec<u8> {
     Seed::new(&mnemonic, password).as_bytes().to_owned()
 }
 
-pub(crate) fn from_phrase<T: Into<String>>(phrase: T, password: &str) -> Fallible<Vec<u8>> {
-    let mnemonic_res = Mnemonic::from_phrase(phrase, Language::English);
+pub(crate) fn from_phrase<S: AsRef<str>>(phrase: S, password: &str) -> Fallible<Vec<u8>> {
+    let mnemonic_res = Mnemonic::from_phrase(phrase.as_ref(), Language::English);
     mnemonic_res.map(|m| Seed::new(&m, password).as_bytes().to_owned())
 }
 
