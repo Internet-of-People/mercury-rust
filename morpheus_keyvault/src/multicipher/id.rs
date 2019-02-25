@@ -33,9 +33,9 @@ fn deser(bytes: Vec<u8>) -> Fallible<MKeyId> {
     ensure!(bytes.is_empty(), "No crypto suite discriminator found");
     let discriminator = bytes[0];
     let data = &bytes[1..];
-    let value = match discriminator {
-        b'e' => erase!(e, MKeyId, ed25519::KeyId::from_bytes(data)?),
-        b'f' => erase!(f, MKeyId, ed25519::KeyId::from_bytes(data)?),
+    let value = match discriminator as char {
+        'e' => erase!(e, MKeyId, ed25519::KeyId::from_bytes(data)?),
+        'f' => erase!(f, MKeyId, ed25519::KeyId::from_bytes(data)?),
         _ => Err(err_msg(format!(
             "Unknown crypto suite discriminator {}",
             discriminator
@@ -132,5 +132,32 @@ impl std::fmt::Display for MKeyId {
 impl std::fmt::Debug for MKeyId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         (self as &std::fmt::Display).fmt(f)
+    }
+}
+
+impl std::str::FromStr for MKeyId {
+    type Err = failure::Error;
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        let mut chars = src.chars();
+        ensure!(chars.next() == Some('I'), "Identifiers must start with 'I'");
+        if let Some(discriminator) = chars.next() {
+            let (_base, binary) = multibase::decode(chars.as_str())?;
+            Ok(match discriminator {
+                'e' => erase!(e, MKeyId, ed25519::KeyId::from_bytes(&binary)?),
+                'f' => erase!(f, MKeyId, ed25519::KeyId::from_bytes(&binary)?),
+                _ => Err(err_msg(format!(
+                    "Unknown crypto suite discriminator {}",
+                    discriminator
+                )))?,
+            })
+        } else {
+            Err(err_msg("No crypto suite discriminator found"))
+        }
+    }
+}
+
+impl From<ed25519::KeyId> for MKeyId {
+    fn from(src: ed25519::KeyId) -> Self {
+        erase!(e, MKeyId, src)
     }
 }

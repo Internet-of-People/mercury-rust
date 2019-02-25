@@ -20,9 +20,8 @@ pub const KEY_ID_SIZE: usize = 16 + VERSION_SIZE;
 pub const KEY_ID_VERSION1: u8 = b'\x01';
 
 /// Implementation of Ed25519::KeyId
-#[derive(Clone, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-#[serde(transparent)]
-pub struct KeyId(#[serde(with = "serde_bytes")] Vec<u8>);
+#[derive(Clone, Eq, Hash, PartialEq, PartialOrd)]
+pub struct KeyId(Vec<u8>);
 
 impl KeyId {
     /// The key id serialized in a format that can be fed to [`from_bytes`]
@@ -65,39 +64,5 @@ impl From<&EdPublicKey> for KeyId {
         hash.push(KEY_ID_VERSION1);
         hasher.variable_result(|h| hash.extend_from_slice(h));
         KeyId(hash)
-    }
-}
-
-impl std::str::FromStr for KeyId {
-    type Err = failure::Error;
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        let mut chars = src.chars();
-        ensure!(chars.next() == Some('I'), "Identifiers must start with 'I'");
-        ensure!(
-            chars.next() == Some('e'),
-            "Only Ed25519 cipher is supported"
-        );
-        let (_base, binary) = multibase::decode(chars.as_str())?;
-        KeyId::from_bytes(&binary)
-    }
-}
-
-impl From<&KeyId> for String {
-    fn from(src: &KeyId) -> Self {
-        let mut output = multibase::encode(multibase::Base58btc, &src.0);
-        output.insert_str(0, "Ie"); // Logically 'I' and 'e' belongs to different concepts
-        output
-    }
-}
-
-impl std::fmt::Display for KeyId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", String::from(self))
-    }
-}
-
-impl std::fmt::Debug for KeyId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        (self as &std::fmt::Display).fmt(f)
     }
 }

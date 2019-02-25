@@ -4,7 +4,7 @@ pub type AttributeId = String;
 pub type AttributeValue = String;
 pub type Signature = Vec<u8>;
 pub type PublicKey = Vec<u8>;
-pub type ProfileId = morpheus_keyvault::ed25519::KeyId;
+pub type ProfileId = morpheus_keyvault::multicipher::MKeyId;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Link {

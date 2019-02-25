@@ -111,35 +111,6 @@ mod tests {
         }
     }
 
-    mod parse_key_id {
-        use crate::ed25519::KeyId;
-
-        fn test(input: &str, key_id_hex: &str) {
-            let key_id_bytes = hex::decode(key_id_hex).unwrap();
-            let id1 = KeyId::from_bytes(&key_id_bytes).unwrap();
-            assert_eq!(id1.to_string(), input);
-
-            let id2 = input.parse::<KeyId>().unwrap();
-            assert_eq!(hex::encode(&id2.to_bytes()), key_id_hex);
-        }
-
-        #[test]
-        fn test_1() {
-            test(
-                "Iez21JXEtMzXjbCK6BAYFU9ewX",
-                "01d8245272e2317ef53b26407e925edf7e",
-            );
-        }
-
-        #[test]
-        fn test_2() {
-            test(
-                "IezpmXKKc2QRZpXbzGV62MgKe",
-                "0182d4ecfc12c5ad8efa5ef494f47e5285",
-            );
-        }
-    }
-
     mod derivation {
         use crate::{
             ed25519::{Ed25519, EdExtPrivateKey},

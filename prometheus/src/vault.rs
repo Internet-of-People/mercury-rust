@@ -44,7 +44,8 @@ impl HdProfileVault {
 
     fn profile_id(xsk: &EdExtPrivateKey, idx: i32) -> Fallible<ProfileId> {
         let profile_xsk = xsk.derive_hardened_child(idx)?;
-        Ok(profile_xsk.neuter().as_public_key().key_id())
+        let key_id = profile_xsk.neuter().as_public_key().key_id();
+        Ok(key_id.into())
     }
 
     pub fn load(cfg_dir: &std::path::Path, filename: &str) -> Fallible<Self> {

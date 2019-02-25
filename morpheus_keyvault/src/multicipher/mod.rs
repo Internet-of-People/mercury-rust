@@ -151,4 +151,42 @@ mod tests {
         let _cipher = MultiCipher {};
     }
 
+    mod parse_key_id {
+        use crate::ed25519;
+        use crate::multicipher::MKeyId;
+
+        fn test(input: &str, key_id_hex: &str) {
+            let key_id_bytes = hex::decode(key_id_hex).unwrap();
+            let id1 = ed25519::KeyId::from_bytes(&key_id_bytes).unwrap();
+            let erased_id1 = MKeyId::from(id1);
+            assert_eq!(erased_id1.to_string(), input);
+
+            let erased_id2 = input.parse::<MKeyId>().unwrap();
+            assert_eq!(erased_id2, erased_id1);
+        }
+
+        #[test]
+        fn test_1() {
+            test(
+                "Iez21JXEtMzXjbCK6BAYFU9ewX",
+                "01d8245272e2317ef53b26407e925edf7e",
+            );
+        }
+
+        #[test]
+        fn test_2() {
+            test(
+                "IezpmXKKc2QRZpXbzGV62MgKe",
+                "0182d4ecfc12c5ad8efa5ef494f47e5285",
+            );
+        }
+
+        #[test]
+        fn discriminator_matters() {
+            let id1 = "Iez21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
+            let id2 = "Ifz21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
+            assert_ne!(id1, id2);
+        }
+    }
+
 }
