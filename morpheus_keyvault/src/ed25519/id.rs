@@ -2,7 +2,6 @@ use blake2::{
     digest::{Input, VariableOutput},
     VarBlake2b,
 };
-use serde::{Deserialize, Serialize};
 
 use super::*;
 

@@ -29,18 +29,20 @@ impl Serialize for MKeyId {
     }
 }
 
+macro_rules! from_bytes {
+    ($suite:ident, $data:expr) => {
+        erase!($suite, MKeyId, <$suite!(id)>::from_bytes($data)?)
+    };
+}
+
 fn deser(bytes: Vec<u8>) -> Fallible<MKeyId> {
     ensure!(bytes.is_empty(), "No crypto suite discriminator found");
     let discriminator = bytes[0];
     let data = &bytes[1..];
-    let value = match discriminator as char {
-        'e' => erase!(e, MKeyId, ed25519::KeyId::from_bytes(data)?),
-        'f' => erase!(f, MKeyId, ed25519::KeyId::from_bytes(data)?),
-        _ => Err(err_msg(format!(
-            "Unknown crypto suite discriminator {}",
-            discriminator
-        )))?,
-    };
+    let value = visit_fac!(
+        stringify(discriminator.to_string().as_str()) =>
+            from_bytes(data)
+    );
     Ok(value)
 }
 
@@ -142,14 +144,11 @@ impl std::str::FromStr for MKeyId {
         ensure!(chars.next() == Some('I'), "Identifiers must start with 'I'");
         if let Some(discriminator) = chars.next() {
             let (_base, binary) = multibase::decode(chars.as_str())?;
-            Ok(match discriminator {
-                'e' => erase!(e, MKeyId, ed25519::KeyId::from_bytes(&binary)?),
-                'f' => erase!(f, MKeyId, ed25519::KeyId::from_bytes(&binary)?),
-                _ => Err(err_msg(format!(
-                    "Unknown crypto suite discriminator {}",
-                    discriminator
-                )))?,
-            })
+            let ret = visit_fac!(
+                stringify(discriminator.to_string().as_str()) =>
+                    from_bytes(binary)
+            );
+            Ok(ret)
         } else {
             Err(err_msg("No crypto suite discriminator found"))
         }
@@ -159,5 +158,68 @@ impl std::str::FromStr for MKeyId {
 impl From<ed25519::KeyId> for MKeyId {
     fn from(src: ed25519::KeyId) -> Self {
         erase!(e, MKeyId, src)
+    }
+}
+
+mod parse_key_id {
+    use crate::ed25519;
+    use crate::multicipher::MKeyId;
+
+    #[allow(dead_code)]
+    fn case(input: &str, key_id_hex: &str) {
+        let key_id_bytes = hex::decode(key_id_hex).unwrap();
+        let id1 = ed25519::KeyId::from_bytes(&key_id_bytes).unwrap();
+        let erased_id1 = MKeyId::from(id1);
+        assert_eq!(erased_id1.to_string(), input);
+
+        let erased_id2 = input.parse::<MKeyId>().unwrap();
+        assert_eq!(erased_id2, erased_id1);
+    }
+
+    #[test]
+    fn test_1() {
+        case(
+            "Iez21JXEtMzXjbCK6BAYFU9ewX",
+            "01d8245272e2317ef53b26407e925edf7e",
+        );
+    }
+
+    #[test]
+    fn test_2() {
+        case(
+            "IezpmXKKc2QRZpXbzGV62MgKe",
+            "0182d4ecfc12c5ad8efa5ef494f47e5285",
+        );
+    }
+
+    #[test]
+    fn discriminator_matters() {
+        let id1 = "Iez21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
+        let id2 = "Ifz21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
+        assert_ne!(id1, id2);
+    }
+
+    #[test]
+    #[should_panic(expected = "Unknown crypto suite discriminator \\'g\\'")]
+    fn invalid_discriminator() {
+        let _id = "Igz21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "No crypto suite discriminator found")]
+    fn missing_discriminator() {
+        let _id = "I".parse::<MKeyId>().unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "Identifiers must start with \\'I\\'")]
+    fn invalid_type() {
+        let _id = "Fez21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
+    }
+
+    #[test]
+    #[should_panic(expected = "Identifiers must start with \\'I\\'")]
+    fn empty() {
+        let _id = "".parse::<MKeyId>().unwrap();
     }
 }
