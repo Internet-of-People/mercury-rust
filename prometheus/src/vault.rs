@@ -21,13 +21,13 @@ pub trait ProfileVault {
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct DummyProfileVault {
+pub struct HdProfileVault {
     pub seed: Seed,
     pub indexes: Vec<i32>,
     pub active_idx: Option<i32>,
 }
 
-impl DummyProfileVault {
+impl HdProfileVault {
     pub fn create(seed: Seed) -> Self {
         info!("Initializing new vault");
         Self {
@@ -49,7 +49,7 @@ impl DummyProfileVault {
 
     pub fn load(cfg_dir: &std::path::Path, filename: &str) -> Fallible<Self> {
         let cfg_file = std::fs::File::open(&cfg_dir.join(filename))?;
-        let vault: DummyProfileVault = serde_json::from_reader(&cfg_file)?;
+        let vault: HdProfileVault = serde_json::from_reader(&cfg_file)?;
         Ok(vault)
     }
 
@@ -61,7 +61,7 @@ impl DummyProfileVault {
     //    }
 }
 
-impl ProfileVault for DummyProfileVault {
+impl ProfileVault for HdProfileVault {
     fn list(&self) -> Fallible<Vec<ProfileId>> {
         let mercury_xsk = self.mercury_xsk()?;
         self.indexes

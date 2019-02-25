@@ -5,7 +5,7 @@ mod store;
 
 pub use client::*;
 pub use model::*;
-pub use store::DummyProfileStore;
+pub use store::RpcProfileRepository;
 
 //#[test]
 //fn test()

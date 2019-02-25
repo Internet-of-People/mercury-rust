@@ -7,7 +7,7 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::cli::*;
-use morpheus_storage::DummyProfileStore;
+use morpheus_storage::RpcProfileRepository;
 use prometheus::vault::*;
 
 mod cli;
@@ -53,16 +53,13 @@ fn run() -> Fallible<()> {
             "Found profile vault, loading {}",
             vault_path.to_string_lossy()
         );
-        vault = Some(Box::new(DummyProfileVault::load(
-            &app_cfg_dir,
-            &vault_file,
-        )?))
+        vault = Some(Box::new(HdProfileVault::load(&app_cfg_dir, &vault_file)?))
     } else {
         debug!("No profile vault found");
     }
 
     let timeout = Duration::from_secs(options.network_timeout_secs);
-    let store = DummyProfileStore::new(&options.storage_address, timeout)?;
+    let store = RpcProfileRepository::new(&options.storage_address, timeout)?;
 
     let mut ctx = CommandContext::new(vault_path, vault, Box::new(store));
     command.execute(&mut ctx)?;

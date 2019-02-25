@@ -11,14 +11,14 @@ use prometheus::vault::*;
 pub struct CommandContext {
     vault_path: PathBuf,
     vault: Option<Box<ProfileVault>>,
-    store: Box<ProfileStore>,
+    store: Box<ProfileRepository>,
 }
 
 impl CommandContext {
     pub fn new(
         vault_path: PathBuf,
         vault: Option<Box<ProfileVault>>,
-        store: Box<ProfileStore>,
+        store: Box<ProfileRepository>,
     ) -> Self {
         Self {
             vault_path,
@@ -48,11 +48,11 @@ impl CommandContext {
         self.vault.replace(new_vault)
     }
 
-    pub fn store(&self) -> &ProfileStore {
+    pub fn store(&self) -> &ProfileRepository {
         self.store.as_ref()
     }
 
-    pub fn mut_store(&mut self) -> &mut ProfileStore {
+    pub fn mut_store(&mut self) -> &mut ProfileRepository {
         self.store.as_mut()
     }
 }
@@ -457,7 +457,7 @@ before trying to restore another vault."#,
             }
         }
     }?;
-    let new_vault = DummyProfileVault::create(seed);
+    let new_vault = HdProfileVault::create(seed);
     ctx.replace_vault(Box::new(new_vault));
     Ok(())
 }

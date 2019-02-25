@@ -15,7 +15,7 @@ const RESPONSE_CODE_OK: u32 = 0;
 pub type AttributeMap = HashMap<AttributeId, AttributeValue>;
 
 // TODO should all operations below be async?
-pub trait ProfileStore {
+pub trait ProfileRepository {
     fn get(&self, id: &ProfileId) -> Option<ProfilePtr>;
     fn create(&mut self, id: &ProfileId) -> Fallible<ProfilePtr>;
     // TODO what does this mean? Purge related metadata from local storage plus don't show it in the list,
@@ -338,15 +338,16 @@ where
 mod test {
     use super::*;
     use crate::model::ProfileId;
-    use crate::store::DummyProfileStore;
+    use crate::store::RpcProfileRepository;
     use std::str::FromStr;
     use std::time::Duration;
 
-    //#[test]
+    #[test]
+    #[ignore]
     fn test_server_calls() -> Fallible<()> {
         let addr = "127.0.0.1:6161".parse()?;
         let timeout = Duration::from_secs(5);
-        let mut store = DummyProfileStore::new(&addr, timeout)?;
+        let mut store = RpcProfileRepository::new(&addr, timeout)?;
 
         let nodes = store.list_nodes()?;
         assert_eq!(nodes.len(), 0);
@@ -390,6 +391,12 @@ mod test {
         me.borrow_mut().clear_attribute(&attr_id)?;
         assert_eq!(me.borrow().metadata()?.len(), 0);
         assert_eq!(me.borrow().metadata()?.len(), 0);
+
+        assert_eq!(nodes.len(), 2);
+// TODO consider if we need removing profiles or keep it unimplemented
+//        store.remove(&my_id)?;
+//        store.remove(&peer_id)?;
+//        assert_eq!(nodes.len(), 0);
 
         Ok(())
     }

@@ -8,15 +8,15 @@ use std::time::Duration;
 use failure::err_msg;
 
 use crate::client::AttributeMap;
-use crate::{messages, MsgPackRpc, ProfileId, ProfilePtr, ProfileStore, RpcProfile, RpcPtr};
+use crate::{messages, MsgPackRpc, ProfileId, ProfilePtr, ProfileRepository, RpcProfile, RpcPtr};
 
-pub struct DummyProfileStore {
+pub struct RpcProfileRepository {
     connect_timeout: Duration,
     addr: SocketAddr,
     rpc: RefCell<Option<RpcPtr<TcpStream, TcpStream>>>,
 }
 
-impl DummyProfileStore {
+impl RpcProfileRepository {
     pub fn new(addr: &SocketAddr, connect_timeout: Duration) -> Fallible<Self> {
         // let id = if let Some(active_id) = vault.get_active()? {
         //     active_id
@@ -61,7 +61,7 @@ impl DummyProfileStore {
     }
 }
 
-impl ProfileStore for DummyProfileStore {
+impl ProfileRepository for RpcProfileRepository {
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#show-profile
     fn get(&self, id: &ProfileId) -> Option<ProfilePtr> {
         self.rpc()
