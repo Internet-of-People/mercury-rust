@@ -393,10 +393,10 @@ mod test {
         assert_eq!(me.borrow().metadata()?.len(), 0);
 
         assert_eq!(nodes.len(), 2);
-// TODO consider if we need removing profiles or keep it unimplemented
-//        store.remove(&my_id)?;
-//        store.remove(&peer_id)?;
-//        assert_eq!(nodes.len(), 0);
+        // TODO consider if we need removing profiles or keep it unimplemented
+        //store.remove(&my_id)?;
+        //store.remove(&peer_id)?;
+        //assert_eq!(nodes.len(), 0);
 
         Ok(())
     }
