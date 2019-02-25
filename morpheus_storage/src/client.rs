@@ -26,6 +26,7 @@ pub trait ProfileStore {
 // TODO should all operations below be async?
 pub trait Profile {
     fn id(&self) -> ProfileId;
+    // TODO naming is inconsistent, metadata vs attribute, should use only one of them
     fn metadata(&self) -> Fallible<AttributeMap>;
     fn links(&self) -> Fallible<Vec<Link>>;
     fn followers(&self) -> Fallible<Vec<Link>>;
@@ -350,11 +351,45 @@ mod test {
         let nodes = store.list_nodes()?;
         assert_eq!(nodes.len(), 0);
 
-        let me = store.create(&ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?)?;
-        let peer = store.create(&ProfileId::from_str("Iez25N5WZ1Q6TQpgpyYgiu9gTX")?)?;
+        let my_id = ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?;
+        let me = store.create(&my_id)?;
+        let peer_id = ProfileId::from_str("Iez25N5WZ1Q6TQpgpyYgiu9gTX")?;
+        let peer = store.create(&peer_id)?;
 
         let nodes = store.list_nodes()?;
         assert_eq!(nodes.len(), 2);
+        assert_eq!(me.borrow().links()?.len(), 0);
+        assert_eq!(me.borrow().followers()?.len(), 0);
+        assert_eq!(peer.borrow().links()?.len(), 0);
+        assert_eq!(peer.borrow().followers()?.len(), 0);
+
+        let link = me.borrow_mut().create_link(&peer_id)?;
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(link.peer_profile, peer_id);
+        assert_eq!(me.borrow().followers()?.len(), 0);
+        assert_eq!(peer.borrow().links()?.len(), 0);
+        assert_eq!(me.borrow().links()?.len(), 1);
+        assert_eq!(me.borrow().links()?[0].peer_profile, peer_id);
+        assert_eq!(peer.borrow().followers()?[0].peer_profile, my_id);
+
+        me.borrow_mut().remove_link(&peer_id)?;
+        assert_eq!(nodes.len(), 2);
+        assert_eq!(me.borrow().links()?.len(), 0);
+        assert_eq!(me.borrow().followers()?.len(), 0);
+        assert_eq!(peer.borrow().links()?.len(), 0);
+        assert_eq!(peer.borrow().followers()?.len(), 0);
+
+        let attr_id = "1 2 3".to_owned();
+        let attr_val = "one two three".to_owned();
+        assert_eq!(me.borrow().metadata()?.len(), 0);
+        assert_eq!(peer.borrow().metadata()?.len(), 0);
+        me.borrow_mut().set_attribute(&attr_id, &attr_val)?;
+        assert_eq!(me.borrow().metadata()?.len(), 1);
+        assert_eq!(me.borrow().metadata()?.get(&attr_id), Some(&attr_val));
+        assert_eq!(peer.borrow().metadata()?.len(), 0);
+        me.borrow_mut().clear_attribute(&attr_id)?;
+        assert_eq!(me.borrow().metadata()?.len(), 0);
+        assert_eq!(me.borrow().metadata()?.len(), 0);
 
         Ok(())
     }
