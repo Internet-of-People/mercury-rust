@@ -1,4 +1,5 @@
-use serde::{Serialize, Serializer};
+use failure::{ensure, err_msg, Fallible};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::cmp::Ordering;
 
 use super::*;
@@ -25,6 +26,31 @@ impl Serialize for MKeyId {
         let mut out = bytes.to_vec();
         out.insert(0, discriminator.as_bytes()[0]);
         serializer.serialize_bytes(out.as_slice())
+    }
+}
+
+fn deser(bytes: Vec<u8>) -> Fallible<MKeyId> {
+    ensure!(bytes.is_empty(), "No crypto suite discriminator found");
+    let discriminator = bytes[0];
+    let data = &bytes[1..];
+    let value = match discriminator {
+        b'e' => erase!(e, MKeyId, ed25519::KeyId::from_bytes(data)?),
+        b'f' => erase!(f, MKeyId, ed25519::KeyId::from_bytes(data)?),
+        _ => Err(err_msg(format!(
+            "Unknown crypto suite discriminator {}",
+            discriminator
+        )))?,
+    };
+    Ok(value)
+}
+
+impl<'de> Deserialize<'de> for MKeyId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        serde_bytes::deserialize(deserializer)
+            .and_then(|b| deser(b).map_err(|e| serde::de::Error::custom(e.to_string())))
     }
 }
 
