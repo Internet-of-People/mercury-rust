@@ -1,0 +1,21 @@
+[package]
+name = "prometheus-tester"
+version = "0.0.1-alpha1"
+authors = ["IoP Ventures LLC <info@iop-ventures.com>", "Wigy <wigy_opensource_developer@yahoo.com>"]
+license = "GPL-3.0-or-later"
+repository = "https://github.com/internet-of-people/prometheus"
+keywords = ["iop", "mercury", "morpheus", "prometheus", "test", "tool"]
+edition = "2018"
+
+[dependencies]
+failure = "*"
+log = "*"
+morpheus_keyvault = { path="../morpheus_keyvault" }
+morpheus_storage = { path="../morpheus_storage" }
+prometheus = { path="../prometheus" }
+serde = "*"
+serde_derive = "*"
+serde_json = "*"
+dirs = "*"
+log4rs = "*"
+structopt = "*"

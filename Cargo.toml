@@ -3,4 +3,6 @@ members = [
     "morpheus_keyvault",
     "morpheus_storage",
     "prometheus",
+    "prometheus-cli",
+    "prometheus-tester",
 ]
