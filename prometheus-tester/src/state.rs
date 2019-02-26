@@ -42,7 +42,23 @@ impl IndexMut<usize> for State {
     }
 }
 
-#[derive(Deserialize, Serialize)]
+impl<'a> IntoIterator for &'a State {
+    type Item = &'a User;
+    type IntoIter = std::slice::Iter<'a, User>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.users.iter()
+    }
+}
+
+impl<'a> IntoIterator for &'a mut State {
+    type Item = &'a mut User;
+    type IntoIter = std::slice::IterMut<'a, User>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.users.iter_mut()
+    }
+}
+
+#[derive(Debug, Deserialize, Serialize)]
 pub struct User {
     outlinks: BTreeSet<usize>,
 }

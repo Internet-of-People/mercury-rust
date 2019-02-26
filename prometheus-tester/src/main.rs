@@ -65,6 +65,9 @@ fn run() -> Fallible<()> {
         State::new()
     };
 
+    for (i, user) in state.into_iter().enumerate() {
+        info!("{}: {:?}", i, user);
+    }
     let idx = state.add_user();
     let user = &mut state[idx];
     user.add_link(idx);
