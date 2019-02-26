@@ -1,5 +1,5 @@
 [package]
-name = "prometheus"
+name = "prometheus-cli"
 version = "0.0.1-alpha1"
 authors = ["IoP Ventures LLC <info@iop-ventures.com>", "Rache Bartmoss <bartmoss@tutanota.com>"]
 edition = "2018"
@@ -9,6 +9,10 @@ failure = "*"
 log = "*"
 morpheus_keyvault = { path="../morpheus_keyvault" }
 morpheus_storage = { path="../morpheus_storage" }
+prometheus = { path="../prometheus" }
 serde = "*"
 serde_derive = "*"
 serde_json = "*"
+dirs = "*"
+log4rs = "*"
+structopt = "*"
