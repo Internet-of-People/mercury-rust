@@ -1,7 +1,6 @@
 use failure::Fallible;
 use log::*;
 use std::net::SocketAddr;
-use std::path::Path;
 use structopt::StructOpt;
 
 mod config;
@@ -57,12 +56,14 @@ fn run() -> Fallible<()> {
 
     debug!("Actions to take: {}", options.actions);
 
-    let state_path = Path::new(&options.state_file);
+    let cwd = std::fs::canonicalize("./")?;
+    let state_path = cwd.join(&options.state_file);
+    debug!("State: {}", state_path.to_string_lossy());
     let mut state = if state_path.exists() {
-        let state_file = std::fs::File::open(state_path)?;
+        let state_file = std::fs::File::open(&state_path)?;
         serde_json::from_reader(&state_file)?
     } else {
-        State::new()
+        State::new("include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already").unwrap()
     };
 
     for (i, user) in state.into_iter().enumerate() {
@@ -72,7 +73,7 @@ fn run() -> Fallible<()> {
     let user = &mut state[idx];
     user.add_link(idx);
 
-    std::fs::create_dir_all(state_path.parent().unwrap())?;
+    std::fs::create_dir_all(&state_path.parent().unwrap())?;
     let cfg_file = std::fs::File::create(state_path)?;
     serde_json::to_writer_pretty(&cfg_file, &state)?;
 

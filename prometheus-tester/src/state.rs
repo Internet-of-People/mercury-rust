@@ -1,3 +1,4 @@
+use failure::Fallible;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::ops::{Index, IndexMut};
@@ -11,10 +12,10 @@ pub struct State {
 }
 
 impl State {
-    pub fn new() -> Self {
-        let seed = morpheus_keyvault::Seed::from_bip39("include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already").unwrap();
+    pub fn new<S: AsRef<str>>(phrase: S) -> Fallible<Self> {
+        let seed = morpheus_keyvault::Seed::from_bip39(phrase)?;
         let users = Default::default();
-        Self { seed, users }
+        Ok(Self { seed, users })
     }
 
     pub fn add_user(&mut self) -> usize {
