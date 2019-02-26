@@ -12,9 +12,11 @@ A Markov chain Monte Carlo simulator for populating a social network based on a 
 
 ## Usage
 
-- Set up the config file if you do not like the defaults provided with the tool
-- Run the tool providing the number of actions to take
-- Observe the state of the open social graph
+- Edit the config file if you do not like the defaults provided with the tool. That file should have
+  enough comments to help you.
+- Run the tool providing the number of actions to take. If in doubt,
+  run `prometheus-tester --help` for details.
+- Observe the state of the open social graph. We have made a cool OpenGL-based visualizer for that.
 
 ## Contributing
 
