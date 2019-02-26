@@ -67,14 +67,23 @@ pub struct Options {
     #[structopt(
         long = "storage",
         default_value = "127.0.0.1:6161",
-        raw(value_name = r#""ADDRESS""#)
+        raw(value_name = r#""IP:PORT""#)
     )]
-    /// IPv4/6 address of the storage backend used for this demo
+    /// IPv4/6 address of the storage backend.
     pub storage_address: SocketAddr,
 
     #[structopt(long = "timeout", default_value = "10", raw(value_name = r#""SECS""#))]
     /// Number of seconds used for network timeouts
     pub network_timeout_secs: u64,
+
+    #[structopt(
+        long = "logger_config",
+        default_value = "log4rs.yml",
+        raw(value_name = r#""FILE""#),
+        parse(from_os_str)
+    )]
+    /// Config file for log4rs (YAML).
+    pub logger_config: PathBuf,
 
     #[structopt(subcommand)]
     pub command: Command,
@@ -319,7 +328,7 @@ pub enum RemoveCommand {
 
 #[derive(Debug, StructOpt)]
 pub enum SetCommand {
-    #[structopt(name = "active-profile")]
+    #[structopt(name = "active_profile")]
     /// Show profile
     ActiveProfile {
         // TODO is activation by profile NUMBER needed or is this enough?

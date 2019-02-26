@@ -23,8 +23,26 @@ fn run() -> Fallible<()> {
     let options = Options::from_args();
     let command = options.command;
 
-    // TODO make log config path configurable or at least this should not fail if file is not available
-    log4rs::init_file("log4rs.yml", Default::default())?;
+    if let Err(_) = log4rs::init_file(&options.logger_config, Default::default()) {
+        println!(
+            "Failed to initialize loggers from config file {:?}, falling back to default loggers",
+            options.logger_config
+        );
+
+        use log::LevelFilter;
+        use log4rs::append::console::ConsoleAppender;
+        use log4rs::config::{Appender, Config, Root};
+        use log4rs::encode::pattern::PatternEncoder;
+
+        let stdout = ConsoleAppender::builder()
+            .encoder(Box::new(PatternEncoder::new("{m}{n}")))
+            .build();
+        let config = Config::builder()
+            .appender(Appender::builder().build("stdout", Box::new(stdout)))
+            .build(Root::builder().appender("stdout").build(LevelFilter::Info))?;
+
+        log4rs::init_config(config)?;
+    }
 
     debug!("Got command {:?}", command);
 
