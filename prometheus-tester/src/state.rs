@@ -18,6 +18,10 @@ impl State {
         Ok(Self { seed, users })
     }
 
+    pub fn seed(&self) -> &Seed {
+        &self.seed
+    }
+
     pub fn add_user(&mut self) -> usize {
         let idx = self.users.len();
         let user = User {

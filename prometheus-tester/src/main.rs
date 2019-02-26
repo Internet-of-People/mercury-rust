@@ -1,10 +1,15 @@
+mod config;
+mod simul;
+mod state;
+mod sync;
+
 use failure::Fallible;
 use log::*;
 use std::net::SocketAddr;
+use std::time::Duration;
 use structopt::StructOpt;
 
-mod config;
-mod state;
+use morpheus_storage::RpcProfileRepository;
 
 use state::State;
 
@@ -31,7 +36,7 @@ pub struct Options {
     /// of local state with the storage backend
     #[structopt(
         long = "actions",
-        default_value = "100000",
+        default_value = "200",
         raw(value_name = r#""STEPS""#)
     )]
     pub actions: u64,
@@ -66,9 +71,19 @@ fn run() -> Fallible<()> {
         State::new("include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already").unwrap()
     };
 
-    for (i, user) in state.into_iter().enumerate() {
-        info!("{}: {:?}", i, user);
+    let timeout = Duration::from_secs(options.network_timeout_secs);
+    let mut store = RpcProfileRepository::new(&options.storage_address, timeout)?;
+
+    info!("Synchronizing existing state");
+    sync::synchronize(&mut state, &mut store)?;
+    info!("Starting simulation");
+    for i in 1..=options.actions {
+        if i % 100 == 0 {
+            info!("..{} steps done", i);
+        }
+        simul::step(&mut state);
     }
+
     let idx = state.add_user();
     let user = &mut state[idx];
     user.add_link(idx);
