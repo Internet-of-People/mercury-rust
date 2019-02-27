@@ -23,7 +23,7 @@ fn run() -> Fallible<()> {
     let options = Options::from_args();
     let command = options.command;
 
-    if let Err(_) = log4rs::init_file(&options.logger_config, Default::default()) {
+    if log4rs::init_file(&options.logger_config, Default::default()).is_err() {
         println!(
             "Failed to initialize loggers from config file {:?}, falling back to default loggers",
             options.logger_config
