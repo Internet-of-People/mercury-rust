@@ -29,11 +29,9 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
             .get(&id)
             .ok_or_else(|| err_msg("Could not connect to server"))?;
 
-        if let Ok(_links) = profile.clone().borrow().links() {
-            debug!("Found {}: {}", i, id);
-        // sync links for profile_ptr
-        } else {
-            info!("Re-creating {}: {}", i, id);
+        match profile.clone().borrow().links() {
+            Ok(_links) => debug!("Found {}: {}", i, id),
+            Err(e) => warn!("Not found {}: {}", i, e),
         }
     }
     Ok(())
