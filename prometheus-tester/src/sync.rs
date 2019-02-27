@@ -1,4 +1,4 @@
-use failure::Fallible;
+use failure::{err_msg, Fallible};
 use log::*;
 
 use morpheus_keyvault::{
@@ -25,7 +25,11 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
     let mercury = mercury_xsk(&state.seed())?;
     for (i, _user) in state.into_iter().enumerate() {
         let id = profile_id(&mercury, i as i32)?;
-        if let Some(_profile_ptr) = repo.get(&id) {
+        let profile = repo
+            .get(&id)
+            .ok_or_else(|| err_msg("Could not connect to server"))?;
+
+        if let Ok(_links) = profile.clone().borrow().links() {
             debug!("Found {}: {}", i, id);
         // sync links for profile_ptr
         } else {
