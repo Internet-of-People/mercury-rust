@@ -1,10 +1,11 @@
 use failure::Fallible;
+use rand::ChaChaRng;
 use rand::SeedableRng;
 use rand_chacha::ChaChaCore;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
+use std::iter::FromIterator;
 use std::ops::{Index, IndexMut};
-use rand::ChaChaRng;
 
 pub type RngSeed = <ChaChaCore as SeedableRng>::Seed;
 
@@ -12,8 +13,8 @@ pub type RngSeed = <ChaChaCore as SeedableRng>::Seed;
 pub struct State {
     vault_seed: morpheus_keyvault::Seed,
     rand_seed: RngSeed,
-//    #[serde(with="serde_bytes")]
-//    rand_seed: Vec<u8>,
+    //    #[serde(with="serde_bytes")]
+    //    rand_seed: Vec<u8>,
     users: Vec<User>,
 }
 
@@ -92,6 +93,11 @@ impl User {
         let added = !self.outlinks.contains(&peer);
         self.outlinks.insert(peer);
         added
+    }
+
+    pub fn not_links(&self, count: usize) -> Vec<usize> {
+        let full = BTreeSet::from_iter(0..count);
+        full.difference(&self.outlinks).cloned().collect()
     }
 
     pub fn len(&self) -> usize {

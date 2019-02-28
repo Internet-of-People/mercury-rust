@@ -1,7 +1,8 @@
-use failure::Fallible;
+use failure::{err_msg, Fallible};
 use log::*;
 use rand::{
     distributions::{Distribution, Uniform},
+    seq::SliceRandom,
     RngCore, SeedableRng,
 };
 use rand_chacha::ChaChaRng;
@@ -24,8 +25,8 @@ impl<'a> Simulation<'a> {
     }
 
     pub fn step(&mut self) -> Fallible<()> {
-//        let seed = self.state.rand_seed();
-//        let mut rng = ChaChaRng::from_seed(*seed);
+        //        let seed = self.state.rand_seed();
+        //        let mut rng = ChaChaRng::from_seed(*seed);
         let mut rng = thread_rng();
         let weight_create_profile = 5; // TODO config
         let weight_update_profile = self.state.len();
@@ -40,6 +41,34 @@ impl<'a> Simulation<'a> {
     }
 
     fn update_profile(&mut self, rng: &mut RngCore) -> Fallible<()> {
+        let profile_count = self.state.len();
+
+        let src_dist = Uniform::new(0, profile_count);
+        let idx = src_dist.sample(rng);
+        let src_user = &self.state[idx];
+
+        let mut missing_links = src_user.not_links(profile_count);
+        if let Some(pos) = missing_links.iter().position(|x| *x == idx) {
+            missing_links.remove(pos); // Removes self-link from the possibilities
+        }
+
+        debug!("Node {} can still link to {:?}", idx, missing_links);
+
+        match missing_links.as_slice().choose(rng) {
+            None => info!("Chosen node {} had all possible links", idx),
+            Some(peer) => {
+                let id = self.vault.profile_id(idx)?;
+                let peer_id = self.vault.profile_id(*peer)?;
+                let profile = self
+                    .repo
+                    .get(&id)
+                    .ok_or_else(|| err_msg("Could not connect to server"))?;
+                profile.borrow_mut().create_link(&peer_id)?;
+                self.state[idx].add_link(*peer);
+                info!("Generated link {}->{}: {}->{}", idx, *peer, id, peer_id);
+            }
+        }
+
         Ok(())
     }
 
@@ -49,15 +78,16 @@ impl<'a> Simulation<'a> {
         let idx = self.state.add_user();
         let id = self.vault.profile_id(idx)?;
         let profile = self.repo.create(&id)?;
+        info!("Generated profile {}: {}", idx, id);
 
         if old_profile_count > 0 {
             let dist = Uniform::new(0, old_profile_count);
             let peer = dist.sample(rng);
 
             let peer_id = self.vault.profile_id(peer)?;
-            info!("Generated link {}->{}: {}->{}", idx, peer, id, peer_id);
             profile.borrow_mut().create_link(&peer_id)?;
             self.state[idx].add_link(peer);
+            info!("Generated link {}->{}: {}->{}", idx, peer, id, peer_id);
         }
         Ok(())
     }
