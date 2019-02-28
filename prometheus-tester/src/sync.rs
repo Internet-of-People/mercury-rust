@@ -43,15 +43,18 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
                     let peer_id = &id_map[peer];
                     if links.iter().find(|l| l.peer_profile == *peer_id).is_none() {
                         profile.clone().borrow_mut().create_link(peer_id)?;
+                        info!("Re-created link {}->{}: {}->{}", idx, peer, id, peer_id);
                     }
                 }
             }
             Err(e) => {
-                warn!("Not found {}: {}", idx, e);
+                debug!("Not found {}: {}", idx, e);
                 let profile = repo.create(id)?;
+                info!("Re-created {}: {}", idx, id);
                 for peer in user.into_iter() {
                     let peer_id = &id_map[peer];
                     profile.clone().borrow_mut().create_link(peer_id)?;
+                    info!("Re-created link {}->{}: {}->{}", idx, peer, id, peer_id);
                 }
             }
         }
