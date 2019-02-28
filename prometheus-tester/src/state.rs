@@ -7,19 +7,23 @@ use morpheus_keyvault::Seed;
 
 #[derive(Deserialize, Serialize)]
 pub struct State {
-    seed: Seed,
+    vault_seed: Seed,
     users: Vec<User>,
 }
 
 impl State {
     pub fn new<S: AsRef<str>>(phrase: S) -> Fallible<Self> {
-        let seed = morpheus_keyvault::Seed::from_bip39(phrase)?;
+        let vault_seed = morpheus_keyvault::Seed::from_bip39(phrase)?;
         let users = Default::default();
-        Ok(Self { seed, users })
+        Ok(Self { vault_seed, users })
     }
 
-    pub fn seed(&self) -> &Seed {
-        &self.seed
+    pub fn vault_seed(&self) -> &Seed {
+        &self.vault_seed
+    }
+
+    pub fn len(&self) -> usize {
+        self.users.len()
     }
 
     pub fn add_user(&mut self) -> usize {
@@ -65,7 +69,7 @@ impl<'a> IntoIterator for &'a mut State {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct User {
-    outlinks: BTreeSet<usize>,
+    pub outlinks: BTreeSet<usize>,
 }
 
 impl User {

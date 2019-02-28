@@ -22,7 +22,7 @@ use state::State;
 pub struct Options {
     #[structopt(
         long = "storage",
-        default_value = "127.0.0.1:6161",
+        default_value = "172.17.0.2:6161",
         raw(value_name = r#""ADDRESS""#)
     )]
     /// IPv4/6 address of the storage backend used for this demo

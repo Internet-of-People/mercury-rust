@@ -22,16 +22,38 @@ fn profile_id(xsk: &EdExtPrivateKey, idx: i32) -> Fallible<ProfileId> {
 }
 
 pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<()> {
-    let mercury = mercury_xsk(&state.seed())?;
-    for (i, _user) in state.into_iter().enumerate() {
-        let id = profile_id(&mercury, i as i32)?;
+    let mercury = mercury_xsk(&state.vault_seed())?;
+    let mut id_map = std::collections::HashMap::<usize, ProfileId>::with_capacity(state.len());
+    for (idx, _user) in state.into_iter().enumerate() {
+        let id = profile_id(&mercury, idx as i32)?;
+        id_map.insert(idx, id);
+    }
+
+    for (idx, user) in state.into_iter().enumerate() {
+        let id = &id_map[&idx];
         let profile = repo
-            .get(&id)
+            .get(id)
             .ok_or_else(|| err_msg("Could not connect to server"))?;
 
-        match profile.clone().borrow().links() {
-            Ok(_links) => debug!("Found {}: {}", i, id),
-            Err(e) => warn!("Not found {}: {}", i, e),
+        let links_res = profile.clone().borrow().links();
+        match links_res {
+            Ok(links) => {
+                debug!("Found {}: {}", idx, id);
+                for peer in &user.outlinks {
+                    let peer_id = &id_map[peer];
+                    if links.iter().find(|l| l.peer_profile == *peer_id).is_none() {
+                        profile.clone().borrow_mut().create_link(peer_id)?;
+                    }
+                }
+            }
+            Err(e) => {
+                warn!("Not found {}: {}", idx, e);
+                let profile = repo.create(id)?;
+                for peer in &user.outlinks {
+                    let peer_id = &id_map[peer];
+                    profile.clone().borrow_mut().create_link(peer_id)?;
+                }
+            }
         }
     }
     Ok(())
