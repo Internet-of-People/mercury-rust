@@ -13,6 +13,8 @@ log = "*"
 morpheus_keyvault = { path="../morpheus_keyvault" }
 morpheus_storage = { path="../morpheus_storage" }
 prometheus = { path="../prometheus" }
+rand_chacha = "0.1.1"
+rand = "0.6.5"
 serde = "*"
 serde_derive = "*"
 serde_json = "*"

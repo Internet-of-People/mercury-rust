@@ -2,6 +2,7 @@ mod config;
 mod simul;
 mod state;
 mod sync;
+mod vault;
 
 use failure::Fallible;
 use log::*;
@@ -77,16 +78,13 @@ fn run() -> Fallible<()> {
     info!("Synchronizing existing state");
     sync::synchronize(&mut state, &mut store)?;
     info!("Starting simulation");
+    let mut sim = simul::Simulation::new(&mut state, &mut store)?;
     for i in 1..=options.actions {
         if i % 100 == 0 {
             info!("..{} steps done", i);
         }
-        simul::step(&mut state);
+        sim.step()?;
     }
-
-    let idx = state.add_user();
-    let user = &mut state[idx];
-    user.add_link(idx);
 
     std::fs::create_dir_all(&state_path.parent().unwrap())?;
     let cfg_file = std::fs::File::create(state_path)?;

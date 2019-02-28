@@ -1,25 +1,37 @@
 use failure::Fallible;
+use rand::SeedableRng;
+use rand_chacha::ChaChaCore;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::ops::{Index, IndexMut};
 
-use morpheus_keyvault::Seed;
+pub type RngSeed = <ChaChaCore as SeedableRng>::Seed;
 
 #[derive(Deserialize, Serialize)]
 pub struct State {
-    vault_seed: Seed,
+    vault_seed: morpheus_keyvault::Seed,
+    rand_seed: RngSeed,
     users: Vec<User>,
 }
 
 impl State {
     pub fn new<S: AsRef<str>>(phrase: S) -> Fallible<Self> {
         let vault_seed = morpheus_keyvault::Seed::from_bip39(phrase)?;
+        let rand_seed = RngSeed::default();
         let users = Default::default();
-        Ok(Self { vault_seed, users })
+        Ok(Self {
+            vault_seed,
+            rand_seed,
+            users,
+        })
     }
 
-    pub fn vault_seed(&self) -> &Seed {
+    pub fn vault_seed(&self) -> &morpheus_keyvault::Seed {
         &self.vault_seed
+    }
+
+    pub fn rand_seed(&mut self) -> &mut RngSeed {
+        &mut self.rand_seed
     }
 
     pub fn len(&self) -> usize {

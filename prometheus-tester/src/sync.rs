@@ -1,31 +1,15 @@
 use failure::{err_msg, Fallible};
 use log::*;
 
-use morpheus_keyvault::{
-    ed25519::{Ed25519, EdExtPrivateKey},
-    ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PublicKey, Seed,
-    BIP43_PURPOSE_MERCURY,
-};
 use morpheus_storage::{ProfileId, ProfileRepository};
 
-use crate::state::State;
-
-fn mercury_xsk(seed: &Seed) -> Fallible<EdExtPrivateKey> {
-    let master = Ed25519::master(seed);
-    master.derive_hardened_child(BIP43_PURPOSE_MERCURY)
-}
-
-fn profile_id(xsk: &EdExtPrivateKey, idx: i32) -> Fallible<ProfileId> {
-    let profile_xsk = xsk.derive_hardened_child(idx)?;
-    let key_id = profile_xsk.neuter().as_public_key().key_id();
-    Ok(key_id.into())
-}
+use crate::{state::State, vault::Vault};
 
 pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<()> {
-    let mercury = mercury_xsk(&state.vault_seed())?;
+    let vault = Vault::new(&state.vault_seed())?;
     let mut id_map = std::collections::HashMap::<usize, ProfileId>::with_capacity(state.len());
     for (idx, _user) in state.into_iter().enumerate() {
-        let id = profile_id(&mercury, idx as i32)?;
+        let id = vault.profile_id(idx)?;
         id_map.insert(idx, id);
     }
 
