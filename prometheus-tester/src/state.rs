@@ -69,7 +69,7 @@ impl<'a> IntoIterator for &'a mut State {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct User {
-    pub outlinks: BTreeSet<usize>,
+    outlinks: BTreeSet<usize>,
 }
 
 impl User {
@@ -77,5 +77,17 @@ impl User {
         let added = !self.outlinks.contains(&peer);
         self.outlinks.insert(peer);
         added
+    }
+
+    pub fn len(&self) -> usize {
+        self.outlinks.len()
+    }
+}
+
+impl<'a> IntoIterator for &'a User {
+    type Item = &'a usize;
+    type IntoIter = std::collections::btree_set::Iter<'a, usize>;
+    fn into_iter(self) -> Self::IntoIter {
+        self.outlinks.iter()
     }
 }
