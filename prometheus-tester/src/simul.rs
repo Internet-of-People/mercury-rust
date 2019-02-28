@@ -1,4 +1,5 @@
 use failure::Fallible;
+use log::*;
 use rand::{
     distributions::{Distribution, Uniform},
     RngCore, SeedableRng,
@@ -8,6 +9,7 @@ use rand_chacha::ChaChaRng;
 use morpheus_storage::ProfileRepository;
 
 use crate::{state::State, vault::Vault};
+use rand::thread_rng;
 
 pub struct Simulation<'a> {
     state: &'a mut State,
@@ -22,15 +24,19 @@ impl<'a> Simulation<'a> {
     }
 
     pub fn step(&mut self) -> Fallible<()> {
-        let mut rng = ChaChaRng::seed_from_u64(0); // TODO state + config
+//        let seed = self.state.rand_seed();
+//        let mut rng = ChaChaRng::from_seed(*seed);
+        let mut rng = thread_rng();
         let weight_create_profile = 5; // TODO config
         let weight_update_profile = self.state.len();
         let dist = Uniform::new(0, weight_create_profile + weight_update_profile);
         if dist.sample(&mut rng) >= weight_create_profile {
-            self.update_profile(&mut rng)
+            self.update_profile(&mut rng)?;
         } else {
-            self.create_profile(&mut rng)
+            self.create_profile(&mut rng)?;
         }
+        //*self.state.rand_seed() = (rng as <ChaChaRng as SeedableRng>::Seed).as_mut();
+        Ok(())
     }
 
     fn update_profile(&mut self, rng: &mut RngCore) -> Fallible<()> {
@@ -49,6 +55,7 @@ impl<'a> Simulation<'a> {
             let peer = dist.sample(rng);
 
             let peer_id = self.vault.profile_id(peer)?;
+            info!("Generated link {}->{}: {}->{}", idx, peer, id, peer_id);
             profile.borrow_mut().create_link(&peer_id)?;
             self.state[idx].add_link(peer);
         }

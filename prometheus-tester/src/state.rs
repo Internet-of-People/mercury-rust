@@ -4,6 +4,7 @@ use rand_chacha::ChaChaCore;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::ops::{Index, IndexMut};
+use rand::ChaChaRng;
 
 pub type RngSeed = <ChaChaCore as SeedableRng>::Seed;
 
@@ -11,13 +12,15 @@ pub type RngSeed = <ChaChaCore as SeedableRng>::Seed;
 pub struct State {
     vault_seed: morpheus_keyvault::Seed,
     rand_seed: RngSeed,
+//    #[serde(with="serde_bytes")]
+//    rand_seed: Vec<u8>,
     users: Vec<User>,
 }
 
 impl State {
     pub fn new<S: AsRef<str>>(phrase: S) -> Fallible<Self> {
         let vault_seed = morpheus_keyvault::Seed::from_bip39(phrase)?;
-        let rand_seed = RngSeed::default();
+        let rand_seed = RngSeed::default(); // TODO config
         let users = Default::default();
         Ok(Self {
             vault_seed,
