@@ -6,7 +6,7 @@ use rand::{
     RngCore, SeedableRng,
 };
 use rand_chacha::ChaChaRng;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BinaryHeap};
 
 use morpheus_storage::{ProfilePtr, ProfileRepository};
 
@@ -35,6 +35,28 @@ impl<'a> Simulation<'a> {
             inlinks,
             vault,
         })
+    }
+
+    pub fn stats(&self) -> Fallible<(usize, usize, Vec<usize>)> {
+        let users = self.state.len();
+        let (links, bheap) = self.inlinks.iter().fold(
+            (0usize, BinaryHeap::<usize>::with_capacity(users)),
+            |(mut links, mut bheap), (_idx, followers)| {
+                links += *followers;
+                bheap.push(*followers);
+                (links, bheap)
+            },
+        );
+
+        let influencers: Vec<usize> = bheap
+            .into_sorted_vec()
+            .iter()
+            .rev()
+            .cloned()
+            .take(10)
+            .collect();
+
+        Ok((users, links, influencers))
     }
 
     pub fn step(&mut self) -> Fallible<()> {

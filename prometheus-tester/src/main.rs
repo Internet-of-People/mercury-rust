@@ -81,7 +81,9 @@ fn run() -> Fallible<()> {
     let mut sim = simul::Simulation::new(&mut state, &mut store)?;
     for i in 1..=options.actions {
         if i % 100 == 0 {
-            info!("..{} steps done", i);
+            let (nodes, links, influencers) = sim.stats()?;
+            info!("..{} steps, {} nodes, {} links", i, nodes, links);
+            info!("  Top follower counts: {:?}", influencers)
         }
         sim.step()?;
     }
