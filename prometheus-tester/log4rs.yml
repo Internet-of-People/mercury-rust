@@ -11,6 +11,6 @@ appenders:
 
 # Set the default logging level and attach appenders to the root
 root:
-  level: debug
+  level: info
   appenders:
     - stdout

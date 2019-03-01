@@ -1,11 +1,12 @@
 use failure::{err_msg, Fallible};
 use log::*;
 use rand::{
-    distributions::{Distribution, Uniform},
+    distributions::{Distribution, Uniform, WeightedError},
     seq::SliceRandom,
     RngCore, SeedableRng,
 };
 use rand_chacha::ChaChaRng;
+use std::collections::BTreeMap;
 
 use morpheus_storage::ProfileRepository;
 
@@ -15,13 +16,25 @@ use rand::thread_rng;
 pub struct Simulation<'a> {
     state: &'a mut State,
     repo: &'a mut ProfileRepository,
+    inlinks: BTreeMap<usize, usize>,
     vault: Vault,
 }
 
 impl<'a> Simulation<'a> {
     pub fn new(state: &'a mut State, repo: &'a mut ProfileRepository) -> Fallible<Self> {
         let vault = Vault::new(state.vault_seed())?;
-        Ok(Self { state, repo, vault })
+        let mut inlinks = BTreeMap::new();
+        for user in state.into_iter() {
+            for peer in user.into_iter() {
+                *inlinks.entry(*peer).or_insert(1usize) += 1;
+            }
+        }
+        Ok(Self {
+            state,
+            repo,
+            inlinks,
+            vault,
+        })
     }
 
     pub fn step(&mut self) -> Fallible<()> {
@@ -54,9 +67,16 @@ impl<'a> Simulation<'a> {
 
         debug!("Node {} can still link to {:?}", idx, missing_links);
 
-        match missing_links.as_slice().choose(rng) {
-            None => info!("Chosen node {} had all possible links", idx),
-            Some(peer) => {
+        let peer_res = {
+            let inlinks = &self.inlinks;
+            missing_links.as_slice().choose_weighted(rng, |prospect| {
+                1 + *inlinks.get(prospect).unwrap_or(&0usize)
+            })
+        };
+        match peer_res {
+            Err(WeightedError::NoItem) => info!("Chosen node {} had all possible links", idx),
+            Err(_) => info!("Weight calculation is buggy"),
+            Ok(peer) => {
                 let id = self.vault.profile_id(idx)?;
                 let peer_id = self.vault.profile_id(*peer)?;
                 let profile = self
@@ -65,6 +85,7 @@ impl<'a> Simulation<'a> {
                     .ok_or_else(|| err_msg("Could not connect to server"))?;
                 profile.borrow_mut().create_link(&peer_id)?;
                 self.state[idx].add_link(*peer);
+                *self.inlinks.entry(*peer).or_insert(1usize) += 1;
                 info!("Generated link {}->{}: {}->{}", idx, *peer, id, peer_id);
             }
         }
@@ -87,6 +108,7 @@ impl<'a> Simulation<'a> {
             let peer_id = self.vault.profile_id(peer)?;
             profile.borrow_mut().create_link(&peer_id)?;
             self.state[idx].add_link(peer);
+            *self.inlinks.entry(peer).or_insert(1usize) += 1;
             info!("Generated link {}->{}: {}->{}", idx, peer, id, peer_id);
         }
         Ok(())
