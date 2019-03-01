@@ -58,7 +58,7 @@ impl<'a> Simulation<'a> {
 
         let src_dist = Uniform::new(0, profile_count);
         let idx = src_dist.sample(rng);
-        let src_user = &self.state[idx];
+        let src_user = &mut self.state[idx];
 
         let mut missing_links = src_user.not_links(profile_count);
         if let Some(pos) = missing_links.iter().position(|x| *x == idx) {
@@ -78,15 +78,11 @@ impl<'a> Simulation<'a> {
             Err(_) => info!("Weight calculation is buggy"),
             Ok(peer) => {
                 let id = self.vault.profile_id(idx)?;
-                let peer_id = self.vault.profile_id(*peer)?;
                 let profile = self
                     .repo
                     .get(&id)
                     .ok_or_else(|| err_msg("Could not connect to server"))?;
-                profile.borrow_mut().create_link(&peer_id)?;
-                self.state[idx].add_link(*peer);
-                *self.inlinks.entry(*peer).or_insert(1usize) += 1;
-                info!("Generated link {}->{}: {}->{}", idx, *peer, id, peer_id);
+                self.create_link(profile, idx, *peer)?;
             }
         }
 
@@ -104,13 +100,18 @@ impl<'a> Simulation<'a> {
         if old_profile_count > 0 {
             let dist = Uniform::new(0, old_profile_count);
             let peer = dist.sample(rng);
-
-            let peer_id = self.vault.profile_id(peer)?;
-            profile.borrow_mut().create_link(&peer_id)?;
-            self.state[idx].add_link(peer);
-            *self.inlinks.entry(peer).or_insert(1usize) += 1;
-            info!("Generated link {}->{}: {}->{}", idx, peer, id, peer_id);
+            self.create_link(profile, idx, peer)?;
         }
+        Ok(())
+    }
+
+    fn create_link(&mut self, profile: ProfilePtr, idx: usize, peer: usize) -> Fallible<()> {
+        let peer_id = self.vault.profile_id(peer)?;
+        let id = profile.borrow().id();
+        profile.borrow_mut().create_link(&peer_id)?;
+        self.state[idx].add_link(peer);
+        *self.inlinks.entry(peer).or_insert(1usize) += 1;
+        info!("Generated link {}->{}: {}->{}", idx, peer, id, peer_id);
         Ok(())
     }
 }
