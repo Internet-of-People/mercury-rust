@@ -8,7 +8,7 @@ use rand::{
 use rand_chacha::ChaChaRng;
 use std::collections::BTreeMap;
 
-use morpheus_storage::ProfileRepository;
+use morpheus_storage::{ProfilePtr, ProfileRepository};
 
 use crate::{state::State, vault::Vault};
 use rand::thread_rng;
