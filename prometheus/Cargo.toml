@@ -1,6 +1,6 @@
 [package]
 name = "prometheus"
-version = "0.0.1-alpha1"
+version = "0.1.0"
 authors = ["IoP Ventures LLC <info@iop-ventures.com>", "Rache Bartmoss <bartmoss@tutanota.com>"]
 edition = "2018"
 
