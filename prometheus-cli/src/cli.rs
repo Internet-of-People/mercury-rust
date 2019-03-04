@@ -194,7 +194,13 @@ impl Command {
                 let active_profile_opt = ctx.vault().get_active()?;
                 for (i, profile_id) in profile_ids.iter().enumerate() {
                     let status = match active_profile_opt {
-                        Some(ref active_profile) => if active_profile == profile_id { " (active)" } else { "" },
+                        Some(ref active_profile) => {
+                            if active_profile == profile_id {
+                                " (active)"
+                            } else {
+                                ""
+                            }
+                        }
                         None => "",
                     };
                     info!("  {}: {}{}", i, profile_id, status);
