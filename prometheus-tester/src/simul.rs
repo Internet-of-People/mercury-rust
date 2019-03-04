@@ -3,14 +3,41 @@ use log::*;
 use rand::{
     distributions::{Distribution, Uniform, WeightedError},
     seq::SliceRandom,
-    RngCore,
 };
 use std::collections::{BTreeMap, BinaryHeap};
+use std::fmt;
 
 use morpheus_storage::{ProfilePtr, ProfileRepository};
 
 use crate::{state::State, vault::Vault};
-use rand::thread_rng;
+
+#[derive(Clone)]
+pub struct InlinkCount {
+    idx: usize,
+    inlinks: usize,
+}
+
+impl PartialEq<InlinkCount> for InlinkCount {
+    fn eq(&self, other: &InlinkCount) -> bool {
+        self.inlinks.eq(&other.inlinks)
+    }
+}
+impl Eq for InlinkCount {}
+impl PartialOrd<InlinkCount> for InlinkCount {
+    fn partial_cmp(&self, other: &InlinkCount) -> Option<std::cmp::Ordering> {
+        self.inlinks.partial_cmp(&other.inlinks)
+    }
+}
+impl Ord for InlinkCount {
+    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+        self.inlinks.cmp(&other.inlinks)
+    }
+}
+impl fmt::Display for InlinkCount {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}*{}", self.idx, self.inlinks)
+    }
+}
 
 pub struct Simulation<'a> {
     state: &'a mut State,
@@ -25,7 +52,7 @@ impl<'a> Simulation<'a> {
         let mut inlinks = BTreeMap::new();
         for user in state.into_iter() {
             for peer in user.into_iter() {
-                *inlinks.entry(*peer).or_insert(1usize) += 1;
+                *inlinks.entry(*peer).or_insert(0usize) += 1;
             }
         }
         Ok(Self {
@@ -36,18 +63,19 @@ impl<'a> Simulation<'a> {
         })
     }
 
-    pub fn stats(&self) -> Fallible<(usize, usize, Vec<usize>)> {
+    pub fn stats(&self) -> Fallible<(usize, usize, usize, Vec<InlinkCount>)> {
+        let steps = self.state.steps();
         let users = self.state.len();
         let (links, bheap) = self.inlinks.iter().fold(
-            (0usize, BinaryHeap::<usize>::with_capacity(users)),
-            |(mut links, mut bheap), (_idx, followers)| {
-                links += *followers;
-                bheap.push(*followers);
+            (0usize, BinaryHeap::<InlinkCount>::with_capacity(users)),
+            |(mut links, mut bheap), (&idx, &inlinks)| {
+                links += inlinks;
+                bheap.push(InlinkCount { idx, inlinks });
                 (links, bheap)
             },
         );
 
-        let influencers: Vec<usize> = bheap
+        let influencers: Vec<InlinkCount> = bheap
             .into_sorted_vec()
             .iter()
             .rev()
@@ -55,32 +83,49 @@ impl<'a> Simulation<'a> {
             .take(10)
             .collect();
 
-        Ok((users, links, influencers))
+        Ok((steps, users, links, influencers))
     }
 
     pub fn step(&mut self) -> Fallible<()> {
-        //        let seed = self.state.rand_seed();
-        //        let mut rng = ChaChaRng::from_seed(*seed);
-        let mut rng = thread_rng();
         let weight_create_profile = 5; // TODO config
         let weight_update_profile = self.state.len();
         let dist = Uniform::new(0, weight_create_profile + weight_update_profile);
-        if dist.sample(&mut rng) >= weight_create_profile {
-            self.update_profile(&mut rng)?;
+        if dist.sample(self.state.rand()) >= weight_create_profile {
+            self.update_profile()?;
         } else {
-            self.create_profile(&mut rng)?;
+            self.create_profile()?;
         }
-        //*self.state.rand_seed() = (rng as <ChaChaRng as SeedableRng>::Seed).as_mut();
+        self.state.add_step();
         Ok(())
     }
 
-    fn update_profile(&mut self, rng: &mut RngCore) -> Fallible<()> {
+    fn update_profile(&mut self) -> Fallible<()> {
         let profile_count = self.state.len();
 
         let src_dist = Uniform::new(0, profile_count);
-        let idx = src_dist.sample(rng);
-        let src_user = &mut self.state[idx];
+        let idx = src_dist.sample(self.state.rand());
 
+        self.add_link_to_user(idx)
+    }
+
+    fn create_profile(&mut self) -> Fallible<()> {
+        let old_profile_count = self.state.len();
+
+        let idx = self.state.add_user();
+        let id = self.vault.profile_id(idx)?;
+        self.repo.create(&id)?;
+        info!("Generated profile {}: {}", idx, id);
+
+        if old_profile_count > 0 {
+            self.add_link_to_user(idx)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn add_link_to_user(&mut self, idx: usize) -> Fallible<()> {
+        let profile_count = self.state.len();
+        let src_user = &mut self.state[idx];
         let mut missing_links = src_user.not_links(profile_count);
         if let Some(pos) = missing_links.iter().position(|x| *x == idx) {
             missing_links.remove(pos); // Removes self-link from the possibilities
@@ -88,12 +133,11 @@ impl<'a> Simulation<'a> {
 
         debug!("Node {} can still link to {:?}", idx, missing_links);
 
-        let peer_res = {
-            let inlinks = &self.inlinks;
-            missing_links.as_slice().choose_weighted(rng, |prospect| {
-                1 + *inlinks.get(prospect).unwrap_or(&0usize)
-            })
-        };
+        let rand = self.state.rand();
+        let inlinks = &self.inlinks;
+        let peer_res = missing_links
+            .as_slice()
+            .choose_weighted(rand, |prospect| Self::weight(inlinks, *prospect));
         match peer_res {
             Err(WeightedError::NoItem) => info!("Chosen node {} had all possible links", idx),
             Err(_) => info!("Weight calculation is buggy"),
@@ -105,25 +149,15 @@ impl<'a> Simulation<'a> {
                     .ok_or_else(|| err_msg("Could not connect to server"))?;
                 self.create_link(profile, idx, *peer)?;
             }
-        }
-
+        };
         Ok(())
     }
 
-    fn create_profile(&mut self, rng: &mut RngCore) -> Fallible<()> {
-        let old_profile_count = self.state.len();
-
-        let idx = self.state.add_user();
-        let id = self.vault.profile_id(idx)?;
-        let profile = self.repo.create(&id)?;
-        info!("Generated profile {}: {}", idx, id);
-
-        if old_profile_count > 0 {
-            let dist = Uniform::new(0, old_profile_count);
-            let peer = dist.sample(rng);
-            self.create_link(profile, idx, peer)?;
+    fn weight(inlinks: &BTreeMap<usize, usize>, prospect: usize) -> f64 {
+        match inlinks.get(&prospect) {
+            Some(followers) => (*followers as f64).powi(2),
+            None => 0.1f64,
         }
-        Ok(())
     }
 
     fn create_link(&mut self, profile: ProfilePtr, idx: usize, peer: usize) -> Fallible<()> {
@@ -131,7 +165,7 @@ impl<'a> Simulation<'a> {
         let id = profile.borrow().id();
         profile.borrow_mut().create_link(&peer_id)?;
         self.state[idx].add_link(peer);
-        *self.inlinks.entry(peer).or_insert(1usize) += 1;
+        *self.inlinks.entry(peer).or_insert(0usize) += 1;
         info!("Generated link {}->{}: {}->{}", idx, peer, id, peer_id);
         Ok(())
     }

@@ -81,16 +81,24 @@ fn run() -> Fallible<()> {
     let mut sim = simul::Simulation::new(&mut state, &mut store)?;
     for i in 1..=options.actions {
         if i % 100 == 0 {
-            let (nodes, links, influencers) = sim.stats()?;
-            info!("..{} steps, {} nodes, {} links", i, nodes, links);
-            info!("  Top follower counts: {:?}", influencers)
+            print_stats(&sim)?;
         }
         sim.step()?;
     }
+    info!("Finished simulation");
+    print_stats(&sim)?;
 
     std::fs::create_dir_all(&state_path.parent().unwrap())?;
     let cfg_file = std::fs::File::create(state_path)?;
     serde_json::to_writer_pretty(&cfg_file, &state)?;
 
+    Ok(())
+}
+
+fn print_stats(sim: &simul::Simulation) -> Fallible<()> {
+    let (steps, nodes, links, influencers) = sim.stats()?;
+    info!("..{} steps, {} nodes, {} links", steps, nodes, links);
+    let x: std::borrow::Cow<'_, [String]> = influencers.iter().map(|i| format!("{}", i)).collect();
+    info!("  Top follower counts: {}", x.join(", "));
     Ok(())
 }

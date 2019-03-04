@@ -1,31 +1,30 @@
 use failure::Fallible;
 use rand::SeedableRng;
-use rand_chacha::ChaChaCore;
+use rand_xorshift::XorShiftRng;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeSet;
 use std::iter::FromIterator;
 use std::ops::{Index, IndexMut};
 
-pub type RngSeed = <ChaChaCore as SeedableRng>::Seed;
-
 #[derive(Deserialize, Serialize)]
 pub struct State {
     vault_seed: morpheus_keyvault::Seed,
-    rand_seed: RngSeed,
-    //    #[serde(with="serde_bytes")]
-    //    rand_seed: Vec<u8>,
+    rand: XorShiftRng,
     users: Vec<User>,
+    steps: usize,
 }
 
 impl State {
     pub fn new<S: AsRef<str>>(phrase: S) -> Fallible<Self> {
         let vault_seed = morpheus_keyvault::Seed::from_bip39(phrase)?;
-        let rand_seed = RngSeed::default(); // TODO config
+        let rand = XorShiftRng::from_seed([42u8; 16]); // TODO config
         let users = Default::default();
+        let steps = Default::default();
         Ok(Self {
             vault_seed,
-            rand_seed,
+            rand,
             users,
+            steps,
         })
     }
 
@@ -33,8 +32,8 @@ impl State {
         &self.vault_seed
     }
 
-    pub fn rand_seed(&mut self) -> &mut RngSeed {
-        &mut self.rand_seed
+    pub fn rand(&mut self) -> &mut XorShiftRng {
+        &mut self.rand
     }
 
     pub fn len(&self) -> usize {
@@ -48,6 +47,14 @@ impl State {
         };
         self.users.push(user);
         idx
+    }
+
+    pub fn steps(&self) -> usize {
+        self.steps
+    }
+
+    pub fn add_step(&mut self) {
+        self.steps += 1;
     }
 }
 
