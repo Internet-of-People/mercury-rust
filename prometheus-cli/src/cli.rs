@@ -115,8 +115,9 @@ pub enum Command {
     /// Create profile or link
     Create(CreateCommand),
 
+    // TODO consider if removing profile is needed?
     #[structopt(name = "remove")]
-    /// Remove link // TODO (or profile?)
+    /// Remove link
     Remove(RemoveCommand),
 
     #[structopt(name = "set")]
@@ -274,7 +275,7 @@ pub enum ListCommand {
     #[structopt(name = "followers")]
     /// List followers
     IncomingLinks {
-        #[structopt(long = "my_profile_id")]
+        #[structopt()] // long = "my_profile_id"
         /// List public followers of this profile of yours if other than the active one
         my_profile_id: Option<ProfileId>,
     },
@@ -285,7 +286,7 @@ pub enum ShowCommand {
     #[structopt(name = "profile")]
     /// Show profile
     Profile {
-        #[structopt(long = "profile_id")]
+        #[structopt()] // long = "profile_id"
         /// Profile id to be shown, either yours or remote
         profile_id: ProfileId,
     },
@@ -304,7 +305,7 @@ pub enum CreateCommand {
         /// Add link to this profile of yours if other than the active one
         my_profile_id: Option<ProfileId>,
 
-        #[structopt(long = "peer_profile_id")]
+        #[structopt()] // long = "peer_profile_id"
         /// Create link to this remote profile
         peer_profile_id: ProfileId,
         // TODO is an optional "relation_type" needed here?
@@ -320,7 +321,7 @@ pub enum RemoveCommand {
         /// Remove link from this profile of yours if other than the active one
         my_profile_id: Option<ProfileId>,
 
-        #[structopt(long = "peer_profile_id")]
+        #[structopt()] // long = "peer_profile_id"
         /// Remove link with this remote profile
         peer_profile_id: ProfileId,
     },
@@ -333,7 +334,7 @@ pub enum SetCommand {
     ActiveProfile {
         // TODO is activation by profile NUMBER needed or is this enough?
         //      If enough, should be a mandatory positional parameter instead of a named one.
-        #[structopt(long = "my_profile_id")]
+        #[structopt()] // long = "my_profile_id"
         /// Profile id to be activated
         my_profile_id: ProfileId,
     },
@@ -364,7 +365,7 @@ pub enum ClearCommand {
         /// Clear attribute from this profile of yours if other than the active one
         my_profile_id: Option<ProfileId>,
 
-        #[structopt(long = "key")]
+        #[structopt()] // long = "key"
         /// Attribute name
         key: AttributeId,
     },
