@@ -99,10 +99,6 @@ pub enum Command {
     /// Restore profile vault from a phraselist
     Restore(RestoreCommand),
 
-    #[structopt(name = "status")]
-    /// Show the status of your profile vault
-    Status,
-
     #[structopt(name = "list")]
     /// List profiles or followers
     List(ListCommand),
@@ -195,9 +191,13 @@ impl Command {
             Command::List(ListCommand::Profiles) => {
                 let profile_ids = ctx.vault().list()?;
                 info!("You have {} profiles", profile_ids.len());
+                let active_profile_opt = ctx.vault().get_active()?;
                 for (i, profile_id) in profile_ids.iter().enumerate() {
-                    // TODO mark active profile somehow
-                    info!("  {}: {}", i, profile_id);
+                    let status = match active_profile_opt {
+                        Some(ref active_profile) => if active_profile == profile_id { " (active)" } else { "" },
+                        None => "",
+                    };
+                    info!("  {}: {}{}", i, profile_id, status);
                 }
             }
 
@@ -242,15 +242,6 @@ impl Command {
                 for (i, peer_id) in links.iter().enumerate() {
                     info!("    {}: {:?}", i, peer_id);
                 }
-            }
-
-            Command::Status => {
-                let active_profile_opt = ctx.vault().get_active()?;
-                match active_profile_opt {
-                    Some(active_prof) => info!("Your active profile is {}", active_prof),
-                    None => info!("You still don't have an active profile set"),
-                };
-                // TODO what status to display besides active (default) profile?
             }
 
             Command::Generate(GenerateCommand::Vault) => {
