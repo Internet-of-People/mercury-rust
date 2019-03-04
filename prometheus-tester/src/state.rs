@@ -1,5 +1,4 @@
 use failure::Fallible;
-use rand::ChaChaRng;
 use rand::SeedableRng;
 use rand_chacha::ChaChaCore;
 use serde::{Deserialize, Serialize};

@@ -3,9 +3,8 @@ use log::*;
 use rand::{
     distributions::{Distribution, Uniform, WeightedError},
     seq::SliceRandom,
-    RngCore, SeedableRng,
+    RngCore,
 };
-use rand_chacha::ChaChaRng;
 use std::collections::{BTreeMap, BinaryHeap};
 
 use morpheus_storage::{ProfilePtr, ProfileRepository};
