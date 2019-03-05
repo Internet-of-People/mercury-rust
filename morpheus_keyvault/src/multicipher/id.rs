@@ -227,7 +227,6 @@ mod test {
     }
 
     mod serde_key_id {
-        use crate::ed25519;
         use crate::multicipher::MKeyId;
 
         #[test]
