@@ -14,7 +14,7 @@ mod cli;
 
 fn main() {
     match run() {
-        Ok(()) => {} // println!("OK"),
+        Ok(()) => {}
         Err(e) => eprintln!("Error: {}", e),
     };
 }

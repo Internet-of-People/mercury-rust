@@ -6,6 +6,7 @@ use std::rc::Rc;
 use enum_repr::EnumRepr;
 use failure::{bail, err_msg, Fail, Fallible};
 use log::*;
+use serde_derive::{Deserialize, Serialize};
 
 use crate::messages::*;
 use crate::model::*;
@@ -24,11 +25,9 @@ pub trait ProfileRepository {
     fn remove(&mut self, id: &ProfileId) -> Fallible<()>;
 }
 
-// TODO should all operations below be async?
 pub trait Profile {
     fn id(&self) -> ProfileId;
-    // TODO naming is inconsistent, metadata vs attribute, should use only one of them
-    fn metadata(&self) -> Fallible<AttributeMap>;
+    fn attributes(&self) -> Fallible<AttributeMap>;
     fn links(&self) -> Fallible<Vec<Link>>;
     fn followers(&self) -> Fallible<Vec<Link>>;
 
@@ -110,6 +109,73 @@ impl<T> FallibleExtension<T> for Fallible<T> {
 }
 
 pub type ProfilePtr = Rc<RefCell<Profile>>;
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LocalProfile {
+    id: ProfileId,
+    links: Vec<Link>,
+    attributes: AttributeMap,
+}
+
+impl LocalProfile {
+    pub fn new(id: &ProfileId) -> Self {
+        Self {
+            id: id.to_owned(),
+            links: Default::default(),
+            attributes: Default::default(),
+        }
+    }
+
+    pub fn from(id: &ProfileId, links: Vec<Link>, attributes: AttributeMap) -> Self {
+        Self {
+            id: id.to_owned(),
+            links,
+            attributes,
+        }
+    }
+}
+
+impl Profile for LocalProfile {
+    fn id(&self) -> ProfileId {
+        self.id.clone()
+    }
+
+    fn attributes(&self) -> Fallible<AttributeMap> {
+        Ok(self.attributes.clone())
+    }
+
+    fn links(&self) -> Fallible<Vec<Link>> {
+        Ok(self.links.clone())
+    }
+
+    fn followers(&self) -> Fallible<Vec<Link>> {
+        Ok(Default::default()) // TODO !!! this will still need RPC
+    }
+
+    fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link> {
+        let link = Link {
+            peer_profile: peer_profile.to_owned(),
+        };
+        self.links.push(link.clone());
+        Ok(link)
+    }
+
+    fn remove_link(&mut self, peer_profile: &ProfileId) -> Fallible<()> {
+        self.links.retain(|link| link.peer_profile != *peer_profile);
+        Ok(())
+    }
+
+    fn set_attribute(&mut self, key: &AttributeId, value: &AttributeValue) -> Fallible<()> {
+        self.attributes.insert(key.to_owned(), value.to_owned());
+        Ok(())
+    }
+
+    fn clear_attribute(&mut self, key: &AttributeId) -> Fallible<()> {
+        self.attributes.remove(key);
+        Ok(())
+    }
+}
+
 pub type RpcPtr<R, W> = Rc<RefCell<MsgPackRpc<R, W>>>;
 
 pub struct RpcProfile<R, W> {
@@ -252,7 +318,7 @@ where
         self.id.clone()
     }
 
-    fn metadata(&self) -> Fallible<AttributeMap> {
+    fn attributes(&self) -> Fallible<AttributeMap> {
         self.get_osg_attribute_map()
     }
 
@@ -442,15 +508,15 @@ mod test {
 
         let attr_id = "1 2 3".to_owned();
         let attr_val = "one two three".to_owned();
-        assert_eq!(me.borrow().metadata()?.len(), 0);
-        assert_eq!(peer.borrow().metadata()?.len(), 0);
+        assert_eq!(me.borrow().attributes()?.len(), 0);
+        assert_eq!(peer.borrow().attributes()?.len(), 0);
         me.borrow_mut().set_attribute(&attr_id, &attr_val)?;
-        assert_eq!(me.borrow().metadata()?.len(), 1);
-        assert_eq!(me.borrow().metadata()?.get(&attr_id), Some(&attr_val));
-        assert_eq!(peer.borrow().metadata()?.len(), 0);
+        assert_eq!(me.borrow().attributes()?.len(), 1);
+        assert_eq!(me.borrow().attributes()?.get(&attr_id), Some(&attr_val));
+        assert_eq!(peer.borrow().attributes()?.len(), 0);
         me.borrow_mut().clear_attribute(&attr_id)?;
-        assert_eq!(me.borrow().metadata()?.len(), 0);
-        assert_eq!(me.borrow().metadata()?.len(), 0);
+        assert_eq!(me.borrow().attributes()?.len(), 0);
+        assert_eq!(me.borrow().attributes()?.len(), 0);
 
         assert_eq!(nodes.len(), 2);
         // TODO consider if we need removing profiles or keep it unimplemented

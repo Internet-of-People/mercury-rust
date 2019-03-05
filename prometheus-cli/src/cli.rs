@@ -237,11 +237,11 @@ impl Command {
                 let profile_ptr =
                     profile_ptr_opt.ok_or_else(|| err_msg("Failed to retrieve profile"))?;
                 let links = profile_ptr.borrow().links()?;
-                let metadata = profile_ptr.borrow().metadata()?;
+                let attributes = profile_ptr.borrow().attributes()?;
 
                 info!("Details of profile id {}", profile_id);
-                info!("  {} attributes:", metadata.len());
-                for (i, attribute) in metadata.iter().enumerate() {
+                info!("  {} attributes:", attributes.len());
+                for (i, attribute) in attributes.iter().enumerate() {
                     info!("    {}: {:?}", i, attribute);
                 }
                 info!("  {} subscriptions:", links.len());
