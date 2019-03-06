@@ -34,7 +34,7 @@ impl ProfileData {
         }
     }
 
-    pub fn empty(id: &ProfileId) -> Self {
+    pub fn default(id: &ProfileId) -> Self {
         Self {
             id: id.to_owned(),
             links: Default::default(),

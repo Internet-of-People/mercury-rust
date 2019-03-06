@@ -119,7 +119,7 @@ pub struct LocalProfile {
 impl LocalProfile {
     pub fn new(id: &ProfileId) -> Self {
         Self {
-            profile_data: ProfileData::empty(id),
+            profile_data: ProfileData::default(id),
             remote_version: None, // TODO fill this after trying discovery from remote storage
             modified: false,
         }
