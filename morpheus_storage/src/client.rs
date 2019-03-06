@@ -1,6 +1,6 @@
 use std::cell::RefCell;
-use std::collections::HashMap;
 use std::io::prelude::*;
+use std::net::TcpStream;
 use std::rc::Rc;
 
 use enum_repr::EnumRepr;
@@ -13,8 +13,6 @@ use crate::model::*;
 
 const MORPHEUS_HANDLER: &str = "osg";
 const RESPONSE_CODE_OK: u8 = 0;
-
-pub type AttributeMap = HashMap<AttributeId, AttributeValue>;
 
 // TODO should all operations below be async?
 pub trait ProfileRepository {
@@ -109,74 +107,83 @@ impl<T> FallibleExtension<T> for Fallible<T> {
 }
 
 pub type ProfilePtr = Rc<RefCell<Profile>>;
+pub type RpcPtr<R, W> = Rc<RefCell<MsgPackRpc<R, W>>>;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct LocalProfile {
-    id: ProfileId,
-    links: Vec<Link>,
-    attributes: AttributeMap,
+    profile_data: ProfileData,
+    remote_version: Option<u32>,
+    modified: bool,
 }
 
 impl LocalProfile {
     pub fn new(id: &ProfileId) -> Self {
         Self {
-            id: id.to_owned(),
-            links: Default::default(),
-            attributes: Default::default(),
+            profile_data: ProfileData::empty(id),
+            remote_version: None, // TODO fill this after trying discovery from remote storage
+            modified: false,
         }
     }
 
-    pub fn from(id: &ProfileId, links: Vec<Link>, attributes: AttributeMap) -> Self {
+    pub fn from(profile: ProfileData) -> Self {
         Self {
-            id: id.to_owned(),
-            links,
-            attributes,
+            profile_data: profile,
+            remote_version: None, // TODO fill this after trying discovery from remote storage
+            modified: true,       // TODO what should we do here?
         }
+    }
+
+    fn rpc(&self) -> Fallible<RpcPtr<TcpStream, TcpStream>> {
+        unimplemented!()
     }
 }
 
 impl Profile for LocalProfile {
     fn id(&self) -> ProfileId {
-        self.id.clone()
+        self.profile_data.id.clone()
     }
 
     fn attributes(&self) -> Fallible<AttributeMap> {
-        Ok(self.attributes.clone())
+        Ok(self.profile_data.attributes.clone())
     }
 
     fn links(&self) -> Fallible<Vec<Link>> {
-        Ok(self.links.clone())
+        Ok(self.profile_data.links.clone())
     }
 
     fn followers(&self) -> Fallible<Vec<Link>> {
-        Ok(Default::default()) // TODO !!! this will still need RPC
+        let rpc = self.rpc()?;
+        let rpc_profile = RpcProfile::new(&self.id(), rpc);
+        rpc_profile.followers()
     }
 
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link> {
         let link = Link {
             peer_profile: peer_profile.to_owned(),
         };
-        self.links.push(link.clone());
+        self.profile_data.links.push(link.clone());
         Ok(link)
     }
 
     fn remove_link(&mut self, peer_profile: &ProfileId) -> Fallible<()> {
-        self.links.retain(|link| link.peer_profile != *peer_profile);
+        self.profile_data
+            .links
+            .retain(|link| link.peer_profile != *peer_profile);
         Ok(())
     }
 
     fn set_attribute(&mut self, key: &AttributeId, value: &AttributeValue) -> Fallible<()> {
-        self.attributes.insert(key.to_owned(), value.to_owned());
+        self.profile_data
+            .attributes
+            .insert(key.to_owned(), value.to_owned());
         Ok(())
     }
 
     fn clear_attribute(&mut self, key: &AttributeId) -> Fallible<()> {
-        self.attributes.remove(key);
+        self.profile_data.attributes.remove(key);
         Ok(())
     }
 }
-
-pub type RpcPtr<R, W> = Rc<RefCell<MsgPackRpc<R, W>>>;
 
 pub struct RpcProfile<R, W> {
     id: ProfileId,

@@ -1,11 +1,10 @@
-use failure::Fallible;
-use log::*;
 use std::cell::RefCell;
 use std::net::{SocketAddr, TcpStream};
 use std::rc::Rc;
 use std::time::Duration;
 
-use failure::err_msg;
+use failure::{err_msg, Fallible};
+use log::*;
 
 use crate::client::AttributeMap;
 use crate::{
@@ -14,38 +13,39 @@ use crate::{
 };
 
 pub struct RpcProfileRepository {
-    connect_timeout: Duration,
-    addr: SocketAddr,
+    address: SocketAddr,
+    network_timeout: Duration,
     rpc: RefCell<Option<RpcPtr<TcpStream, TcpStream>>>,
 }
 
 impl RpcProfileRepository {
-    pub fn new(addr: &SocketAddr, connect_timeout: Duration) -> Fallible<Self> {
-        // let id = if let Some(active_id) = vault.get_active()? {
-        //     active_id
-        // } else {
-        //     vault.create_id()?
-        // };
+    pub fn new(address: &SocketAddr, network_timeout: Duration) -> Fallible<Self> {
         Ok(Self {
-            connect_timeout,
-            addr: *addr,
+            address: *address,
+            network_timeout,
             rpc: RefCell::new(Option::None),
         })
+    }
+
+    pub fn connect(
+        address: &SocketAddr,
+        network_timeout: Duration,
+    ) -> Fallible<MsgPackRpc<TcpStream, TcpStream>> {
+        debug!("Connecting to storage backend server {:?}", address);
+
+        let tcp_stream = TcpStream::connect_timeout(&address, network_timeout)?;
+        tcp_stream.set_read_timeout(Some(network_timeout))?;
+        tcp_stream.set_write_timeout(Some(network_timeout))?;
+        let tcp_stream_clone = tcp_stream.try_clone()?;
+        let rpc = MsgPackRpc::new(tcp_stream, tcp_stream_clone);
+        Ok(rpc)
     }
 
     fn rpc(&self) -> Fallible<RpcPtr<TcpStream, TcpStream>> {
         // TODO is really a lazy singleton init needed here? It makes types and
         //      everything much more complex, would be simpler in constructor
         if self.rpc.borrow().is_none() {
-            debug!("Connecting to storage backend server {:?}", self.addr);
-
-            let tcp_stream = TcpStream::connect_timeout(&self.addr, self.connect_timeout)?;
-            // TODO make timeouts configurable
-            tcp_stream.set_read_timeout(Some(Duration::from_secs(5)))?;
-            tcp_stream.set_write_timeout(Some(Duration::from_secs(5)))?;
-            let tcp_stream_clone = tcp_stream.try_clone()?;
-            let rpc = MsgPackRpc::new(tcp_stream, tcp_stream_clone);
-
+            let rpc = Self::connect(&self.address, self.network_timeout)?;
             *self.rpc.borrow_mut() = Option::Some(Rc::new(RefCell::new(rpc)));
         }
 

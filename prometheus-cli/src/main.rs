@@ -77,9 +77,9 @@ fn run() -> Fallible<()> {
     }
 
     let timeout = Duration::from_secs(options.network_timeout_secs);
-    let store = RpcProfileRepository::new(&options.storage_address, timeout)?;
+    let repository = RpcProfileRepository::new(&options.storage_address, timeout)?;
 
-    let mut ctx = CommandContext::new(vault_path, vault, Box::new(store));
+    let mut ctx = CommandContext::new(vault_path, vault, Box::new(repository));
     command.execute(&mut ctx)?;
 
     let vault_opt = ctx.take_vault();
