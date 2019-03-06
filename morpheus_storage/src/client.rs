@@ -1,6 +1,5 @@
 use std::cell::RefCell;
 use std::io::prelude::*;
-use std::net::TcpStream;
 use std::rc::Rc;
 
 use enum_repr::EnumRepr;
@@ -21,13 +20,13 @@ pub trait ProfileRepository {
     // TODO what does this mean? Purge related metadata from local storage plus don't show it in the list,
     //      or maybe also delete all links/follows with other profiles
     fn remove(&mut self, id: &ProfileId) -> Fallible<()>;
+    fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>>;
 }
 
 pub trait Profile {
     fn id(&self) -> ProfileId;
     fn attributes(&self) -> Fallible<AttributeMap>;
     fn links(&self) -> Fallible<Vec<Link>>;
-    fn followers(&self) -> Fallible<Vec<Link>>;
 
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link>;
     fn remove_link(&mut self, peer_profile: &ProfileId) -> Fallible<()>;
@@ -132,10 +131,6 @@ impl LocalProfile {
             modified: true,       // TODO what should we do here?
         }
     }
-
-    fn rpc(&self) -> Fallible<RpcPtr<TcpStream, TcpStream>> {
-        unimplemented!()
-    }
 }
 
 impl Profile for LocalProfile {
@@ -149,12 +144,6 @@ impl Profile for LocalProfile {
 
     fn links(&self) -> Fallible<Vec<Link>> {
         Ok(self.profile_data.links.clone())
-    }
-
-    fn followers(&self) -> Fallible<Vec<Link>> {
-        let rpc = self.rpc()?;
-        let rpc_profile = RpcProfile::new(&self.id(), rpc);
-        rpc_profile.followers()
     }
 
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link> {
@@ -345,22 +334,6 @@ where
         Ok(links)
     }
 
-    fn followers(&self) -> Fallible<Vec<Link>> {
-        let params = ListInEdgesParams {
-            id: self.id().clone(),
-        };
-        let response = self.send_request("list_inedges", params)?;
-        let reply_val = response
-            .reply
-            .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
-        let reply: ListInEdgesReply = rmpv::ext::from_value(reply_val)?;
-        let followers = reply
-            .into_iter()
-            .map(|peer_profile| Link { peer_profile })
-            .collect();
-        Ok(followers)
-    }
-
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link> {
         let params = AddEdgeParams {
             source: self.id().to_owned(),
@@ -493,25 +466,25 @@ mod test {
         let nodes = store.list_nodes()?;
         assert_eq!(nodes.len(), 2);
         assert_eq!(me.borrow().links()?.len(), 0);
-        assert_eq!(me.borrow().followers()?.len(), 0);
+        assert_eq!(store.followers(&my_id)?.len(), 0);
         assert_eq!(peer.borrow().links()?.len(), 0);
-        assert_eq!(peer.borrow().followers()?.len(), 0);
+        assert_eq!(store.followers(&peer_id)?.len(), 0);
 
         let link = me.borrow_mut().create_link(&peer_id)?;
         assert_eq!(nodes.len(), 2);
         assert_eq!(link.peer_profile, peer_id);
-        assert_eq!(me.borrow().followers()?.len(), 0);
+        assert_eq!(store.followers(&my_id)?.len(), 0);
         assert_eq!(peer.borrow().links()?.len(), 0);
         assert_eq!(me.borrow().links()?.len(), 1);
         assert_eq!(me.borrow().links()?[0].peer_profile, peer_id);
-        assert_eq!(peer.borrow().followers()?[0].peer_profile, my_id);
+        assert_eq!(store.followers(&peer_id)?[0].peer_profile, my_id);
 
         me.borrow_mut().remove_link(&peer_id)?;
         assert_eq!(nodes.len(), 2);
         assert_eq!(me.borrow().links()?.len(), 0);
-        assert_eq!(me.borrow().followers()?.len(), 0);
+        assert_eq!(store.followers(&my_id)?.len(), 0);
         assert_eq!(peer.borrow().links()?.len(), 0);
-        assert_eq!(peer.borrow().followers()?.len(), 0);
+        assert_eq!(store.followers(&peer_id)?.len(), 0);
 
         let attr_id = "1 2 3".to_owned();
         let attr_val = "one two three".to_owned();

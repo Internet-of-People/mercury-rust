@@ -181,7 +181,7 @@ impl Command {
 
             Command::List(ListCommand::IncomingLinks { my_profile_id }) => {
                 let profile = selected_profile(ctx, my_profile_id)?;
-                let followers = profile.borrow().followers()?;
+                let followers = ctx.store.followers(&profile.borrow().id())?;
                 info!("You have {} followers", followers.len());
                 for (idx, follower) in followers.iter().enumerate() {
                     info!("  {}: {:?}", idx, follower);

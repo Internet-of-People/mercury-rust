@@ -6,11 +6,9 @@ use std::time::Duration;
 use failure::{err_msg, Fallible};
 use log::*;
 
-use crate::client::AttributeMap;
-use crate::{
-    messages, FallibleExtension, MsgPackRpc, ProfileId, ProfilePtr, ProfileRepository, RpcProfile,
-    RpcPtr,
-};
+use crate::client::{FallibleExtension, MsgPackRpc, ProfilePtr, ProfileRepository, RpcProfile, RpcPtr};
+use crate::messages::{AddNodeParams, ListInEdgesParams, ListInEdgesReply, ListNodesParams};
+use crate::model::{AttributeMap, Link, ProfileId};
 
 pub struct RpcProfileRepository {
     address: SocketAddr,
@@ -53,7 +51,7 @@ impl RpcProfileRepository {
     }
 
     pub fn list_nodes(&self) -> Fallible<Vec<ProfileId>> {
-        let params = messages::ListNodesParams {};
+        let params = ListNodesParams {};
         let rpc = self.rpc()?;
         let response = rpc.borrow_mut().send_request("list_nodes", params)?;
         let node_vals = response
@@ -79,7 +77,7 @@ impl ProfileRepository for RpcProfileRepository {
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#create-profile
     fn create(&mut self, id: &ProfileId) -> Fallible<ProfilePtr> {
         self.rpc().and_then(|rpc| {
-            let request = messages::AddNodeParams { id: id.clone() };
+            let request = AddNodeParams { id: id.clone() };
             let rpc_clone = rpc.clone();
             rpc.borrow_mut()
                 .send_request("add_node", request)
@@ -95,6 +93,22 @@ impl ProfileRepository for RpcProfileRepository {
 
     /// There is no call specified for this method
     fn remove(&mut self, _id: &ProfileId) -> Fallible<()> {
-        unimplemented!()
+        unimplemented!() // TODO implement this if needed or completely remove operation
+    }
+
+    fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>> {
+        self.rpc().and_then(|rpc| {
+            let params = ListInEdgesParams { id: id.clone() };
+            let response = rpc.borrow_mut().send_request("list_inedges", params)?;
+            let reply_val = response
+                .reply
+                .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
+            let reply: ListInEdgesReply = rmpv::ext::from_value(reply_val)?;
+            let followers = reply
+                .into_iter()
+                .map(|peer_profile| Link { peer_profile })
+                .collect();
+            Ok(followers)
+        })
     }
 }

@@ -55,13 +55,6 @@ impl HdProfileVault {
         let vault: HdProfileVault = serde_json::from_reader(&cfg_file)?;
         Ok(vault)
     }
-
-    //    pub fn save(&self, cfg_dir: &std::path::Path, filename: &str) -> Fallible<()> {
-    //        std::fs::create_dir_all(&cfg_dir)?;
-    //        let cfg_file = std::fs::File::create(&cfg_dir.join(filename))?;
-    //        serde_json::to_writer_pretty(&cfg_file, self)?;
-    //        Ok(())
-    //    }
 }
 
 impl ProfileVault for HdProfileVault {
