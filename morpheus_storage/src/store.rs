@@ -91,9 +91,21 @@ impl ProfileRepository for RpcProfileRepository {
         })
     }
 
-    /// There is no call specified for this method
-    fn remove(&mut self, _id: &ProfileId) -> Fallible<()> {
-        unimplemented!() // TODO implement this if needed or completely remove operation
+    fn remove(&mut self, id: &ProfileId) -> Fallible<()> {
+        let profile_ptr = self
+            .get(id)
+            .ok_or_else(|| err_msg("Profile is unknown, can't delete it"))?;
+        let mut profile = profile_ptr.borrow_mut();
+
+        let links = profile.links()?;
+        for link in links {
+            profile.remove_link(&link.peer_profile)?;
+        }
+        let attributes = profile.attributes()?;
+        for attr in attributes.keys() {
+            profile.clear_attribute(&attr)?;
+        }
+        Ok(())
     }
 
     fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>> {

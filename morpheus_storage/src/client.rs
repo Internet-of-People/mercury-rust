@@ -17,10 +17,14 @@ const RESPONSE_CODE_OK: u8 = 0;
 pub trait ProfileRepository {
     fn get(&self, id: &ProfileId) -> Option<ProfilePtr>;
     fn create(&mut self, id: &ProfileId) -> Fallible<ProfilePtr>;
-    // TODO what does this mean? Purge related metadata from local storage plus don't show it in the list,
-    //      or maybe also delete all links/follows with other profiles
+    // clear up links and attributes to leave an empty tombstone in place of the profile.
     fn remove(&mut self, id: &ProfileId) -> Fallible<()>;
+
     fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>>;
+
+    // TODO should these be located here or in the vault instead?
+    // fn publish(&mut self) -> Fallible<()>;
+    // fn restore(&mut self) -> Fallible<()>;
 }
 
 pub trait Profile {
