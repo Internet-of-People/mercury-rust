@@ -1,11 +1,11 @@
 use failure::Fallible;
 
-use morpheus_keyvault::{
+use keyvault::{
     ed25519::{Ed25519, EdExtPrivateKey},
     ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PublicKey, Seed,
     BIP43_PURPOSE_MERCURY,
 };
-use prometheus::model::ProfileId;
+use osg::model::ProfileId;
 
 pub struct Vault {
     mercury_xsk: EdExtPrivateKey,

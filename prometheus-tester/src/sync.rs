@@ -1,8 +1,8 @@
 use failure::{err_msg, Fallible};
 use log::*;
 
-use prometheus::model::ProfileId;
-use prometheus::profile::ProfileRepository;
+use osg::model::ProfileId;
+use osg::profile::ProfileRepository;
 
 use crate::{state::State, vault::Vault};
 

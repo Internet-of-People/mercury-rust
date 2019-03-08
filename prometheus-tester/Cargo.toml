@@ -10,9 +10,9 @@ edition = "2018"
 [dependencies]
 failure = "*"
 log = "*"
-morpheus_keyvault = { path="../morpheus_keyvault" }
-morpheus_storage = { path="../morpheus_storage" }
-prometheus = { path="../prometheus" }
+keyvault = { path="../keyvault" }
+osg-rpc-storage = { path="../osg-rpc-storage" }
+osg = { path="../osg" }
 rand_xorshift = { version="0.1.1", features=["serde1"] }
 rand = "0.6.5"
 serde = "*"

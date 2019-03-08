@@ -1,8 +1,8 @@
 [workspace]
 members = [
-    "morpheus_keyvault",
-    "morpheus_storage",
-    "prometheus",
+    "keyvault",
+    "osg",
+    "osg-rpc-storage",
     "prometheus-cli",
     "prometheus-tester",
 ]

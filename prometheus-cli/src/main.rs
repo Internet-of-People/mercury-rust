@@ -7,8 +7,8 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::cli::*;
-use morpheus_storage::RpcProfileRepository;
-use prometheus::vault::*;
+use osg::vault::*;
+use osg_rpc_storage::RpcProfileRepository;
 
 mod cli;
 

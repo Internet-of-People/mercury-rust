@@ -5,9 +5,9 @@ use failure::{ensure, err_msg, Fallible};
 use log::*;
 use structopt::StructOpt;
 
-use prometheus::model::*;
-use prometheus::profile::{ProfilePtr, ProfileRepository};
-use prometheus::vault::*;
+use osg::model::*;
+use osg::profile::{ProfilePtr, ProfileRepository};
+use osg::vault::*;
 
 pub struct CommandContext {
     vault_path: PathBuf,
@@ -387,7 +387,7 @@ pub enum RestoreCommand {
 }
 
 pub fn generate_vault() {
-    let new_bip39_phrase = morpheus_keyvault::Seed::generate_bip39();
+    let new_bip39_phrase = keyvault::Seed::generate_bip39();
     let words = new_bip39_phrase.split(' ');
     warn!(
         r#"Make sure you back these words up somewhere safe
@@ -418,7 +418,7 @@ fn read_phrase() -> Fallible<String> {
             stdout_lock.flush()?; // without this, nothing is written on the console
             stdin_lock.read_line(&mut buffer)?;
             buffer = buffer.trim().to_owned();
-            if morpheus_keyvault::Seed::check_word(&buffer) {
+            if keyvault::Seed::check_word(&buffer) {
                 words.push(buffer);
                 break;
             } else {
@@ -452,11 +452,11 @@ before trying to restore another vault."#,
         read_phrase()?
     };
 
-    let seed_res = morpheus_keyvault::Seed::from_bip39(&phrase);
+    let seed_res = keyvault::Seed::from_bip39(&phrase);
     let seed = match seed_res {
         Ok(seed) => Ok(seed),
         Err(e) => {
-            if let Some(morpheus_keyvault::Bip39ErrorKind::InvalidChecksum) =
+            if let Some(keyvault::Bip39ErrorKind::InvalidChecksum) =
                 e.find_root_cause().downcast_ref()
             {
                 Err(err_msg("All the words entered were valid, still the checksum was wrong.\nIs the order of the words correct?"))

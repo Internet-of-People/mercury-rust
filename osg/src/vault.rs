@@ -3,7 +3,7 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::model::*;
-use morpheus_keyvault::{
+use keyvault::{
     ed25519::{Ed25519, EdExtPrivateKey},
     ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PublicKey, Seed,
     BIP43_PURPOSE_MERCURY,

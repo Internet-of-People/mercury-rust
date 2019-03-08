@@ -8,8 +8,8 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::messages::*;
-use prometheus::model::*;
-use prometheus::profile::Profile;
+use osg::model::*;
+use osg::profile::Profile;
 
 const MORPHEUS_HANDLER: &str = "osg";
 const RESPONSE_CODE_OK: u8 = 0;
@@ -419,8 +419,8 @@ where
 mod test {
     use super::*;
     use crate::store::RpcProfileRepository;
-    use prometheus::model::ProfileId;
-    use prometheus::profile::ProfileRepository;
+    use osg::model::ProfileId;
+    use osg::profile::ProfileRepository;
     use std::str::FromStr;
     use std::time::Duration;
 

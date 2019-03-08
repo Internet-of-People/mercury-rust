@@ -8,7 +8,7 @@ use std::ops::{Index, IndexMut};
 
 #[derive(Deserialize, Serialize)]
 pub struct State {
-    vault_seed: morpheus_keyvault::Seed,
+    vault_seed: keyvault::Seed,
     rand: XorShiftRng,
     users: Vec<User>,
     steps: usize,
@@ -16,7 +16,7 @@ pub struct State {
 
 impl State {
     pub fn new<S: AsRef<str>>(phrase: S) -> Fallible<Self> {
-        let vault_seed = morpheus_keyvault::Seed::from_bip39(phrase)?;
+        let vault_seed = keyvault::Seed::from_bip39(phrase)?;
         let rand = XorShiftRng::from_seed([42u8; 16]); // TODO config
         let users = Default::default();
         let steps = Default::default();
@@ -28,7 +28,7 @@ impl State {
         })
     }
 
-    pub fn vault_seed(&self) -> &morpheus_keyvault::Seed {
+    pub fn vault_seed(&self) -> &keyvault::Seed {
         &self.vault_seed
     }
 

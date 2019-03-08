@@ -6,7 +6,7 @@ pub type AttributeId = String;
 pub type AttributeValue = String;
 pub type Signature = Vec<u8>;
 pub type PublicKey = Vec<u8>;
-pub type ProfileId = morpheus_keyvault::multicipher::MKeyId;
+pub type ProfileId = keyvault::multicipher::MKeyId;
 
 pub type AttributeMap = HashMap<AttributeId, AttributeValue>;
 

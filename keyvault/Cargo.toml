@@ -1,5 +1,5 @@
 [package]
-name = "morpheus_keyvault"
+name = "keyvault"
 version = "0.1.0"
 authors = ["IoP Ventures LLC <info@iop-ventures.com>", "wigy <wigy_opensource_developer@yahoo.com>"]
 license = "LGPL-3.0-or-later"

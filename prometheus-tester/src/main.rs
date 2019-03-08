@@ -10,7 +10,7 @@ use std::net::SocketAddr;
 use std::time::Duration;
 use structopt::StructOpt;
 
-use morpheus_storage::RpcProfileRepository;
+use osg_rpc_storage::RpcProfileRepository;
 
 use state::State;
 

@@ -7,9 +7,9 @@ edition = "2018"
 [dependencies]
 failure = "*"
 log = "*"
-morpheus_keyvault = { path="../morpheus_keyvault" }
-morpheus_storage = { path="../morpheus_storage" }
-prometheus = { path="../prometheus" }
+keyvault = { path="../keyvault" }
+osg-rpc-storage = { path="../osg-rpc-storage" }
+osg = { path="../osg" }
 serde = "*"
 serde_derive = "*"
 serde_json = "*"

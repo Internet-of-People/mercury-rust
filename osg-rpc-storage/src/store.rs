@@ -8,8 +8,8 @@ use log::*;
 
 use crate::client::{FallibleExtension, MsgPackRpc, RpcProfile, RpcPtr};
 use crate::messages::{AddNodeParams, ListInEdgesParams, ListInEdgesReply, ListNodesParams};
-use prometheus::model::{AttributeMap, Link, ProfileId};
-use prometheus::profile::{ProfilePtr, ProfileRepository};
+use osg::model::{AttributeMap, Link, ProfileId};
+use osg::profile::{ProfilePtr, ProfileRepository};
 
 pub struct RpcProfileRepository {
     address: SocketAddr,
