@@ -7,7 +7,7 @@ use rand::{
 use std::collections::{BTreeMap, BinaryHeap};
 use std::fmt;
 
-use morpheus_storage::{ProfilePtr, ProfileRepository};
+use morpheus_storage::{MorpheusdError, ProfileId, ProfilePtr, ProfileRepository, RpcError};
 
 use crate::{state::State, vault::Vault};
 
@@ -113,7 +113,8 @@ impl<'a> Simulation<'a> {
 
         let idx = self.state.add_user();
         let id = self.vault.profile_id(idx)?;
-        self.repo.create(&id)?;
+
+        self.safe_create(idx, &id)?;
         info!("Generated profile {}: {}", idx, id);
 
         if old_profile_count > 0 {
@@ -121,6 +122,27 @@ impl<'a> Simulation<'a> {
         } else {
             Ok(())
         }
+    }
+
+    fn safe_create(&mut self, idx: usize, id: &ProfileId) -> Fallible<ProfilePtr> {
+        let create_res = self.repo.create(id);
+        if let Err(e) = &create_res {
+            if let Some(rpc) = e.downcast_ref::<RpcError>() {
+                if let RpcError::Morpheusd {
+                    code: MorpheusdError::KeyAlreadyExists,
+                    ..
+                } = rpc
+                {
+                    debug!("Was already created {}: {}", idx, id);
+                    let profile = self
+                        .repo
+                        .get(id)
+                        .ok_or_else(|| err_msg("Could not connect to server"))?;
+                    return Ok(profile);
+                }
+            }
+        }
+        create_res
     }
 
     fn add_link_to_user(&mut self, idx: usize) -> Fallible<()> {

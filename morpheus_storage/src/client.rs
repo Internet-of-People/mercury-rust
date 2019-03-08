@@ -3,14 +3,15 @@ use std::collections::HashMap;
 use std::io::prelude::*;
 use std::rc::Rc;
 
-use failure::{bail, err_msg, Fallible};
+use enum_repr::EnumRepr;
+use failure::{bail, err_msg, Fail, Fallible};
 use log::*;
 
 use crate::messages::*;
 use crate::model::*;
 
 const MORPHEUS_HANDLER: &str = "osg";
-const RESPONSE_CODE_OK: u32 = 0;
+const RESPONSE_CODE_OK: u8 = 0;
 
 pub type AttributeMap = HashMap<AttributeId, AttributeValue>;
 
@@ -39,6 +40,47 @@ pub trait Profile {
 
     //fn sign(&self, data: &[u8]) -> Signature;
     //fn get_signer(&self) -> Arc<Signer>;
+}
+
+#[derive(Clone, Debug, Eq, Fail, Hash, PartialEq)]
+pub enum RpcError {
+    #[fail(display = "Server returned no response for request")]
+    NoResponse,
+    #[fail(
+        display = "Expected response to request {}, Got response for {}",
+        request_id, response_id
+    )]
+    UnexpectedResponseId { request_id: u64, response_id: u64 },
+    #[fail(display = "Server returned unexpected attribute type")]
+    UnexpectedAttributeType,
+    #[fail(display = "Unexpected target of response message: {}", target)]
+    UnexpectedTarget { target: String },
+    #[fail(display = "Morpheus error {}: {}", code, description)]
+    Morpheusd {
+        code: MorpheusdError,
+        description: String,
+    },
+    #[fail(display = "Local RPC error: {}", msg)]
+    Unknown { msg: String },
+    #[fail(display = "Unknown Morpheus error {}: {}", code, description)]
+    UnknownMorpheusd { code: u8, description: String },
+}
+
+#[EnumRepr(type = "u8")]
+#[derive(Clone, Debug, Eq, Fail, Hash, Ord, PartialEq, PartialOrd)]
+pub enum MorpheusdError {
+    #[fail(display = "Profile identifier not found")]
+    KeyNotFound = 1,
+    #[fail(display = "Profile was already existing")]
+    KeyAlreadyExists = 2,
+    #[fail(display = "Attribute was not found on that profile")]
+    AttributeNotFound = 3,
+    #[fail(display = "Source profile of the link was not found")]
+    SourceNotFound = 4,
+    #[fail(display = "Target profile of the link was not found")]
+    TargetNotFound = 5,
+    #[fail(display = "Internal server error")]
+    InternalServerError = 6,
 }
 
 pub type ProfilePtr = Rc<RefCell<Profile>>;
@@ -76,10 +118,10 @@ where
         let response = self.send_request("get_node_attribute", params)?;
         let attr_val = response
             .reply
-            .ok_or_else(|| err_msg("Server returned no reply content for query"))
+            .ok_or_else(|| RpcError::NoResponse.into())
             .and_then(|resp_val| match resp_val {
                 rmpv::Value::Binary(bin) => Ok(bin),
-                _ => bail!("Server returned unexpected attribute type"),
+                _ => Err(failure::Error::from(RpcError::UnexpectedAttributeType)),
             })?;
         Ok(attr_val)
     }
@@ -274,18 +316,6 @@ where
         }
     }
 
-    // TODO this should probably return a different error type to differentiate
-    //      between different errors returned by the server.
-    //      They are currently defined as the following in the server:
-    //
-    //  enum class error_code : uint8_t {
-    //    ok                  = 0,
-    //    key_not_found       = 1,
-    //    key_already_exists  = 2,
-    //    attribute_not_found = 3,
-    //    source_not_found    = 4,
-    //    target_not_found    = 5,
-    //  };
     pub fn send_request<T>(&mut self, method: &str, params: T) -> Fallible<Response>
     where
         T: serde::Serialize + std::fmt::Debug,
@@ -305,27 +335,29 @@ where
 
         trace!("Request sent, reading response");
         let resp_envelope: Envelope = rmp_serde::from_read(&mut self.reader)?;
-        if resp_envelope.target != MORPHEUS_HANDLER {
-            bail!(
-                "Unexpected target of response message: {}",
-                resp_envelope.target
-            );
+        let target = resp_envelope.target;
+        if target != MORPHEUS_HANDLER {
+            return Err(RpcError::UnexpectedTarget { target }.into());
         }
 
         let response: Response = rmp_serde::from_slice(&resp_envelope.payload)?;
         if response.rid != req_rid {
-            bail!(
-                "Expected response to request {}, Got response for {}",
-                req_rid,
-                response.rid
-            );
+            return Err(RpcError::UnexpectedResponseId {
+                request_id: req_rid,
+                response_id: response.rid,
+            }
+            .into());
         }
 
         if response.code != RESPONSE_CODE_OK {
-            bail!(
-                "Got error response with code {}, description: {}",
-                response.code,
-                response.description.unwrap_or_else(|| "None".to_owned())
+            let description = response.description.unwrap_or_else(|| "None".to_owned());
+            return Err(
+                if let Some(code) = MorpheusdError::from_repr(response.code) {
+                    RpcError::Morpheusd { code, description }.into()
+                } else {
+                    let code = response.code;
+                    RpcError::UnknownMorpheusd { code, description }.into()
+                },
             );
         }
 

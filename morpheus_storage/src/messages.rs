@@ -26,7 +26,7 @@ impl Envelope {
 }
 
 pub type MessageId = u64;
-pub type ResponseCode = u32;
+pub type ResponseCode = u8;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Request<T> {

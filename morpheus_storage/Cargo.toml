@@ -5,6 +5,7 @@ authors = ["IoP Ventures LLC <info@iop-ventures.com>", "Rache Bartmoss <bartmoss
 edition = "2018"
 
 [dependencies]
+enum-repr = "0.2.3"
 failure = "*"
 log = "*"
 morpheus_keyvault = { path = "../morpheus_keyvault" }
