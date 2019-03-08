@@ -2,6 +2,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 
 use failure::Fallible;
+use serde_derive::{Deserialize, Serialize};
 
 use crate::model::*;
 
@@ -34,4 +35,70 @@ pub trait Profile {
 
     //fn sign(&self, data: &[u8]) -> Signature;
     //fn get_signer(&self) -> Arc<Signer>;
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct LocalProfile {
+    profile_data: ProfileData,
+    remote_version: Option<u32>,
+    modified: bool,
+}
+
+impl LocalProfile {
+    pub fn new(id: &ProfileId) -> Self {
+        Self {
+            profile_data: ProfileData::default(id),
+            remote_version: None, // TODO fill this after trying discovery from remote storage
+            modified: false,
+        }
+    }
+
+    pub fn from(profile: ProfileData) -> Self {
+        Self {
+            profile_data: profile,
+            remote_version: None, // TODO fill this after trying discovery from remote storage
+            modified: true,       // TODO what should we do here?
+        }
+    }
+}
+
+impl Profile for LocalProfile {
+    fn id(&self) -> ProfileId {
+        self.profile_data.id.clone()
+    }
+
+    fn attributes(&self) -> Fallible<AttributeMap> {
+        Ok(self.profile_data.attributes.clone())
+    }
+
+    fn links(&self) -> Fallible<Vec<Link>> {
+        Ok(self.profile_data.links.clone())
+    }
+
+    fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link> {
+        let link = Link {
+            peer_profile: peer_profile.to_owned(),
+        };
+        self.profile_data.links.push(link.clone());
+        Ok(link)
+    }
+
+    fn remove_link(&mut self, peer_profile: &ProfileId) -> Fallible<()> {
+        self.profile_data
+            .links
+            .retain(|link| link.peer_profile != *peer_profile);
+        Ok(())
+    }
+
+    fn set_attribute(&mut self, key: &AttributeId, value: &AttributeValue) -> Fallible<()> {
+        self.profile_data
+            .attributes
+            .insert(key.to_owned(), value.to_owned());
+        Ok(())
+    }
+
+    fn clear_attribute(&mut self, key: &AttributeId) -> Fallible<()> {
+        self.profile_data.attributes.remove(key);
+        Ok(())
+    }
 }
