@@ -83,6 +83,32 @@ pub enum MorpheusdError {
     InternalServerError = 6,
 }
 
+pub trait FallibleExtension<T> {
+    fn key_not_existed_or_else<F>(self, fallback: F) -> Fallible<T>
+    where
+        F: FnOnce() -> Fallible<T>;
+}
+
+impl<T> FallibleExtension<T> for Fallible<T> {
+    fn key_not_existed_or_else<F>(self, fallback: F) -> Fallible<T>
+    where
+        F: FnOnce() -> Fallible<T>,
+    {
+        if let Err(e) = &self {
+            if let Some(rpc) = e.downcast_ref::<RpcError>() {
+                if let RpcError::Morpheusd {
+                    code: MorpheusdError::KeyAlreadyExists,
+                    ..
+                } = rpc
+                {
+                    return fallback();
+                }
+            }
+        }
+        self
+    }
+}
+
 pub type ProfilePtr = Rc<RefCell<Profile>>;
 pub type RpcPtr<R, W> = Rc<RefCell<MsgPackRpc<R, W>>>;
 
@@ -267,7 +293,9 @@ where
             source: self.id().to_owned(),
             target: peer_profile.to_owned(),
         };
-        let _response = self.send_request("add_edge", params)?;
+        self.send_request("add_edge", params)
+            .map(|_r| ())
+            .key_not_existed_or_else(|| Ok(()))?;
         Ok(Link {
             peer_profile: peer_profile.to_owned(),
         })

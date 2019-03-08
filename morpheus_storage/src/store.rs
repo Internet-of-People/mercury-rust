@@ -8,7 +8,10 @@ use std::time::Duration;
 use failure::err_msg;
 
 use crate::client::AttributeMap;
-use crate::{messages, MsgPackRpc, ProfileId, ProfilePtr, ProfileRepository, RpcProfile, RpcPtr};
+use crate::{
+    messages, FallibleExtension, MsgPackRpc, ProfileId, ProfilePtr, ProfileRepository, RpcProfile,
+    RpcPtr,
+};
 
 pub struct RpcProfileRepository {
     connect_timeout: Duration,
@@ -67,6 +70,7 @@ impl ProfileRepository for RpcProfileRepository {
         self.rpc()
             .and_then(|rpc| {
                 let rpc_clone = rpc.clone();
+                // TODO This is duplicated in create
                 Ok(Rc::new(RefCell::new(RpcProfile::new(id, rpc_clone))) as ProfilePtr)
             })
             .ok()
@@ -77,7 +81,11 @@ impl ProfileRepository for RpcProfileRepository {
         self.rpc().and_then(|rpc| {
             let request = messages::AddNodeParams { id: id.clone() };
             let rpc_clone = rpc.clone();
-            let _res = rpc.borrow_mut().send_request("add_node", request)?;
+            rpc.borrow_mut()
+                .send_request("add_node", request)
+                .map(|_r| ())
+                .key_not_existed_or_else(|| Ok(()))?;
+
             let profile = RpcProfile::new(id, rpc_clone);
             // TODO this shouldn't belong here, querying an empty attribute set shouldn't be an error
             profile.set_osg_attribute_map(AttributeMap::default())?;
