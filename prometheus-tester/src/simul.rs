@@ -7,7 +7,7 @@ use rand::{
 use std::collections::{BTreeMap, BinaryHeap};
 use std::fmt;
 
-use morpheus_storage::{ProfilePtr, ProfileRepository};
+use prometheus::profile::{ProfilePtr, ProfileRepository};
 
 use crate::{state::State, vault::Vault};
 

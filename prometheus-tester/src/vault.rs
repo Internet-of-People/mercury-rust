@@ -5,7 +5,7 @@ use morpheus_keyvault::{
     ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PublicKey, Seed,
     BIP43_PURPOSE_MERCURY,
 };
-use morpheus_storage::ProfileId;
+use prometheus::model::ProfileId;
 
 pub struct Vault {
     mercury_xsk: EdExtPrivateKey,

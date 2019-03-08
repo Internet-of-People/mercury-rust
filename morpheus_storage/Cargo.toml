@@ -10,6 +10,7 @@ failure = "*"
 log = "*"
 morpheus_keyvault = { path = "../morpheus_keyvault" }
 multibase = "0.6.0"
+prometheus = { path="../prometheus" }
 rmp-serde = "*"
 rmpv = { version="*", features=["with-serde"] }
 serde = "*"

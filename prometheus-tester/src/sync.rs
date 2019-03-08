@@ -1,7 +1,8 @@
 use failure::{err_msg, Fallible};
 use log::*;
 
-use morpheus_storage::{ProfileId, ProfileRepository};
+use prometheus::model::ProfileId;
+use prometheus::profile::ProfileRepository;
 
 use crate::{state::State, vault::Vault};
 

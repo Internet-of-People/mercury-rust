@@ -6,9 +6,10 @@ use std::time::Duration;
 use failure::{err_msg, Fallible};
 use log::*;
 
-use crate::client::{FallibleExtension, MsgPackRpc, ProfilePtr, ProfileRepository, RpcProfile, RpcPtr};
+use crate::client::{FallibleExtension, MsgPackRpc, RpcProfile, RpcPtr};
 use crate::messages::{AddNodeParams, ListInEdgesParams, ListInEdgesReply, ListNodesParams};
-use crate::model::{AttributeMap, Link, ProfileId};
+use prometheus::model::{AttributeMap, Link, ProfileId};
+use prometheus::profile::{ProfilePtr, ProfileRepository};
 
 pub struct RpcProfileRepository {
     address: SocketAddr,

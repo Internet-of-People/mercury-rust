@@ -5,7 +5,8 @@ use failure::{ensure, err_msg, Fallible};
 use log::*;
 use structopt::StructOpt;
 
-use morpheus_storage::*;
+use prometheus::model::*;
+use prometheus::profile::{ProfilePtr, ProfileRepository};
 use prometheus::vault::*;
 
 pub struct CommandContext {

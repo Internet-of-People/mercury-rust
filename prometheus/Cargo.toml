@@ -8,7 +8,6 @@ edition = "2018"
 failure = "*"
 log = "*"
 morpheus_keyvault = { path="../morpheus_keyvault" }
-morpheus_storage = { path="../morpheus_storage" }
 serde = "*"
 serde_derive = "*"
 serde_json = "*"
