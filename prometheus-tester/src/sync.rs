@@ -1,8 +1,8 @@
-use failure::{err_msg, Fallible};
+use failure::Fallible;
 use log::*;
 
 use osg::model::ProfileId;
-use osg::profile::ProfileRepository;
+use osg::repo::ProfileRepository;
 
 use crate::{state::State, vault::Vault};
 
@@ -13,9 +13,7 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
     for (idx, _user) in state.into_iter().enumerate() {
         let id = vault.profile_id(idx)?;
         id_map.insert(idx, id.clone());
-        let profile = repo
-            .get(&id)
-            .ok_or_else(|| err_msg("Could not connect to server"))?;
+        let profile = repo.get(&id)?;
 
         let links_res = profile.clone().borrow().links();
         match links_res {
@@ -24,7 +22,12 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
             }
             Err(e) => {
                 debug!("Not found {}: {}", idx, e);
-                repo.create(&id)?;
+                // TODO this should be removed after ProfileRepository trait is settled
+                use osg::profile::LocalProfile;
+                use std::cell::RefCell;
+                use std::rc::Rc;
+                let profile = Rc::new(RefCell::new(LocalProfile::new(&id)));
+                repo.set(&id, profile)?;
                 info!("Re-created {}: {}", idx, id);
             }
         }
@@ -32,9 +35,7 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
 
     for (idx, user) in state.into_iter().enumerate() {
         let id = &id_map[&idx];
-        let profile = repo
-            .get(id)
-            .ok_or_else(|| err_msg("Could not connect to server"))?;
+        let profile = repo.get(id)?;
 
         let links_res = profile.clone().borrow().links();
         match links_res {

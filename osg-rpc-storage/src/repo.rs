@@ -3,13 +3,14 @@ use std::net::{SocketAddr, TcpStream};
 use std::rc::Rc;
 use std::time::Duration;
 
-use failure::{err_msg, Fallible};
+use failure::{ensure, err_msg, Fallible};
 use log::*;
 
 use crate::client::{FallibleExtension, MsgPackRpc, RpcProfile, RpcPtr};
 use crate::messages::{AddNodeParams, ListInEdgesParams, ListInEdgesReply, ListNodesParams};
 use osg::model::{AttributeMap, Link, ProfileId};
-use osg::profile::{ProfilePtr, ProfileRepository};
+use osg::profile::ProfilePtr;
+use osg::repo::ProfileRepository;
 
 pub struct RpcProfileRepository {
     address: SocketAddr,
@@ -65,18 +66,21 @@ impl RpcProfileRepository {
 
 impl ProfileRepository for RpcProfileRepository {
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#show-profile
-    fn get(&self, id: &ProfileId) -> Option<ProfilePtr> {
-        self.rpc()
-            .and_then(|rpc| {
-                let rpc_clone = rpc.clone();
-                // TODO This is duplicated in create
-                Ok(Rc::new(RefCell::new(RpcProfile::new(id, rpc_clone))) as ProfilePtr)
-            })
-            .ok()
+    fn get(&self, id: &ProfileId) -> Fallible<ProfilePtr> {
+        self.rpc().and_then(|rpc| {
+            let rpc_clone = rpc.clone();
+            Ok(Rc::new(RefCell::new(RpcProfile::new(id, rpc_clone))) as ProfilePtr)
+        })
     }
 
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#create-profile
-    fn create(&mut self, id: &ProfileId) -> Fallible<ProfilePtr> {
+    fn set(&mut self, id: &ProfileId, profile: ProfilePtr) -> Fallible<()> {
+        ensure!(
+            *id != profile.borrow().id(),
+            "Implementation error: RpcProfileRepository got conlicting key and value: {} vs {}",
+            id,
+            profile.borrow().id()
+        );
         self.rpc().and_then(|rpc| {
             let request = AddNodeParams { id: id.clone() };
             let rpc_clone = rpc.clone();
@@ -89,13 +93,12 @@ impl ProfileRepository for RpcProfileRepository {
             // TODO this shouldn't belong here, querying an empty attribute set shouldn't be an error
             profile.set_osg_attribute_map(AttributeMap::default())?;
             Ok(Rc::new(RefCell::new(profile)) as ProfilePtr)
-        })
+        })?;
+        Ok(())
     }
 
-    fn remove(&mut self, id: &ProfileId) -> Fallible<()> {
-        let profile_ptr = self
-            .get(id)
-            .ok_or_else(|| err_msg("Profile is unknown, can't delete it"))?;
+    fn clear(&mut self, id: &ProfileId) -> Fallible<()> {
+        let profile_ptr = self.get(id)?;
         let mut profile = profile_ptr.borrow_mut();
 
         let links = profile.links()?;

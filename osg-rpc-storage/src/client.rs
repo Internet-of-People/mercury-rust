@@ -351,9 +351,12 @@ where
 #[cfg(test)]
 mod test {
     use super::*;
-    use crate::store::RpcProfileRepository;
+    use crate::repo::RpcProfileRepository;
     use osg::model::ProfileId;
-    use osg::profile::ProfileRepository;
+    use osg::profile::{LocalProfile, Profile};
+    use osg::repo::ProfileRepository;
+    use std::cell::RefCell;
+    use std::rc::Rc;
     use std::str::FromStr;
     use std::time::Duration;
 
@@ -368,9 +371,11 @@ mod test {
         assert_eq!(nodes.len(), 0);
 
         let my_id = ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?;
-        let me = store.create(&my_id)?;
+        let me = Rc::new(RefCell::new(LocalProfile::new(&my_id)));
+        store.set(&my_id, me.clone())?;
         let peer_id = ProfileId::from_str("Iez25N5WZ1Q6TQpgpyYgiu9gTX")?;
-        let peer = store.create(&peer_id)?;
+        let peer = Rc::new(RefCell::new(LocalProfile::new(&peer_id)));
+        store.set(&peer_id, peer.clone())?;
 
         let nodes = store.list_nodes()?;
         assert_eq!(nodes.len(), 2);

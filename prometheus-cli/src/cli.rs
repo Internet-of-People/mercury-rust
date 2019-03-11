@@ -1,12 +1,13 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
-use failure::{ensure, err_msg, Fallible};
+use failure::{bail, ensure, err_msg, Fallible};
 use log::*;
 use structopt::StructOpt;
 
 use osg::model::*;
-use osg::profile::{ProfilePtr, ProfileRepository};
+use osg::profile::{LocalProfile, ProfilePtr};
+use osg::repo::ProfileRepository;
 use osg::vault::*;
 
 pub struct CommandContext {
@@ -130,17 +131,16 @@ fn selected_profile(
     ctx: &CommandContext,
     my_profile_option: Option<ProfileId>,
 ) -> Fallible<ProfilePtr> {
-    let profile_opt = my_profile_option
-        .or_else(|| ctx.vault().get_active().ok()?)
-        .and_then(|profile_id| {
-            info!("Your active profile is {}", profile_id);
-            ctx.store().get(&profile_id)
-        });
-    ensure!(
-        profile_opt.is_some(),
-        "Command option my_profile_id is unspecified and no active default profile was found"
-    );
-    Ok(profile_opt.unwrap())
+    let profile_id_opt = my_profile_option.or_else(|| ctx.vault().get_active().ok()?);
+    let profile_id = match profile_id_opt {
+        Some(profile_id) => profile_id,
+        None => bail!(
+            "Command option my_profile_id is unspecified and no active default profile was found"
+        ),
+    };
+    info!("Your active profile is {}", profile_id);
+    let profile = ctx.store().get(&profile_id)?;
+    Ok(profile)
 }
 
 impl Command {
@@ -166,12 +166,10 @@ impl Command {
 
             Command::Create(CreateCommand::Profile) => {
                 let new_profile_id = ctx.mut_vault().create_id()?;
-                let created_profile_ptr = ctx.mut_store().create(&new_profile_id)?;
-                let created_profile = created_profile_ptr.borrow();
-                info!(
-                    "Created and activated profile with id {}",
-                    created_profile.id()
-                );
+                let created_profile_ptr =
+                    std::rc::Rc::new(std::cell::RefCell::new(LocalProfile::new(&new_profile_id)));
+                ctx.mut_store().set(&new_profile_id, created_profile_ptr)?;
+                info!("Created and activated profile with id {}", new_profile_id);
             }
 
             Command::Clear(ClearCommand::Attribute { my_profile_id, key }) => {
@@ -234,9 +232,7 @@ impl Command {
 
             Command::Show(ShowCommand::Profile { profile_id }) => {
                 // NOTE must also work with a profile that is not ours
-                let profile_ptr_opt = ctx.store().get(&profile_id);
-                let profile_ptr =
-                    profile_ptr_opt.ok_or_else(|| err_msg("Failed to retrieve profile"))?;
+                let profile_ptr = ctx.store().get(&profile_id)?;
                 let links = profile_ptr.borrow().links()?;
                 let attributes = profile_ptr.borrow().attributes()?;
 

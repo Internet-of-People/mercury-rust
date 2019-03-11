@@ -1,15 +1,16 @@
-use failure::{err_msg, Fallible};
+use std::collections::{BTreeMap, BinaryHeap};
+use std::fmt;
+
+use failure::Fallible;
 use log::*;
 use rand::{
     distributions::{Distribution, Uniform, WeightedError},
     seq::SliceRandom,
 };
-use std::collections::{BTreeMap, BinaryHeap};
-use std::fmt;
-
-use osg::profile::{ProfilePtr, ProfileRepository};
 
 use crate::{state::State, vault::Vault};
+use osg::profile::ProfilePtr;
+use osg::repo::ProfileRepository;
 
 #[derive(Clone)]
 pub struct InlinkCount {
@@ -109,12 +110,18 @@ impl<'a> Simulation<'a> {
     }
 
     fn create_profile(&mut self) -> Fallible<()> {
+        // TODO this should be removed after ProfileRepository trait is settled
+        use osg::profile::LocalProfile;
+        use std::cell::RefCell;
+        use std::rc::Rc;
+
         let old_profile_count = self.state.len();
 
         let idx = self.state.add_user();
         let id = self.vault.profile_id(idx)?;
 
-        self.repo.create(&id)?;
+        let profile = Rc::new(RefCell::new(LocalProfile::new(&id)));
+        self.repo.set(&id, profile)?;
         info!("Generated profile {}: {}", idx, id);
 
         if old_profile_count > 0 {
@@ -144,10 +151,7 @@ impl<'a> Simulation<'a> {
             Err(_) => info!("Weight calculation is buggy"),
             Ok(peer) => {
                 let id = self.vault.profile_id(idx)?;
-                let profile = self
-                    .repo
-                    .get(&id)
-                    .ok_or_else(|| err_msg("Could not connect to server"))?;
+                let profile = self.repo.get(&id)?;
                 self.create_link(profile, idx, *peer)?;
             }
         };

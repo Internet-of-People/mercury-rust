@@ -25,7 +25,7 @@ pub struct HdProfileVault {
     pub seed: Seed,
     pub indexes: Vec<i32>,
     pub active_idx: Option<i32>,
-    pub profiles: Vec<ProfileData>,
+    pub profiles: Vec<ProfileData>, // TODO remove this and use local_store instead
 }
 
 impl HdProfileVault {

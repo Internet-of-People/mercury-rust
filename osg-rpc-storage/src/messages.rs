@@ -33,6 +33,7 @@ pub struct Request<T> {
     rid: MessageId,
     method: String,
     params: T,
+    commit: Option<bool>,
 }
 
 impl<T> Request<T>
@@ -44,6 +45,7 @@ where
             rid,
             method: method.to_owned(),
             params,
+            commit: Some(true), // TODO consider how to fill up this field in different requests and repository operations
         }
     }
 }

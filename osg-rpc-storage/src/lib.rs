@@ -1,6 +1,6 @@
 mod client;
 mod messages;
-mod store;
+mod repo;
 
 pub use client::*;
-pub use store::RpcProfileRepository;
+pub use repo::RpcProfileRepository;
