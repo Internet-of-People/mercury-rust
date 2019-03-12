@@ -20,9 +20,9 @@ pub struct Link {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ProfileData {
-    pub id: ProfileId,
-    pub links: Vec<Link>,
-    pub attributes: AttributeMap,
+    id: ProfileId,
+    links: Vec<Link>,
+    attributes: AttributeMap,
 }
 
 impl ProfileData {
@@ -40,6 +40,13 @@ impl ProfileData {
             links: Default::default(),
             attributes: Default::default(),
         }
+    }
+
+    // TODO these operations are basically the same as of trait Profile
+    //      (created towards the concepts of RpcProfile) but cannot fail.
+    //      We should either kill trait Profile or fit it like this.
+    pub fn id(&self) -> &ProfileId {
+        &self.id
     }
 
     pub fn links(&self) -> &Vec<Link> {

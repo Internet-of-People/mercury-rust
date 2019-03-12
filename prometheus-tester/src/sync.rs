@@ -22,7 +22,7 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
         for peer in user.into_iter() {
             let peer_id = &id_map[peer];
             if profile
-                .links
+                .links()
                 .iter()
                 .find(|l| l.peer_profile == *peer_id)
                 .is_none()

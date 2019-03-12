@@ -9,7 +9,7 @@ use log::*;
 use crate::client::{FallibleExtension, MsgPackRpc, RpcProfile, RpcPtr};
 use crate::messages;
 use osg::model::*;
-use osg::profile::ProfilePtr;
+use osg::profile::{Profile, ProfilePtr};
 use osg::repo::ProfileRepository;
 
 pub struct RpcProfileRepository {
@@ -103,52 +103,37 @@ impl ProfileRepository for RpcProfileRepository {
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#create-profile
     fn set(&mut self, id: ProfileId, profile: ProfileData) -> Fallible<()> {
         ensure!(
-            id == profile.id,
+            id == *profile.id(),
             "Implementation error: RpcProfileRepository got conlicting key and value: {} vs {}",
             id,
-            profile.id
+            profile.id()
         );
+
+        match self.remove_node(&id) {
+            Ok(()) => debug!("Profile existed, removed it as part of overwriting"),
+            Err(_e) => debug!("Failed to remove profile, creating it as new one"),
+        };
+
         self.rpc().and_then(|rpc| {
-            // TODO properly implement insert_or_update with the RPC
             let request = messages::AddNodeParams { id: id.clone() };
             rpc.borrow_mut()
                 .send_request("add_node", request)
                 .map(|_r| ())
                 .key_not_existed_or_else(|| Ok(()))?;
 
-            let rpc_clone = rpc.clone();
-            let rpc_profile = RpcProfile::new(&id, rpc_clone);
-            // TODO this shouldn't belong here, querying an empty attribute set shouldn't be an error
-            rpc_profile.set_osg_attribute_map(AttributeMap::default())?;
+            let mut rpc_profile = RpcProfile::new(&id, rpc);
+            rpc_profile.set_osg_attribute_map(profile.attributes())?;
+
+            for link in profile.links() {
+                rpc_profile.create_link(&link.peer_profile)?;
+            }
             Ok(())
         })?;
         Ok(())
     }
 
     fn clear(&mut self, id: &ProfileId) -> Fallible<()> {
-        // TODO set() should implement insert_or_update, so remove() should be removed
-        self.remove_node(id)?;
         self.set(id.to_owned(), ProfileData::empty(id))
-
-        // TODO remove commented section if not needed
-        //        let params = messages::RemoveNodeParams { id: id.clone() };
-        //        rpc.borrow_mut()
-        //            .send_request("remove_node", request)
-        //            .map(|_r| ())?;
-        //        rpc.borrow_mut().
-        //
-        //        let mut rpc_profile = self.get(id)?;
-        //
-        //        self.rpc().and_then(|rpc| {
-        //            let rpc_profile = RpcProfile::new(id, rpc);
-        //            for link in profile.links {
-        //                rpc_profile.remove_link(&link.peer_profile)?;
-        //            }
-        //            for attr in profile.attributes.keys() {
-        //                rpc_profile.clear_attribute(&attr)?;
-        //            }
-        //        })?;
-        //        Ok(())
     }
 
     fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>> {

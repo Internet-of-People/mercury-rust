@@ -159,7 +159,7 @@ impl Command {
             }) => {
                 let mut profile = selected_profile(ctx, my_profile_id)?;
                 let link = profile.create_link(&peer_profile_id);
-                ctx.mut_repo().set(profile.id.clone(), profile)?;
+                ctx.mut_repo().set(profile.id().to_owned(), profile)?;
                 debug!("Created link: {:?}", link);
                 info!("Created link to peer profile {}", peer_profile_id);
             }
@@ -167,20 +167,21 @@ impl Command {
             Command::Create(CreateCommand::Profile) => {
                 let new_profile_id = ctx.mut_vault().create_id()?;
                 let empty_profile = ProfileData::empty(&new_profile_id);
-                ctx.mut_repo().set(new_profile_id.clone(), empty_profile)?;
+                ctx.mut_repo()
+                    .set(new_profile_id.to_owned(), empty_profile)?;
                 info!("Created and activated profile with id {}", new_profile_id);
             }
 
             Command::Clear(ClearCommand::Attribute { my_profile_id, key }) => {
                 let mut profile = selected_profile(ctx, my_profile_id)?;
                 profile.clear_attribute(&key);
-                ctx.mut_repo().set(profile.id.clone(), profile)?;
+                ctx.mut_repo().set(profile.id().to_owned(), profile)?;
                 info!("Cleared attribute: {}", key);
             }
 
             Command::List(ListCommand::IncomingLinks { my_profile_id }) => {
                 let profile = selected_profile(ctx, my_profile_id)?;
-                let followers = ctx.repo.followers(&profile.id)?;
+                let followers = ctx.repo.followers(profile.id())?;
                 info!("You have {} followers", followers.len());
                 for (idx, follower) in followers.iter().enumerate() {
                     info!("  {}: {:?}", idx, follower);
@@ -212,7 +213,7 @@ impl Command {
             }) => {
                 let mut profile = selected_profile(ctx, my_profile_id)?;
                 profile.remove_link(&peer_profile_id);
-                ctx.mut_repo().set(profile.id.clone(), profile)?;
+                ctx.mut_repo().set(profile.id().to_owned(), profile)?;
                 info!("Removed link from profile {}", peer_profile_id);
             }
 
@@ -229,7 +230,7 @@ impl Command {
                 let mut profile = selected_profile(ctx, my_profile_id)?;
                 info!("Setting attribute {} to {}", key, value);
                 profile.set_attribute(key, value);
-                ctx.mut_repo().set(profile.id.clone(), profile)?;
+                ctx.mut_repo().set(profile.id().to_owned(), profile)?;
             }
 
             Command::Show(ShowCommand::Profile { profile_id }) => {

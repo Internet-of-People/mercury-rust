@@ -149,8 +149,8 @@ where
         Ok(attributes)
     }
 
-    pub fn set_osg_attribute_map(&self, attributes: AttributeMap) -> Fallible<()> {
-        let attr_map_bin = serde_json::to_vec(&attributes)?;
+    pub fn set_osg_attribute_map(&self, attributes: &AttributeMap) -> Fallible<()> {
+        let attr_map_bin = serde_json::to_vec(attributes)?;
         self.set_node_attribute(Self::OPEN_SOCIAL_GRAPH_ATTRIBUTE.to_owned(), attr_map_bin)
     }
 
@@ -269,13 +269,13 @@ where
     fn set_attribute(&mut self, key: &AttributeId, value: &AttributeValue) -> Fallible<()> {
         let mut attr_map = self.get_osg_attribute_map()?;
         attr_map.insert(key.to_owned(), value.to_owned());
-        self.set_osg_attribute_map(attr_map)
+        self.set_osg_attribute_map(&attr_map)
     }
 
     fn clear_attribute(&mut self, key: &AttributeId) -> Fallible<()> {
         let mut attr_map = self.get_osg_attribute_map()?;
         attr_map.remove(key);
-        self.set_osg_attribute_map(attr_map)
+        self.set_osg_attribute_map(&attr_map)
     }
 }
 
