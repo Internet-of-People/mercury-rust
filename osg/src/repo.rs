@@ -4,7 +4,6 @@ use failure::{err_msg, Fallible};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::model::*;
-//use crate::profile::*;
 
 // TODO should all operations below be async?
 pub trait ProfileRepository {
@@ -13,11 +12,8 @@ pub trait ProfileRepository {
     // clear up links and attributes to leave an empty tombstone in place of the profile.
     fn clear(&mut self, id: &ProfileId) -> Fallible<()>;
 
+    // TODO this shouldn't be here, an external clawler/explorer service should be used
     fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>>;
-
-    // TODO should these be located here or in the vault instead?
-    // fn publish(&mut self) -> Fallible<()>;
-    // fn restore(&mut self) -> Fallible<()>;
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -36,14 +32,17 @@ impl ProfileRepository for LocalProfileRepository {
             .map(|prof_ref| prof_ref.to_owned())
             .ok_or_else(|| err_msg("Profile not found"))
     }
+
     fn set(&mut self, id: ProfileId, profile: ProfileData) -> Fallible<()> {
         self.profiles.insert(id, profile);
         Ok(())
     }
+
     fn clear(&mut self, id: &ProfileId) -> Fallible<()> {
         self.profiles.remove(id);
         Ok(())
     }
+
     fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
         // TODO how to implement this?
         unimplemented!()

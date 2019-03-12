@@ -17,7 +17,11 @@ pub trait ProfileVault {
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
 
     // TODO this should not be on this interface, adding it here as fast hack for MVP demo
-    fn save(&self, cfg_dir: &std::path::Path, filename: &str) -> Fallible<()>;
+    fn save(
+        &self,
+        filename: &std::path::PathBuf,
+        cfg_dir_opt: Option<&std::path::Path>,
+    ) -> Fallible<()>;
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -50,8 +54,8 @@ impl HdProfileVault {
         Ok(key_id.into())
     }
 
-    pub fn load(cfg_dir: &std::path::Path, filename: &str) -> Fallible<Self> {
-        let cfg_file = std::fs::File::open(&cfg_dir.join(filename))?;
+    pub fn load(filename: &std::path::PathBuf) -> Fallible<Self> {
+        let cfg_file = std::fs::File::open(filename)?;
         let vault: HdProfileVault = serde_json::from_reader(&cfg_file)?;
         Ok(vault)
     }
@@ -102,10 +106,18 @@ impl ProfileVault for HdProfileVault {
         }
     }
 
-    fn save(&self, cfg_dir: &std::path::Path, filename: &str) -> Fallible<()> {
+    fn save(
+        &self,
+        filename: &std::path::PathBuf,
+        cfg_dir_opt: Option<&std::path::Path>,
+    ) -> Fallible<()> {
         debug!("Saving profile vault to store state");
-        std::fs::create_dir_all(&cfg_dir)?;
-        let cfg_file = std::fs::File::create(&cfg_dir.join(filename))?;
+        if let Some(cfg_dir) = cfg_dir_opt {
+            debug!("Recursively Creating directory {:?}", cfg_dir);
+            std::fs::create_dir_all(cfg_dir)?;
+        }
+
+        let cfg_file = std::fs::File::create(filename)?;
         serde_json::to_writer_pretty(&cfg_file, self)?;
         Ok(())
     }

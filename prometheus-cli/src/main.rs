@@ -1,4 +1,3 @@
-use std::path::Path;
 use std::time::Duration;
 
 use dirs;
@@ -46,11 +45,16 @@ fn run() -> Fallible<()> {
 
     debug!("Got command {:?}", command);
 
-    let cfg_dir = dirs::config_dir()
+    let app_cfg_dir = dirs::config_dir()
         .ok_or_else(|| err_msg("Failed to detect platform-dependent directory for app config"))?;
-    let app_cfg_dir = Path::new(&cfg_dir).join("prometheus");
-    let vault_file = "vault.dat";
-    let vault_path = app_cfg_dir.join(vault_file);
+    let prometheus_cfg_dir = app_cfg_dir.join("prometheus");
+
+    let vault_path = options
+        .keyvault_path
+        .unwrap_or_else(|| prometheus_cfg_dir.join("vault.dat"));
+    let _repo_path = options
+        .profile_repo_path
+        .unwrap_or_else(|| prometheus_cfg_dir.join("profiles.dat"));
 
     let vault_exists = vault_path.exists();
     if command.needs_vault() && !vault_exists {
@@ -71,7 +75,7 @@ fn run() -> Fallible<()> {
             "Found profile vault, loading {}",
             vault_path.to_string_lossy()
         );
-        vault = Some(Box::new(HdProfileVault::load(&app_cfg_dir, &vault_file)?))
+        vault = Some(Box::new(HdProfileVault::load(&vault_path)?))
     } else {
         debug!("No profile vault found");
     }
@@ -79,12 +83,12 @@ fn run() -> Fallible<()> {
     let timeout = Duration::from_secs(options.network_timeout_secs);
     let repository = RpcProfileRepository::new(&options.storage_address, timeout)?;
 
-    let mut ctx = CommandContext::new(vault_path, vault, Box::new(repository));
+    let mut ctx = CommandContext::new(vault_path.clone(), vault, Box::new(repository));
     command.execute(&mut ctx)?;
 
     let vault_opt = ctx.take_vault();
     if let Some(vault) = vault_opt {
-        vault.save(&app_cfg_dir, &vault_file)?;
+        vault.save(&vault_path, Some(&app_cfg_dir))?;
     }
     Ok(())
 }

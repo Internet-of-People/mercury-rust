@@ -65,6 +65,14 @@ impl CommandContext {
     raw(setting = "structopt::clap::AppSettings::ColoredHelp")
 )]
 pub struct Options {
+    #[structopt(long = "keyvault", raw(value_name = r#""FILE""#), parse(from_os_str))]
+    /// Path of the keyvault file. Default: OS-specific app_cfg_dir/prometheus/vault.dat
+    pub keyvault_path: Option<PathBuf>,
+
+    #[structopt(long = "profiles", raw(value_name = r#""FILE""#), parse(from_os_str))]
+    /// Path of the keyvault file. Default: OS-specific app_cfg_dir/prometheus/profiles.dat
+    pub profile_repo_path: Option<PathBuf>,
+
     #[structopt(
         long = "storage",
         default_value = "127.0.0.1:6161",
