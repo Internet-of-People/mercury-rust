@@ -6,26 +6,25 @@ use log::*;
 use structopt::StructOpt;
 
 use osg::model::*;
-use osg::profile::{LocalProfile, ProfilePtr};
 use osg::repo::ProfileRepository;
 use osg::vault::*;
 
 pub struct CommandContext {
     vault_path: PathBuf,
     vault: Option<Box<ProfileVault>>,
-    store: Box<ProfileRepository>,
+    repo: Box<ProfileRepository>,
 }
 
 impl CommandContext {
     pub fn new(
         vault_path: PathBuf,
         vault: Option<Box<ProfileVault>>,
-        store: Box<ProfileRepository>,
+        repo: Box<ProfileRepository>,
     ) -> Self {
         Self {
             vault_path,
             vault,
-            store,
+            repo,
         }
     }
 
@@ -50,12 +49,12 @@ impl CommandContext {
         self.vault.replace(new_vault)
     }
 
-    pub fn store(&self) -> &ProfileRepository {
-        self.store.as_ref()
+    pub fn repo(&self) -> &ProfileRepository {
+        self.repo.as_ref()
     }
 
-    pub fn mut_store(&mut self) -> &mut ProfileRepository {
-        self.store.as_mut()
+    pub fn mut_repo(&mut self) -> &mut ProfileRepository {
+        self.repo.as_mut()
     }
 }
 
@@ -130,7 +129,7 @@ pub enum Command {
 fn selected_profile(
     ctx: &CommandContext,
     my_profile_option: Option<ProfileId>,
-) -> Fallible<ProfilePtr> {
+) -> Fallible<ProfileData> {
     let profile_id_opt = my_profile_option.or_else(|| ctx.vault().get_active().ok()?);
     let profile_id = match profile_id_opt {
         Some(profile_id) => profile_id,
@@ -139,7 +138,7 @@ fn selected_profile(
         ),
     };
     info!("Your active profile is {}", profile_id);
-    let profile = ctx.store().get(&profile_id)?;
+    let profile = ctx.repo().get(&profile_id)?;
     Ok(profile)
 }
 
@@ -158,29 +157,30 @@ impl Command {
                 my_profile_id,
                 peer_profile_id,
             }) => {
-                let profile = selected_profile(ctx, my_profile_id)?;
-                let link = profile.borrow_mut().create_link(&peer_profile_id)?;
+                let mut profile = selected_profile(ctx, my_profile_id)?;
+                let link = profile.create_link(&peer_profile_id);
+                ctx.mut_repo().set(profile.id.clone(), profile)?;
                 debug!("Created link: {:?}", link);
                 info!("Created link to peer profile {}", peer_profile_id);
             }
 
             Command::Create(CreateCommand::Profile) => {
                 let new_profile_id = ctx.mut_vault().create_id()?;
-                let created_profile_ptr =
-                    std::rc::Rc::new(std::cell::RefCell::new(LocalProfile::new(&new_profile_id)));
-                ctx.mut_store().set(&new_profile_id, created_profile_ptr)?;
+                let empty_profile = ProfileData::empty(&new_profile_id);
+                ctx.mut_repo().set(new_profile_id.clone(), empty_profile)?;
                 info!("Created and activated profile with id {}", new_profile_id);
             }
 
             Command::Clear(ClearCommand::Attribute { my_profile_id, key }) => {
-                let profile = selected_profile(ctx, my_profile_id)?;
-                info!("Clearing attribute: {}", key);
-                profile.borrow_mut().clear_attribute(&key)?;
+                let mut profile = selected_profile(ctx, my_profile_id)?;
+                profile.clear_attribute(&key);
+                ctx.mut_repo().set(profile.id.clone(), profile)?;
+                info!("Cleared attribute: {}", key);
             }
 
             Command::List(ListCommand::IncomingLinks { my_profile_id }) => {
                 let profile = selected_profile(ctx, my_profile_id)?;
-                let followers = ctx.store.followers(&profile.borrow().id())?;
+                let followers = ctx.repo.followers(&profile.id)?;
                 info!("You have {} followers", followers.len());
                 for (idx, follower) in followers.iter().enumerate() {
                     info!("  {}: {:?}", idx, follower);
@@ -210,8 +210,9 @@ impl Command {
                 my_profile_id,
                 peer_profile_id,
             }) => {
-                let profile = selected_profile(ctx, my_profile_id)?;
-                profile.borrow_mut().remove_link(&peer_profile_id)?;
+                let mut profile = selected_profile(ctx, my_profile_id)?;
+                profile.remove_link(&peer_profile_id);
+                ctx.mut_repo().set(profile.id.clone(), profile)?;
                 info!("Removed link from profile {}", peer_profile_id);
             }
 
@@ -225,16 +226,17 @@ impl Command {
                 key,
                 value,
             }) => {
-                let profile = selected_profile(ctx, my_profile_id)?;
+                let mut profile = selected_profile(ctx, my_profile_id)?;
                 info!("Setting attribute {} to {}", key, value);
-                profile.borrow_mut().set_attribute(&key, &value)?;
+                profile.set_attribute(key, value);
+                ctx.mut_repo().set(profile.id.clone(), profile)?;
             }
 
             Command::Show(ShowCommand::Profile { profile_id }) => {
                 // NOTE must also work with a profile that is not ours
-                let profile_ptr = ctx.store().get(&profile_id)?;
-                let links = profile_ptr.borrow().links()?;
-                let attributes = profile_ptr.borrow().attributes()?;
+                let profile = ctx.repo().get(&profile_id)?;
+                let links = profile.links();
+                let attributes = profile.attributes();
 
                 info!("Details of profile id {}", profile_id);
                 info!("  {} attributes:", attributes.len());

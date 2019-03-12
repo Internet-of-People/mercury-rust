@@ -353,10 +353,7 @@ mod test {
     use super::*;
     use crate::repo::RpcProfileRepository;
     use osg::model::ProfileId;
-    use osg::profile::{LocalProfile, Profile};
     use osg::repo::ProfileRepository;
-    use std::cell::RefCell;
-    use std::rc::Rc;
     use std::str::FromStr;
     use std::time::Duration;
 
@@ -365,40 +362,40 @@ mod test {
     fn test_server_calls() -> Fallible<()> {
         let addr = "127.0.0.1:6161".parse()?;
         let timeout = Duration::from_secs(5);
-        let mut store = RpcProfileRepository::new(&addr, timeout)?;
+        let mut repo = RpcProfileRepository::new(&addr, timeout)?;
 
-        let nodes = store.list_nodes()?;
-        assert_eq!(nodes.len(), 0);
+        assert_eq!(repo.list_nodes()?.len(), 0);
 
         let my_id = ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?;
-        let me = Rc::new(RefCell::new(LocalProfile::new(&my_id)));
-        store.set(&my_id, me.clone())?;
+        let my_data = ProfileData::empty(&my_id);
+        repo.set(my_id.clone(), my_data.clone())?;
+        let me = repo.get_node(&my_id)?;
         let peer_id = ProfileId::from_str("Iez25N5WZ1Q6TQpgpyYgiu9gTX")?;
-        let peer = Rc::new(RefCell::new(LocalProfile::new(&peer_id)));
-        store.set(&peer_id, peer.clone())?;
+        let peer_data = ProfileData::empty(&peer_id);
+        repo.set(peer_id.clone(), peer_data.clone())?;
+        let peer = repo.get_node(&peer_id)?;
 
-        let nodes = store.list_nodes()?;
-        assert_eq!(nodes.len(), 2);
+        assert_eq!(repo.list_nodes()?.len(), 2);
         assert_eq!(me.borrow().links()?.len(), 0);
-        assert_eq!(store.followers(&my_id)?.len(), 0);
+        assert_eq!(repo.followers(&my_id)?.len(), 0);
         assert_eq!(peer.borrow().links()?.len(), 0);
-        assert_eq!(store.followers(&peer_id)?.len(), 0);
+        assert_eq!(repo.followers(&peer_id)?.len(), 0);
 
         let link = me.borrow_mut().create_link(&peer_id)?;
-        assert_eq!(nodes.len(), 2);
+        assert_eq!(repo.list_nodes()?.len(), 2);
         assert_eq!(link.peer_profile, peer_id);
-        assert_eq!(store.followers(&my_id)?.len(), 0);
+        assert_eq!(repo.followers(&my_id)?.len(), 0);
         assert_eq!(peer.borrow().links()?.len(), 0);
         assert_eq!(me.borrow().links()?.len(), 1);
         assert_eq!(me.borrow().links()?[0].peer_profile, peer_id);
-        assert_eq!(store.followers(&peer_id)?[0].peer_profile, my_id);
+        assert_eq!(repo.followers(&peer_id)?[0].peer_profile, my_id);
 
         me.borrow_mut().remove_link(&peer_id)?;
-        assert_eq!(nodes.len(), 2);
+        assert_eq!(repo.list_nodes()?.len(), 2);
         assert_eq!(me.borrow().links()?.len(), 0);
-        assert_eq!(store.followers(&my_id)?.len(), 0);
+        assert_eq!(repo.followers(&my_id)?.len(), 0);
         assert_eq!(peer.borrow().links()?.len(), 0);
-        assert_eq!(store.followers(&peer_id)?.len(), 0);
+        assert_eq!(repo.followers(&peer_id)?.len(), 0);
 
         let attr_id = "1 2 3".to_owned();
         let attr_val = "one two three".to_owned();
@@ -412,11 +409,11 @@ mod test {
         assert_eq!(me.borrow().attributes()?.len(), 0);
         assert_eq!(me.borrow().attributes()?.len(), 0);
 
-        assert_eq!(nodes.len(), 2);
-        // TODO consider if we need removing profiles or keep it unimplemented
-        //store.remove(&my_id)?;
-        //store.remove(&peer_id)?;
-        //assert_eq!(nodes.len(), 0);
+        assert_eq!(repo.list_nodes()?.len(), 2);
+        repo.clear(&my_id)?;
+        repo.clear(&peer_id)?;
+        // NOTE deleting nodes erases all details and keeps an empty profile as a tombstone for followers
+        assert_eq!(repo.list_nodes()?.len(), 2);
 
         Ok(())
     }

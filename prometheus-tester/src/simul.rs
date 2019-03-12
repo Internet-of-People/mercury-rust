@@ -9,7 +9,7 @@ use rand::{
 };
 
 use crate::{state::State, vault::Vault};
-use osg::profile::ProfilePtr;
+use osg::model::{ProfileData, ProfileId};
 use osg::repo::ProfileRepository;
 
 #[derive(Clone)]
@@ -110,18 +110,13 @@ impl<'a> Simulation<'a> {
     }
 
     fn create_profile(&mut self) -> Fallible<()> {
-        // TODO this should be removed after ProfileRepository trait is settled
-        use osg::profile::LocalProfile;
-        use std::cell::RefCell;
-        use std::rc::Rc;
-
         let old_profile_count = self.state.len();
 
         let idx = self.state.add_user();
         let id = self.vault.profile_id(idx)?;
 
-        let profile = Rc::new(RefCell::new(LocalProfile::new(&id)));
-        self.repo.set(&id, profile)?;
+        let profile = ProfileData::empty(&id);
+        self.repo.set(id.clone(), profile)?;
         info!("Generated profile {}: {}", idx, id);
 
         if old_profile_count > 0 {
@@ -151,8 +146,7 @@ impl<'a> Simulation<'a> {
             Err(_) => info!("Weight calculation is buggy"),
             Ok(peer) => {
                 let id = self.vault.profile_id(idx)?;
-                let profile = self.repo.get(&id)?;
-                self.create_link(profile, idx, *peer)?;
+                self.create_link(id, idx, *peer)?;
             }
         };
         Ok(())
@@ -165,10 +159,11 @@ impl<'a> Simulation<'a> {
         }
     }
 
-    fn create_link(&mut self, profile: ProfilePtr, idx: usize, peer: usize) -> Fallible<()> {
+    fn create_link(&mut self, id: ProfileId, idx: usize, peer: usize) -> Fallible<()> {
         let peer_id = self.vault.profile_id(peer)?;
-        let id = profile.borrow().id();
-        profile.borrow_mut().create_link(&peer_id)?;
+        let mut profile = self.repo.get(&id)?;
+        profile.create_link(&peer_id);
+        self.repo.set(id.clone(), profile)?;
         self.state[idx].add_link(peer);
         *self.inlinks.entry(peer).or_insert(0usize) += 1;
         info!("Generated link {}->{}: {}->{}", idx, peer, id, peer_id);

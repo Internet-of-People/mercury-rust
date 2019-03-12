@@ -73,12 +73,12 @@ fn run() -> Fallible<()> {
     };
 
     let timeout = Duration::from_secs(options.network_timeout_secs);
-    let mut store = RpcProfileRepository::new(&options.storage_address, timeout)?;
+    let mut repo = RpcProfileRepository::new(&options.storage_address, timeout)?;
 
     info!("Synchronizing existing state");
-    sync::synchronize(&mut state, &mut store)?;
+    sync::synchronize(&mut state, &mut repo)?;
     info!("Starting simulation");
-    let mut sim = simul::Simulation::new(&mut state, &mut store)?;
+    let mut sim = simul::Simulation::new(&mut state, &mut repo)?;
     for i in 1..=options.actions {
         if i % 100 == 0 {
             print_stats(&sim)?;

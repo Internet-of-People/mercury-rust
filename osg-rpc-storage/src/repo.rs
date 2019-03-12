@@ -7,8 +7,8 @@ use failure::{ensure, err_msg, Fallible};
 use log::*;
 
 use crate::client::{FallibleExtension, MsgPackRpc, RpcProfile, RpcPtr};
-use crate::messages::{AddNodeParams, ListInEdgesParams, ListInEdgesReply, ListNodesParams};
-use osg::model::{AttributeMap, Link, ProfileId};
+use crate::messages;
+use osg::model::*;
 use osg::profile::ProfilePtr;
 use osg::repo::ProfileRepository;
 
@@ -53,7 +53,7 @@ impl RpcProfileRepository {
     }
 
     pub fn list_nodes(&self) -> Fallible<Vec<ProfileId>> {
-        let params = ListNodesParams {};
+        let params = messages::ListNodesParams {};
         let rpc = self.rpc()?;
         let response = rpc.borrow_mut().send_request("list_nodes", params)?;
         let node_vals = response
@@ -62,64 +62,103 @@ impl RpcProfileRepository {
         let nodes = rmpv::ext::from_value(node_vals)?;
         Ok(nodes)
     }
+
+    /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#show-profile
+    pub fn get_node(&self, id: &ProfileId) -> Fallible<ProfilePtr> {
+        self.rpc().and_then(|rpc| {
+            let rpc_profile = RpcProfile::new(id, rpc.clone());
+            Ok(Rc::new(RefCell::new(rpc_profile)) as ProfilePtr)
+        })
+    }
+
+    pub fn remove_node(&self, id: &ProfileId) -> Fallible<()> {
+        // TODO remove this commented section if really not needed
+        //        let profile_ptr = self.get_node(id)?;
+        //        let mut profile = profile_ptr.borrow_mut();
+        //
+        //        let links = profile.links()?;
+        //        for link in links {
+        //            profile.remove_link(&link.peer_profile)?;
+        //        }
+        //        let attributes = profile.attributes()?;
+        //        for attr in attributes.keys() {
+        //            profile.clear_attribute(&attr)?;
+        //        }
+
+        self.rpc().and_then(|rpc| {
+            let params = messages::RemoveNodeParams { id: id.clone() };
+            rpc.borrow_mut().send_request("remove_node", params)?;
+            Ok(())
+        })
+    }
 }
 
 impl ProfileRepository for RpcProfileRepository {
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#show-profile
-    fn get(&self, id: &ProfileId) -> Fallible<ProfilePtr> {
-        self.rpc().and_then(|rpc| {
-            let rpc_clone = rpc.clone();
-            Ok(Rc::new(RefCell::new(RpcProfile::new(id, rpc_clone))) as ProfilePtr)
-        })
+    fn get(&self, id: &ProfileId) -> Fallible<ProfileData> {
+        let rpc_profile = self.get_node(id)?;
+        ProfileData::try_from(rpc_profile)
     }
 
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#create-profile
-    fn set(&mut self, id: &ProfileId, profile: ProfilePtr) -> Fallible<()> {
+    fn set(&mut self, id: ProfileId, profile: ProfileData) -> Fallible<()> {
         ensure!(
-            *id != profile.borrow().id(),
+            id == profile.id,
             "Implementation error: RpcProfileRepository got conlicting key and value: {} vs {}",
             id,
-            profile.borrow().id()
+            profile.id
         );
         self.rpc().and_then(|rpc| {
-            let request = AddNodeParams { id: id.clone() };
-            let rpc_clone = rpc.clone();
+            // TODO properly implement insert_or_update with the RPC
+            let request = messages::AddNodeParams { id: id.clone() };
             rpc.borrow_mut()
                 .send_request("add_node", request)
                 .map(|_r| ())
                 .key_not_existed_or_else(|| Ok(()))?;
 
-            let profile = RpcProfile::new(id, rpc_clone);
+            let rpc_clone = rpc.clone();
+            let rpc_profile = RpcProfile::new(&id, rpc_clone);
             // TODO this shouldn't belong here, querying an empty attribute set shouldn't be an error
-            profile.set_osg_attribute_map(AttributeMap::default())?;
-            Ok(Rc::new(RefCell::new(profile)) as ProfilePtr)
+            rpc_profile.set_osg_attribute_map(AttributeMap::default())?;
+            Ok(())
         })?;
         Ok(())
     }
 
     fn clear(&mut self, id: &ProfileId) -> Fallible<()> {
-        let profile_ptr = self.get(id)?;
-        let mut profile = profile_ptr.borrow_mut();
+        // TODO set() should implement insert_or_update, so remove() should be removed
+        self.remove_node(id)?;
+        self.set(id.to_owned(), ProfileData::empty(id))
 
-        let links = profile.links()?;
-        for link in links {
-            profile.remove_link(&link.peer_profile)?;
-        }
-        let attributes = profile.attributes()?;
-        for attr in attributes.keys() {
-            profile.clear_attribute(&attr)?;
-        }
-        Ok(())
+        // TODO remove commented section if not needed
+        //        let params = messages::RemoveNodeParams { id: id.clone() };
+        //        rpc.borrow_mut()
+        //            .send_request("remove_node", request)
+        //            .map(|_r| ())?;
+        //        rpc.borrow_mut().
+        //
+        //        let mut rpc_profile = self.get(id)?;
+        //
+        //        self.rpc().and_then(|rpc| {
+        //            let rpc_profile = RpcProfile::new(id, rpc);
+        //            for link in profile.links {
+        //                rpc_profile.remove_link(&link.peer_profile)?;
+        //            }
+        //            for attr in profile.attributes.keys() {
+        //                rpc_profile.clear_attribute(&attr)?;
+        //            }
+        //        })?;
+        //        Ok(())
     }
 
     fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>> {
         self.rpc().and_then(|rpc| {
-            let params = ListInEdgesParams { id: id.clone() };
+            let params = messages::ListInEdgesParams { id: id.clone() };
             let response = rpc.borrow_mut().send_request("list_inedges", params)?;
             let reply_val = response
                 .reply
                 .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
-            let reply: ListInEdgesReply = rmpv::ext::from_value(reply_val)?;
+            let reply: messages::ListInEdgesReply = rmpv::ext::from_value(reply_val)?;
             let followers = reply
                 .into_iter()
                 .map(|peer_profile| Link { peer_profile })

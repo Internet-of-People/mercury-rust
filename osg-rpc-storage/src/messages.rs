@@ -80,6 +80,7 @@ pub(crate) struct Node {
 }
 
 pub(crate) type AddNodeParams = Node;
+pub(crate) type RemoveNodeParams = Node;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub(crate) struct SetNodeAttributeParams {

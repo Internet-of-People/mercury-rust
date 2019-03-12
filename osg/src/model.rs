@@ -34,11 +34,44 @@ impl ProfileData {
         }
     }
 
-    pub fn default(id: &ProfileId) -> Self {
+    pub fn empty(id: &ProfileId) -> Self {
         Self {
             id: id.to_owned(),
             links: Default::default(),
             attributes: Default::default(),
         }
     }
+
+    pub fn links(&self) -> &Vec<Link> {
+        &self.links
+    }
+
+    pub fn create_link(&mut self, with_id: &ProfileId) {
+        // TODO check duplicates here
+        self.links.push(Link {
+            peer_profile: with_id.to_owned(),
+        })
+    }
+
+    pub fn remove_link(&mut self, with_id: &ProfileId) {
+        self.links.retain(|link| link.peer_profile != *with_id)
+    }
+
+    pub fn attributes(&self) -> &AttributeMap {
+        &self.attributes
+    }
+
+    pub fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) {
+        self.attributes.insert(key, value);
+    }
+
+    pub fn clear_attribute(&mut self, key: &AttributeId) {
+        self.attributes.remove(key);
+    }
+}
+
+// TODO remove this after TryFrom has been stabilized
+pub trait TryFrom<T>: Sized {
+    type Error;
+    fn try_from(value: T) -> Result<Self, Self::Error>;
 }

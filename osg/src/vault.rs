@@ -25,7 +25,7 @@ pub struct HdProfileVault {
     pub seed: Seed,
     pub indexes: Vec<i32>,
     pub active_idx: Option<i32>,
-    pub profiles: Vec<ProfileData>, // TODO remove this and use local_store instead
+    // pub profiles: Vec<ProfileData>, // TODO remove this and use local store instead
 }
 
 impl HdProfileVault {
@@ -35,7 +35,7 @@ impl HdProfileVault {
             seed,
             indexes: Default::default(),
             active_idx: Option::None,
-            profiles: Default::default(),
+            // profiles: Default::default(),
         }
     }
 
@@ -74,7 +74,7 @@ impl ProfileVault for HdProfileVault {
         let xsk = self.mercury_xsk()?;
         let profile_id = Self::profile_id(&xsk, next_idx)?;
         self.indexes.push(next_idx);
-        self.profiles.push(ProfileData::default(&profile_id));
+        // self.profiles.push(ProfileData::empty(&profile_id));
         debug!("Setting active profile to {}", profile_id);
         self.active_idx = Option::Some(next_idx);
         Ok(profile_id)
