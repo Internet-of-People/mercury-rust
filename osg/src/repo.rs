@@ -1,6 +1,9 @@
 use std::collections::HashMap;
+use std::fs::File;
+use std::path::PathBuf;
 
 use failure::{err_msg, Fallible};
+use log::*;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::model::*;
@@ -18,12 +21,42 @@ pub trait ProfileRepository {
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct LocalProfileRepository {
-    pub profiles: HashMap<ProfileId, ProfileData>,
+    profiles: HashMap<ProfileId, ProfileData>,
+    #[serde(skip)]
+    filename: PathBuf,
 }
 
-impl LocalProfileRepository {}
+impl LocalProfileRepository {
+    pub fn create(filename: &PathBuf) -> Fallible<Self> {
+        let this = Self {
+            profiles: Default::default(),
+            filename: filename.to_owned(),
+        };
+        this.save()?;
+        Ok(this)
+    }
 
-// TODO implement keeping serialized profiles in profiles.dat (near vault.dat)
+    fn save(&self) -> Fallible<()> {
+        debug!("Saving profile repository to {:?}", self.filename);
+        if let Some(repo_dir) = self.filename.parent() {
+            debug!("Recursively Creating directory {:?}", repo_dir);
+            std::fs::create_dir_all(repo_dir)?;
+        }
+
+        let repo_file = File::create(&self.filename)?;
+        bincode::serialize_into(repo_file, self)?;
+        Ok(())
+    }
+
+    pub fn load(filename: &PathBuf) -> Fallible<Self> {
+        debug!("Loading profile repository from {:?}", filename);
+        let repo_file = File::open(filename)?;
+        let mut vault: Self = bincode::deserialize_from(repo_file)?;
+        vault.filename = filename.to_owned();
+        Ok(vault)
+    }
+}
+
 impl ProfileRepository for LocalProfileRepository {
     fn get(&self, id: &ProfileId) -> Fallible<ProfileData> {
         // TODO we probably should also have some nicely typed errors here
@@ -35,11 +68,13 @@ impl ProfileRepository for LocalProfileRepository {
 
     fn set(&mut self, id: ProfileId, profile: ProfileData) -> Fallible<()> {
         self.profiles.insert(id, profile);
+        self.save()?;
         Ok(())
     }
 
     fn clear(&mut self, id: &ProfileId) -> Fallible<()> {
         self.profiles.remove(id);
+        self.save()?;
         Ok(())
     }
 

@@ -125,6 +125,12 @@ impl From<&MKeyId> for String {
     }
 }
 
+impl From<MKeyId> for String {
+    fn from(src: MKeyId) -> Self {
+        (&src).into()
+    }
+}
+
 impl std::fmt::Display for MKeyId {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", String::from(self))

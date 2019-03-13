@@ -1,3 +1,6 @@
+use std::fs::File;
+use std::path::PathBuf;
+
 use failure::{bail, Fallible};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
@@ -17,11 +20,7 @@ pub trait ProfileVault {
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
 
     // TODO this should not be on this interface, adding it here as fast hack for MVP demo
-    fn save(
-        &self,
-        filename: &std::path::PathBuf,
-        cfg_dir_opt: Option<&std::path::Path>,
-    ) -> Fallible<()>;
+    fn save(&self, filename: &PathBuf) -> Fallible<()>;
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -54,9 +53,10 @@ impl HdProfileVault {
         Ok(key_id.into())
     }
 
-    pub fn load(filename: &std::path::PathBuf) -> Fallible<Self> {
-        let cfg_file = std::fs::File::open(filename)?;
-        let vault: HdProfileVault = serde_json::from_reader(&cfg_file)?;
+    pub fn load(filename: &PathBuf) -> Fallible<Self> {
+        trace!("Loading profile vault from {:?}", filename);
+        let vault_file = File::open(filename)?;
+        let vault: Self = serde_json::from_reader(&vault_file)?;
         Ok(vault)
     }
 }
@@ -106,19 +106,15 @@ impl ProfileVault for HdProfileVault {
         }
     }
 
-    fn save(
-        &self,
-        filename: &std::path::PathBuf,
-        cfg_dir_opt: Option<&std::path::Path>,
-    ) -> Fallible<()> {
+    fn save(&self, filename: &PathBuf) -> Fallible<()> {
         debug!("Saving profile vault to store state");
-        if let Some(cfg_dir) = cfg_dir_opt {
-            debug!("Recursively Creating directory {:?}", cfg_dir);
-            std::fs::create_dir_all(cfg_dir)?;
+        if let Some(vault_dir) = filename.parent() {
+            debug!("Recursively Creating directory {:?}", vault_dir);
+            std::fs::create_dir_all(vault_dir)?;
         }
 
-        let cfg_file = std::fs::File::create(filename)?;
-        serde_json::to_writer_pretty(&cfg_file, self)?;
+        let vault_file = File::create(filename)?;
+        serde_json::to_writer_pretty(&vault_file, self)?;
         Ok(())
     }
 }

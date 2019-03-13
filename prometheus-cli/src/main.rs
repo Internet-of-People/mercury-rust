@@ -6,6 +6,7 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::cli::*;
+use osg::repo::*;
 use osg::vault::*;
 use osg_rpc_storage::RpcProfileRepository;
 
@@ -20,39 +21,21 @@ fn main() {
 
 fn run() -> Fallible<()> {
     let options = Options::from_args();
+    init_logger(&options)?;
+
     let command = options.command;
-
-    if log4rs::init_file(&options.logger_config, Default::default()).is_err() {
-        println!(
-            "Failed to initialize loggers from config file {:?}, falling back to default loggers",
-            options.logger_config
-        );
-
-        use log::LevelFilter;
-        use log4rs::append::console::ConsoleAppender;
-        use log4rs::config::{Appender, Config, Root};
-        use log4rs::encode::pattern::PatternEncoder;
-
-        let stdout = ConsoleAppender::builder()
-            .encoder(Box::new(PatternEncoder::new("{m}{n}")))
-            .build();
-        let config = Config::builder()
-            .appender(Appender::builder().build("stdout", Box::new(stdout)))
-            .build(Root::builder().appender("stdout").build(LevelFilter::Info))?;
-
-        log4rs::init_config(config)?;
-    }
-
     debug!("Got command {:?}", command);
 
-    let app_cfg_dir = dirs::config_dir()
-        .ok_or_else(|| err_msg("Failed to detect platform-dependent directory for app config"))?;
-    let prometheus_cfg_dir = app_cfg_dir.join("prometheus");
+    let prometheus_cfg_dir = dirs::config_dir()
+        .ok_or_else(|| {
+            err_msg("Failed to detect platform-dependent directory for application config")
+        })?
+        .join("prometheus");
 
     let vault_path = options
         .keyvault_path
         .unwrap_or_else(|| prometheus_cfg_dir.join("vault.dat"));
-    let _repo_path = options
+    let repo_path = options
         .profile_repo_path
         .unwrap_or_else(|| prometheus_cfg_dir.join("profiles.dat"));
 
@@ -81,14 +64,45 @@ fn run() -> Fallible<()> {
     }
 
     let timeout = Duration::from_secs(options.network_timeout_secs);
-    let repository = RpcProfileRepository::new(&options.storage_address, timeout)?;
+    let _rpc_repo = RpcProfileRepository::new(&options.storage_address, timeout)?;
+    let local_repo = LocalProfileRepository::load(&repo_path).or_else(|_e| {
+        info!(
+            "Failed to load profile repository {:?}, creating an empty one",
+            repo_path
+        );
+        LocalProfileRepository::create(&repo_path)
+    })?;
 
-    let mut ctx = CommandContext::new(vault_path.clone(), vault, Box::new(repository));
+    let mut ctx = CommandContext::new(vault_path.clone(), vault, Box::new(local_repo));
     command.execute(&mut ctx)?;
 
     let vault_opt = ctx.take_vault();
     if let Some(vault) = vault_opt {
-        vault.save(&vault_path, Some(&app_cfg_dir))?;
+        vault.save(&vault_path)?;
     }
+    Ok(())
+}
+
+fn init_logger(options: &Options) -> Fallible<()> {
+    if log4rs::init_file(&options.logger_config, Default::default()).is_err() {
+        println!(
+            "Failed to initialize loggers from config file {:?}, use default config",
+            options.logger_config
+        );
+
+        use log::LevelFilter;
+        use log4rs::append::console::ConsoleAppender;
+        use log4rs::config::{Appender, Config, Root};
+        use log4rs::encode::pattern::PatternEncoder;
+
+        let stdout = ConsoleAppender::builder()
+            .encoder(Box::new(PatternEncoder::new("{m}{n}")))
+            .build();
+        let config = Config::builder()
+            .appender(Appender::builder().build("stdout", Box::new(stdout)))
+            .build(Root::builder().appender("stdout").build(LevelFilter::Info))?;
+
+        log4rs::init_config(config)?;
+    };
     Ok(())
 }
