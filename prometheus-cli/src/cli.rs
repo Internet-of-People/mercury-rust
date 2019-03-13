@@ -218,6 +218,7 @@ before trying to restore another vault."#,
 
             Command::Restore(RestoreCommand::Profile { my_profile_id }) => {
                 let profile_id = self.selected_profile_id(my_profile_id)?;
+                self.mut_vault().restore_id(&profile_id)?;
                 debug!("Fetching profile {} from remote repository", profile_id);
                 let profile = self.remote_repo.get(&profile_id)?;
                 self.local_repo.set(profile_id.clone(), profile)?;
