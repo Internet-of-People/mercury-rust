@@ -66,7 +66,7 @@ fn run() -> Fallible<()> {
     let timeout = Duration::from_secs(options.network_timeout_secs);
     let _rpc_repo = RpcProfileRepository::new(&options.storage_address, timeout)?;
     let local_repo = LocalProfileRepository::load(&repo_path).or_else(|_e| {
-        info!(
+        debug!(
             "Failed to load profile repository {:?}, creating an empty one",
             repo_path
         );

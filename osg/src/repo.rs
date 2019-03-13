@@ -51,9 +51,9 @@ impl LocalProfileRepository {
     pub fn load(filename: &PathBuf) -> Fallible<Self> {
         debug!("Loading profile repository from {:?}", filename);
         let repo_file = File::open(filename)?;
-        let mut vault: Self = bincode::deserialize_from(repo_file)?;
-        vault.filename = filename.to_owned();
-        Ok(vault)
+        let mut repo: Self = bincode::deserialize_from(repo_file)?;
+        repo.filename = filename.to_owned();
+        Ok(repo)
     }
 }
 

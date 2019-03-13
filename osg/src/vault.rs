@@ -28,7 +28,6 @@ pub struct HdProfileVault {
     pub seed: Seed,
     pub indexes: Vec<i32>,
     pub active_idx: Option<i32>,
-    // pub profiles: Vec<ProfileData>, // TODO remove this and use local store instead
 }
 
 impl HdProfileVault {
@@ -38,7 +37,6 @@ impl HdProfileVault {
             seed,
             indexes: Default::default(),
             active_idx: Option::None,
-            // profiles: Default::default(),
         }
     }
 
@@ -56,7 +54,8 @@ impl HdProfileVault {
     pub fn load(filename: &PathBuf) -> Fallible<Self> {
         trace!("Loading profile vault from {:?}", filename);
         let vault_file = File::open(filename)?;
-        let vault: Self = serde_json::from_reader(&vault_file)?;
+        //let vault: Self = serde_json::from_reader(&vault_file)?;
+        let vault: Self = bincode::deserialize_from(vault_file)?;
         Ok(vault)
     }
 }
@@ -78,7 +77,6 @@ impl ProfileVault for HdProfileVault {
         let xsk = self.mercury_xsk()?;
         let profile_id = Self::profile_id(&xsk, next_idx)?;
         self.indexes.push(next_idx);
-        // self.profiles.push(ProfileData::empty(&profile_id));
         debug!("Setting active profile to {}", profile_id);
         self.active_idx = Option::Some(next_idx);
         Ok(profile_id)
@@ -114,7 +112,8 @@ impl ProfileVault for HdProfileVault {
         }
 
         let vault_file = File::create(filename)?;
-        serde_json::to_writer_pretty(&vault_file, self)?;
+        //serde_json::to_writer_pretty(&vault_file, self)?;
+        bincode::serialize_into(vault_file, self)?;
         Ok(())
     }
 }
