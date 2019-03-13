@@ -65,8 +65,6 @@ fn run() -> Fallible<()> {
         debug!("No profile vault found");
     }
 
-    let timeout = Duration::from_secs(options.network_timeout_secs);
-    let _rpc_repo = RpcProfileRepository::new(&options.storage_address, timeout)?;
     let local_repo = LocalProfileRepository::load(&repo_path).or_else(|_e| {
         debug!(
             "Failed to load profile repository {:?}, creating an empty one",
@@ -74,8 +72,15 @@ fn run() -> Fallible<()> {
         );
         LocalProfileRepository::create(&repo_path)
     })?;
+    let timeout = Duration::from_secs(options.network_timeout_secs);
+    let rpc_repo = RpcProfileRepository::new(&options.remote_repo_address, timeout)?;
 
-    let mut ctx = CommandContext::new(vault_path.clone(), vault, Box::new(local_repo));
+    let mut ctx = CommandContext::new(
+        vault_path.clone(),
+        vault,
+        Box::new(local_repo),
+        Box::new(rpc_repo),
+    );
     ctx.execute(command)?;
 
     let vault_opt = ctx.take_vault();

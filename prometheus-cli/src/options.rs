@@ -21,12 +21,12 @@ pub struct Options {
     pub profile_repo_path: Option<PathBuf>,
 
     #[structopt(
-        long = "storage",
+        long = "repository",
         default_value = "127.0.0.1:6161",
         raw(value_name = r#""IP:PORT""#)
     )]
-    /// IPv4/6 address of the storage backend.
-    pub storage_address: SocketAddr,
+    /// IPv4/6 address of the remote profile repository.
+    pub remote_repo_address: SocketAddr,
 
     #[structopt(long = "timeout", default_value = "10", raw(value_name = r#""SECS""#))]
     /// Number of seconds used for network timeouts
@@ -79,6 +79,10 @@ pub enum Command {
     #[structopt(name = "clear")]
     /// Clear attribute
     Clear(ClearCommand),
+
+    #[structopt(name = "publish")]
+    /// Publish local profile version to remote profile repository
+    Publish(PublishCommand),
 }
 
 impl Command {
@@ -114,6 +118,10 @@ pub enum ShowCommand {
         #[structopt()] // long = "profile_id"
         /// Profile id to be shown, either yours or remote
         profile_id: ProfileId,
+
+        #[structopt(long)]
+        /// Profile id to be shown, either yours or remote
+        local: bool,
     },
 }
 
@@ -210,5 +218,16 @@ pub enum RestoreCommand {
     Vault {
         #[structopt(long = "demo")]
         demo: bool,
+    },
+}
+
+#[derive(Debug, StructOpt)]
+pub enum PublishCommand {
+    #[structopt(name = "profile")]
+    /// Publish local profile version to remote profile repository
+    Profile {
+        #[structopt(long = "my_profile_id")]
+        /// Publish this specific local profile
+        my_profile_id: Option<ProfileId>,
     },
 }

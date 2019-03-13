@@ -12,6 +12,7 @@ pub struct CommandContext {
     vault_path: PathBuf,
     vault: Option<Box<ProfileVault>>,
     local_repo: Box<ProfileRepository>, // TODO should this be LocalProfileRepository instead?
+    remote_repo: Box<ProfileRepository>,
 }
 
 impl CommandContext {
@@ -19,11 +20,13 @@ impl CommandContext {
         vault_path: PathBuf,
         vault: Option<Box<ProfileVault>>,
         local_repo: Box<ProfileRepository>,
+        remote_repo: Box<ProfileRepository>,
     ) -> Self {
         Self {
             vault_path,
             vault,
             local_repo,
+            remote_repo,
         }
     }
 
@@ -121,7 +124,7 @@ before trying to restore another vault."#,
 
             Command::List(ListCommand::IncomingLinks { my_profile_id }) => {
                 let profile = self.selected_profile(my_profile_id)?;
-                let followers = self.local_repo.followers(profile.id())?;
+                let followers = self.remote_repo.followers(profile.id())?;
                 info!("You have {} followers", followers.len());
                 for (idx, follower) in followers.iter().enumerate() {
                     info!("  {}: {:?}", idx, follower);
@@ -173,9 +176,13 @@ before trying to restore another vault."#,
                 self.local_repo.set(profile.id().to_owned(), profile)?;
             }
 
-            Command::Show(ShowCommand::Profile { profile_id }) => {
+            Command::Show(ShowCommand::Profile { profile_id, local }) => {
                 // NOTE must also work with a profile that is not ours
-                let profile = self.local_repo.get(&profile_id)?;
+                let repo = match local {
+                    true => &self.local_repo,
+                    false => &self.remote_repo,
+                };
+                let profile = repo.get(&profile_id)?;
                 let links = profile.links();
                 let attributes = profile.attributes();
 
@@ -196,6 +203,12 @@ before trying to restore another vault."#,
 
             Command::Restore(RestoreCommand::Vault { demo }) => {
                 self.restore_vault(demo)?;
+            }
+
+            Command::Publish(PublishCommand::Profile { my_profile_id }) => {
+                let profile = self.selected_profile(my_profile_id)?;
+                info!("Publishing profile {} to remote repository", profile.id());
+                self.remote_repo.set(profile.id().to_owned(), profile)?;
             }
         };
 
