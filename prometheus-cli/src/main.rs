@@ -6,11 +6,13 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::cli::*;
+use crate::options::Options;
 use osg::repo::*;
 use osg::vault::*;
 use osg_rpc_storage::RpcProfileRepository;
 
 mod cli;
+mod options;
 
 fn main() {
     match run() {
@@ -74,7 +76,7 @@ fn run() -> Fallible<()> {
     })?;
 
     let mut ctx = CommandContext::new(vault_path.clone(), vault, Box::new(local_repo));
-    command.execute(&mut ctx)?;
+    ctx.execute(command)?;
 
     let vault_opt = ctx.take_vault();
     if let Some(vault) = vault_opt {
