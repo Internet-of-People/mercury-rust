@@ -52,7 +52,7 @@ pub enum Command {
     Generate(GenerateCommand),
 
     #[structopt(name = "restore")]
-    /// Restore profile vault from a phraselist
+    /// Restore profile vault from a phraselist or profile from remote repository
     Restore(RestoreCommand),
 
     #[structopt(name = "list")]
@@ -218,6 +218,13 @@ pub enum RestoreCommand {
     Vault {
         #[structopt(long = "demo")]
         demo: bool,
+    },
+    #[structopt(name = "profile")]
+    /// Synchronize profile data from remote repository (possibly overwrite local data if exists)
+    Profile {
+        #[structopt(long = "my_profile_id")]
+        /// Restore this specific profile from remote repository
+        my_profile_id: Option<ProfileId>,
     },
 }
 

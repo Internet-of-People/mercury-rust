@@ -81,7 +81,7 @@ before trying to restore another vault."#,
         Ok(())
     }
 
-    fn selected_profile(&self, my_profile_option: Option<ProfileId>) -> Fallible<ProfileData> {
+    fn selected_profile_id(&self, my_profile_option: Option<ProfileId>) -> Fallible<ProfileId> {
         let profile_id_opt = my_profile_option.or_else(|| self.vault().get_active().ok()?);
         let profile_id = match profile_id_opt {
             Some(profile_id) => profile_id,
@@ -90,6 +90,11 @@ before trying to restore another vault."#,
             ),
         };
         info!("Your active profile is {}", profile_id);
+        Ok(profile_id)
+    }
+
+    fn selected_profile(&self, my_profile_option: Option<ProfileId>) -> Fallible<ProfileData> {
+        let profile_id = self.selected_profile_id(my_profile_option)?;
         let profile = self.local_repo.get(&profile_id)?;
         Ok(profile)
     }
@@ -209,6 +214,14 @@ before trying to restore another vault."#,
                 let profile = self.selected_profile(my_profile_id)?;
                 info!("Publishing profile {} to remote repository", profile.id());
                 self.remote_repo.set(profile.id().to_owned(), profile)?;
+            }
+
+            Command::Restore(RestoreCommand::Profile { my_profile_id }) => {
+                let profile_id = self.selected_profile_id(my_profile_id)?;
+                debug!("Fetching profile {} from remote repository", profile_id);
+                let profile = self.remote_repo.get(&profile_id)?;
+                self.local_repo.set(profile_id.clone(), profile)?;
+                info!("Restored profile {} from remote repository", profile_id);
             }
         };
 
