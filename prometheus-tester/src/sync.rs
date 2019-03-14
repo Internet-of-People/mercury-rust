@@ -22,8 +22,7 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
 
     for (idx, user) in state.into_iter().enumerate() {
         let id = &id_map[&idx];
-        let mut profile = repo
-            .get(id)?;
+        let mut profile = repo.get(id)?;
 
         for peer in user.into_iter() {
             let peer_id = &id_map[peer];
