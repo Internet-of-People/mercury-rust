@@ -100,11 +100,16 @@ impl ProfileVault for HdProfileVault {
 
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()> {
         if self.index_of(id).is_some() {
+            trace!("Profile id {} is already present in the vault", id);
             return Ok(());
         }
 
-        for _i in 0..GAP {
-            if *id == self.create_id()? {
+        trace!("Profile id {} is not contained yet, trying to find it from index {} with {} gap", id, self.next_idx, GAP);
+        let xsk = self.mercury_xsk()?;
+        for idx in self.next_idx..self.next_idx + GAP {
+            if *id == Self::profile_id(&xsk, idx)? {
+                trace!("Profile id {} is found at key index {}", id, idx);
+                self.next_idx = idx + 1;
                 return Ok(());
             }
         }
