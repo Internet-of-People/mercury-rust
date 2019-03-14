@@ -81,6 +81,32 @@ before trying to restore another vault."#,
         Ok(())
     }
 
+    fn restore_all_profiles(&mut self) -> Fallible<()> {
+        let mut all_profile_ids = self.vault().list()?;
+        all_profile_ids.append(&mut self.vault().list_gap()?);
+
+        let mut restore_count = 0;
+        for profile_id in all_profile_ids.iter() {
+            let profile_res = self.remote_repo.get(&profile_id);
+            if let Err(e) = profile_res {
+                info!("  Remote profile {} not found: {}", profile_id, e);
+                continue;
+            }
+            self.local_repo
+                .set(profile_id.clone(), profile_res.unwrap())?;
+            self.mut_vault().restore_id(&profile_id)?;
+            restore_count += 1;
+            info!("  Successfully restored profile {}", profile_id);
+        }
+
+        info!(
+            "Tried {} profiles, successfully restored {}",
+            all_profile_ids.len(),
+            restore_count
+        );
+        Ok(())
+    }
+
     fn selected_profile_id(&self, my_profile_option: Option<ProfileId>) -> Fallible<ProfileId> {
         let profile_id_opt = my_profile_option.or_else(|| self.vault().get_active().ok()?);
         let profile_id = match profile_id_opt {
@@ -184,9 +210,10 @@ before trying to restore another vault."#,
             Command::Show(ShowCommand::Profile { profile_id, local }) => {
                 // NOTE must also work with a profile that is not ours
                 let profile_id = self.selected_profile_id(profile_id)?;
-                let repo = match local {
-                    true => &self.local_repo,
-                    false => &self.remote_repo,
+                let repo = if local {
+                    &self.local_repo
+                } else {
+                    &self.remote_repo
                 };
                 let profile = repo.get(&profile_id)?;
                 let links = profile.links();
@@ -209,12 +236,11 @@ before trying to restore another vault."#,
 
             Command::Restore(RestoreCommand::Vault { demo }) => {
                 self.restore_vault(demo)?;
+                self.restore_all_profiles()?;
             }
 
-            Command::Publish(PublishCommand::Profile { my_profile_id }) => {
-                let profile = self.selected_profile(my_profile_id)?;
-                info!("Publishing profile {} to remote repository", profile.id());
-                self.remote_repo.set(profile.id().to_owned(), profile)?;
+            Command::Restore(RestoreCommand::Profiles {}) => {
+                self.restore_all_profiles()?;
             }
 
             Command::Restore(RestoreCommand::Profile { my_profile_id }) => {
@@ -224,6 +250,12 @@ before trying to restore another vault."#,
                 let profile = self.remote_repo.get(&profile_id)?;
                 self.local_repo.set(profile_id.clone(), profile)?;
                 info!("Restored profile {} from remote repository", profile_id);
+            }
+
+            Command::Publish(PublishCommand::Profile { my_profile_id }) => {
+                let profile = self.selected_profile(my_profile_id)?;
+                info!("Publishing profile {} to remote repository", profile.id());
+                self.remote_repo.set(profile.id().to_owned(), profile)?;
             }
         };
 

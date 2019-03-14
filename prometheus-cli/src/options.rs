@@ -220,12 +220,15 @@ pub enum RestoreCommand {
         demo: bool,
     },
     #[structopt(name = "profile")]
-    /// Synchronize profile data from remote repository (possibly overwrite local data if exists)
+    /// Synchronize data of a profile from remote repository (possibly overwrite local data if exists)
     Profile {
         #[structopt(long = "my_profile_id")]
         /// Restore this specific profile from remote repository
         my_profile_id: Option<ProfileId>,
     },
+    #[structopt(name = "profiles")]
+    /// Synchronize data of all profiles from remote repository (possibly overwrite local data if exists)
+    Profiles {},
 }
 
 #[derive(Debug, StructOpt)]

@@ -14,6 +14,7 @@ use keyvault::{
 
 pub trait ProfileVault {
     fn list(&self) -> Fallible<Vec<ProfileId>>;
+    fn list_gap(&self) -> Fallible<Vec<ProfileId>>;
     fn create_id(&mut self) -> Fallible<ProfileId>;
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()>;
 
@@ -76,17 +77,25 @@ impl HdProfileVault {
 
         Ok(vault)
     }
-}
 
-impl ProfileVault for HdProfileVault {
-    fn list(&self) -> Fallible<Vec<ProfileId>> {
+    fn list_range(&self, range: std::ops::Range<i32>) -> Fallible<Vec<ProfileId>> {
         let mercury_xsk = self.mercury_xsk()?;
-        let mut v = Vec::with_capacity(self.next_idx as usize);
-        for idx in 0..self.next_idx {
+        let mut v = Vec::with_capacity(range.len());
+        for idx in range {
             let profile_id = Self::profile_id(&mercury_xsk, idx)?;
             v.push(profile_id);
         }
         Ok(v)
+    }
+}
+
+impl ProfileVault for HdProfileVault {
+    fn list(&self) -> Fallible<Vec<ProfileId>> {
+        self.list_range(0..self.next_idx)
+    }
+
+    fn list_gap(&self) -> Fallible<Vec<ProfileId>> {
+        self.list_range(self.next_idx..self.next_idx + GAP)
     }
 
     fn create_id(&mut self) -> Fallible<ProfileId> {
@@ -110,6 +119,7 @@ impl ProfileVault for HdProfileVault {
             self.next_idx,
             GAP
         );
+
         let xsk = self.mercury_xsk()?;
         for idx in self.next_idx..self.next_idx + GAP {
             if *id == Self::profile_id(&xsk, idx)? {
