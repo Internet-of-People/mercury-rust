@@ -117,7 +117,7 @@ pub enum ShowCommand {
     Profile {
         #[structopt()] // long = "profile_id"
         /// Profile id to be shown, either yours or remote
-        profile_id: ProfileId,
+        profile_id: Option<ProfileId>,
 
         #[structopt(long)]
         /// Profile id to be shown, either yours or remote

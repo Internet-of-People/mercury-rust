@@ -183,6 +183,7 @@ before trying to restore another vault."#,
 
             Command::Show(ShowCommand::Profile { profile_id, local }) => {
                 // NOTE must also work with a profile that is not ours
+                let profile_id = self.selected_profile_id(profile_id)?;
                 let repo = match local {
                     true => &self.local_repo,
                     false => &self.remote_repo,

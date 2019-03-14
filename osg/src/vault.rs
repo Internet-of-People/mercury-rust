@@ -104,7 +104,12 @@ impl ProfileVault for HdProfileVault {
             return Ok(());
         }
 
-        trace!("Profile id {} is not contained yet, trying to find it from index {} with {} gap", id, self.next_idx, GAP);
+        trace!(
+            "Profile id {} is not contained yet, trying to find it from index {} with {} gap",
+            id,
+            self.next_idx,
+            GAP
+        );
         let xsk = self.mercury_xsk()?;
         for idx in self.next_idx..self.next_idx + GAP {
             if *id == Self::profile_id(&xsk, idx)? {

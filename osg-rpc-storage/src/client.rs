@@ -46,12 +46,8 @@ pub enum MorpheusdError {
     KeyAlreadyExists = 2,
     #[fail(display = "Attribute was not found on that profile")]
     AttributeNotFound = 3,
-    #[fail(display = "Source profile of the link was not found")]
-    SourceNotFound = 4,
-    #[fail(display = "Target profile of the link was not found")]
-    TargetNotFound = 5,
     #[fail(display = "Internal server error")]
-    InternalServerError = 6,
+    InternalServerError = 4,
 }
 
 pub trait FallibleExtension<T> {
@@ -154,7 +150,7 @@ where
         self.set_node_attribute(Self::OPEN_SOCIAL_GRAPH_ATTRIBUTE.to_owned(), attr_map_bin)
     }
 
-    // TOOD either source or target should be self.id but how to differentiate incoming and outgoing edges?
+    // TODO either source or target should be self.id but how to differentiate incoming and outgoing edges?
     //      Maybe separate calls?
     // TODO consider if we also should hide all attributes behind a separate "namespace" key
     //      and Json-like document as for node attributes
