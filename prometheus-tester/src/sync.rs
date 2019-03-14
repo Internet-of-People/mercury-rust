@@ -10,14 +10,20 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
     let vault = Vault::new(&state.vault_seed())?;
     let mut id_map = std::collections::HashMap::<usize, ProfileId>::with_capacity(state.len());
 
-    for (idx, user) in state.into_iter().enumerate() {
+    for (idx, _user) in state.into_iter().enumerate() {
         let id = vault.profile_id(idx)?;
         id_map.insert(idx, id.clone());
 
-        let mut profile = match repo.get(&id) {
-            Ok(profile) => profile,
-            Err(_e) => ProfileData::empty(&id),
-        };
+        if repo.get(&id).is_err() {
+            let profile = ProfileData::empty(&id);
+            repo.set(id, profile)?;
+        }
+    }
+
+    for (idx, user) in state.into_iter().enumerate() {
+        let id = &id_map[&idx];
+        let mut profile = repo
+            .get(id)?;
 
         for peer in user.into_iter() {
             let peer_id = &id_map[peer];
@@ -32,7 +38,7 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
             }
         }
 
-        repo.set(id, profile)?;
+        repo.set(id.clone(), profile)?;
     }
     Ok(())
 }
