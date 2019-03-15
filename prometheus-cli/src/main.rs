@@ -6,7 +6,7 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::cli::*;
-use crate::options::Options;
+use crate::options::{Command, Options};
 use osg::repo::*;
 use osg::vault::*;
 use osg_rpc_storage::RpcProfileRepository;
@@ -81,7 +81,7 @@ fn run() -> Fallible<()> {
         Box::new(local_repo),
         Box::new(rpc_repo),
     );
-    ctx.execute(command)?;
+    command.execute(&mut ctx)?;
 
     let vault_opt = ctx.take_vault();
     if let Some(vault) = vault_opt {

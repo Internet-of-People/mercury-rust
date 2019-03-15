@@ -3,7 +3,12 @@ use std::path::PathBuf;
 
 use structopt::StructOpt;
 
+use crate::cli::{self, Api, ApiRes};
 use osg::model::*;
+
+pub trait Command {
+    fn execute(self, api: &mut Api) -> ApiRes;
+}
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -42,11 +47,11 @@ pub struct Options {
     pub logger_config: PathBuf,
 
     #[structopt(subcommand)]
-    pub command: Command,
+    pub command: CommandVerb,
 }
 
 #[derive(Debug, StructOpt)]
-pub enum Command {
+pub enum CommandVerb {
     #[structopt(name = "generate")]
     /// Generate a phraselist needed to create a profile vault
     Generate(GenerateCommand),
@@ -85,12 +90,30 @@ pub enum Command {
     Publish(PublishCommand),
 }
 
-impl Command {
+impl CommandVerb {
     pub fn needs_vault(&self) -> bool {
+        use CommandVerb::*;
         match self {
-            Command::Generate(_) | Command::Restore(_) => false,
-            Command::Show(ShowCommand::Profile { .. }) => false,
+            Generate(_) | Restore(_) => false,
+            Show(ShowCommand::Profile { .. }) => false,
             _ => true,
+        }
+    }
+}
+
+impl Command for CommandVerb {
+    fn execute(self, api: &mut Api) -> ApiRes {
+        use CommandVerb::*;
+        match self {
+            Generate(sub) => sub.execute(api),
+            Restore(sub) => sub.execute(api),
+            List(sub) => sub.execute(api),
+            Show(sub) => sub.execute(api),
+            Create(sub) => sub.execute(api),
+            Remove(sub) => sub.execute(api),
+            Set(sub) => sub.execute(api),
+            Clear(sub) => sub.execute(api),
+            Publish(sub) => sub.execute(api),
         }
     }
 }
@@ -110,6 +133,16 @@ pub enum ListCommand {
     },
 }
 
+impl Command for ListCommand {
+    fn execute(self, api: &mut Api) -> ApiRes {
+        use ListCommand::*;
+        match self {
+            Profiles => api.list_profiles(),
+            IncomingLinks { my_profile_id } => api.list_incoming_links(my_profile_id),
+        }
+    }
+}
+
 #[derive(Debug, StructOpt)]
 pub enum ShowCommand {
     #[structopt(name = "profile")]
@@ -123,6 +156,15 @@ pub enum ShowCommand {
         /// Profile id to be shown, either yours or remote
         local: bool,
     },
+}
+
+impl Command for ShowCommand {
+    fn execute(self, api: &mut Api) -> ApiRes {
+        use ShowCommand::*;
+        match self {
+            Profile { profile_id, local } => api.show_profile(profile_id, local),
+        }
+    }
 }
 
 #[derive(Debug, StructOpt)]
@@ -145,6 +187,19 @@ pub enum CreateCommand {
     },
 }
 
+impl Command for CreateCommand {
+    fn execute(self, api: &mut Api) -> ApiRes {
+        use CreateCommand::*;
+        match self {
+            Profile => api.create_profile(),
+            Link {
+                my_profile_id,
+                peer_profile_id,
+            } => api.create_link(my_profile_id, peer_profile_id),
+        }
+    }
+}
+
 #[derive(Debug, StructOpt)]
 pub enum RemoveCommand {
     #[structopt(name = "link")]
@@ -158,6 +213,18 @@ pub enum RemoveCommand {
         /// Remove link with this remote profile
         peer_profile_id: ProfileId,
     },
+}
+
+impl Command for RemoveCommand {
+    fn execute(self, api: &mut Api) -> ApiRes {
+        use RemoveCommand::*;
+        match self {
+            Link {
+                my_profile_id,
+                peer_profile_id,
+            } => api.remove_link(my_profile_id, peer_profile_id),
+        }
+    }
 }
 
 #[derive(Debug, StructOpt)]
@@ -189,6 +256,20 @@ pub enum SetCommand {
     },
 }
 
+impl Command for SetCommand {
+    fn execute(self, api: &mut Api) -> ApiRes {
+        use SetCommand::*;
+        match self {
+            ActiveProfile { my_profile_id } => api.set_active_profile(my_profile_id),
+            Attribute {
+                my_profile_id,
+                key,
+                value,
+            } => api.set_attribute(my_profile_id, key, value),
+        }
+    }
+}
+
 #[derive(Debug, StructOpt)]
 pub enum ClearCommand {
     #[structopt(name = "attribute")]
@@ -204,11 +285,32 @@ pub enum ClearCommand {
     },
 }
 
+impl Command for ClearCommand {
+    fn execute(self, api: &mut Api) -> ApiRes {
+        use ClearCommand::*;
+        match self {
+            Attribute { my_profile_id, key } => api.clear_attribute(my_profile_id, key),
+        }
+    }
+}
+
 #[derive(Debug, StructOpt)]
 pub enum GenerateCommand {
     #[structopt(name = "vault")]
     /// Generate a phraselist needed to create a profile vault
     Vault,
+}
+
+impl Command for GenerateCommand {
+    fn execute(self, _api: &mut Api) -> ApiRes {
+        use GenerateCommand::*;
+        match self {
+            Vault => {
+                cli::generate_vault();
+                Ok(())
+            }
+        }
+    }
 }
 
 #[derive(Debug, StructOpt)]
@@ -228,7 +330,18 @@ pub enum RestoreCommand {
     },
     #[structopt(name = "profiles")]
     /// Synchronize data of all profiles from remote repository (possibly overwrite local data if exists)
-    Profiles {},
+    Profiles,
+}
+
+impl Command for RestoreCommand {
+    fn execute(self, api: &mut Api) -> ApiRes {
+        use RestoreCommand::*;
+        match self {
+            Vault { demo } => api.restore_vault(demo),
+            Profile { my_profile_id } => api.restore_profile(my_profile_id),
+            Profiles => api.restore_all_profiles(),
+        }
+    }
 }
 
 #[derive(Debug, StructOpt)]
@@ -240,4 +353,13 @@ pub enum PublishCommand {
         /// Publish this specific local profile
         my_profile_id: Option<ProfileId>,
     },
+}
+
+impl Command for PublishCommand {
+    fn execute(self, api: &mut Api) -> ApiRes {
+        use PublishCommand::*;
+        match self {
+            Profile { my_profile_id } => api.publish_profile(my_profile_id),
+        }
+    }
 }

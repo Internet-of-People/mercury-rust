@@ -3,10 +3,39 @@ use std::path::PathBuf;
 use failure::{bail, ensure, err_msg, Fallible};
 use log::*;
 
-use crate::options::*;
 use osg::model::*;
 use osg::repo::ProfileRepository;
 use osg::vault::*;
+
+pub type ApiRes = Fallible<()>;
+pub trait Api {
+    fn list_profiles(&mut self) -> ApiRes;
+    fn list_incoming_links(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
+    fn show_profile(&mut self, profile_id: Option<ProfileId>, local: bool) -> ApiRes;
+    fn create_profile(&mut self) -> ApiRes;
+    fn create_link(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        peer_profile_id: ProfileId,
+    ) -> ApiRes;
+    fn remove_link(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        peer_profile_id: ProfileId,
+    ) -> ApiRes;
+    fn set_active_profile(&mut self, my_profile_id: ProfileId) -> ApiRes;
+    fn set_attribute(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        key: AttributeId,
+        value: AttributeValue,
+    ) -> ApiRes;
+    fn clear_attribute(&mut self, my_profile_id: Option<ProfileId>, key: AttributeId) -> ApiRes;
+    fn restore_vault(&mut self, demo: bool) -> ApiRes;
+    fn restore_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
+    fn restore_all_profiles(&mut self) -> ApiRes;
+    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
+}
 
 pub struct CommandContext {
     vault_path: PathBuf,
@@ -124,142 +153,146 @@ before trying to restore another vault."#,
         let profile = self.local_repo.get(&profile_id)?;
         Ok(profile)
     }
+}
 
-    pub fn execute(&mut self, command: Command) -> Fallible<()> {
-        match command {
-            Command::Create(CreateCommand::Link {
-                my_profile_id,
-                peer_profile_id,
-            }) => {
-                let mut profile = self.selected_profile(my_profile_id)?;
-                let link = profile.create_link(&peer_profile_id);
-                self.local_repo.set(profile.id().to_owned(), profile)?;
-                debug!("Created link: {:?}", link);
-                info!("Created link to peer profile {}", peer_profile_id);
-            }
-
-            Command::Create(CreateCommand::Profile) => {
-                let new_profile_id = self.mut_vault().create_id()?;
-                let empty_profile = ProfileData::empty(&new_profile_id);
-                self.local_repo
-                    .set(new_profile_id.to_owned(), empty_profile)?;
-                info!("Created and activated profile with id {}", new_profile_id);
-            }
-
-            Command::Clear(ClearCommand::Attribute { my_profile_id, key }) => {
-                let mut profile = self.selected_profile(my_profile_id)?;
-                profile.clear_attribute(&key);
-                self.local_repo.set(profile.id().to_owned(), profile)?;
-                info!("Cleared attribute: {}", key);
-            }
-
-            Command::List(ListCommand::IncomingLinks { my_profile_id }) => {
-                let profile = self.selected_profile(my_profile_id)?;
-                let followers = self.remote_repo.followers(profile.id())?;
-                info!("You have {} followers", followers.len());
-                for (idx, follower) in followers.iter().enumerate() {
-                    info!("  {}: {:?}", idx, follower);
+impl Api for CommandContext {
+    fn list_profiles(&mut self) -> ApiRes {
+        let profile_ids = self.vault().list()?;
+        info!("You have {} profiles", profile_ids.len());
+        let active_profile_opt = self.vault().get_active()?;
+        for (i, profile_id) in profile_ids.iter().enumerate() {
+            let status = match active_profile_opt {
+                Some(ref active_profile) => {
+                    if active_profile == profile_id {
+                        " (active)"
+                    } else {
+                        ""
+                    }
                 }
-            }
-
-            Command::List(ListCommand::Profiles) => {
-                let profile_ids = self.vault().list()?;
-                info!("You have {} profiles", profile_ids.len());
-                let active_profile_opt = self.vault().get_active()?;
-                for (i, profile_id) in profile_ids.iter().enumerate() {
-                    let status = match active_profile_opt {
-                        Some(ref active_profile) => {
-                            if active_profile == profile_id {
-                                " (active)"
-                            } else {
-                                ""
-                            }
-                        }
-                        None => "",
-                    };
-                    info!("  {}: {}{}", i, profile_id, status);
-                }
-            }
-
-            Command::Remove(RemoveCommand::Link {
-                my_profile_id,
-                peer_profile_id,
-            }) => {
-                let mut profile = self.selected_profile(my_profile_id)?;
-                profile.remove_link(&peer_profile_id);
-                self.local_repo.set(profile.id().to_owned(), profile)?;
-                info!("Removed link from profile {}", peer_profile_id);
-            }
-
-            Command::Set(SetCommand::ActiveProfile { my_profile_id }) => {
-                self.mut_vault().set_active(&my_profile_id)?;
-                info!("Active profile was set to {}", my_profile_id);
-            }
-
-            Command::Set(SetCommand::Attribute {
-                my_profile_id,
-                key,
-                value,
-            }) => {
-                let mut profile = self.selected_profile(my_profile_id)?;
-                info!("Setting attribute {} to {}", key, value);
-                profile.set_attribute(key, value);
-                self.local_repo.set(profile.id().to_owned(), profile)?;
-            }
-
-            Command::Show(ShowCommand::Profile { profile_id, local }) => {
-                // NOTE must also work with a profile that is not ours
-                let profile_id = self.selected_profile_id(profile_id)?;
-                let repo = if local {
-                    &self.local_repo
-                } else {
-                    &self.remote_repo
-                };
-                let profile = repo.get(&profile_id)?;
-                let links = profile.links();
-                let attributes = profile.attributes();
-
-                info!("Details of profile id {}", profile_id);
-                info!("  {} attributes:", attributes.len());
-                for (i, attribute) in attributes.iter().enumerate() {
-                    info!("    {}: {:?}", i, attribute);
-                }
-                info!("  {} subscriptions:", links.len());
-                for (i, peer_id) in links.iter().enumerate() {
-                    info!("    {}: {:?}", i, peer_id);
-                }
-            }
-
-            Command::Generate(GenerateCommand::Vault) => {
-                generate_vault();
-            }
-
-            Command::Restore(RestoreCommand::Vault { demo }) => {
-                self.restore_vault(demo)?;
-                self.restore_all_profiles()?;
-            }
-
-            Command::Restore(RestoreCommand::Profiles {}) => {
-                self.restore_all_profiles()?;
-            }
-
-            Command::Restore(RestoreCommand::Profile { my_profile_id }) => {
-                let profile_id = self.selected_profile_id(my_profile_id)?;
-                self.mut_vault().restore_id(&profile_id)?;
-                debug!("Fetching profile {} from remote repository", profile_id);
-                let profile = self.remote_repo.get(&profile_id)?;
-                self.local_repo.set(profile_id.clone(), profile)?;
-                info!("Restored profile {} from remote repository", profile_id);
-            }
-
-            Command::Publish(PublishCommand::Profile { my_profile_id }) => {
-                let profile = self.selected_profile(my_profile_id)?;
-                info!("Publishing profile {} to remote repository", profile.id());
-                self.remote_repo.set(profile.id().to_owned(), profile)?;
-            }
-        };
-
+                None => "",
+            };
+            info!("  {}: {}{}", i, profile_id, status);
+        }
         Ok(())
+    }
+
+    fn list_incoming_links(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
+        let profile = self.selected_profile(my_profile_id)?;
+        let followers = self.remote_repo.followers(profile.id())?;
+        info!("You have {} followers", followers.len());
+        for (idx, follower) in followers.iter().enumerate() {
+            info!("  {}: {:?}", idx, follower);
+        }
+        Ok(())
+    }
+
+    fn show_profile(&mut self, profile_id: Option<ProfileId>, local: bool) -> ApiRes {
+        // NOTE must also work with a profile that is not ours
+        let profile_id = self.selected_profile_id(profile_id)?;
+        let repo = if local {
+            &self.local_repo
+        } else {
+            &self.remote_repo
+        };
+        let profile = repo.get(&profile_id)?;
+        let links = profile.links();
+        let attributes = profile.attributes();
+
+        info!("Details of profile id {}", profile_id);
+        info!("  {} attributes:", attributes.len());
+        for (i, attribute) in attributes.iter().enumerate() {
+            info!("    {}: {:?}", i, attribute);
+        }
+        info!("  {} subscriptions:", links.len());
+        for (i, peer_id) in links.iter().enumerate() {
+            info!("    {}: {:?}", i, peer_id);
+        }
+        Ok(())
+    }
+
+    fn create_profile(&mut self) -> ApiRes {
+        let new_profile_id = self.mut_vault().create_id()?;
+        let empty_profile = ProfileData::empty(&new_profile_id);
+        self.local_repo
+            .set(new_profile_id.to_owned(), empty_profile)?;
+        info!("Created and activated profile with id {}", new_profile_id);
+        Ok(())
+    }
+
+    fn create_link(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        peer_profile_id: ProfileId,
+    ) -> ApiRes {
+        let mut profile = self.selected_profile(my_profile_id)?;
+        let link = profile.create_link(&peer_profile_id);
+        self.local_repo.set(profile.id().to_owned(), profile)?;
+        debug!("Created link: {:?}", link);
+        info!("Created link to peer profile {}", peer_profile_id);
+        Ok(())
+    }
+
+    fn remove_link(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        peer_profile_id: ProfileId,
+    ) -> ApiRes {
+        let mut profile = self.selected_profile(my_profile_id)?;
+        profile.remove_link(&peer_profile_id);
+        self.local_repo.set(profile.id().to_owned(), profile)?;
+        info!("Removed link from profile {}", peer_profile_id);
+        Ok(())
+    }
+
+    fn set_active_profile(&mut self, my_profile_id: ProfileId) -> ApiRes {
+        self.mut_vault().set_active(&my_profile_id)?;
+        info!("Active profile was set to {}", my_profile_id);
+        Ok(())
+    }
+
+    fn set_attribute(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        key: AttributeId,
+        value: AttributeValue,
+    ) -> ApiRes {
+        let mut profile = self.selected_profile(my_profile_id)?;
+        info!("Setting attribute {} to {}", key, value);
+        profile.set_attribute(key, value);
+        self.local_repo.set(profile.id().to_owned(), profile)
+    }
+
+    fn clear_attribute(&mut self, my_profile_id: Option<ProfileId>, key: AttributeId) -> ApiRes {
+        let mut profile = self.selected_profile(my_profile_id)?;
+        profile.clear_attribute(&key);
+        self.local_repo.set(profile.id().to_owned(), profile)?;
+        info!("Cleared attribute: {}", key);
+        Ok(())
+    }
+
+    fn restore_vault(&mut self, demo: bool) -> ApiRes {
+        self.restore_vault(demo)?;
+        self.restore_all_profiles()
+    }
+
+    fn restore_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
+        let profile_id = self.selected_profile_id(my_profile_id)?;
+        self.mut_vault().restore_id(&profile_id)?;
+        debug!("Fetching profile {} from remote repository", profile_id);
+        let profile = self.remote_repo.get(&profile_id)?;
+        self.local_repo.set(profile_id.clone(), profile)?;
+        info!("Restored profile {} from remote repository", profile_id);
+        Ok(())
+    }
+
+    fn restore_all_profiles(&mut self) -> ApiRes {
+        self.restore_all_profiles()
+    }
+
+    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
+        let profile = self.selected_profile(my_profile_id)?;
+        info!("Publishing profile {} to remote repository", profile.id());
+        self.remote_repo.set(profile.id().to_owned(), profile)
     }
 }
 
