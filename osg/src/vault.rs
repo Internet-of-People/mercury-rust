@@ -39,7 +39,7 @@ pub trait ProfileVault {
     fn save(&self, filename: &PathBuf) -> Fallible<()>;
 
     fn is_empty(&self) -> bool {
-        self.len() > 0
+        self.len() == 0
     }
 }
 
