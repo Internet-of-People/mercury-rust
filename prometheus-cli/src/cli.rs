@@ -261,8 +261,8 @@ impl Api for CommandContext {
 
     fn restore_all_profiles(&mut self) -> ApiRes {
         fn restore_one_profile(ctx: &mut CommandContext, profile_id: &ProfileId) -> ApiRes {
-            let profile_res = ctx.remote_repo.get(profile_id)?;
-            ctx.local_repo.set(profile_id.clone(), profile_res)?;
+            let profile = ctx.remote_repo.get(profile_id)?;
+            ctx.local_repo.set(profile_id.clone(), profile)?;
             ctx.mut_vault().restore_id(&profile_id)?;
             info!("  Successfully restored profile {}", profile_id);
             Ok(())
