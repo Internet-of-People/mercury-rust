@@ -12,9 +12,23 @@ use keyvault::{
     BIP43_PURPOSE_MERCURY,
 };
 
+pub struct MercuryProfiles {
+    mercury_xsk: EdExtPrivateKey,
+}
+
+impl MercuryProfiles {
+    pub fn id(&self, idx: i32) -> Fallible<ProfileId> {
+        let profile_xsk = self.mercury_xsk.derive_hardened_child(idx)?;
+        let key_id = profile_xsk.neuter().as_public_key().key_id();
+        Ok(key_id.into())
+    }
+}
+
 pub trait ProfileVault {
+    fn len(&self) -> usize;
+    fn profiles(&self) -> Fallible<MercuryProfiles>;
+
     fn list(&self) -> Fallible<Vec<ProfileId>>;
-    fn list_gap(&self) -> Fallible<Vec<ProfileId>>;
     fn create_id(&mut self) -> Fallible<ProfileId>;
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()>;
 
@@ -23,9 +37,13 @@ pub trait ProfileVault {
 
     // TODO this should not be on this interface, adding it here as fast hack for MVP demo
     fn save(&self, filename: &PathBuf) -> Fallible<()>;
+
+    fn is_empty(&self) -> bool {
+        self.len() > 0
+    }
 }
 
-const GAP: i32 = 20;
+pub const GAP: usize = 20;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct HdProfileVault {
@@ -42,17 +60,6 @@ impl HdProfileVault {
             next_idx: Default::default(),
             active_idx: Option::None,
         }
-    }
-
-    fn mercury_xsk(&self) -> Fallible<EdExtPrivateKey> {
-        let master = Ed25519::master(&self.seed);
-        master.derive_hardened_child(BIP43_PURPOSE_MERCURY)
-    }
-
-    fn profile_id(xsk: &EdExtPrivateKey, idx: i32) -> Fallible<ProfileId> {
-        let profile_xsk = xsk.derive_hardened_child(idx)?;
-        let key_id = profile_xsk.neuter().as_public_key().key_id();
-        Ok(key_id.into())
     }
 
     fn index_of(&self, id: &ProfileId) -> Option<usize> {
@@ -79,10 +86,10 @@ impl HdProfileVault {
     }
 
     fn list_range(&self, range: std::ops::Range<i32>) -> Fallible<Vec<ProfileId>> {
-        let mercury_xsk = self.mercury_xsk()?;
+        let profiles = self.profiles()?;
         let mut v = Vec::with_capacity(range.len());
         for idx in range {
-            let profile_id = Self::profile_id(&mercury_xsk, idx)?;
+            let profile_id = profiles.id(idx)?;
             v.push(profile_id);
         }
         Ok(v)
@@ -90,17 +97,22 @@ impl HdProfileVault {
 }
 
 impl ProfileVault for HdProfileVault {
+    fn len(&self) -> usize {
+        self.next_idx as usize
+    }
+
+    fn profiles(&self) -> Fallible<MercuryProfiles> {
+        let master = Ed25519::master(&self.seed);
+        let mercury_xsk = master.derive_hardened_child(BIP43_PURPOSE_MERCURY)?;
+        Ok(MercuryProfiles { mercury_xsk })
+    }
+
     fn list(&self) -> Fallible<Vec<ProfileId>> {
         self.list_range(0..self.next_idx)
     }
 
-    fn list_gap(&self) -> Fallible<Vec<ProfileId>> {
-        self.list_range(self.next_idx..self.next_idx + GAP)
-    }
-
     fn create_id(&mut self) -> Fallible<ProfileId> {
-        let xsk = self.mercury_xsk()?;
-        let profile_id = Self::profile_id(&xsk, self.next_idx)?;
+        let profile_id = self.profiles()?.id(self.next_idx)?;
         self.active_idx = Option::Some(self.next_idx);
         self.next_idx += 1;
         debug!("Setting active profile to {}", profile_id);
@@ -120,9 +132,9 @@ impl ProfileVault for HdProfileVault {
             GAP
         );
 
-        let xsk = self.mercury_xsk()?;
-        for idx in self.next_idx..self.next_idx + GAP {
-            if *id == Self::profile_id(&xsk, idx)? {
+        let profiles = self.profiles()?;
+        for idx in self.next_idx..self.next_idx + GAP as i32 {
+            if *id == profiles.id(idx)? {
                 trace!("Profile id {} is found at key index {}", id, idx);
                 self.next_idx = idx + 1;
                 return Ok(());
@@ -134,8 +146,7 @@ impl ProfileVault for HdProfileVault {
 
     fn get_active(&self) -> Fallible<Option<ProfileId>> {
         if let Some(idx) = self.active_idx {
-            let xsk = self.mercury_xsk()?;
-            Ok(Option::Some(Self::profile_id(&xsk, idx)?))
+            Ok(Option::Some(self.profiles()?.id(idx)?))
         } else {
             Ok(Option::None)
         }

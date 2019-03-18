@@ -5,7 +5,7 @@ use log::*;
 
 use osg::model::*;
 use osg::repo::ProfileRepository;
-use osg::vault::*;
+use osg::vault::{self, ProfileVault};
 
 pub type ApiRes = Fallible<()>;
 pub trait Api {
@@ -105,34 +105,8 @@ before trying to restore another vault."#,
                 }
             }
         }?;
-        let new_vault = HdProfileVault::create(seed);
+        let new_vault = vault::HdProfileVault::create(seed);
         self.vault.replace(Box::new(new_vault));
-        Ok(())
-    }
-
-    fn restore_all_profiles(&mut self) -> Fallible<()> {
-        let mut all_profile_ids = self.vault().list()?;
-        all_profile_ids.append(&mut self.vault().list_gap()?);
-
-        let mut restore_count = 0;
-        for profile_id in all_profile_ids.iter() {
-            let profile_res = self.remote_repo.get(&profile_id);
-            if let Err(e) = profile_res {
-                info!("  Remote profile {} not found: {}", profile_id, e);
-                continue;
-            }
-            self.local_repo
-                .set(profile_id.clone(), profile_res.unwrap())?;
-            self.mut_vault().restore_id(&profile_id)?;
-            restore_count += 1;
-            info!("  Successfully restored profile {}", profile_id);
-        }
-
-        info!(
-            "Tried {} profiles, successfully restored {}",
-            all_profile_ids.len(),
-            restore_count
-        );
         Ok(())
     }
 
@@ -286,7 +260,52 @@ impl Api for CommandContext {
     }
 
     fn restore_all_profiles(&mut self) -> ApiRes {
-        self.restore_all_profiles()
+        fn restore_one_profile(ctx: &mut CommandContext, profile_id: &ProfileId) -> ApiRes {
+            let profile_res = ctx.remote_repo.get(profile_id)?;
+            ctx.local_repo.set(profile_id.clone(), profile_res)?;
+            ctx.mut_vault().restore_id(&profile_id)?;
+            info!("  Successfully restored profile {}", profile_id);
+            Ok(())
+        }
+
+        let profiles = self.vault().profiles()?;
+        let len = self.vault().len();
+
+        let mut try_count = 0;
+        let mut restore_count = 0;
+        for idx in 0..len {
+            try_count += 1;
+            let profile_id = profiles.id(idx as i32)?;
+            if let Err(e) = restore_one_profile(self, &profile_id) {
+                info!(
+                    "  Profile {} not found on this repository: {}",
+                    profile_id, e
+                );
+                continue;
+            }
+            restore_count += 1;
+        }
+        debug!("  After the known profiles, we try to look for unknown ones.");
+        let mut idx = len;
+        let mut end = len + vault::GAP;
+        while idx < end {
+            try_count += 1;
+            let profile_id = profiles.id(idx as i32)?;
+            if let Err(e) = restore_one_profile(self, &profile_id) {
+                debug!("  Profile {} was tried, but not found: {}", profile_id, e);
+                idx += 1;
+                continue;
+            }
+            end = idx + vault::GAP;
+            idx += 1;
+            restore_count += 1;
+        }
+
+        info!(
+            "Tried {} profiles, successfully restored {}",
+            try_count, restore_count
+        );
+        Ok(())
     }
 
     fn publish_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
