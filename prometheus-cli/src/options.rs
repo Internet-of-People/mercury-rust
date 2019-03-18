@@ -7,7 +7,7 @@ use crate::cli::{self, Api, ApiRes};
 use osg::model::*;
 
 pub trait Command {
-    fn execute(self, api: &mut Api) -> ApiRes;
+    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes;
 }
 
 #[derive(Debug, StructOpt)]
@@ -102,19 +102,20 @@ impl CommandVerb {
 }
 
 impl Command for CommandVerb {
-    fn execute(self, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         use CommandVerb::*;
-        match self {
-            Generate(sub) => sub.execute(api),
-            Restore(sub) => sub.execute(api),
-            List(sub) => sub.execute(api),
-            Show(sub) => sub.execute(api),
-            Create(sub) => sub.execute(api),
-            Remove(sub) => sub.execute(api),
-            Set(sub) => sub.execute(api),
-            Clear(sub) => sub.execute(api),
-            Publish(sub) => sub.execute(api),
-        }
+        let sub: Box<Command> = match *self {
+            Generate(sub) => Box::new(sub),
+            Restore(sub) => Box::new(sub),
+            List(sub) => Box::new(sub),
+            Show(sub) => Box::new(sub),
+            Create(sub) => Box::new(sub),
+            Remove(sub) => Box::new(sub),
+            Set(sub) => Box::new(sub),
+            Clear(sub) => Box::new(sub),
+            Publish(sub) => Box::new(sub),
+        };
+        sub.execute(api)
     }
 }
 
@@ -134,9 +135,9 @@ pub enum ListCommand {
 }
 
 impl Command for ListCommand {
-    fn execute(self, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         use ListCommand::*;
-        match self {
+        match *self {
             Profiles => api.list_profiles(),
             IncomingLinks { my_profile_id } => api.list_incoming_links(my_profile_id),
         }
@@ -159,9 +160,9 @@ pub enum ShowCommand {
 }
 
 impl Command for ShowCommand {
-    fn execute(self, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         use ShowCommand::*;
-        match self {
+        match *self {
             Profile { profile_id, local } => api.show_profile(profile_id, local),
         }
     }
@@ -188,9 +189,9 @@ pub enum CreateCommand {
 }
 
 impl Command for CreateCommand {
-    fn execute(self, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         use CreateCommand::*;
-        match self {
+        match *self {
             Profile => api.create_profile(),
             Link {
                 my_profile_id,
@@ -216,9 +217,9 @@ pub enum RemoveCommand {
 }
 
 impl Command for RemoveCommand {
-    fn execute(self, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         use RemoveCommand::*;
-        match self {
+        match *self {
             Link {
                 my_profile_id,
                 peer_profile_id,
@@ -257,9 +258,9 @@ pub enum SetCommand {
 }
 
 impl Command for SetCommand {
-    fn execute(self, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         use SetCommand::*;
-        match self {
+        match *self {
             ActiveProfile { my_profile_id } => api.set_active_profile(my_profile_id),
             Attribute {
                 my_profile_id,
@@ -286,9 +287,9 @@ pub enum ClearCommand {
 }
 
 impl Command for ClearCommand {
-    fn execute(self, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         use ClearCommand::*;
-        match self {
+        match *self {
             Attribute { my_profile_id, key } => api.clear_attribute(my_profile_id, key),
         }
     }
@@ -302,9 +303,9 @@ pub enum GenerateCommand {
 }
 
 impl Command for GenerateCommand {
-    fn execute(self, _api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, _api: &mut Api) -> ApiRes {
         use GenerateCommand::*;
-        match self {
+        match *self {
             Vault => {
                 cli::generate_vault();
                 Ok(())
@@ -334,9 +335,9 @@ pub enum RestoreCommand {
 }
 
 impl Command for RestoreCommand {
-    fn execute(self, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         use RestoreCommand::*;
-        match self {
+        match *self {
             Vault { demo } => api.restore_vault(demo),
             Profile { my_profile_id } => api.restore_profile(my_profile_id),
             Profiles => api.restore_all_profiles(),
@@ -356,9 +357,9 @@ pub enum PublishCommand {
 }
 
 impl Command for PublishCommand {
-    fn execute(self, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         use PublishCommand::*;
-        match self {
+        match *self {
             Profile { my_profile_id } => api.publish_profile(my_profile_id),
         }
     }

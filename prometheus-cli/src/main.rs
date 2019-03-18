@@ -81,6 +81,7 @@ fn run() -> Fallible<()> {
         Box::new(local_repo),
         Box::new(rpc_repo),
     );
+    let command = Box::new(command);
     command.execute(&mut ctx)?;
 
     let vault_opt = ctx.take_vault();
