@@ -98,7 +98,9 @@ impl CommandVerb {
     pub fn needs_vault(&self) -> bool {
         use CommandVerb::*;
         match self {
-            Generate(_) | Restore(_) => false,
+            Generate(GenerateCommand::Vault { .. }) | Restore(RestoreCommand::Vault { .. }) => {
+                false
+            }
             Show(ShowCommand::Profile { .. }) => false,
             _ => true,
         }
@@ -132,7 +134,7 @@ pub enum ListCommand {
     #[structopt(name = "followers")]
     /// List followers
     IncomingLinks {
-        #[structopt()] // long = "my_profile_id"
+        #[structopt()]
         /// List public followers of this profile of yours if other than the active one
         my_profile_id: Option<ProfileId>,
     },
@@ -153,7 +155,7 @@ pub enum ShowCommand {
     #[structopt(name = "profile")]
     /// Show profile
     Profile {
-        #[structopt()] // long = "profile_id"
+        #[structopt()]
         /// Profile id to be shown, either yours or remote
         profile_id: Option<ProfileId>,
 
@@ -354,7 +356,7 @@ pub enum PublishCommand {
     #[structopt(name = "profile")]
     /// Publish local profile version to remote profile repository
     Profile {
-        #[structopt(long = "my_profile_id")]
+        #[structopt()]
         /// Publish this specific local profile
         my_profile_id: Option<ProfileId>,
     },
