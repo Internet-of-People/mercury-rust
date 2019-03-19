@@ -39,7 +39,12 @@ fn run() -> Fallible<()> {
         .unwrap_or_else(|| prometheus_cfg_dir.join("vault.dat"));
     let repo_path = options
         .profile_repo_path
+        .clone()
         .unwrap_or_else(|| prometheus_cfg_dir.join("profiles.dat"));
+    let base_path = options
+        .profile_repo_path
+        .clone()
+        .unwrap_or_else(|| prometheus_cfg_dir.join("vases.dat"));
 
     let vault_exists = vault_path.exists();
     if command.needs_vault() && !vault_exists {
@@ -72,6 +77,13 @@ fn run() -> Fallible<()> {
         );
         LocalProfileRepository::create(&repo_path)
     })?;
+    let base_repo = LocalProfileRepository::load(&base_path).or_else(|_e| {
+        debug!(
+            "Failed to load base repository {:?}, creating an empty one",
+            base_path
+        );
+        LocalProfileRepository::create(&base_path)
+    })?;
     let timeout = Duration::from_secs(options.network_timeout_secs);
     let rpc_repo = RpcProfileRepository::new(&options.remote_repo_address, timeout)?;
 
@@ -79,6 +91,7 @@ fn run() -> Fallible<()> {
         vault_path.clone(),
         vault,
         Box::new(local_repo),
+        Box::new(base_repo),
         Box::new(rpc_repo),
     );
     let command = Box::new(command);

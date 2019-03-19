@@ -40,7 +40,8 @@ pub trait Api {
 pub struct CommandContext {
     vault_path: PathBuf,
     vault: Option<Box<ProfileVault>>,
-    local_repo: Box<ProfileRepository>, // TODO should this be LocalProfileRepository instead?
+    local_repo: Box<ProfileRepository>,
+    base_repo: Box<ProfileRepository>,
     remote_repo: Box<ProfileRepository>,
 }
 
@@ -49,12 +50,14 @@ impl CommandContext {
         vault_path: PathBuf,
         vault: Option<Box<ProfileVault>>,
         local_repo: Box<ProfileRepository>,
+        base_repo: Box<ProfileRepository>,
         remote_repo: Box<ProfileRepository>,
     ) -> Self {
         Self {
             vault_path,
             vault,
             local_repo,
+            base_repo,
             remote_repo,
         }
     }
@@ -126,6 +129,15 @@ before trying to restore another vault."#,
         let profile_id = self.selected_profile_id(my_profile_option)?;
         let profile = self.local_repo.get(&profile_id)?;
         Ok(profile)
+    }
+
+    fn restore_one_profile(&mut self, profile_id: &ProfileId) -> ApiRes {
+        let profile = self.remote_repo.get(profile_id)?;
+        self.local_repo.set(profile_id.clone(), profile.clone())?;
+        self.base_repo.set(profile_id.clone(), profile)?;
+        self.mut_vault().restore_id(&profile_id)?;
+        info!("  Successfully restored profile {}", profile_id);
+        Ok(())
     }
 }
 
@@ -260,14 +272,6 @@ impl Api for CommandContext {
     }
 
     fn restore_all_profiles(&mut self) -> ApiRes {
-        fn restore_one_profile(ctx: &mut CommandContext, profile_id: &ProfileId) -> ApiRes {
-            let profile = ctx.remote_repo.get(profile_id)?;
-            ctx.local_repo.set(profile_id.clone(), profile)?;
-            ctx.mut_vault().restore_id(&profile_id)?;
-            info!("  Successfully restored profile {}", profile_id);
-            Ok(())
-        }
-
         let profiles = self.vault().profiles()?;
         let len = self.vault().len();
 
@@ -276,7 +280,7 @@ impl Api for CommandContext {
         for idx in 0..len {
             try_count += 1;
             let profile_id = profiles.id(idx as i32)?;
-            if let Err(e) = restore_one_profile(self, &profile_id) {
+            if let Err(e) = self.restore_one_profile(&profile_id) {
                 info!(
                     "  Profile {} not found on this repository: {}",
                     profile_id, e
@@ -291,7 +295,7 @@ impl Api for CommandContext {
         while idx < end {
             try_count += 1;
             let profile_id = profiles.id(idx as i32)?;
-            if let Err(e) = restore_one_profile(self, &profile_id) {
+            if let Err(e) = self.restore_one_profile(&profile_id) {
                 debug!("  Profile {} was tried, but not found: {}", profile_id, e);
                 idx += 1;
                 continue;
@@ -311,7 +315,9 @@ impl Api for CommandContext {
     fn publish_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
         let profile = self.selected_profile(my_profile_id)?;
         info!("Publishing profile {} to remote repository", profile.id());
-        self.remote_repo.set(profile.id().to_owned(), profile)
+        self.remote_repo
+            .set(profile.id().to_owned(), profile.clone())?;
+        self.base_repo.set(profile.id().to_owned(), profile)
     }
 }
 
