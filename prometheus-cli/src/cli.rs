@@ -7,12 +7,22 @@ use osg::model::*;
 use osg::repo::ProfileRepository;
 use osg::vault::{self, ProfileVault};
 
+// TODO this trait and its implementation probably should be located in the prometheus lib crate
+//      instead of the cli binary here
 pub type ApiRes = Fallible<()>;
 pub trait Api {
+    fn restore_vault(&mut self, demo: bool) -> ApiRes;
+    fn restore_all_profiles(&mut self) -> ApiRes;
     fn list_profiles(&mut self) -> ApiRes;
-    fn list_incoming_links(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
-    fn show_profile(&mut self, profile_id: Option<ProfileId>, local: bool) -> ApiRes;
+    fn set_active_profile(&mut self, my_profile_id: ProfileId) -> ApiRes;
+
     fn create_profile(&mut self) -> ApiRes;
+    fn restore_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
+    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
+    fn show_profile(&mut self, profile_id: Option<ProfileId>, local: bool) -> ApiRes;
+
+    fn list_incoming_links(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
+
     fn create_link(
         &mut self,
         my_profile_id: Option<ProfileId>,
@@ -23,7 +33,6 @@ pub trait Api {
         my_profile_id: Option<ProfileId>,
         peer_profile_id: ProfileId,
     ) -> ApiRes;
-    fn set_active_profile(&mut self, my_profile_id: ProfileId) -> ApiRes;
     fn set_attribute(
         &mut self,
         my_profile_id: Option<ProfileId>,
@@ -31,10 +40,6 @@ pub trait Api {
         value: AttributeValue,
     ) -> ApiRes;
     fn clear_attribute(&mut self, my_profile_id: Option<ProfileId>, key: AttributeId) -> ApiRes;
-    fn restore_vault(&mut self, demo: bool) -> ApiRes;
-    fn restore_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
-    fn restore_all_profiles(&mut self) -> ApiRes;
-    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
 }
 
 pub struct CommandContext {
