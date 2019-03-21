@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use structopt::StructOpt;
 
-use osg::api::{self, Api, ApiRes};
+use osg::api::{self, Api, ApiRes, ProfileRepositoryKind};
 use osg::model::*;
 
 pub trait Command {
@@ -159,9 +159,10 @@ pub enum ShowCommand {
         /// Profile id to be shown, either yours or remote
         profile_id: Option<ProfileId>,
 
-        #[structopt(long)]
-        /// Profile id to be shown, either yours or remote
-        local: bool,
+        #[structopt(default_value = "remote")]
+        /// Source of the profile repository to be consulted for the lookup.
+        /// Possible values are: local, base, remote
+        source: ProfileRepositoryKind,
     },
 }
 
@@ -169,7 +170,7 @@ impl Command for ShowCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         use ShowCommand::*;
         match *self {
-            Profile { profile_id, local } => api.show_profile(profile_id, local),
+            Profile { profile_id, source } => api.show_profile(profile_id, source),
         }
     }
 }
@@ -331,7 +332,7 @@ pub enum RestoreCommand {
     #[structopt(name = "profile")]
     /// Synchronize data of a profile from remote repository (possibly overwrite local data if exists)
     Profile {
-        #[structopt(long = "my_profile_id")]
+        #[structopt()]
         /// Restore this specific profile from remote repository
         my_profile_id: Option<ProfileId>,
     },
@@ -345,8 +346,12 @@ impl Command for RestoreCommand {
         use RestoreCommand::*;
         match *self {
             Vault { demo } => api.restore_vault(demo),
-            Profile { my_profile_id } => api.restore_profile(my_profile_id),
             Profiles => api.restore_all_profiles(),
+            Profile { my_profile_id } => {
+                api.pull_base_profile(my_profile_id.clone())?;
+                // TODO detect and resolve conflicts here
+                api.revert_local_profile_to_base(my_profile_id)
+            }
         }
     }
 }
@@ -366,7 +371,11 @@ impl Command for PublishCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         use PublishCommand::*;
         match *self {
-            Profile { my_profile_id } => api.publish_profile(my_profile_id),
+            Profile { my_profile_id } => {
+                // TODO detect and resolve conflicts here
+                api.push_local_profile(my_profile_id.clone())?;
+                api.pull_base_profile(my_profile_id)
+            }
         }
     }
 }

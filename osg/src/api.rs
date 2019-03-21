@@ -1,4 +1,5 @@
 use std::path::PathBuf;
+use std::str::FromStr;
 
 use failure::{bail, ensure, err_msg, Fallible};
 use log::*;
@@ -6,6 +7,25 @@ use log::*;
 use crate::model::*;
 use crate::repo::ProfileRepository;
 use crate::vault::{self, ProfileVault};
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
+pub enum ProfileRepositoryKind {
+    Local,
+    Base,
+    Remote, // TODO Differentiate several remotes, e.g. by including a network address here like Remote(addr)
+}
+
+impl FromStr for ProfileRepositoryKind {
+    type Err = failure::Error;
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        match src {
+            "local" => Ok(ProfileRepositoryKind::Local),
+            "base" => Ok(ProfileRepositoryKind::Base),
+            "remote" => Ok(ProfileRepositoryKind::Remote),
+            _ => Err(err_msg("Invalid profile repository kind")),
+        }
+    }
+}
 
 pub type ApiRes = Fallible<()>;
 pub trait Api {
@@ -15,9 +35,15 @@ pub trait Api {
     fn set_active_profile(&mut self, my_profile_id: ProfileId) -> ApiRes;
 
     fn create_profile(&mut self) -> ApiRes;
-    fn restore_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
-    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
-    fn show_profile(&mut self, profile_id: Option<ProfileId>, local: bool) -> ApiRes;
+    fn show_profile(
+        &mut self,
+        profile_id: Option<ProfileId>,
+        kind: ProfileRepositoryKind,
+    ) -> ApiRes;
+
+    fn pull_base_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
+    fn revert_local_profile_to_base(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
+    fn push_local_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
 
     fn list_incoming_links(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
 
@@ -136,8 +162,14 @@ before trying to restore another vault."#,
 
     fn restore_one_profile(&mut self, profile_id: &ProfileId) -> ApiRes {
         let profile = self.remote_repo.get(profile_id)?;
-        self.local_repo.set(profile_id.clone(), profile.clone())?;
-        self.base_repo.set(profile_id.clone(), profile)?;
+        self.base_repo.set(profile_id.clone(), profile.clone())?;
+        self.local_repo.set(profile_id.clone(), profile)?;
+
+        // TODO This might be a cleaner approach, but the Some(id) and getting many
+        //      "your active profile is ..." messages on the CLI has to be fixed then
+        // self.pull_base_profile(Some(profile_id.to_owned()))?;
+        // self.revert_local_profile_to_base(Some(profile_id.to_owned()))?;
+
         self.mut_vault().restore_id(&profile_id)?;
         info!("  Successfully restored profile {}", profile_id);
         Ok(())
@@ -175,13 +207,18 @@ impl Api for Context {
         Ok(())
     }
 
-    fn show_profile(&mut self, profile_id: Option<ProfileId>, local: bool) -> ApiRes {
+    fn show_profile(
+        &mut self,
+        profile_id: Option<ProfileId>,
+        kind: ProfileRepositoryKind,
+    ) -> ApiRes {
         // NOTE must also work with a profile that is not ours
         let profile_id = self.selected_profile_id(profile_id)?;
-        let repo = if local {
-            &self.local_repo
-        } else {
-            &self.remote_repo
+        use ProfileRepositoryKind::*;
+        let repo = match kind {
+            Local => &self.local_repo,
+            Base => &self.base_repo,
+            Remote => &self.remote_repo,
         };
         let profile = repo.get(&profile_id)?;
         let links = profile.links();
@@ -264,7 +301,7 @@ impl Api for Context {
         self.restore_all_profiles()
     }
 
-    fn restore_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
+    fn revert_local_profile_to_base(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
         let profile_id = self.selected_profile_id(my_profile_id)?;
         self.mut_vault().restore_id(&profile_id)?;
         debug!("Fetching profile {} from remote repository", profile_id);
@@ -315,12 +352,18 @@ impl Api for Context {
         Ok(())
     }
 
-    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
+    fn push_local_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
         let profile = self.selected_profile(my_profile_id)?;
         info!("Publishing profile {} to remote repository", profile.id());
         self.remote_repo
             .set(profile.id().to_owned(), profile.clone())?;
         self.base_repo.set(profile.id().to_owned(), profile)
+    }
+
+    fn pull_base_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
+        let profile_id = self.selected_profile_id(my_profile_id)?;
+        let profile = self.remote_repo.get(&profile_id)?;
+        self.base_repo.set(profile_id, profile)
     }
 }
 

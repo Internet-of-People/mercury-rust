@@ -35,7 +35,7 @@ pub trait ProfileVault {
     fn get_active(&self) -> Fallible<Option<ProfileId>>;
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
 
-    // TODO this should not be on this interface, adding it here as fast hack for MVP demo
+    // TODO this should not be on this interface on the long run
     fn save(&self, filename: &PathBuf) -> Fallible<()>;
 
     fn is_empty(&self) -> bool {

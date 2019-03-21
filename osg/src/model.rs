@@ -54,11 +54,12 @@ impl ProfileData {
     }
 
     pub fn create_link(&mut self, with_id: &ProfileId) -> Link {
-        // TODO check duplicates here
         let link = Link {
             peer_profile: with_id.to_owned(),
         };
-        self.links.push(link.clone());
+        if !self.links.contains(&link) {
+            self.links.push(link.clone());
+        }
         link
     }
 

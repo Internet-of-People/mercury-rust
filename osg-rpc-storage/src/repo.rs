@@ -72,19 +72,6 @@ impl RpcProfileRepository {
     }
 
     pub fn remove_node(&self, id: &ProfileId) -> Fallible<()> {
-        // TODO remove this commented section if really not needed
-        //        let profile_ptr = self.get_node(id)?;
-        //        let mut profile = profile_ptr.borrow_mut();
-        //
-        //        let links = profile.links()?;
-        //        for link in links {
-        //            profile.remove_link(&link.peer_profile)?;
-        //        }
-        //        let attributes = profile.attributes()?;
-        //        for attr in attributes.keys() {
-        //            profile.clear_attribute(&attr)?;
-        //        }
-
         self.rpc().and_then(|rpc| {
             let params = messages::RemoveNodeParams { id: id.clone() };
             rpc.borrow_mut().send_request("remove_node", params)?;
