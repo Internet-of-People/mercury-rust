@@ -159,7 +159,7 @@ pub enum ShowCommand {
         /// Profile id to be shown, either yours or remote
         profile_id: Option<ProfileId>,
 
-        #[structopt(default_value = "remote")]
+        #[structopt(long = "source", default_value = "remote")]
         /// Source of the profile repository to be consulted for the lookup.
         /// Possible values are: local, base, remote
         source: ProfileRepositoryKind,

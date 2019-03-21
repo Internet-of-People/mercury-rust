@@ -10,6 +10,7 @@ pub type ProfilePtr = Rc<RefCell<Profile>>;
 
 pub trait Profile {
     fn id(&self) -> ProfileId;
+    fn version(&self) -> Fallible<u64>;
     fn attributes(&self) -> Fallible<AttributeMap>;
     fn links(&self) -> Fallible<Vec<Link>>;
 
@@ -29,6 +30,7 @@ impl TryFrom<ProfilePtr> for ProfileData {
         let profile = value.borrow();
         Ok(ProfileData::new(
             profile.id(),
+            profile.version()?,
             profile.links()?,
             profile.attributes()?,
         ))

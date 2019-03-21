@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::io::prelude::*;
 use std::rc::Rc;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use enum_repr::EnumRepr;
 use failure::{bail, err_msg, Fail, Fallible};
@@ -216,6 +217,16 @@ where
 {
     fn id(&self) -> ProfileId {
         self.id.clone()
+    }
+
+    fn version(&self) -> Fallible<u64> {
+        // TODO add versioning to the server and query version with a server request
+        //unimplemented!()
+        let start = SystemTime::now();
+        let since_the_epoch = start
+            .duration_since(UNIX_EPOCH)
+            .expect("Time went backwards");
+        Ok(since_the_epoch.as_secs())
     }
 
     fn attributes(&self) -> Fallible<AttributeMap> {

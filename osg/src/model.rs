@@ -21,14 +21,16 @@ pub struct Link {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ProfileData {
     id: ProfileId,
+    version: u64, // monotonically increasing, e.g. normal version, unix datetime or blockheight
     links: Vec<Link>,
     attributes: AttributeMap,
 }
 
 impl ProfileData {
-    pub fn new(id: ProfileId, links: Vec<Link>, attributes: AttributeMap) -> Self {
+    pub fn new(id: ProfileId, version: u64, links: Vec<Link>, attributes: AttributeMap) -> Self {
         Self {
             id,
+            version,
             links,
             attributes,
         }
@@ -37,6 +39,7 @@ impl ProfileData {
     pub fn empty(id: &ProfileId) -> Self {
         Self {
             id: id.to_owned(),
+            version: Default::default(),
             links: Default::default(),
             attributes: Default::default(),
         }
