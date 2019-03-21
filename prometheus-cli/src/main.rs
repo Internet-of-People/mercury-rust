@@ -5,13 +5,12 @@ use failure::{bail, err_msg, Fallible};
 use log::*;
 use structopt::StructOpt;
 
-use crate::cli::*;
 use crate::options::{Command, Options};
+use osg::api::*;
 use osg::repo::*;
 use osg::vault::*;
 use osg_rpc_storage::RpcProfileRepository;
 
-mod cli;
 mod options;
 
 fn main() {
@@ -52,7 +51,7 @@ fn run() -> Fallible<()> {
             "Profile vault is required but not found at {}",
             vault_path.to_string_lossy()
         );
-        cli::generate_vault();
+        generate_vault();
         bail!(
             "First you need a profile vault initialized to run {:?}",
             command
@@ -87,7 +86,7 @@ fn run() -> Fallible<()> {
     let timeout = Duration::from_secs(options.network_timeout_secs);
     let rpc_repo = RpcProfileRepository::new(&options.remote_repo_address, timeout)?;
 
-    let mut ctx = CommandContext::new(
+    let mut ctx = Context::new(
         vault_path.clone(),
         vault,
         Box::new(local_repo),

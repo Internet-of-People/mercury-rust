@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use structopt::StructOpt;
 
-use crate::cli::{self, Api, ApiRes};
+use osg::api::{self, Api, ApiRes};
 use osg::model::*;
 
 pub trait Command {
@@ -313,7 +313,7 @@ impl Command for GenerateCommand {
         use GenerateCommand::*;
         match *self {
             Vault => {
-                cli::generate_vault();
+                api::generate_vault();
                 Ok(())
             }
         }

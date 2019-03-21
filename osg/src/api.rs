@@ -3,12 +3,10 @@ use std::path::PathBuf;
 use failure::{bail, ensure, err_msg, Fallible};
 use log::*;
 
-use osg::model::*;
-use osg::repo::ProfileRepository;
-use osg::vault::{self, ProfileVault};
+use crate::model::*;
+use crate::repo::ProfileRepository;
+use crate::vault::{self, ProfileVault};
 
-// TODO this trait and its implementation probably should be located in the prometheus lib crate
-//      instead of the cli binary here
 pub type ApiRes = Fallible<()>;
 pub trait Api {
     fn restore_vault(&mut self, demo: bool) -> ApiRes;
@@ -42,7 +40,7 @@ pub trait Api {
     fn clear_attribute(&mut self, my_profile_id: Option<ProfileId>, key: AttributeId) -> ApiRes;
 }
 
-pub struct CommandContext {
+pub struct Context {
     vault_path: PathBuf,
     vault: Option<Box<ProfileVault>>,
     local_repo: Box<ProfileRepository>,
@@ -50,7 +48,7 @@ pub struct CommandContext {
     remote_repo: Box<ProfileRepository>,
 }
 
-impl CommandContext {
+impl Context {
     pub fn new(
         vault_path: PathBuf,
         vault: Option<Box<ProfileVault>>,
@@ -146,7 +144,7 @@ before trying to restore another vault."#,
     }
 }
 
-impl Api for CommandContext {
+impl Api for Context {
     fn list_profiles(&mut self) -> ApiRes {
         let profile_ids = self.vault().list()?;
         info!("You have {} profiles", profile_ids.len());
