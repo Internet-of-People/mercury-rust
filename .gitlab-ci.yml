@@ -18,6 +18,7 @@ test:cargo:
     - rustc --version && cargo --version      # Print version info for debugging
     - export RUST_BACKTRACE=1
     - time cargo fmt --all -- --check
+    - apt-get install libfuse-dev
     - time cargo build --all --all-targets --verbose --release # --all builds whole workspace, --all-targets builds bin,lib,examples,tests,benchmarks
     - time cargo test --all --verbose --jobs 1 --release # Don't parallelize to make errors more readable
   cache:
