@@ -1,0 +1,10 @@
+[package]
+name = "forgetfulfs"
+version = "0.1.0"
+authors = ["wigy <wigy_opensource_developer@yahoo.com>"]
+edition = "2018"
+
+[dependencies]
+fuse = "0.3.1"
+fuse_mt = "0.4.4"
+libc = "0.2"
