@@ -10,7 +10,7 @@ pub type ProfilePtr = Rc<RefCell<Profile>>;
 
 pub trait Profile {
     fn id(&self) -> ProfileId;
-    fn version(&self) -> Fallible<u64>;
+    fn version(&self) -> Fallible<Version>;
     fn attributes(&self) -> Fallible<AttributeMap>;
     fn links(&self) -> Fallible<Vec<Link>>;
 

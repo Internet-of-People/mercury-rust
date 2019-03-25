@@ -1,7 +1,6 @@
 use std::cell::RefCell;
 use std::io::prelude::*;
 use std::rc::Rc;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 use enum_repr::EnumRepr;
 use failure::{bail, err_msg, Fail, Fallible};
@@ -22,7 +21,10 @@ pub enum RpcError {
         display = "Expected response to request {}, Got response for {}",
         request_id, response_id
     )]
-    UnexpectedResponseId { request_id: u64, response_id: u64 },
+    UnexpectedResponseId {
+        request_id: MessageId,
+        response_id: MessageId,
+    },
     #[fail(display = "Server returned unexpected attribute type")]
     UnexpectedAttributeType,
     #[fail(display = "Unexpected target of response message: {}", target)]
@@ -138,6 +140,7 @@ where
         Ok(())
     }
 
+    const VERSION_ATTRIBUTE: &'static str = "version";
     const OPEN_SOCIAL_GRAPH_ATTRIBUTE: &'static str = "osg";
 
     pub fn get_osg_attribute_map(&self) -> Fallible<AttributeMap> {
@@ -219,14 +222,10 @@ where
         self.id.clone()
     }
 
-    fn version(&self) -> Fallible<u64> {
-        // TODO add versioning to the server and query version with a server request
-        //unimplemented!()
-        let start = SystemTime::now();
-        let since_the_epoch = start
-            .duration_since(UNIX_EPOCH)
-            .expect("Time went backwards");
-        Ok(since_the_epoch.as_secs())
+    fn version(&self) -> Fallible<Version> {
+        let version_rmp = self.get_node_attribute(Self::VERSION_ATTRIBUTE.to_owned())?;
+        let version: Version = rmp_serde::from_slice(&version_rmp)?;
+        Ok(version)
     }
 
     fn attributes(&self) -> Fallible<AttributeMap> {
@@ -383,24 +382,31 @@ mod test {
         let peer = repo.get_node(&peer_id)?;
 
         assert_eq!(repo.list_nodes()?.len(), 2);
+        // NOTE current set() implementation adds node then sets empty osg attribute
+        assert_eq!(me.borrow().version()?, 2);
         assert_eq!(me.borrow().links()?.len(), 0);
         assert_eq!(repo.followers(&my_id)?.len(), 0);
+        assert_eq!(peer.borrow().version()?, 2);
         assert_eq!(peer.borrow().links()?.len(), 0);
         assert_eq!(repo.followers(&peer_id)?.len(), 0);
 
         let link = me.borrow_mut().create_link(&peer_id)?;
-        assert_eq!(repo.list_nodes()?.len(), 2);
         assert_eq!(link.peer_profile, peer_id);
-        assert_eq!(repo.followers(&my_id)?.len(), 0);
-        assert_eq!(peer.borrow().links()?.len(), 0);
+        assert_eq!(repo.list_nodes()?.len(), 2);
+        assert_eq!(me.borrow().version()?, 3);
         assert_eq!(me.borrow().links()?.len(), 1);
         assert_eq!(me.borrow().links()?[0].peer_profile, peer_id);
+        assert_eq!(repo.followers(&my_id)?.len(), 0);
+        assert_eq!(peer.borrow().version()?, 2);
+        assert_eq!(peer.borrow().links()?.len(), 0);
         assert_eq!(repo.followers(&peer_id)?[0].peer_profile, my_id);
 
         me.borrow_mut().remove_link(&peer_id)?;
         assert_eq!(repo.list_nodes()?.len(), 2);
+        assert_eq!(me.borrow().version()?, 4);
         assert_eq!(me.borrow().links()?.len(), 0);
         assert_eq!(repo.followers(&my_id)?.len(), 0);
+        assert_eq!(peer.borrow().version()?, 2);
         assert_eq!(peer.borrow().links()?.len(), 0);
         assert_eq!(repo.followers(&peer_id)?.len(), 0);
 
@@ -409,10 +415,13 @@ mod test {
         assert_eq!(me.borrow().attributes()?.len(), 0);
         assert_eq!(peer.borrow().attributes()?.len(), 0);
         me.borrow_mut().set_attribute(&attr_id, &attr_val)?;
+        assert_eq!(me.borrow().version()?, 5);
         assert_eq!(me.borrow().attributes()?.len(), 1);
         assert_eq!(me.borrow().attributes()?.get(&attr_id), Some(&attr_val));
+        assert_eq!(peer.borrow().version()?, 2);
         assert_eq!(peer.borrow().attributes()?.len(), 0);
         me.borrow_mut().clear_attribute(&attr_id)?;
+        assert_eq!(me.borrow().version()?, 6);
         assert_eq!(me.borrow().attributes()?.len(), 0);
         assert_eq!(me.borrow().attributes()?.len(), 0);
 
@@ -421,6 +430,9 @@ mod test {
         repo.clear(&peer_id)?;
         // NOTE deleting nodes erases all details and keeps an empty profile as a tombstone for followers
         assert_eq!(repo.list_nodes()?.len(), 2);
+        // NOTE current clear() implementation deletes node, then adds it back (update tombstone and set empty osg attribute)
+        assert_eq!(me.borrow().version()?, 9);
+        assert_eq!(peer.borrow().version()?, 5);
 
         Ok(())
     }
