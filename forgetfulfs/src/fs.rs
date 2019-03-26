@@ -61,22 +61,23 @@ impl FsImpl {
         Ok(())
     }
 
-    fn remove(&mut self, parent: &Path, name: &OsStr, need_dir: bool) -> ResultEmpty {
-        let entry = parent.join(name);
-        if let Some(is_dir) = self.is_dir(&entry) {
-            if is_dir != need_dir {
-                Err(if need_dir {
-                    libc::ENOTDIR
-                } else {
-                    libc::EISDIR
-                })
-            } else {
-                self.entries.remove(&entry);
-                Ok(())
+    fn unlink(&mut self, parent: &Path, name: &OsStr) -> ResultEmpty {
+        let file_path = parent.join(name);
+        self.check_entry(&file_path, false)?;
+        self.entries.remove(&file_path);
+        Ok(())
+    }
+
+    fn rmdir(&mut self, parent: &Path, name: &OsStr) -> ResultEmpty {
+        let dir_path = parent.join(name);
+        self.check_entry(&dir_path, true)?;
+        for entry in &self.entries {
+            if entry.0.parent() == Some(&dir_path) {
+                return Err(libc::ENOTEMPTY);
             }
-        } else {
-            Err(libc::ENOENT)
         }
+        self.entries.remove(&dir_path);
+        Ok(())
     }
 
     fn attr(&self, size: u64, mtime_sec: i64, is_dir: bool) -> FileAttr {
@@ -129,14 +130,26 @@ impl FsImpl {
         }
     }
 
-    fn is_dir(&self, path: &Path) -> Option<bool> {
+    fn check_entry(&self, path: &Path, is_dir: bool) -> ResultEmpty {
         if let Some(existing) = self.entries.get(path) {
             match existing {
-                Entry::Dir { .. } => Some(true),
-                Entry::File { .. } => Some(false),
+                Entry::Dir { .. } => {
+                    if is_dir {
+                        Ok(())
+                    } else {
+                        Err(libc::EISDIR)
+                    }
+                }
+                Entry::File { .. } => {
+                    if is_dir {
+                        Err(libc::ENOTDIR)
+                    } else {
+                        Ok(())
+                    }
+                }
             }
         } else {
-            None
+            Err(libc::ENOENT)
         }
     }
 
@@ -152,12 +165,7 @@ impl FsImpl {
     }
 
     fn readdir(&self, path: &Path) -> ResultReaddir {
-        let is_dir_opt = self.is_dir(path);
-        if is_dir_opt.is_none() {
-            return Err(libc::ENOENT);
-        } else if is_dir_opt == Some(false) {
-            return Err(libc::ENOTDIR);
-        }
+        self.check_entry(path, true)?;
 
         // TODO Linear search through all files is fine for now
         let mut dir = Vec::with_capacity(64);
@@ -252,7 +260,7 @@ impl FilesystemMT for ForgetfulFS {
             parent.to_string_lossy(),
             name.to_string_lossy()
         );
-        self.wlock(req, |this| this.remove(parent, name, false))
+        self.wlock(req, |this| this.unlink(parent, name))
     }
 
     fn rmdir(&self, req: RequestInfo, parent: &Path, name: &OsStr) -> ResultEmpty {
@@ -262,7 +270,7 @@ impl FilesystemMT for ForgetfulFS {
             parent.to_string_lossy(),
             name.to_string_lossy()
         );
-        self.wlock(req, |this| this.remove(parent, name, true))
+        self.wlock(req, |this| this.rmdir(parent, name))
     }
 
     fn mkdir(&self, req: RequestInfo, parent: &Path, name: &OsStr, _mode: u32) -> ResultEntry {
@@ -278,14 +286,8 @@ impl FilesystemMT for ForgetfulFS {
     fn opendir(&self, req: RequestInfo, path: &Path, _flags: u32) -> ResultOpen {
         info!("{}: opendir {}", req.unique, path.to_string_lossy());
         self.rlock(req, |this| {
-            let is_dir_opt = this.is_dir(path);
-            if is_dir_opt.is_none() {
-                Err(libc::ENOENT)
-            } else if is_dir_opt == Some(false) {
-                Err(libc::ENOTDIR)
-            } else {
-                Ok((0, 0))
-            }
+            this.check_entry(path, true)?;
+            Ok((0, 0))
         })
     }
 
