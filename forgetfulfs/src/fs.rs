@@ -61,6 +61,18 @@ impl FsImpl {
         Ok(())
     }
 
+    fn utimens(&mut self, path: &Path, mtime: Option<Timespec>) -> ResultEmpty {
+        let entry: &mut Entry = self.entries.get_mut(path).ok_or(libc::ENOENT)?;
+        let x: &mut i64 = match entry {
+            Entry::Dir { mtime_sec } => mtime_sec,
+            Entry::File { mtime_sec, .. } => mtime_sec,
+        };
+        if mtime.is_some() {
+            *x = mtime.unwrap().sec;
+        }
+        Ok(())
+    }
+
     fn unlink(&mut self, parent: &Path, name: &OsStr) -> ResultEmpty {
         let file_path = parent.join(name);
         self.check_entry(&file_path, false)?;
@@ -117,16 +129,37 @@ impl FsImpl {
     }
 
     fn mkdir(&mut self, parent: &Path, name: &OsStr) -> ResultEntry {
-        let entry = parent.join(name);
-        if let Some(existing) = self.entries.get(&entry) {
+        let dir_name = parent.join(name);
+        self.check_entry(parent, true)?;
+        if let Some(existing) = self.entries.get(&dir_name) {
             match existing {
                 Entry::Dir { mtime_sec } => Ok(self.dir_entry(*mtime_sec)),
                 Entry::File { .. } => Err(libc::ENOTDIR),
             }
         } else {
             let mtime_sec = Self::now_utc();
-            self.entries.insert(entry, Entry::Dir { mtime_sec });
+            self.entries.insert(dir_name, Entry::Dir { mtime_sec });
             Ok(self.dir_entry(mtime_sec))
+        }
+    }
+
+    fn create(&mut self, parent: &Path, name: &OsStr) -> ResultCreate {
+        let file_name = parent.join(name);
+        self.check_entry(parent, true)?;
+        if let Some(_existing) = self.entries.get(&file_name) {
+            Err(libc::EEXIST)
+        } else {
+            let mtime_sec = Self::now_utc();
+            let blob = Vec::with_capacity(1024);
+            self.entries
+                .insert(file_name, Entry::File { mtime_sec, blob });
+            let res = CreatedEntry {
+                ttl: Timespec::new(std::i64::MAX, 0),
+                attr: self.attr(0, mtime_sec, false),
+                fh: 0,
+                flags: 0,
+            };
+            Ok(res)
         }
     }
 
@@ -243,6 +276,33 @@ impl FilesystemMT for ForgetfulFS {
         Ok(())
     }
 
+    fn open(&self, req: RequestInfo, path: &Path, _flags: u32) -> ResultOpen {
+        info!("{}: open {}", req.unique, path.to_string_lossy());
+        self.rlock(req, |this| {
+            this.check_entry(path, false)?;
+            Ok((0, 0))
+        })
+    }
+
+    fn create(
+        &self,
+        req: RequestInfo,
+        parent: &Path,
+        name: &OsStr,
+        mode: u32,
+        flags: u32,
+    ) -> ResultCreate {
+        info!(
+            "{}: create {},{},{},{}",
+            req.unique,
+            parent.to_string_lossy(),
+            name.to_string_lossy(),
+            mode,
+            flags,
+        );
+        self.wlock(req, |this| this.create(parent, name))
+    }
+
     fn truncate(&self, req: RequestInfo, path: &Path, _fh: Option<u64>, size: u64) -> ResultEmpty {
         info!(
             "{}: truncate {}, {}",
@@ -251,6 +311,23 @@ impl FilesystemMT for ForgetfulFS {
             size
         );
         self.wlock(req, |this| this.truncate(path, size))
+    }
+
+    fn utimens(
+        &self,
+        req: RequestInfo,
+        path: &Path,
+        _fh: Option<u64>,
+        _atime: Option<Timespec>,
+        mtime: Option<Timespec>,
+    ) -> ResultEmpty {
+        info!(
+            "{}: utimens {}, {:?}",
+            req.unique,
+            path.to_string_lossy(),
+            mtime,
+        );
+        self.wlock(req, |this| this.utimens(path, mtime))
     }
 
     fn unlink(&self, req: RequestInfo, parent: &Path, name: &OsStr) -> ResultEmpty {
