@@ -115,7 +115,7 @@ impl<'a> Simulation<'a> {
         let idx = self.state.add_user();
         let id = self.vault.profile_id(idx)?;
 
-        let profile = ProfileData::empty(&id);
+        let profile = ProfileData::new(&id);
         self.repo.set(id.clone(), profile)?;
         info!("Generated profile {}: {}", idx, id);
 

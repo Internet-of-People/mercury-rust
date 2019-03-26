@@ -248,6 +248,12 @@ where
         Ok(links)
     }
 
+    fn set_version(&mut self, version: Version) -> Fallible<()> {
+        //let version = self.version()? + 1;
+        let version_rmp = rmp_serde::to_vec(&version)?;
+        self.set_node_attribute(Self::VERSION_ATTRIBUTE.to_owned(), version_rmp)
+    }
+
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link> {
         let params = AddEdgeParams {
             source: self.id().to_owned(),
@@ -373,11 +379,11 @@ mod test {
         assert_eq!(repo.list_nodes()?.len(), 0);
 
         let my_id = ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?;
-        let my_data = ProfileData::empty(&my_id);
+        let my_data = ProfileData::new(&my_id);
         repo.set(my_id.clone(), my_data.clone())?;
         let me = repo.get_node(&my_id)?;
         let peer_id = ProfileId::from_str("Iez25N5WZ1Q6TQpgpyYgiu9gTX")?;
-        let peer_data = ProfileData::empty(&peer_id);
+        let peer_data = ProfileData::new(&peer_id);
         repo.set(peer_id.clone(), peer_data.clone())?;
         let peer = repo.get_node(&peer_id)?;
 

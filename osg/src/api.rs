@@ -31,21 +31,17 @@ pub type ApiRes = Fallible<()>;
 pub trait Api {
     fn restore_vault(&mut self, demo: bool) -> ApiRes;
     fn restore_all_profiles(&mut self) -> ApiRes;
-    fn list_profiles(&mut self) -> ApiRes;
+    fn list_profiles(&self) -> ApiRes;
     fn set_active_profile(&mut self, my_profile_id: ProfileId) -> ApiRes;
 
     fn create_profile(&mut self) -> ApiRes;
-    fn show_profile(
-        &mut self,
-        profile_id: Option<ProfileId>,
-        kind: ProfileRepositoryKind,
-    ) -> ApiRes;
+    fn show_profile(&self, profile_id: Option<ProfileId>, kind: ProfileRepositoryKind) -> ApiRes;
 
     fn pull_base_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
     fn revert_local_profile_to_base(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
     fn push_local_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
 
-    fn list_incoming_links(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
+    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> ApiRes;
 
     fn create_link(
         &mut self,
@@ -177,7 +173,7 @@ before trying to restore another vault."#,
 }
 
 impl Api for Context {
-    fn list_profiles(&mut self) -> ApiRes {
+    fn list_profiles(&self) -> ApiRes {
         let profile_ids = self.vault().list()?;
         info!("You have {} profiles", profile_ids.len());
         let active_profile_opt = self.vault().get_active()?;
@@ -197,7 +193,7 @@ impl Api for Context {
         Ok(())
     }
 
-    fn list_incoming_links(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
+    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> ApiRes {
         let profile = self.selected_profile(my_profile_id)?;
         let followers = self.remote_repo.followers(profile.id())?;
         info!("You have {} followers", followers.len());
@@ -207,11 +203,7 @@ impl Api for Context {
         Ok(())
     }
 
-    fn show_profile(
-        &mut self,
-        profile_id: Option<ProfileId>,
-        kind: ProfileRepositoryKind,
-    ) -> ApiRes {
+    fn show_profile(&self, profile_id: Option<ProfileId>, kind: ProfileRepositoryKind) -> ApiRes {
         // NOTE must also work with a profile that is not ours
         let profile_id = self.selected_profile_id(profile_id)?;
         use ProfileRepositoryKind::*;
@@ -225,6 +217,7 @@ impl Api for Context {
         let attributes = profile.attributes();
 
         info!("Details of profile id {}", profile_id);
+        info!("Profile version: {}", profile.version());
         info!("  {} attributes:", attributes.len());
         for (i, attribute) in attributes.iter().enumerate() {
             info!("    {}: {:?}", i, attribute);
@@ -238,7 +231,7 @@ impl Api for Context {
 
     fn create_profile(&mut self) -> ApiRes {
         let new_profile_id = self.mut_vault().create_id()?;
-        let empty_profile = ProfileData::empty(&new_profile_id);
+        let empty_profile = ProfileData::new(&new_profile_id);
         self.local_repo
             .set(new_profile_id.to_owned(), empty_profile)?;
         info!("Created and activated profile with id {}", new_profile_id);
@@ -252,6 +245,7 @@ impl Api for Context {
     ) -> ApiRes {
         let mut profile = self.selected_profile(my_profile_id)?;
         let link = profile.create_link(&peer_profile_id);
+        profile.increase_version();
         self.local_repo.set(profile.id().to_owned(), profile)?;
         debug!("Created link: {:?}", link);
         info!("Created link to peer profile {}", peer_profile_id);
@@ -265,6 +259,7 @@ impl Api for Context {
     ) -> ApiRes {
         let mut profile = self.selected_profile(my_profile_id)?;
         profile.remove_link(&peer_profile_id);
+        profile.increase_version();
         self.local_repo.set(profile.id().to_owned(), profile)?;
         info!("Removed link from profile {}", peer_profile_id);
         Ok(())
@@ -285,12 +280,14 @@ impl Api for Context {
         let mut profile = self.selected_profile(my_profile_id)?;
         info!("Setting attribute {} to {}", key, value);
         profile.set_attribute(key, value);
+        profile.increase_version();
         self.local_repo.set(profile.id().to_owned(), profile)
     }
 
     fn clear_attribute(&mut self, my_profile_id: Option<ProfileId>, key: AttributeId) -> ApiRes {
         let mut profile = self.selected_profile(my_profile_id)?;
         profile.clear_attribute(&key);
+        profile.increase_version();
         self.local_repo.set(profile.id().to_owned(), profile)?;
         info!("Cleared attribute: {}", key);
         Ok(())

@@ -109,6 +109,8 @@ impl ProfileRepository for RpcProfileRepository {
                 .key_not_existed_or_else(|| Ok(()))?;
 
             let mut rpc_profile = RpcProfile::new(&id, rpc);
+            // TODO consider version conflict checks here
+            rpc_profile.set_version(profile.version())?;
             rpc_profile.set_osg_attribute_map(profile.attributes())?;
 
             for link in profile.links() {
@@ -120,7 +122,8 @@ impl ProfileRepository for RpcProfileRepository {
     }
 
     fn clear(&mut self, id: &ProfileId) -> Fallible<()> {
-        self.set(id.to_owned(), ProfileData::empty(id))
+        let profile = self.get(id)?;
+        self.set(id.to_owned(), ProfileData::tombstone(id, profile.version()))
     }
 
     fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>> {

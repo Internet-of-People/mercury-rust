@@ -28,7 +28,7 @@ pub struct ProfileData {
 }
 
 impl ProfileData {
-    pub fn new(
+    pub fn create(
         id: ProfileId,
         version: Version,
         links: Vec<Link>,
@@ -42,10 +42,19 @@ impl ProfileData {
         }
     }
 
-    pub fn empty(id: &ProfileId) -> Self {
+    pub fn new(id: &ProfileId) -> Self {
         Self {
             id: id.to_owned(),
-            version: Default::default(),
+            version: 1,
+            links: Default::default(),
+            attributes: Default::default(),
+        }
+    }
+
+    pub fn tombstone(id: &ProfileId, last_version: Version) -> Self {
+        Self {
+            id: id.to_owned(),
+            version: last_version + 1,
             links: Default::default(),
             attributes: Default::default(),
         }
@@ -56,6 +65,13 @@ impl ProfileData {
     //      We should either kill trait Profile or fit it like this.
     pub fn id(&self) -> &ProfileId {
         &self.id
+    }
+    pub fn version(&self) -> Version {
+        self.version
+    }
+
+    pub fn increase_version(&mut self) {
+        self.version += 1;
     }
 
     pub fn links(&self) -> &Vec<Link> {

@@ -15,7 +15,7 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
         id_map.insert(idx, id.clone());
 
         if repo.get(&id).is_err() {
-            let profile = ProfileData::empty(&id);
+            let profile = ProfileData::new(&id);
             repo.set(id, profile)?;
         }
     }

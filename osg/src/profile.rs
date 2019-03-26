@@ -14,6 +14,8 @@ pub trait Profile {
     fn attributes(&self) -> Fallible<AttributeMap>;
     fn links(&self) -> Fallible<Vec<Link>>;
 
+    fn set_version(&mut self, version: Version) -> Fallible<()>;
+
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link>;
     fn remove_link(&mut self, peer_profile: &ProfileId) -> Fallible<()>;
 
@@ -28,7 +30,7 @@ impl TryFrom<ProfilePtr> for ProfileData {
     type Error = failure::Error;
     fn try_from(value: ProfilePtr) -> Result<Self, Self::Error> {
         let profile = value.borrow();
-        Ok(ProfileData::new(
+        Ok(ProfileData::create(
             profile.id(),
             profile.version()?,
             profile.links()?,
