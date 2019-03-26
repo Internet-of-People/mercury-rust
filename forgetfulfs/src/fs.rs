@@ -24,9 +24,7 @@ struct FsImpl {
 }
 
 impl FsImpl {
-    fn new() -> Self {
-        let uid = Default::default();
-        let gid = Default::default();
+    fn new(uid: u32, gid: u32) -> Self {
         let mut entries = HashMap::with_capacity(128);
         entries.insert(
             PathBuf::from("/"),
@@ -169,8 +167,8 @@ pub struct ForgetfulFS {
 }
 
 impl ForgetfulFS {
-    pub fn new() -> Self {
-        let inner = RwLock::new(FsImpl::new());
+    pub fn new(uid: u32, gid: u32) -> Self {
+        let inner = RwLock::new(FsImpl::new(uid, gid));
         Self { inner }
     }
 
@@ -178,16 +176,16 @@ impl ForgetfulFS {
     where
         F: FnOnce(&RwLockReadGuard<'_, FsImpl>) -> Result<T, LibCError>,
     {
-        trace!("Trying to acquire read lock {}", req.unique);
+        trace!("{}: Trying to acquire read lock", req.unique);
         match self.inner.read() {
             Err(_e) => {
-                debug!("Could not acquire read lock {}", req.unique);
+                debug!("{}: Could not acquire read lock", req.unique);
                 Err(libc::EAGAIN)
             }
             Ok(this) => {
                 this.auth(req)?;
                 let res = f(&this);
-                trace!("Releasing read lock {}", req.unique);
+                trace!("{}: Releasing read lock", req.unique);
                 res
             }
         }
@@ -213,16 +211,15 @@ impl ForgetfulFS {
     }
 }
 
-impl fuse::Filesystem for ForgetfulFS {}
-
 impl FilesystemMT for ForgetfulFS {
     fn init(&self, req: RequestInfo) -> ResultEmpty {
         info!("{}: init {}:{}", req.unique, req.uid, req.gid);
-        self.wlock(req, |this| {
-            this.uid = req.uid;
-            this.gid = req.gid;
-            Ok(())
-        })
+        // self.wlock(req, |this| {
+        //     this.uid = req.uid;
+        //     this.gid = req.gid;
+        //     Ok(())
+        // })
+        Ok(())
     }
 
     fn truncate(&self, req: RequestInfo, path: &Path, _fh: Option<u64>, size: u64) -> ResultEmpty {
