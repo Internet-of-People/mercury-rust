@@ -61,10 +61,22 @@ impl FsImpl {
         Ok(())
     }
 
-    fn unlink(&mut self, parent: &Path, name: &OsStr) -> ResultEmpty {
+    fn remove(&mut self, parent: &Path, name: &OsStr, need_dir: bool) -> ResultEmpty {
         let entry = parent.join(name);
-        self.entries.remove(&entry);
-        Ok(())
+        if let Some(is_dir) = self.is_dir(&entry) {
+            if is_dir != need_dir {
+                Err(if need_dir {
+                    libc::ENOTDIR
+                } else {
+                    libc::EISDIR
+                })
+            } else {
+                self.entries.remove(&entry);
+                Ok(())
+            }
+        } else {
+            Err(libc::ENOENT)
+        }
     }
 
     fn attr(&self, size: u64, mtime_sec: i64, is_dir: bool) -> FileAttr {
@@ -117,14 +129,14 @@ impl FsImpl {
         }
     }
 
-    fn dir_exist(&self, path: &Path) -> bool {
+    fn is_dir(&self, path: &Path) -> Option<bool> {
         if let Some(existing) = self.entries.get(path) {
             match existing {
-                Entry::Dir { .. } => true,
-                Entry::File { .. } => false,
+                Entry::Dir { .. } => Some(true),
+                Entry::File { .. } => Some(false),
             }
         } else {
-            false
+            None
         }
     }
 
@@ -140,7 +152,10 @@ impl FsImpl {
     }
 
     fn readdir(&self, path: &Path) -> ResultReaddir {
-        if !self.dir_exist(path) {
+        let is_dir_opt = self.is_dir(path);
+        if is_dir_opt.is_none() {
+            return Err(libc::ENOENT);
+        } else if is_dir_opt == Some(false) {
             return Err(libc::ENOTDIR);
         }
 
@@ -213,12 +228,10 @@ impl ForgetfulFS {
 
 impl FilesystemMT for ForgetfulFS {
     fn init(&self, req: RequestInfo) -> ResultEmpty {
-        info!("{}: init {}:{}", req.unique, req.uid, req.gid);
-        // self.wlock(req, |this| {
-        //     this.uid = req.uid;
-        //     this.gid = req.gid;
-        //     Ok(())
-        // })
+        info!(
+            "{}: init {}:{} from PID {}",
+            req.unique, req.uid, req.gid, req.pid
+        );
         Ok(())
     }
 
@@ -239,7 +252,17 @@ impl FilesystemMT for ForgetfulFS {
             parent.to_string_lossy(),
             name.to_string_lossy()
         );
-        self.wlock(req, |this| this.unlink(parent, name))
+        self.wlock(req, |this| this.remove(parent, name, false))
+    }
+
+    fn rmdir(&self, req: RequestInfo, parent: &Path, name: &OsStr) -> ResultEmpty {
+        info!(
+            "{}: rmdir {}, {}",
+            req.unique,
+            parent.to_string_lossy(),
+            name.to_string_lossy()
+        );
+        self.wlock(req, |this| this.remove(parent, name, true))
     }
 
     fn mkdir(&self, req: RequestInfo, parent: &Path, name: &OsStr, _mode: u32) -> ResultEntry {
@@ -254,11 +277,16 @@ impl FilesystemMT for ForgetfulFS {
 
     fn opendir(&self, req: RequestInfo, path: &Path, _flags: u32) -> ResultOpen {
         info!("{}: opendir {}", req.unique, path.to_string_lossy());
-        if self.rlock(req, |this| Ok(this.dir_exist(path)))? {
-            Ok((0, 0))
-        } else {
-            Err(libc::ENOTDIR)
-        }
+        self.rlock(req, |this| {
+            let is_dir_opt = this.is_dir(path);
+            if is_dir_opt.is_none() {
+                Err(libc::ENOENT)
+            } else if is_dir_opt == Some(false) {
+                Err(libc::ENOTDIR)
+            } else {
+                Ok((0, 0))
+            }
+        })
     }
 
     fn readdir(&self, req: RequestInfo, path: &Path, _fh: u64) -> ResultReaddir {
