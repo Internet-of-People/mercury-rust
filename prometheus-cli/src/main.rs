@@ -69,19 +69,19 @@ fn run() -> Fallible<()> {
         debug!("No profile vault found");
     }
 
-    let local_repo = LocalProfileRepository::load(&repo_path).or_else(|_e| {
+    let local_repo = FileProfileRepository::load(&repo_path).or_else(|_e| {
         debug!(
             "Failed to load profile repository {:?}, creating an empty one",
             repo_path
         );
-        LocalProfileRepository::create(&repo_path)
+        FileProfileRepository::create(&repo_path)
     })?;
-    let base_repo = LocalProfileRepository::load(&base_path).or_else(|_e| {
+    let base_repo = FileProfileRepository::load(&base_path).or_else(|_e| {
         debug!(
             "Failed to load base repository {:?}, creating an empty one",
             base_path
         );
-        LocalProfileRepository::create(&base_path)
+        FileProfileRepository::create(&base_path)
     })?;
     let timeout = Duration::from_secs(options.network_timeout_secs);
     let rpc_repo = RpcProfileRepository::new(&options.remote_repo_address, timeout)?;
@@ -89,8 +89,9 @@ fn run() -> Fallible<()> {
     let mut ctx = Context::new(
         vault_path.clone(),
         vault,
-        Box::new(local_repo),
+        local_repo,
         Box::new(base_repo),
+        Box::new(rpc_repo.clone()),
         Box::new(rpc_repo),
     );
     let command = Box::new(command);

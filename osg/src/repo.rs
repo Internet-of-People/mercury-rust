@@ -8,25 +8,30 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::model::*;
 
-// TODO should all operations below be async?
 pub trait ProfileRepository {
     fn get(&self, id: &ProfileId) -> Fallible<ProfileData>;
     fn set(&mut self, id: ProfileId, profile: ProfileData) -> Fallible<()>;
     // clear up links and attributes to leave an empty tombstone in place of the profile.
     fn clear(&mut self, id: &ProfileId) -> Fallible<()>;
+}
 
-    // TODO this shouldn't be here, an external clawler/explorer service should be used
+pub trait LocalProfileRepository: ProfileRepository {
+    // NOTE similar to set() but without version check, must be able to revert to a previous version
+    fn restore(&mut self, id: ProfileId, profile: ProfileData) -> Fallible<()>;
+}
+
+pub trait ProfileExplorer {
     fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>>;
 }
 
 #[derive(Debug, Deserialize, Serialize)]
-pub struct LocalProfileRepository {
+pub struct FileProfileRepository {
     profiles: HashMap<ProfileId, ProfileData>,
     #[serde(skip)]
     filename: PathBuf,
 }
 
-impl LocalProfileRepository {
+impl FileProfileRepository {
     pub fn create(filename: &PathBuf) -> Fallible<Self> {
         let this = Self {
             profiles: Default::default(),
@@ -55,9 +60,15 @@ impl LocalProfileRepository {
         repo.filename = filename.to_owned();
         Ok(repo)
     }
+
+    fn store(&mut self, id: ProfileId, profile: ProfileData) -> Fallible<()> {
+        self.profiles.insert(id, profile);
+        self.save()?;
+        Ok(())
+    }
 }
 
-impl ProfileRepository for LocalProfileRepository {
+impl ProfileRepository for FileProfileRepository {
     fn get(&self, id: &ProfileId) -> Fallible<ProfileData> {
         // TODO we probably should also have some nicely typed errors here
         self.profiles
@@ -76,9 +87,7 @@ impl ProfileRepository for LocalProfileRepository {
             }
         }
 
-        self.profiles.insert(id, profile);
-        self.save()?;
-        Ok(())
+        self.store(id, profile)
     }
 
     fn clear(&mut self, id: &ProfileId) -> Fallible<()> {
@@ -87,10 +96,11 @@ impl ProfileRepository for LocalProfileRepository {
         self.set(id.to_owned(), ProfileData::tombstone(id, profile.version()))?;
         Ok(())
     }
+}
 
-    fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
-        // TODO it's pointless for a local storage, we should seperate this operation from this trait
-        unimplemented!()
+impl LocalProfileRepository for FileProfileRepository {
+    fn restore(&mut self, id: ProfileId, profile: ProfileData) -> Fallible<()> {
+        self.store(id, profile)
     }
 }
 
@@ -102,7 +112,7 @@ mod test {
     #[test]
     fn test_local_repository() -> Fallible<()> {
         let tmp_file = std::env::temp_dir().join("local_repo_test.dat");
-        let mut repo = LocalProfileRepository::create(&tmp_file)?;
+        let mut repo = FileProfileRepository::create(&tmp_file)?;
 
         let my_id = ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?;
         let mut my_data = ProfileData::new(&my_id);

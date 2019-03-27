@@ -5,7 +5,7 @@ use failure::{bail, ensure, err_msg, Fallible};
 use log::*;
 
 use crate::model::*;
-use crate::repo::ProfileRepository;
+use crate::repo::*;
 use crate::vault::{self, ProfileVault};
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
@@ -65,18 +65,20 @@ pub trait Api {
 pub struct Context {
     vault_path: PathBuf,
     vault: Option<Box<ProfileVault>>,
-    local_repo: Box<ProfileRepository>,
+    local_repo: FileProfileRepository,
     base_repo: Box<ProfileRepository>,
     remote_repo: Box<ProfileRepository>,
+    explorer: Box<ProfileExplorer>,
 }
 
 impl Context {
     pub fn new(
         vault_path: PathBuf,
         vault: Option<Box<ProfileVault>>,
-        local_repo: Box<ProfileRepository>,
+        local_repo: FileProfileRepository,
         base_repo: Box<ProfileRepository>,
         remote_repo: Box<ProfileRepository>,
+        explorer: Box<ProfileExplorer>,
     ) -> Self {
         Self {
             vault_path,
@@ -84,6 +86,7 @@ impl Context {
             local_repo,
             base_repo,
             remote_repo,
+            explorer,
         }
     }
 
@@ -159,7 +162,7 @@ before trying to restore another vault."#,
     fn restore_one_profile(&mut self, profile_id: &ProfileId) -> ApiRes {
         let profile = self.remote_repo.get(profile_id)?;
         self.base_repo.set(profile_id.clone(), profile.clone())?;
-        self.local_repo.set(profile_id.clone(), profile)?;
+        self.local_repo.restore(profile_id.clone(), profile)?;
 
         // TODO This might be a cleaner approach, but the Some(id) and getting many
         //      "your active profile is ..." messages on the CLI has to be fixed then
@@ -195,7 +198,7 @@ impl Api for Context {
 
     fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> ApiRes {
         let profile = self.selected_profile(my_profile_id)?;
-        let followers = self.remote_repo.followers(profile.id())?;
+        let followers = self.explorer.followers(profile.id())?;
         info!("You have {} followers", followers.len());
         for (idx, follower) in followers.iter().enumerate() {
             info!("  {}: {:?}", idx, follower);
@@ -209,8 +212,8 @@ impl Api for Context {
         use ProfileRepositoryKind::*;
         let repo = match kind {
             Local => &self.local_repo,
-            Base => &self.base_repo,
-            Remote => &self.remote_repo,
+            Base => self.base_repo.as_ref(),
+            Remote => self.remote_repo.as_ref(),
         };
         let profile = repo.get(&profile_id)?;
         let links = profile.links();
@@ -301,10 +304,14 @@ impl Api for Context {
     fn revert_local_profile_to_base(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
         let profile_id = self.selected_profile_id(my_profile_id)?;
         self.mut_vault().restore_id(&profile_id)?;
-        debug!("Fetching profile {} from remote repository", profile_id);
-        let profile = self.remote_repo.get(&profile_id)?;
-        self.local_repo.set(profile_id.clone(), profile)?;
-        info!("Restored profile {} from remote repository", profile_id);
+        let profile = self.base_repo.get(&profile_id)?;
+        self.local_repo
+            .restore(profile_id.clone(), profile.clone())?;
+        info!(
+            "Restored profile {} to last known remote version {}",
+            profile_id,
+            profile.version()
+        );
         Ok(())
     }
 
@@ -352,15 +359,26 @@ impl Api for Context {
     fn push_local_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
         let profile = self.selected_profile(my_profile_id)?;
         info!("Publishing profile {} to remote repository", profile.id());
+        // NOTE remote server should detect version conflict updating the entry
+        // TODO should we detect version conflicts ALSO here?
         self.remote_repo
-            .set(profile.id().to_owned(), profile.clone())?;
-        self.base_repo.set(profile.id().to_owned(), profile)
+            .set(profile.id().to_owned(), profile.clone())
     }
 
     fn pull_base_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
         let profile_id = self.selected_profile_id(my_profile_id)?;
-        let profile = self.remote_repo.get(&profile_id)?;
-        self.base_repo.set(profile_id, profile)
+        let base_profile_res = self.base_repo.get(&profile_id);
+        let local_profile_res = self.local_repo.get(&profile_id);
+        if local_profile_res.is_ok() && base_profile_res.is_ok() {
+            let local_version = local_profile_res.unwrap().version();
+            let base_version = base_profile_res.unwrap().version();
+            if local_version > base_version {
+                // TODO we should suggest some conflict resolution method here
+                bail!("Conflict detected: local version {} was modified since last known remote version {}", local_version, base_version);
+            }
+        }
+        let remote_profile = self.remote_repo.get(&profile_id)?;
+        self.base_repo.set(profile_id, remote_profile)
     }
 }
 

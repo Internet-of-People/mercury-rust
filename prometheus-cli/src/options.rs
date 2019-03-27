@@ -349,7 +349,6 @@ impl Command for RestoreCommand {
             Profiles => api.restore_all_profiles(),
             Profile { my_profile_id } => {
                 api.pull_base_profile(my_profile_id.clone())?;
-                // TODO detect and resolve conflicts here
                 api.revert_local_profile_to_base(my_profile_id)
             }
         }
@@ -372,7 +371,6 @@ impl Command for PublishCommand {
         use PublishCommand::*;
         match *self {
             Profile { my_profile_id } => {
-                // TODO detect and resolve conflicts here
                 api.push_local_profile(my_profile_id.clone())?;
                 api.pull_base_profile(my_profile_id)
             }

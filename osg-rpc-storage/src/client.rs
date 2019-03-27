@@ -365,7 +365,7 @@ mod test {
     use super::*;
     use crate::repo::RpcProfileRepository;
     use osg::model::ProfileId;
-    use osg::repo::ProfileRepository;
+    use osg::repo::{ProfileExplorer, ProfileRepository};
     use std::str::FromStr;
     use std::time::Duration;
 
@@ -389,30 +389,30 @@ mod test {
 
         assert_eq!(repo.list_nodes()?.len(), 2);
         // NOTE current set() implementation adds node then sets empty osg attribute
-        assert_eq!(me.borrow().version()?, 2);
+        assert_eq!(me.borrow().version()?, 1);
         assert_eq!(me.borrow().links()?.len(), 0);
         assert_eq!(repo.followers(&my_id)?.len(), 0);
-        assert_eq!(peer.borrow().version()?, 2);
+        assert_eq!(peer.borrow().version()?, 1);
         assert_eq!(peer.borrow().links()?.len(), 0);
         assert_eq!(repo.followers(&peer_id)?.len(), 0);
 
         let link = me.borrow_mut().create_link(&peer_id)?;
         assert_eq!(link.peer_profile, peer_id);
         assert_eq!(repo.list_nodes()?.len(), 2);
-        assert_eq!(me.borrow().version()?, 3);
+        assert_eq!(me.borrow().version()?, 1);
         assert_eq!(me.borrow().links()?.len(), 1);
         assert_eq!(me.borrow().links()?[0].peer_profile, peer_id);
         assert_eq!(repo.followers(&my_id)?.len(), 0);
-        assert_eq!(peer.borrow().version()?, 2);
+        assert_eq!(peer.borrow().version()?, 1);
         assert_eq!(peer.borrow().links()?.len(), 0);
         assert_eq!(repo.followers(&peer_id)?[0].peer_profile, my_id);
 
         me.borrow_mut().remove_link(&peer_id)?;
         assert_eq!(repo.list_nodes()?.len(), 2);
-        assert_eq!(me.borrow().version()?, 4);
+        assert_eq!(me.borrow().version()?, 1);
         assert_eq!(me.borrow().links()?.len(), 0);
         assert_eq!(repo.followers(&my_id)?.len(), 0);
-        assert_eq!(peer.borrow().version()?, 2);
+        assert_eq!(peer.borrow().version()?, 1);
         assert_eq!(peer.borrow().links()?.len(), 0);
         assert_eq!(repo.followers(&peer_id)?.len(), 0);
 
@@ -421,15 +421,18 @@ mod test {
         assert_eq!(me.borrow().attributes()?.len(), 0);
         assert_eq!(peer.borrow().attributes()?.len(), 0);
         me.borrow_mut().set_attribute(&attr_id, &attr_val)?;
-        assert_eq!(me.borrow().version()?, 5);
+        assert_eq!(me.borrow().version()?, 1);
         assert_eq!(me.borrow().attributes()?.len(), 1);
         assert_eq!(me.borrow().attributes()?.get(&attr_id), Some(&attr_val));
-        assert_eq!(peer.borrow().version()?, 2);
+        assert_eq!(peer.borrow().version()?, 1);
         assert_eq!(peer.borrow().attributes()?.len(), 0);
         me.borrow_mut().clear_attribute(&attr_id)?;
-        assert_eq!(me.borrow().version()?, 6);
+        assert_eq!(me.borrow().version()?, 1);
         assert_eq!(me.borrow().attributes()?.len(), 0);
         assert_eq!(me.borrow().attributes()?.len(), 0);
+
+        me.borrow_mut().set_version(42)?;
+        assert_eq!(me.borrow().version()?, 42);
 
         assert_eq!(repo.list_nodes()?.len(), 2);
         repo.clear(&my_id)?;
@@ -437,8 +440,8 @@ mod test {
         // NOTE deleting nodes erases all details and keeps an empty profile as a tombstone for followers
         assert_eq!(repo.list_nodes()?.len(), 2);
         // NOTE current clear() implementation deletes node, then adds it back (update tombstone and set empty osg attribute)
-        assert_eq!(me.borrow().version()?, 9);
-        assert_eq!(peer.borrow().version()?, 5);
+        assert_eq!(me.borrow().version()?, 43);
+        assert_eq!(peer.borrow().version()?, 2);
 
         Ok(())
     }

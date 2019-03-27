@@ -10,8 +10,9 @@ use crate::client::{FallibleExtension, MsgPackRpc, RpcProfile, RpcPtr};
 use crate::messages;
 use osg::model::*;
 use osg::profile::{Profile, ProfilePtr};
-use osg::repo::ProfileRepository;
+use osg::repo::{ProfileExplorer, ProfileRepository};
 
+#[derive(Clone)]
 pub struct RpcProfileRepository {
     address: SocketAddr,
     network_timeout: Duration,
@@ -125,7 +126,9 @@ impl ProfileRepository for RpcProfileRepository {
         let profile = self.get(id)?;
         self.set(id.to_owned(), ProfileData::tombstone(id, profile.version()))
     }
+}
 
+impl ProfileExplorer for RpcProfileRepository {
     fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>> {
         self.rpc().and_then(|rpc| {
             let params = messages::ListInEdgesParams { id: id.clone() };
