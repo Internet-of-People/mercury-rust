@@ -322,10 +322,13 @@ impl FilesystemMT for ForgetfulFS {
         mtime: Option<Timespec>,
     ) -> ResultEmpty {
         info!(
-            "{}: utimens {}, {:?}",
+            "{}: utimens {}, {}",
             req.unique,
             path.to_string_lossy(),
-            mtime,
+            mtime
+                .map(time::at_utc)
+                .unwrap_or_else(time::empty_tm)
+                .rfc3339(),
         );
         self.wlock(req, |this| this.utimens(path, mtime))
     }
