@@ -27,6 +27,25 @@ impl FromStr for ProfileRepositoryKind {
     }
 }
 
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
+pub enum UpdateMode {
+    CacheOnly,
+    UpdateUnchanged,
+    ForcedOverwrite,
+}
+
+impl FromStr for UpdateMode {
+    type Err = failure::Error;
+    fn from_str(src: &str) -> Result<Self, Self::Err> {
+        match src {
+            "cache" => Ok(UpdateMode::CacheOnly),
+            "update" => Ok(UpdateMode::UpdateUnchanged),
+            "force" => Ok(UpdateMode::ForcedOverwrite),
+            _ => Err(err_msg("Invalid update mode")),
+        }
+    }
+}
+
 pub type ApiRes = Fallible<()>;
 pub trait Api {
     fn restore_vault(&mut self, demo: bool) -> ApiRes;
@@ -37,9 +56,9 @@ pub trait Api {
     fn create_profile(&mut self) -> ApiRes;
     fn show_profile(&self, profile_id: Option<ProfileId>, kind: ProfileRepositoryKind) -> ApiRes;
 
-    fn pull_base_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
-    fn revert_local_profile_to_base(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
-    fn push_local_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
+    fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
+    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
+    fn update_profile(&mut self, my_profile_id: Option<ProfileId>, mode: UpdateMode) -> ApiRes;
 
     fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> ApiRes;
 
@@ -159,19 +178,49 @@ before trying to restore another vault."#,
         Ok(profile)
     }
 
-    fn restore_one_profile(&mut self, profile_id: &ProfileId) -> ApiRes {
-        let profile = self.remote_repo.get(profile_id)?;
-        self.base_repo.set(profile_id.clone(), profile.clone())?;
-        self.local_repo.restore(profile_id.clone(), profile)?;
-
-        // TODO This might be a cleaner approach, but the Some(id) and getting many
-        //      "your active profile is ..." messages on the CLI has to be fixed then
-        // self.pull_base_profile(Some(profile_id.to_owned()))?;
-        // self.revert_local_profile_to_base(Some(profile_id.to_owned()))?;
-
+    fn revert_local_profile_to_base(&mut self, profile_id: &ProfileId) -> ApiRes {
         self.mut_vault().restore_id(&profile_id)?;
+        let profile = self.base_repo.get(&profile_id)?;
+        self.local_repo
+            .restore(profile_id.clone(), profile.clone())?;
+        info!(
+            "Reverted profile {} to last known remote version {}",
+            profile_id,
+            profile.version()
+        );
+        Ok(())
+    }
+
+    fn pull_base_profile(&mut self, profile_id: &ProfileId) -> ApiRes {
+        info!(
+            "Fetching remote version of profile {} to base cache",
+            profile_id
+        );
+        let remote_profile = self.remote_repo.get(&profile_id)?;
+        self.base_repo.set(profile_id.to_owned(), remote_profile)
+    }
+
+    fn restore_one_profile(&mut self, profile_id: &ProfileId) -> ApiRes {
+        self.pull_base_profile(profile_id)?;
+        self.revert_local_profile_to_base(profile_id)?;
         info!("  Successfully restored profile {}", profile_id);
         Ok(())
+    }
+
+    fn revert_with_conflict_detection(&mut self, profile_id: &ProfileId) -> ApiRes {
+        let base_profile = self.base_repo.get(&profile_id)?;
+        let local_profile = self
+            .local_repo
+            .get(&profile_id)
+            .unwrap_or_else(|_e| ProfileData::new(&profile_id));
+
+        let profile_has_local_changes = local_profile.version() > base_profile.version();
+        if profile_has_local_changes {
+            // TODO do we really need an error here or just log some message and return success?
+            bail!("Conflict detected: local version {} was modified since last known remote version {}", local_profile.version(), base_profile.version());
+        }
+
+        self.revert_local_profile_to_base(&profile_id)
     }
 }
 
@@ -241,6 +290,43 @@ impl Api for Context {
         Ok(())
     }
 
+    fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
+        let profile_id = self.selected_profile_id(my_profile_id)?;
+        self.revert_local_profile_to_base(&profile_id)
+    }
+
+    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
+        let profile = self.selected_profile(my_profile_id)?;
+        let profile_id = profile.id().to_owned();
+        // NOTE remote server should detect version conflict updating the entry
+        // TODO should we detect version conflicts ALSO here?
+        self.remote_repo.set(profile_id.clone(), profile)?;
+        info!("Published profile {} to remote repository", profile_id);
+
+        self.pull_base_profile(&profile_id)
+    }
+
+    fn update_profile(&mut self, my_profile_id: Option<ProfileId>, mode: UpdateMode) -> ApiRes {
+        let profile_id = self.selected_profile_id(my_profile_id)?;
+
+        self.pull_base_profile(&profile_id)?;
+
+        match mode {
+            UpdateMode::CacheOnly => {
+                info!("Leave local profile version untouched");
+                Ok(())
+            }
+            UpdateMode::ForcedOverwrite => {
+                info!("Applying remote profile version, overwriting any local changes if present");
+                self.revert_local_profile_to_base(&profile_id)
+            }
+            UpdateMode::UpdateUnchanged => {
+                info!("Applying remote profile version with conflict detection");
+                self.revert_with_conflict_detection(&profile_id)
+            }
+        }
+    }
+
     fn create_link(
         &mut self,
         my_profile_id: Option<ProfileId>,
@@ -301,20 +387,6 @@ impl Api for Context {
         self.restore_all_profiles()
     }
 
-    fn revert_local_profile_to_base(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
-        let profile_id = self.selected_profile_id(my_profile_id)?;
-        self.mut_vault().restore_id(&profile_id)?;
-        let profile = self.base_repo.get(&profile_id)?;
-        self.local_repo
-            .restore(profile_id.clone(), profile.clone())?;
-        info!(
-            "Restored profile {} to last known remote version {}",
-            profile_id,
-            profile.version()
-        );
-        Ok(())
-    }
-
     fn restore_all_profiles(&mut self) -> ApiRes {
         let profiles = self.vault().profiles()?;
         let len = self.vault().len();
@@ -354,31 +426,6 @@ impl Api for Context {
             try_count, restore_count
         );
         Ok(())
-    }
-
-    fn push_local_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
-        let profile = self.selected_profile(my_profile_id)?;
-        info!("Publishing profile {} to remote repository", profile.id());
-        // NOTE remote server should detect version conflict updating the entry
-        // TODO should we detect version conflicts ALSO here?
-        self.remote_repo
-            .set(profile.id().to_owned(), profile.clone())
-    }
-
-    fn pull_base_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
-        let profile_id = self.selected_profile_id(my_profile_id)?;
-        let base_profile_res = self.base_repo.get(&profile_id);
-        let local_profile_res = self.local_repo.get(&profile_id);
-        if local_profile_res.is_ok() && base_profile_res.is_ok() {
-            let local_version = local_profile_res.unwrap().version();
-            let base_version = base_profile_res.unwrap().version();
-            if local_version > base_version {
-                // TODO we should suggest some conflict resolution method here
-                bail!("Conflict detected: local version {} was modified since last known remote version {}", local_version, base_version);
-            }
-        }
-        let remote_profile = self.remote_repo.get(&profile_id)?;
-        self.base_repo.set(profile_id, remote_profile)
     }
 }
 

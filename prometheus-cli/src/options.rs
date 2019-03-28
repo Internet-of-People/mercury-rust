@@ -3,7 +3,7 @@ use std::path::PathBuf;
 
 use structopt::StructOpt;
 
-use osg::api::{self, Api, ApiRes, ProfileRepositoryKind};
+use osg::api::{self, *};
 use osg::model::*;
 
 pub trait Command {
@@ -92,6 +92,14 @@ pub enum CommandVerb {
     #[structopt(name = "publish")]
     /// Publish local profile version to remote profile repository
     Publish(PublishCommand),
+
+    #[structopt(name = "update")]
+    /// Update local profiles from remote profile repository
+    Update(UpdateCommand),
+
+    #[structopt(name = "revert")]
+    /// Revert unpublished profile to previous version
+    Revert(RevertCommand),
 }
 
 impl CommandVerb {
@@ -120,6 +128,8 @@ impl Command for CommandVerb {
             Set(sub) => Box::new(sub),
             Clear(sub) => Box::new(sub),
             Publish(sub) => Box::new(sub),
+            Update(sub) => Box::new(sub),
+            Revert(sub) => Box::new(sub),
         };
         sub.execute(api)
     }
@@ -168,9 +178,8 @@ pub enum ShowCommand {
 
 impl Command for ShowCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
-        use ShowCommand::*;
         match *self {
-            Profile { profile_id, source } => api.show_profile(profile_id, source),
+            ShowCommand::Profile { profile_id, source } => api.show_profile(profile_id, source),
         }
     }
 }
@@ -225,9 +234,8 @@ pub enum RemoveCommand {
 
 impl Command for RemoveCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
-        use RemoveCommand::*;
         match *self {
-            Link {
+            RemoveCommand::Link {
                 my_profile_id,
                 peer_profile_id,
             } => api.remove_link(my_profile_id, peer_profile_id),
@@ -295,9 +303,10 @@ pub enum ClearCommand {
 
 impl Command for ClearCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
-        use ClearCommand::*;
         match *self {
-            Attribute { my_profile_id, key } => api.clear_attribute(my_profile_id, key),
+            ClearCommand::Attribute { my_profile_id, key } => {
+                api.clear_attribute(my_profile_id, key)
+            }
         }
     }
 }
@@ -311,9 +320,8 @@ pub enum GenerateCommand {
 
 impl Command for GenerateCommand {
     fn execute(self: Box<Self>, _api: &mut Api) -> ApiRes {
-        use GenerateCommand::*;
         match *self {
-            Vault => {
+            GenerateCommand::Vault => {
                 api::generate_vault();
                 Ok(())
             }
@@ -348,8 +356,7 @@ impl Command for RestoreCommand {
             Vault { demo } => api.restore_vault(demo),
             Profiles => api.restore_all_profiles(),
             Profile { my_profile_id } => {
-                api.pull_base_profile(my_profile_id.clone())?;
-                api.revert_local_profile_to_base(my_profile_id)
+                api.update_profile(my_profile_id, UpdateMode::ForcedOverwrite)
             }
         }
     }
@@ -368,12 +375,54 @@ pub enum PublishCommand {
 
 impl Command for PublishCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
-        use PublishCommand::*;
         match *self {
-            Profile { my_profile_id } => {
-                api.push_local_profile(my_profile_id.clone())?;
-                api.pull_base_profile(my_profile_id)
-            }
+            PublishCommand::Profile { my_profile_id } => api.publish_profile(my_profile_id),
+        }
+    }
+}
+
+#[derive(Debug, StructOpt)]
+pub enum UpdateCommand {
+    #[structopt(name = "profile")]
+    /// Update local profiles from remote profile repository
+    Profile {
+        #[structopt()]
+        /// Update this specific local profile
+        my_profile_id: Option<ProfileId>,
+
+        #[structopt(long = "mode", default_value = "update")]
+        /// Strategy to handle conflicts.
+        /// Possible values are: cache, update, force.
+        mode: UpdateMode,
+    },
+}
+
+impl Command for UpdateCommand {
+    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
+        match *self {
+            UpdateCommand::Profile {
+                my_profile_id,
+                mode,
+            } => api.update_profile(my_profile_id, mode),
+        }
+    }
+}
+
+#[derive(Debug, StructOpt)]
+pub enum RevertCommand {
+    #[structopt(name = "profile")]
+    /// Revert changes of modified but unpublished local profile version
+    Profile {
+        #[structopt()]
+        /// Revert this specific local profile
+        my_profile_id: Option<ProfileId>,
+    },
+}
+
+impl Command for RevertCommand {
+    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
+        match *self {
+            RevertCommand::Profile { my_profile_id } => api.revert_profile(my_profile_id),
         }
     }
 }
