@@ -1,9 +1,13 @@
 [package]
-name = "forgetfulfs"
+name = "forgetfulfuse"
 version = "0.1.0"
 license = "GPL-3.0-or-later"
 authors = ["wigy <wigy_opensource_developer@yahoo.com>"]
 edition = "2018"
+
+[badges]
+gitlab = { repository = "https://gitlab.libertaria.community/iop-stack/communication/prometheus" }
+maintenance = { status = "actively-developed" }
 
 [dependencies]
 failure = "0.1.5"

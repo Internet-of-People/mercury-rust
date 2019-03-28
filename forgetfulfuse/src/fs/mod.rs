@@ -128,7 +128,7 @@ impl FilesystemMT for ForgetfulFS {
         _flags: u32,
     ) -> ResultWrite {
         info!(
-            "{}: read {}, {}, {}",
+            "{}: write {}, {}, {}",
             req.unique,
             path.to_string_lossy(),
             offset,

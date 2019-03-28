@@ -36,7 +36,7 @@ fn main() -> Fallible<()> {
     let fs = ForgetfulFS::new(users::get_current_uid(), users::get_current_gid());
     let options = [
         OsStr::new("-o"),
-        OsStr::new("rootmode=700,auto_unmount,default_permissions,noatime"),
+        OsStr::new("auto_unmount,default_permissions,noatime"),
     ];
     let fs_mt = fuse_mt::FuseMT::new(fs, 2);
     fuse_mt::mount(fs_mt, mount, &options[..]).map_err(|e| e.into())

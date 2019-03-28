@@ -1,6 +1,6 @@
 [workspace]
 members = [
-    "forgetfulfs",
+    "forgetfulfuse",
     "keyvault",
     "osg",
     "osg-rpc-storage",

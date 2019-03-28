@@ -1,0 +1,10 @@
+[Unit]
+Description=Mounts a filesystem for temporary secrets
+
+[Service]
+ExecStartPre=/bin/mkdir -p /run/user/%U/forgetful
+ExecStart=/bin/forgetfulfuse /run/user/%U/forgetful
+ExecStop=/bin/fusermount -u /run/user/%U/forgetful
+
+[Install]
+WantedBy=multi-user.target
