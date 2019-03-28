@@ -93,10 +93,6 @@ pub enum CommandVerb {
     /// Publish local profile version to remote profile repository
     Publish(PublishCommand),
 
-    #[structopt(name = "update")]
-    /// Update local profiles from remote profile repository
-    Update(UpdateCommand),
-
     #[structopt(name = "revert")]
     /// Revert unpublished profile to previous version
     Revert(RevertCommand),
@@ -128,7 +124,6 @@ impl Command for CommandVerb {
             Set(sub) => Box::new(sub),
             Clear(sub) => Box::new(sub),
             Publish(sub) => Box::new(sub),
-            Update(sub) => Box::new(sub),
             Revert(sub) => Box::new(sub),
         };
         sub.execute(api)
@@ -343,6 +338,11 @@ pub enum RestoreCommand {
         #[structopt()]
         /// Restore this specific profile from remote repository
         my_profile_id: Option<ProfileId>,
+
+        #[structopt(long = "mode", default_value = "safe")]
+        /// Strategy to handle locally modified data while trying to restore conflicting remote profile.
+        /// Possible values are: safe, force.
+        mode: RestoreMode,
     },
     #[structopt(name = "profiles")]
     /// Synchronize data of all profiles from remote repository (possibly overwrite local data if exists)
@@ -355,9 +355,10 @@ impl Command for RestoreCommand {
         match *self {
             Vault { demo } => api.restore_vault(demo),
             Profiles => api.restore_all_profiles(),
-            Profile { my_profile_id } => {
-                api.update_profile(my_profile_id, UpdateMode::ForcedOverwrite)
-            }
+            Profile {
+                my_profile_id,
+                mode,
+            } => api.restore_profile(my_profile_id, mode),
         }
     }
 }
@@ -377,33 +378,6 @@ impl Command for PublishCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         match *self {
             PublishCommand::Profile { my_profile_id } => api.publish_profile(my_profile_id),
-        }
-    }
-}
-
-#[derive(Debug, StructOpt)]
-pub enum UpdateCommand {
-    #[structopt(name = "profile")]
-    /// Update local profiles from remote profile repository
-    Profile {
-        #[structopt()]
-        /// Update this specific local profile
-        my_profile_id: Option<ProfileId>,
-
-        #[structopt(long = "mode", default_value = "update")]
-        /// Strategy to handle conflicts.
-        /// Possible values are: cache, update, force.
-        mode: UpdateMode,
-    },
-}
-
-impl Command for UpdateCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
-        match *self {
-            UpdateCommand::Profile {
-                my_profile_id,
-                mode,
-            } => api.update_profile(my_profile_id, mode),
         }
     }
 }
