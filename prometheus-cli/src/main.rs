@@ -27,19 +27,15 @@ fn run() -> Fallible<()> {
     let command = options.command;
     debug!("Got command {:?}", command);
 
-    let prometheus_cfg_dir = dirs::config_dir()
-        .ok_or_else(|| {
-            err_msg("Failed to detect platform-dependent directory for application config")
-        })?
-        .join("prometheus");
+    let prometheus_cfg_dir = options.config_dir
+        .or_else( ||
+            dirs::config_dir().map(|dir| dir.join("prometheus") )
+        )
+        .ok_or_else( || err_msg("No explicit option for application config directory was given and failed to detect platform-dependent default directory") )?;
 
-    let vault_path = options.keyvault_path.unwrap_or_else(|| prometheus_cfg_dir.join("vault.dat"));
-    let repo_path = options
-        .profile_repo_path
-        .clone()
-        .unwrap_or_else(|| prometheus_cfg_dir.join("profiles.dat"));
-    let base_path =
-        options.base_repo_path.clone().unwrap_or_else(|| prometheus_cfg_dir.join("bases.dat"));
+    let vault_path = prometheus_cfg_dir.join("vault.dat");
+    let repo_path = prometheus_cfg_dir.join("profiles.dat");
+    let base_path = prometheus_cfg_dir.join("bases.dat");
 
     let vault_exists = vault_path.exists();
     if command.needs_vault() && !vault_exists {

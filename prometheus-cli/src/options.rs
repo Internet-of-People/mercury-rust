@@ -17,17 +17,10 @@ pub trait Command {
     raw(setting = "structopt::clap::AppSettings::ColoredHelp")
 )]
 pub struct Options {
-    #[structopt(long = "keyvault", raw(value_name = r#""FILE""#), parse(from_os_str))]
-    /// Path of the keyvault file. Default: OS-specific app_cfg_dir/prometheus/vault.dat
-    pub keyvault_path: Option<PathBuf>,
-
-    #[structopt(long = "profiles", raw(value_name = r#""FILE""#), parse(from_os_str))]
-    /// Path of your local profile repository file. Default: OS-specific app_cfg_dir/prometheus/profiles.dat
-    pub profile_repo_path: Option<PathBuf>,
-
-    #[structopt(long = "bases", raw(value_name = r#""FILE""#), parse(from_os_str))]
-    /// Path of the profile repository file caching the remote repository. Default: OS-specific app_cfg_dir/prometheus/bases.dat
-    pub base_repo_path: Option<PathBuf>,
+    #[structopt(long = "conf_dir", raw(value_name = r#""DIR""#), parse(from_os_str))]
+    /// Configuration directory to pick vault and profile info from.
+    /// Default: OS-specific app_cfg_dir/prometheus
+    pub config_dir: Option<PathBuf>,
 
     #[structopt(
         long = "repository",
