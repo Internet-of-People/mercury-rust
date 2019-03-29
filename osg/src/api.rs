@@ -301,11 +301,20 @@ impl Api for Context {
     }
 
     fn publish_profile(&mut self, my_profile_id: Option<ProfileId>, force: bool) -> ApiRes {
-        let profile = self.selected_profile(my_profile_id)?;
+        let mut profile = self.selected_profile(my_profile_id)?;
         let profile_id = profile.id().to_owned();
 
         if force {
             debug!("Publishing local profile version, overwriting any remote changes if present");
+            let remote_profile_res = self.remote_repo.get(&profile_id);
+            if remote_profile_res.is_ok() {
+                let remote_profile = remote_profile_res.unwrap();
+                if remote_profile.version() >= profile.version() {
+                    info!("Conflicting profile version found on remote server, forcing overwrite");
+                    profile.set_version(remote_profile.version() + 1);
+                    self.local_repo.set(profile_id.clone(), profile.clone())?;
+                }
+            }
         } else {
             debug!("Publishing local profile version with conflict detection");
             self.ensure_no_remote_changes(&profile_id)?;

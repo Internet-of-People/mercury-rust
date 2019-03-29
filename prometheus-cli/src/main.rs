@@ -39,7 +39,7 @@ fn run() -> Fallible<()> {
         .clone()
         .unwrap_or_else(|| prometheus_cfg_dir.join("profiles.dat"));
     let base_path =
-        options.profile_repo_path.clone().unwrap_or_else(|| prometheus_cfg_dir.join("bases.dat"));
+        options.base_repo_path.clone().unwrap_or_else(|| prometheus_cfg_dir.join("bases.dat"));
 
     let vault_exists = vault_path.exists();
     if command.needs_vault() && !vault_exists {

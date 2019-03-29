@@ -68,6 +68,9 @@ impl ProfileData {
     pub fn increase_version(&mut self) {
         self.version += 1;
     }
+    pub fn set_version(&mut self, version: Version) {
+        self.version = version;
+    }
 
     pub fn links(&self) -> &Vec<Link> {
         &self.links
