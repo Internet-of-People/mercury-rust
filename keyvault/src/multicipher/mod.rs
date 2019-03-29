@@ -74,10 +74,7 @@ macro_rules! reify {
 
 macro_rules! erase {
     ($suite:ident, $type:ident, $result:expr) => {
-        $type {
-            suite: $suite!(variant),
-            erased: Box::new($result) as Box<Any>,
-        }
+        $type { suite: $suite!(variant), erased: Box::new($result) as Box<Any> }
     };
 }
 

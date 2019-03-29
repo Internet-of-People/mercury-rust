@@ -20,12 +20,7 @@ impl State {
         let rand = XorShiftRng::from_seed([42u8; 16]); // TODO config
         let users = Default::default();
         let steps = Default::default();
-        Ok(Self {
-            vault_seed,
-            rand,
-            users,
-            steps,
-        })
+        Ok(Self { vault_seed, rand, users, steps })
     }
 
     pub fn vault_seed(&self) -> &keyvault::Seed {
@@ -42,9 +37,7 @@ impl State {
 
     pub fn add_user(&mut self) -> usize {
         let idx = self.users.len();
-        let user = User {
-            outlinks: Default::default(),
-        };
+        let user = User { outlinks: Default::default() };
         self.users.push(user);
         idx
     }

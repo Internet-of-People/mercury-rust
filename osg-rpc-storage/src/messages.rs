@@ -13,10 +13,7 @@ pub(crate) struct Envelope {
 
 impl Envelope {
     pub(crate) fn new(target: &str, payload: Vec<u8>) -> Self {
-        Self {
-            target: target.to_owned(),
-            payload,
-        }
+        Self { target: target.to_owned(), payload }
     }
 
     pub(crate) fn from<T: serde::Serialize>(target: &str, payload: T) -> Fallible<Self> {
@@ -65,12 +62,7 @@ impl Response {
         description: Option<String>,
         reply: Option<rmpv::Value>,
     ) -> Self {
-        Self {
-            rid,
-            code,
-            description,
-            reply,
-        }
+        Self { rid, code, description, reply }
     }
 }
 

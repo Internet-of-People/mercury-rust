@@ -56,12 +56,7 @@ impl<'a> Simulation<'a> {
                 *inlinks.entry(*peer).or_insert(0usize) += 1;
             }
         }
-        Ok(Self {
-            state,
-            repo,
-            inlinks,
-            vault,
-        })
+        Ok(Self { state, repo, inlinks, vault })
     }
 
     pub fn stats(&self) -> Fallible<(usize, usize, usize, Vec<InlinkCount>)> {
@@ -76,13 +71,8 @@ impl<'a> Simulation<'a> {
             },
         );
 
-        let influencers: Vec<InlinkCount> = bheap
-            .into_sorted_vec()
-            .iter()
-            .rev()
-            .cloned()
-            .take(10)
-            .collect();
+        let influencers: Vec<InlinkCount> =
+            bheap.into_sorted_vec().iter().rev().cloned().take(10).collect();
 
         Ok((steps, users, links, influencers))
     }

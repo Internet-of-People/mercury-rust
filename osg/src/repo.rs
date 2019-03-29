@@ -33,10 +33,7 @@ pub struct FileProfileRepository {
 
 impl FileProfileRepository {
     pub fn create(filename: &PathBuf) -> Fallible<Self> {
-        let this = Self {
-            profiles: Default::default(),
-            filename: filename.to_owned(),
-        };
+        let this = Self { profiles: Default::default(), filename: filename.to_owned() };
         this.save()?;
         Ok(this)
     }
@@ -141,10 +138,7 @@ mod test {
 
         repo.clear(&my_id)?;
         me = repo.get(&my_id)?;
-        assert_eq!(
-            me,
-            ProfileData::create(my_id, 3, Default::default(), Default::default())
-        );
+        assert_eq!(me, ProfileData::create(my_id, 3, Default::default(), Default::default()));
 
         std::fs::remove_file(&tmp_file)?;
 

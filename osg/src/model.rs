@@ -34,12 +34,7 @@ impl ProfileData {
         links: Vec<Link>,
         attributes: AttributeMap,
     ) -> Self {
-        Self {
-            id,
-            version,
-            links,
-            attributes,
-        }
+        Self { id, version, links, attributes }
     }
 
     pub fn new(id: &ProfileId) -> Self {
@@ -79,9 +74,7 @@ impl ProfileData {
     }
 
     pub fn create_link(&mut self, with_id: &ProfileId) -> Link {
-        let link = Link {
-            peer_profile: with_id.to_owned(),
-        };
+        let link = Link { peer_profile: with_id.to_owned() };
         if !self.links.contains(&link) {
             self.links.push(link.clone());
         }

@@ -26,11 +26,7 @@ impl FsImpl {
     fn attr(&self, size: u64, mtime_sec: i64, is_dir: bool) -> FileAttr {
         let blocks = size; // trying to use blksize=1
         let mtime = Timespec::new(mtime_sec, 0);
-        let kind = if is_dir {
-            fuse::FileType::Directory
-        } else {
-            fuse::FileType::RegularFile
-        };
+        let kind = if is_dir { fuse::FileType::Directory } else { fuse::FileType::RegularFile };
         FileAttr {
             size,
             blocks,
@@ -53,10 +49,7 @@ impl FsImpl {
     }
 
     fn file_entry(&self, mtime_sec: i64, size: usize) -> (Timespec, FileAttr) {
-        (
-            Timespec::new(mtime_sec, 0),
-            self.attr(size as u64, mtime_sec, false),
-        )
+        (Timespec::new(mtime_sec, 0), self.attr(size as u64, mtime_sec, false))
     }
 
     fn now_utc() -> i64 {
@@ -120,12 +113,7 @@ Vestibulum sagittis est dolor, nec euismod massa rhoncus sed. Mauris vel arcu lo
 
     pub fn read(&self, path: &Path, offset: u64, size: u32) -> ResultData {
         let blob = self.blob(path)?;
-        Ok(blob
-            .iter()
-            .skip(offset as usize)
-            .take(size as usize)
-            .cloned()
-            .collect())
+        Ok(blob.iter().skip(offset as usize).take(size as usize).cloned().collect())
     }
 
     pub fn write(&mut self, path: &Path, offset: u64, data: Vec<u8>) -> ResultWrite {
@@ -179,8 +167,7 @@ Vestibulum sagittis est dolor, nec euismod massa rhoncus sed. Mauris vel arcu lo
         } else {
             let mtime_sec = Self::now_utc();
             let blob = Vec::with_capacity(1024);
-            self.entries
-                .insert(file_name, Entry::File { mtime_sec, blob });
+            self.entries.insert(file_name, Entry::File { mtime_sec, blob });
             let res = CreatedEntry {
                 ttl: Timespec::new(std::i64::MAX, 0),
                 attr: self.attr(0, mtime_sec, false),

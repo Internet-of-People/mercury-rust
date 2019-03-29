@@ -91,11 +91,7 @@ impl FromStr for ChildIndex {
         if idx < 0 {
             bail!("BIP32 derivation index cannot be negative");
         }
-        Ok(if hardened {
-            ChildIndex::Hardened(idx)
-        } else {
-            ChildIndex::Normal(idx)
-        })
+        Ok(if hardened { ChildIndex::Hardened(idx) } else { ChildIndex::Normal(idx) })
     }
 }
 
@@ -113,15 +109,11 @@ impl FromStr for Path {
             bail!("BIP32 derivation path cannot be empty");
         }
 
-        let (mut successes, errors): (Vec<_>, Vec<_>) = pieces
-            .map(|p: &str| (p, p.parse::<ChildIndex>()))
-            .partition(|(_p, i)| i.is_ok());
+        let (mut successes, errors): (Vec<_>, Vec<_>) =
+            pieces.map(|p: &str| (p, p.parse::<ChildIndex>())).partition(|(_p, i)| i.is_ok());
 
         if !errors.is_empty() {
-            bail!(
-                "BIP32 derivation path contains invalid child indices: {:?}",
-                errors
-            );
+            bail!("BIP32 derivation path contains invalid child indices: {:?}", errors);
         }
 
         // because of the above partitioning, successes only contain parse results
@@ -201,10 +193,7 @@ mod tests {
             TestPublicKey(self.0.clone())
         }
         fn sign<D: AsRef<[u8]>>(&self, data: D) -> TestSignature {
-            TestSignature {
-                data: data.as_ref().to_owned(),
-                pub_key: self.public_key(),
-            }
+            TestSignature { data: data.as_ref().to_owned(), pub_key: self.public_key() }
         }
     }
 
@@ -290,10 +279,7 @@ mod tests {
         assert_eq!("0h".parse::<ChildIndex>().unwrap(), ChildIndex::Hardened(0));
         assert_eq!("0H".parse::<ChildIndex>().unwrap(), ChildIndex::Hardened(0));
         assert_eq!("0'".parse::<ChildIndex>().unwrap(), ChildIndex::Hardened(0));
-        assert_eq!(
-            "2147483647".parse::<ChildIndex>().unwrap(),
-            ChildIndex::Normal(2_147_483_647)
-        );
+        assert_eq!("2147483647".parse::<ChildIndex>().unwrap(), ChildIndex::Normal(2_147_483_647));
         assert_eq!(
             "2147483647'".parse::<ChildIndex>().unwrap(),
             ChildIndex::Hardened(2_147_483_647)
@@ -310,24 +296,9 @@ mod tests {
 
     #[test]
     fn path_fromstr() {
-        assert_eq!(
-            "m".parse::<Path>().unwrap(),
-            Path {
-                path: Default::default()
-            }
-        );
-        assert_eq!(
-            "m/0".parse::<Path>().unwrap(),
-            Path {
-                path: vec![ChildIndex::Normal(0)]
-            }
-        );
-        assert_eq!(
-            "m/44'".parse::<Path>().unwrap(),
-            Path {
-                path: vec![ChildIndex::Hardened(44)]
-            }
-        );
+        assert_eq!("m".parse::<Path>().unwrap(), Path { path: Default::default() });
+        assert_eq!("m/0".parse::<Path>().unwrap(), Path { path: vec![ChildIndex::Normal(0)] });
+        assert_eq!("m/44'".parse::<Path>().unwrap(), Path { path: vec![ChildIndex::Hardened(44)] });
         assert_eq!(
             "m/44'/0h/0H/0".parse::<Path>().unwrap(),
             Path {
@@ -342,10 +313,7 @@ mod tests {
         assert_eq!(
             "m/2147483647'/2147483647".parse::<Path>().unwrap(),
             Path {
-                path: vec![
-                    ChildIndex::Hardened(2_147_483_647),
-                    ChildIndex::Normal(2_147_483_647)
-                ]
+                path: vec![ChildIndex::Hardened(2_147_483_647), ChildIndex::Normal(2_147_483_647)]
             }
         );
         assert!("".parse::<Path>().is_err());
@@ -366,31 +334,11 @@ mod tests {
         use super::Bip32Path;
         let seed = crate::Seed::generate_new();
         let path = path_str.parse::<Path>().unwrap();
-        assert_fmt!(
-            TestCrypto::calc_ext_priv_key(&seed, &path).unwrap(),
-            "xprv(sk({}))",
-            path_str
-        );
-        assert_fmt!(
-            TestCrypto::calc_ext_pub_key(&seed, &path).unwrap(),
-            "xpub(pk({}))",
-            path_str
-        );
-        assert_fmt!(
-            TestCrypto::calc_priv_key(&seed, &path).unwrap(),
-            "sk({})",
-            path_str
-        );
-        assert_fmt!(
-            TestCrypto::calc_pub_key(&seed, &path).unwrap(),
-            "pk({})",
-            path_str
-        );
-        assert_fmt!(
-            TestCrypto::calc_key_id(&seed, &path).unwrap(),
-            "id({})",
-            path_str
-        );
+        assert_fmt!(TestCrypto::calc_ext_priv_key(&seed, &path).unwrap(), "xprv(sk({}))", path_str);
+        assert_fmt!(TestCrypto::calc_ext_pub_key(&seed, &path).unwrap(), "xpub(pk({}))", path_str);
+        assert_fmt!(TestCrypto::calc_priv_key(&seed, &path).unwrap(), "sk({})", path_str);
+        assert_fmt!(TestCrypto::calc_pub_key(&seed, &path).unwrap(), "pk({})", path_str);
+        assert_fmt!(TestCrypto::calc_key_id(&seed, &path).unwrap(), "id({})", path_str);
     }
 
     #[test]

@@ -204,10 +204,9 @@ impl Command for CreateCommand {
         use CreateCommand::*;
         match *self {
             Profile => api.create_profile(),
-            Link {
-                my_profile_id,
-                peer_profile_id,
-            } => api.create_link(my_profile_id, peer_profile_id),
+            Link { my_profile_id, peer_profile_id } => {
+                api.create_link(my_profile_id, peer_profile_id)
+            }
         }
     }
 }
@@ -230,10 +229,9 @@ pub enum RemoveCommand {
 impl Command for RemoveCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         match *self {
-            RemoveCommand::Link {
-                my_profile_id,
-                peer_profile_id,
-            } => api.remove_link(my_profile_id, peer_profile_id),
+            RemoveCommand::Link { my_profile_id, peer_profile_id } => {
+                api.remove_link(my_profile_id, peer_profile_id)
+            }
         }
     }
 }
@@ -272,11 +270,7 @@ impl Command for SetCommand {
         use SetCommand::*;
         match *self {
             ActiveProfile { my_profile_id } => api.set_active_profile(my_profile_id),
-            Attribute {
-                my_profile_id,
-                key,
-                value,
-            } => api.set_attribute(my_profile_id, key, value),
+            Attribute { my_profile_id, key, value } => api.set_attribute(my_profile_id, key, value),
         }
     }
 }
@@ -355,10 +349,7 @@ impl Command for RestoreCommand {
         match *self {
             Vault { demo } => api.restore_vault(demo),
             Profiles => api.restore_all_profiles(),
-            Profile {
-                my_profile_id,
-                mode,
-            } => api.restore_profile(my_profile_id, mode),
+            Profile { my_profile_id, mode } => api.restore_profile(my_profile_id, mode),
         }
     }
 }

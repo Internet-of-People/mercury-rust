@@ -21,19 +21,13 @@ pub enum RpcError {
         display = "Expected response to request {}, Got response for {}",
         request_id, response_id
     )]
-    UnexpectedResponseId {
-        request_id: MessageId,
-        response_id: MessageId,
-    },
+    UnexpectedResponseId { request_id: MessageId, response_id: MessageId },
     #[fail(display = "Server returned unexpected attribute type")]
     UnexpectedAttributeType,
     #[fail(display = "Unexpected target of response message: {}", target)]
     UnexpectedTarget { target: String },
     #[fail(display = "Morpheus error {}: {}", code, description)]
-    Morpheusd {
-        code: MorpheusdError,
-        description: String,
-    },
+    Morpheusd { code: MorpheusdError, description: String },
     #[fail(display = "Local RPC error: {}", msg)]
     Unknown { msg: String },
     #[fail(display = "Unknown Morpheus error {}: {}", code, description)]
@@ -66,11 +60,7 @@ impl<T> FallibleExtension<T> for Fallible<T> {
     {
         if let Err(e) = &self {
             if let Some(rpc) = e.downcast_ref::<RpcError>() {
-                if let RpcError::Morpheusd {
-                    code: MorpheusdError::KeyAlreadyExists,
-                    ..
-                } = rpc
-                {
+                if let RpcError::Morpheusd { code: MorpheusdError::KeyAlreadyExists, .. } = rpc {
                     return fallback();
                 }
             }
@@ -92,10 +82,7 @@ where
     W: 'static + Write,
 {
     pub fn new(id: &ProfileId, rpc: RpcPtr<R, W>) -> Self {
-        Self {
-            id: id.to_owned(),
-            rpc,
-        }
+        Self { id: id.to_owned(), rpc }
     }
 
     fn send_request<T>(&self, method: &str, params: T) -> Fallible<Response>
@@ -106,36 +93,26 @@ where
     }
 
     pub fn get_node_attribute(&self, key: AttributeId) -> Fallible<Vec<u8>> {
-        let params = GetNodeAttributeParams {
-            id: self.id.to_owned(),
-            key,
-        };
+        let params = GetNodeAttributeParams { id: self.id.to_owned(), key };
         let response = self.send_request("get_node_attribute", params)?;
-        let attr_val = response
-            .reply
-            .ok_or_else(|| RpcError::NoResponse.into())
-            .and_then(|resp_val| match resp_val {
-                rmpv::Value::Binary(bin) => Ok(bin),
-                _ => Err(failure::Error::from(RpcError::UnexpectedAttributeType)),
+        let attr_val =
+            response.reply.ok_or_else(|| RpcError::NoResponse.into()).and_then(|resp_val| {
+                match resp_val {
+                    rmpv::Value::Binary(bin) => Ok(bin),
+                    _ => Err(failure::Error::from(RpcError::UnexpectedAttributeType)),
+                }
             })?;
         Ok(attr_val)
     }
 
     pub fn set_node_attribute(&self, key: AttributeId, value: Vec<u8>) -> Fallible<()> {
-        let params = SetNodeAttributeParams {
-            id: self.id.to_owned(),
-            key,
-            value,
-        };
+        let params = SetNodeAttributeParams { id: self.id.to_owned(), key, value };
         let _response = self.send_request("set_node_attribute", params)?;
         Ok(())
     }
 
     pub fn clear_node_attribute(&self, key: String) -> Fallible<()> {
-        let params = ClearNodeAttributeParams {
-            id: self.id.to_owned(),
-            key,
-        };
+        let params = ClearNodeAttributeParams { id: self.id.to_owned(), key };
         let _response = self.send_request("clear_node_attribute", params)?;
         Ok(())
     }
@@ -164,11 +141,7 @@ where
         target: ProfileId,
         key: AttributeId,
     ) -> Fallible<Vec<u8>> {
-        let params = GetEdgeAttributeParams {
-            source,
-            target,
-            key,
-        };
+        let params = GetEdgeAttributeParams { source, target, key };
         let response = self.send_request("get_edge_attribute", params)?;
         let attr_val = response
             .reply
@@ -187,12 +160,7 @@ where
         key: AttributeId,
         value: Vec<u8>,
     ) -> Fallible<()> {
-        let params = SetEdgeAttributeParams {
-            source,
-            target,
-            key,
-            value,
-        };
+        let params = SetEdgeAttributeParams { source, target, key, value };
         let _response = self.send_request("set_edge_attribute", params)?;
         Ok(())
     }
@@ -203,11 +171,7 @@ where
         target: ProfileId,
         key: AttributeId,
     ) -> Fallible<()> {
-        let params = ClearEdgeAttributeParams {
-            source,
-            target,
-            key,
-        };
+        let params = ClearEdgeAttributeParams { source, target, key };
         let _response = self.send_request("clear_edge_attribute", params)?;
         Ok(())
     }
@@ -233,18 +197,12 @@ where
     }
 
     fn links(&self) -> Fallible<Vec<Link>> {
-        let params = ListOutEdgesParams {
-            id: self.id().clone(),
-        };
+        let params = ListOutEdgesParams { id: self.id().clone() };
         let response = self.send_request("list_outedges", params)?;
-        let reply_val = response
-            .reply
-            .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
+        let reply_val =
+            response.reply.ok_or_else(|| err_msg("Server returned no reply content for query"))?;
         let reply: ListOutEdgesReply = rmpv::ext::from_value(reply_val)?;
-        let links = reply
-            .into_iter()
-            .map(|peer_profile| Link { peer_profile })
-            .collect();
+        let links = reply.into_iter().map(|peer_profile| Link { peer_profile }).collect();
         Ok(links)
     }
 
@@ -255,23 +213,15 @@ where
     }
 
     fn create_link(&mut self, peer_profile: &ProfileId) -> Fallible<Link> {
-        let params = AddEdgeParams {
-            source: self.id().to_owned(),
-            target: peer_profile.to_owned(),
-        };
-        self.send_request("add_edge", params)
-            .map(|_r| ())
-            .key_not_existed_or_else(|| Ok(()))?;
-        Ok(Link {
-            peer_profile: peer_profile.to_owned(),
-        })
+        let params =
+            AddEdgeParams { source: self.id().to_owned(), target: peer_profile.to_owned() };
+        self.send_request("add_edge", params).map(|_r| ()).key_not_existed_or_else(|| Ok(()))?;
+        Ok(Link { peer_profile: peer_profile.to_owned() })
     }
 
     fn remove_link(&mut self, peer_profile: &ProfileId) -> Fallible<()> {
-        let params = RemoveEdgeParams {
-            source: self.id().to_owned(),
-            target: peer_profile.to_owned(),
-        };
+        let params =
+            RemoveEdgeParams { source: self.id().to_owned(), target: peer_profile.to_owned() };
         let _response = self.send_request("remove_edge", params)?;
         Ok(())
     }
@@ -303,11 +253,7 @@ where
     W: 'static + Write,
 {
     pub fn new(reader: R, writer: W) -> Self {
-        Self {
-            reader,
-            writer,
-            next_rid: 1,
-        }
+        Self { reader, writer, next_rid: 1 }
     }
 
     pub fn send_request<T>(&mut self, method: &str, params: T) -> Fallible<Response>
@@ -345,14 +291,12 @@ where
 
         if response.code != RESPONSE_CODE_OK {
             let description = response.description.unwrap_or_else(|| "None".to_owned());
-            return Err(
-                if let Some(code) = MorpheusdError::from_repr(response.code) {
-                    RpcError::Morpheusd { code, description }.into()
-                } else {
-                    let code = response.code;
-                    RpcError::UnknownMorpheusd { code, description }.into()
-                },
-            );
+            return Err(if let Some(code) = MorpheusdError::from_repr(response.code) {
+                RpcError::Morpheusd { code, description }.into()
+            } else {
+                let code = response.code;
+                RpcError::UnknownMorpheusd { code, description }.into()
+            });
         }
 
         trace!("Got response {:?}", response);

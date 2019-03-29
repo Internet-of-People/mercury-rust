@@ -55,17 +55,11 @@ pub struct HdProfileVault {
 impl HdProfileVault {
     pub fn create(seed: Seed) -> Self {
         info!("Initializing new vault");
-        Self {
-            seed,
-            next_idx: Default::default(),
-            active_idx: Option::None,
-        }
+        Self { seed, next_idx: Default::default(), active_idx: Option::None }
     }
 
     fn index_of(&self, id: &ProfileId) -> Option<usize> {
-        self.list()
-            .ok()
-            .and_then(|v| v.iter().position(|candidate_id| candidate_id == id))
+        self.list().ok().and_then(|v| v.iter().position(|candidate_id| candidate_id == id))
     }
 
     pub fn load(filename: &PathBuf) -> Fallible<Self> {
@@ -76,10 +70,7 @@ impl HdProfileVault {
         ensure!(vault.next_idx >= 0, "next_idx cannot be negative");
         if let Some(active) = vault.active_idx {
             ensure!(active >= 0, "active_idx cannot be negative");
-            ensure!(
-                active < vault.next_idx,
-                "active_idx cannot exceed last profile index"
-            );
+            ensure!(active < vault.next_idx, "active_idx cannot exceed last profile index");
         }
 
         Ok(vault)

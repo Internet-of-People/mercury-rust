@@ -41,11 +41,7 @@ impl KeyId {
     /// [`KEY_ID_SIZE`]: ../constant.KEY_ID_SIZE
     pub fn from_bytes<D: AsRef<[u8]>>(bytes: D) -> Fallible<Self> {
         let bytes = bytes.as_ref();
-        ensure!(
-            bytes.len() == KEY_ID_SIZE,
-            "Identifier length is not {}",
-            KEY_ID_SIZE
-        );
+        ensure!(bytes.len() == KEY_ID_SIZE, "Identifier length is not {}", KEY_ID_SIZE);
         ensure!(
             bytes[0] == KEY_ID_VERSION1,
             "Only identifier version {:x} is supported",

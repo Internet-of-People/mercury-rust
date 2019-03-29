@@ -97,14 +97,7 @@ impl Context {
         remote_repo: Box<ProfileRepository>,
         explorer: Box<ProfileExplorer>,
     ) -> Self {
-        Self {
-            vault_path,
-            vault,
-            local_repo,
-            base_repo,
-            remote_repo,
-            explorer,
-        }
+        Self { vault_path, vault, local_repo, base_repo, remote_repo, explorer }
     }
 
     // TODO there should be no version of vault getters that panic
@@ -179,16 +172,12 @@ before trying to restore another vault."#,
     fn revert_local_profile_to_base(&mut self, profile_id: &ProfileId) -> Fallible<ProfileData> {
         self.mut_vault().restore_id(&profile_id)?;
         let profile = self.base_repo.get(&profile_id)?;
-        self.local_repo
-            .restore(profile_id.clone(), profile.clone())?;
+        self.local_repo.restore(profile_id.clone(), profile.clone())?;
         Ok(profile)
     }
 
     fn pull_base_profile(&mut self, profile_id: &ProfileId) -> ApiRes {
-        debug!(
-            "Fetching remote version of profile {} to base cache",
-            profile_id
-        );
+        debug!("Fetching remote version of profile {} to base cache", profile_id);
         let remote_profile = self.remote_repo.get(&profile_id)?;
         self.base_repo.set(profile_id.to_owned(), remote_profile)
     }
@@ -295,8 +284,7 @@ impl Api for Context {
     fn create_profile(&mut self) -> ApiRes {
         let new_profile_id = self.mut_vault().create_id()?;
         let empty_profile = ProfileData::new(&new_profile_id);
-        self.local_repo
-            .set(new_profile_id.to_owned(), empty_profile)?;
+        self.local_repo.set(new_profile_id.to_owned(), empty_profile)?;
         info!("Created and activated profile with id {}", new_profile_id);
         Ok(())
     }
@@ -304,11 +292,7 @@ impl Api for Context {
     fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
         let profile_id = self.selected_profile_id(my_profile_id)?;
         let profile = self.revert_local_profile_to_base(&profile_id)?;
-        info!(
-            "Reverted profile {} to last known remote version {}",
-            profile_id,
-            profile.version()
-        );
+        info!("Reverted profile {} to last known remote version {}", profile_id, profile.version());
         Ok(())
     }
 
@@ -421,10 +405,7 @@ impl Api for Context {
             restore_count += 1;
         }
 
-        info!(
-            "Tried {} profiles, successfully restored {}",
-            try_count, restore_count
-        );
+        info!("Tried {} profiles, successfully restored {}", try_count, restore_count);
         Ok(())
     }
 }
@@ -436,9 +417,7 @@ pub fn generate_vault() {
         r#"Make sure you back these words up somewhere safe
 and run the 'restore vault' command of this application first!"#
     );
-    words
-        .enumerate()
-        .for_each(|(i, word)| info!("    {:2}: {}", i + 1, word));
+    words.enumerate().for_each(|(i, word)| info!("    {:2}: {}", i + 1, word));
 }
 
 fn read_phrase() -> Fallible<String> {

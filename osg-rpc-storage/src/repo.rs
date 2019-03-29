@@ -21,11 +21,7 @@ pub struct RpcProfileRepository {
 
 impl RpcProfileRepository {
     pub fn new(address: &SocketAddr, network_timeout: Duration) -> Fallible<Self> {
-        Ok(Self {
-            address: *address,
-            network_timeout,
-            rpc: RefCell::new(Option::None),
-        })
+        Ok(Self { address: *address, network_timeout, rpc: RefCell::new(Option::None) })
     }
 
     pub fn connect(
@@ -57,9 +53,8 @@ impl RpcProfileRepository {
         let params = messages::ListNodesParams {};
         let rpc = self.rpc()?;
         let response = rpc.borrow_mut().send_request("list_nodes", params)?;
-        let node_vals = response
-            .reply
-            .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
+        let node_vals =
+            response.reply.ok_or_else(|| err_msg("Server returned no reply content for query"))?;
         let nodes = rmpv::ext::from_value(node_vals)?;
         Ok(nodes)
     }
@@ -137,10 +132,7 @@ impl ProfileExplorer for RpcProfileRepository {
                 .reply
                 .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
             let reply: messages::ListInEdgesReply = rmpv::ext::from_value(reply_val)?;
-            let followers = reply
-                .into_iter()
-                .map(|peer_profile| Link { peer_profile })
-                .collect();
+            let followers = reply.into_iter().map(|peer_profile| Link { peer_profile }).collect();
             Ok(followers)
         })
     }

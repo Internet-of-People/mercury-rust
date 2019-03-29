@@ -186,18 +186,12 @@ mod test {
 
         #[test]
         fn test_1() {
-            case(
-                "Iez21JXEtMzXjbCK6BAYFU9ewX",
-                "01d8245272e2317ef53b26407e925edf7e",
-            );
+            case("Iez21JXEtMzXjbCK6BAYFU9ewX", "01d8245272e2317ef53b26407e925edf7e");
         }
 
         #[test]
         fn test_2() {
-            case(
-                "IezpmXKKc2QRZpXbzGV62MgKe",
-                "0182d4ecfc12c5ad8efa5ef494f47e5285",
-            );
+            case("IezpmXKKc2QRZpXbzGV62MgKe", "0182d4ecfc12c5ad8efa5ef494f47e5285");
         }
 
         #[test]

@@ -35,11 +35,7 @@ pub struct Options {
 
     /// Number of steps to take in the simulation after resynchronization
     /// of local state with the storage backend
-    #[structopt(
-        long = "actions",
-        default_value = "200",
-        raw(value_name = r#""STEPS""#)
-    )]
+    #[structopt(long = "actions", default_value = "200", raw(value_name = r#""STEPS""#))]
     pub actions: u64,
 
     #[structopt(long = "state", default_value = "state.json")]

@@ -33,54 +33,35 @@ fn run() -> Fallible<()> {
         })?
         .join("prometheus");
 
-    let vault_path = options
-        .keyvault_path
-        .unwrap_or_else(|| prometheus_cfg_dir.join("vault.dat"));
+    let vault_path = options.keyvault_path.unwrap_or_else(|| prometheus_cfg_dir.join("vault.dat"));
     let repo_path = options
         .profile_repo_path
         .clone()
         .unwrap_or_else(|| prometheus_cfg_dir.join("profiles.dat"));
-    let base_path = options
-        .profile_repo_path
-        .clone()
-        .unwrap_or_else(|| prometheus_cfg_dir.join("bases.dat"));
+    let base_path =
+        options.profile_repo_path.clone().unwrap_or_else(|| prometheus_cfg_dir.join("bases.dat"));
 
     let vault_exists = vault_path.exists();
     if command.needs_vault() && !vault_exists {
-        info!(
-            "Profile vault is required but not found at {}",
-            vault_path.to_string_lossy()
-        );
+        info!("Profile vault is required but not found at {}", vault_path.to_string_lossy());
         generate_vault();
-        bail!(
-            "First you need a profile vault initialized to run {:?}",
-            command
-        );
+        bail!("First you need a profile vault initialized to run {:?}", command);
     }
 
     let mut vault: Option<Box<ProfileVault>> = None;
     if vault_exists {
-        info!(
-            "Found profile vault, loading {}",
-            vault_path.to_string_lossy()
-        );
+        info!("Found profile vault, loading {}", vault_path.to_string_lossy());
         vault = Some(Box::new(HdProfileVault::load(&vault_path)?))
     } else {
         debug!("No profile vault found");
     }
 
     let local_repo = FileProfileRepository::load(&repo_path).or_else(|_e| {
-        debug!(
-            "Failed to load profile repository {:?}, creating an empty one",
-            repo_path
-        );
+        debug!("Failed to load profile repository {:?}, creating an empty one", repo_path);
         FileProfileRepository::create(&repo_path)
     })?;
     let base_repo = FileProfileRepository::load(&base_path).or_else(|_e| {
-        debug!(
-            "Failed to load base repository {:?}, creating an empty one",
-            base_path
-        );
+        debug!("Failed to load base repository {:?}, creating an empty one", base_path);
         FileProfileRepository::create(&base_path)
     })?;
     let timeout = Duration::from_secs(options.network_timeout_secs);
@@ -116,9 +97,8 @@ fn init_logger(options: &Options) -> Fallible<()> {
         use log4rs::config::{Appender, Config, Root};
         use log4rs::encode::pattern::PatternEncoder;
 
-        let stdout = ConsoleAppender::builder()
-            .encoder(Box::new(PatternEncoder::new("{m}{n}")))
-            .build();
+        let stdout =
+            ConsoleAppender::builder().encoder(Box::new(PatternEncoder::new("{m}{n}"))).build();
         let config = Config::builder()
             .appender(Appender::builder().build("stdout", Box::new(stdout)))
             .build(Root::builder().appender("stdout").build(LevelFilter::Info))?;

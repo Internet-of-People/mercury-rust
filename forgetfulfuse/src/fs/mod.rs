@@ -63,10 +63,7 @@ impl ForgetfulFS {
 
 impl FilesystemMT for ForgetfulFS {
     fn init(&self, req: RequestInfo) -> ResultEmpty {
-        info!(
-            "{}: init {}:{} from PID {}",
-            req.unique, req.uid, req.gid, req.pid
-        );
+        info!("{}: init {}:{} from PID {}", req.unique, req.uid, req.gid, req.pid);
         Ok(())
     }
 
@@ -98,23 +95,12 @@ impl FilesystemMT for ForgetfulFS {
     }
 
     fn truncate(&self, req: RequestInfo, path: &Path, _fh: Option<u64>, size: u64) -> ResultEmpty {
-        info!(
-            "{}: truncate {}, {}",
-            req.unique,
-            path.to_string_lossy(),
-            size
-        );
+        info!("{}: truncate {}, {}", req.unique, path.to_string_lossy(), size);
         self.wlock(req, |this| this.truncate(path, size))
     }
 
     fn read(&self, req: RequestInfo, path: &Path, _fh: u64, offset: u64, size: u32) -> ResultData {
-        info!(
-            "{}: read {}, {}, {}",
-            req.unique,
-            path.to_string_lossy(),
-            offset,
-            size
-        );
+        info!("{}: read {}, {}, {}", req.unique, path.to_string_lossy(), offset, size);
         self.rlock(req, |this| this.read(path, offset, size))
     }
 
@@ -127,13 +113,7 @@ impl FilesystemMT for ForgetfulFS {
         data: Vec<u8>,
         _flags: u32,
     ) -> ResultWrite {
-        info!(
-            "{}: write {}, {}, {}",
-            req.unique,
-            path.to_string_lossy(),
-            offset,
-            data.len()
-        );
+        info!("{}: write {}, {}, {}", req.unique, path.to_string_lossy(), offset, data.len());
         self.wlock(req, |this| this.write(path, offset, data))
     }
 
@@ -149,41 +129,23 @@ impl FilesystemMT for ForgetfulFS {
             "{}: utimens {}, {}",
             req.unique,
             path.to_string_lossy(),
-            mtime
-                .map(time::at_utc)
-                .unwrap_or_else(time::empty_tm)
-                .rfc3339(),
+            mtime.map(time::at_utc).unwrap_or_else(time::empty_tm).rfc3339(),
         );
         self.wlock(req, |this| this.utimens(path, mtime))
     }
 
     fn unlink(&self, req: RequestInfo, parent: &Path, name: &OsStr) -> ResultEmpty {
-        info!(
-            "{}: unlink {}, {}",
-            req.unique,
-            parent.to_string_lossy(),
-            name.to_string_lossy()
-        );
+        info!("{}: unlink {}, {}", req.unique, parent.to_string_lossy(), name.to_string_lossy());
         self.wlock(req, |this| this.unlink(parent, name))
     }
 
     fn rmdir(&self, req: RequestInfo, parent: &Path, name: &OsStr) -> ResultEmpty {
-        info!(
-            "{}: rmdir {}, {}",
-            req.unique,
-            parent.to_string_lossy(),
-            name.to_string_lossy()
-        );
+        info!("{}: rmdir {}, {}", req.unique, parent.to_string_lossy(), name.to_string_lossy());
         self.wlock(req, |this| this.rmdir(parent, name))
     }
 
     fn mkdir(&self, req: RequestInfo, parent: &Path, name: &OsStr, _mode: u32) -> ResultEntry {
-        info!(
-            "{}: mkdir {}, {}",
-            req.unique,
-            parent.to_string_lossy(),
-            name.to_string_lossy()
-        );
+        info!("{}: mkdir {}, {}", req.unique, parent.to_string_lossy(), name.to_string_lossy());
         self.wlock(req, |this| this.mkdir(parent, name))
     }
 

@@ -26,12 +26,7 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
 
         for peer in user.into_iter() {
             let peer_id = &id_map[peer];
-            if profile
-                .links()
-                .iter()
-                .find(|l| l.peer_profile == *peer_id)
-                .is_none()
-            {
+            if profile.links().iter().find(|l| l.peer_profile == *peer_id).is_none() {
                 profile.create_link(peer_id);
                 info!("Re-created link {}->{}: {}->{}", idx, peer, id, peer_id);
             }
