@@ -27,23 +27,6 @@ impl FromStr for ProfileRepositoryKind {
     }
 }
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub enum RestoreMode {
-    FastForward,
-    ForcePull,
-}
-
-impl FromStr for RestoreMode {
-    type Err = failure::Error;
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        match src {
-            "safe" => Ok(RestoreMode::FastForward),
-            "force" => Ok(RestoreMode::ForcePull),
-            _ => Err(err_msg("Invalid restore mode")),
-        }
-    }
-}
-
 pub type ApiRes = Fallible<()>;
 pub trait Api {
     fn restore_vault(&mut self, demo: bool) -> ApiRes;
@@ -55,8 +38,8 @@ pub trait Api {
     fn show_profile(&self, profile_id: Option<ProfileId>, kind: ProfileRepositoryKind) -> ApiRes;
 
     fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
-    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
-    fn restore_profile(&mut self, my_profile_id: Option<ProfileId>, mode: RestoreMode) -> ApiRes;
+    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>, force: bool) -> ApiRes;
+    fn restore_profile(&mut self, my_profile_id: Option<ProfileId>, force: bool) -> ApiRes;
 
     fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> ApiRes;
 
@@ -182,15 +165,14 @@ before trying to restore another vault."#,
         self.base_repo.set(profile_id.to_owned(), remote_profile)
     }
 
+    //         | none | some  (base)
+    // --------+------+-----------------------------
+    //    none | ok   | ok (but server impl error)
+    //    some | err  | err if local.ver > base.ver
+    // (local)
     fn ensure_no_local_changes(&self, profile_id: &ProfileId) -> ApiRes {
         let base_profile_res = self.base_repo.get(&profile_id);
         let local_profile_res = self.local_repo.get(&profile_id);
-
-        //         | none | some  (base)
-        // --------+------+-----------------------------
-        //    none | ok   | ok (but impl error)
-        //    some | err  | err if local.ver > base.ver
-        // (local)
 
         let implementation_error = base_profile_res.is_ok() && local_profile_res.is_err();
         if implementation_error {
@@ -207,16 +189,38 @@ before trying to restore another vault."#,
         Ok(())
     }
 
-    fn restore_one_profile(&mut self, profile_id: &ProfileId, mode: RestoreMode) -> ApiRes {
-        match mode {
-            RestoreMode::ForcePull => {
-                debug!("Applying remote profile version, overwriting any local changes if present");
-            }
-            RestoreMode::FastForward => {
-                debug!("Applying remote profile version with conflict detection");
-                self.ensure_no_local_changes(profile_id)?;
-            }
-        };
+    // NOTE remote server should detect version conflict updating the entry
+    //         | none | some  (base)
+    // --------+------+-----------------------------
+    //    none | ok   | ok (but server impl error?)
+    //    some | err  | err if remote.ver > base.ver
+    // (remote)
+    fn ensure_no_remote_changes(&self, profile_id: &ProfileId) -> ApiRes {
+        let remote_profile_res = self.remote_repo.get(&profile_id);
+        let base_profile_res = self.base_repo.get(&profile_id);
+
+        let implementation_error = base_profile_res.is_ok() && remote_profile_res.is_err();
+        if implementation_error {
+            return Err(remote_profile_res.unwrap_err());
+        }
+
+        let profile_has_remote_changes = remote_profile_res.is_ok()
+            && (base_profile_res.is_err()
+                || remote_profile_res.unwrap().version() > base_profile_res.unwrap().version());
+        if profile_has_remote_changes {
+            // TODO do we really need an error here or just log some message and return success?
+            bail!("Conflict detected: remote profile was modified since last known version");
+        }
+        Ok(())
+    }
+
+    fn restore_one_profile(&mut self, profile_id: &ProfileId, force: bool) -> ApiRes {
+        if force {
+            debug!("Applying remote profile version, overwriting any local changes if present");
+        } else {
+            debug!("Applying remote profile version with conflict detection");
+            self.ensure_no_local_changes(profile_id)?;
+        }
 
         self.pull_base_profile(profile_id)?;
         self.revert_local_profile_to_base(profile_id)?;
@@ -296,20 +300,26 @@ impl Api for Context {
         Ok(())
     }
 
-    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
+    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>, force: bool) -> ApiRes {
         let profile = self.selected_profile(my_profile_id)?;
         let profile_id = profile.id().to_owned();
-        // NOTE remote server should detect version conflict updating the entry
-        // TODO should we detect version conflicts ALSO here?
+
+        if force {
+            debug!("Publishing local profile version, overwriting any remote changes if present");
+        } else {
+            debug!("Publishing local profile version with conflict detection");
+            self.ensure_no_remote_changes(&profile_id)?;
+        }
+
         self.remote_repo.set(profile_id.clone(), profile)?;
         info!("Published profile {} to remote repository", profile_id);
 
         self.pull_base_profile(&profile_id)
     }
 
-    fn restore_profile(&mut self, my_profile_id: Option<ProfileId>, mode: RestoreMode) -> ApiRes {
+    fn restore_profile(&mut self, my_profile_id: Option<ProfileId>, force: bool) -> ApiRes {
         let profile_id = self.selected_profile_id(my_profile_id)?;
-        self.restore_one_profile(&profile_id, mode)?;
+        self.restore_one_profile(&profile_id, force)?;
         info!("Successfully restored profile {}", profile_id);
         Ok(())
     }
@@ -383,7 +393,7 @@ impl Api for Context {
         for idx in 0..len {
             try_count += 1;
             let profile_id = profiles.id(idx as i32)?;
-            if let Err(e) = self.restore_one_profile(&profile_id, RestoreMode::FastForward) {
+            if let Err(e) = self.restore_one_profile(&profile_id, false) {
                 info!("  No related data found for profile {}: {}", profile_id, e);
                 continue;
             }
@@ -395,7 +405,7 @@ impl Api for Context {
         while idx < end {
             try_count += 1;
             let profile_id = profiles.id(idx as i32)?;
-            if let Err(e) = self.restore_one_profile(&profile_id, RestoreMode::ForcePull) {
+            if let Err(e) = self.restore_one_profile(&profile_id, true) {
                 debug!("  Profile {} was tried, but not found: {}", profile_id, e);
                 idx += 1;
                 continue;

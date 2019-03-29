@@ -333,10 +333,9 @@ pub enum RestoreCommand {
         /// Restore this specific profile from remote repository
         my_profile_id: Option<ProfileId>,
 
-        #[structopt(long = "mode", default_value = "safe")]
-        /// Strategy to handle locally modified data while trying to restore conflicting remote profile.
-        /// Possible values are: safe, force.
-        mode: RestoreMode,
+        #[structopt(long)]
+        /// Enforce restoring remote profile version even if having conflicting local changes.
+        force: bool,
     },
     #[structopt(name = "profiles")]
     /// Synchronize data of all profiles from remote repository (possibly overwrite local data if exists)
@@ -349,7 +348,7 @@ impl Command for RestoreCommand {
         match *self {
             Vault { demo } => api.restore_vault(demo),
             Profiles => api.restore_all_profiles(),
-            Profile { my_profile_id, mode } => api.restore_profile(my_profile_id, mode),
+            Profile { my_profile_id, force } => api.restore_profile(my_profile_id, force),
         }
     }
 }
@@ -362,13 +361,19 @@ pub enum PublishCommand {
         #[structopt()]
         /// Publish this specific local profile
         my_profile_id: Option<ProfileId>,
+
+        #[structopt(long)]
+        /// Enforce publishing local profile version even if having conflicting remote changes.
+        force: bool,
     },
 }
 
 impl Command for PublishCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         match *self {
-            PublishCommand::Profile { my_profile_id } => api.publish_profile(my_profile_id),
+            PublishCommand::Profile { my_profile_id, force } => {
+                api.publish_profile(my_profile_id, force)
+            }
         }
     }
 }
