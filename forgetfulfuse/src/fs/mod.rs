@@ -2,23 +2,23 @@ mod imp;
 
 use std::ffi::OsStr;
 use std::path::Path;
+use std::sync::Arc;
 use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use fuse_mt::*;
 use libc;
 use log::*;
-use time::Timespec;
+use time::{self, Timespec};
 
 use imp::*;
 
-#[derive(Default)]
 pub struct ForgetfulFS {
-    inner: RwLock<FsImpl>,
+    inner: Arc<RwLock<FsImpl>>,
 }
 
 impl ForgetfulFS {
     pub fn new(uid: u32, gid: u32) -> Self {
-        let inner = RwLock::new(FsImpl::new(uid, gid));
+        let inner = Arc::new(RwLock::new(FsImpl::new(uid, gid)));
         Self { inner }
     }
 

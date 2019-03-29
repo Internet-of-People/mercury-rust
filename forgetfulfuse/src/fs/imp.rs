@@ -15,7 +15,6 @@ pub enum Entry {
     Dir { mtime_sec: i64 },
 }
 
-#[derive(Default)]
 pub struct FsImpl {
     uid: u32,
     gid: u32,

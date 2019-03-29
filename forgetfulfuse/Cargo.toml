@@ -7,6 +7,7 @@ edition = "2018"
 
 [badges]
 gitlab = { repository = "https://gitlab.libertaria.community/iop-stack/communication/prometheus" }
+github = { repository = "https://github.com/internet-of-people/prometheus" }
 maintenance = { status = "actively-developed" }
 
 [dependencies]
@@ -18,4 +19,5 @@ log = "0.4.6"
 log4rs = "0.8.1"
 structopt = "0.2.15"
 time = "0.1"
+timer = "0.2.0"
 users = "0.9.1"
