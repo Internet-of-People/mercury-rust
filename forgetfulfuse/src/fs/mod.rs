@@ -1,33 +1,57 @@
 mod imp;
 
 use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::path::Path;
-use std::sync::Arc;
-use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
+use std::path::PathBuf;
+use std::sync::*;
 
 use fuse_mt::*;
 use libc;
 use log::*;
 use time::{self, Timespec};
+use timer::Timer;
 
 use imp::*;
 
+pub trait IgnoreResult: Sized {
+    fn ignore(self) {}
+}
+
+impl<T, E> IgnoreResult for Result<T, E> {}
+
 pub struct ForgetfulFS {
     inner: Arc<RwLock<FsImpl>>,
+    timer: Arc<Mutex<Timer>>,
 }
 
 impl ForgetfulFS {
     pub fn new(uid: u32, gid: u32) -> Self {
         let inner = Arc::new(RwLock::new(FsImpl::new(uid, gid)));
-        Self { inner }
+        let timer = Arc::new(Mutex::new(Timer::with_capacity(128)));
+        Self { inner, timer }
     }
 
     fn rlock<T, F>(&self, req: RequestInfo, f: F) -> Result<T, LibCError>
     where
         F: FnOnce(&RwLockReadGuard<'_, FsImpl>) -> Result<T, LibCError>,
     {
+        Self::rlock_s(&self.inner, req, f)
+    }
+
+    fn wlock<T, F>(&self, req: RequestInfo, f: F) -> Result<T, LibCError>
+    where
+        F: FnOnce(&mut RwLockWriteGuard<'_, FsImpl>) -> Result<T, LibCError>,
+    {
+        Self::wlock_s(&self.inner, req, f)
+    }
+
+    fn rlock_s<T, F>(inner: &RwLock<FsImpl>, req: RequestInfo, f: F) -> Result<T, LibCError>
+    where
+        F: FnOnce(&RwLockReadGuard<'_, FsImpl>) -> Result<T, LibCError>,
+    {
         trace!("{}: Trying to acquire read lock", req.unique);
-        match self.inner.read() {
+        match inner.read() {
             Err(_e) => {
                 debug!("{}: Could not acquire read lock", req.unique);
                 Err(libc::EAGAIN)
@@ -41,12 +65,12 @@ impl ForgetfulFS {
         }
     }
 
-    fn wlock<T, F>(&self, req: RequestInfo, f: F) -> Result<T, LibCError>
+    fn wlock_s<T, F>(inner: &RwLock<FsImpl>, req: RequestInfo, f: F) -> Result<T, LibCError>
     where
         F: FnOnce(&mut RwLockWriteGuard<'_, FsImpl>) -> Result<T, LibCError>,
     {
         trace!("{}: Trying to acquire write lock", req.unique);
-        match self.inner.write() {
+        match inner.write() {
             Err(_e) => {
                 debug!("{}: Could not acquire write lock", req.unique);
                 Err(libc::EAGAIN)
@@ -56,6 +80,25 @@ impl ForgetfulFS {
                 let res = f(&mut this);
                 trace!("{}: Releasing write lock", req.unique);
                 res
+            }
+        }
+    }
+
+    fn schedule_unlink(&self, req: RequestInfo, parent: PathBuf, name: OsString) -> ResultEmpty {
+        let inner = self.inner.clone();
+        match self.timer.lock() {
+            Err(_e) => Err(libc::EAGAIN),
+            Ok(timer) => {
+                timer
+                    .schedule_with_delay(time::Duration::seconds(5), {
+                        let parent = parent.to_owned();
+                        let name = name.to_owned();
+                        move || {
+                            Self::wlock_s(&inner, req, |this| this.unlink(&parent, &name)).ignore();
+                        }
+                    })
+                    .ignore();
+                Ok(())
             }
         }
     }
@@ -91,6 +134,7 @@ impl FilesystemMT for ForgetfulFS {
             mode,
             flags,
         );
+        self.schedule_unlink(req, parent.to_owned(), name.to_owned())?;
         self.wlock(req, |this| this.create(parent, name))
     }
 
