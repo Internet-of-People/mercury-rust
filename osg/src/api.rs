@@ -193,6 +193,31 @@ before trying to restore another vault."#,
         self.base_repo.set(profile_id.to_owned(), remote_profile)
     }
 
+    fn ensure_no_local_changes(&self, profile_id: &ProfileId) -> ApiRes {
+        let base_profile_res = self.base_repo.get(&profile_id);
+        let local_profile_res = self.local_repo.get(&profile_id);
+
+        //         | none | some  (base)
+        // --------+------+-----------------------------
+        //    none | ok   | ok (but impl error)
+        //    some | err  | err if local.ver > base.ver
+        // (local)
+
+        let implementation_error = base_profile_res.is_ok() && local_profile_res.is_err();
+        if implementation_error {
+            return Err(local_profile_res.unwrap_err());
+        }
+
+        let profile_has_local_changes = local_profile_res.is_ok()
+            && (base_profile_res.is_err()
+                || local_profile_res.unwrap().version() > base_profile_res.unwrap().version());
+        if profile_has_local_changes {
+            // TODO do we really need an error here or just log some message and return success?
+            bail!("Conflict detected: local profile was modified since last known remote version");
+        }
+        Ok(())
+    }
+
     fn restore_one_profile(&mut self, profile_id: &ProfileId, mode: RestoreMode) -> ApiRes {
         match mode {
             RestoreMode::ForcePull => {
@@ -200,17 +225,7 @@ before trying to restore another vault."#,
             }
             RestoreMode::FastForward => {
                 debug!("Applying remote profile version with conflict detection");
-                let remote_profile = self.remote_repo.get(&profile_id)?;
-                let local_profile = self
-                    .local_repo
-                    .get(&profile_id)
-                    .unwrap_or_else(|_e| ProfileData::new(&profile_id));
-
-                let profile_has_local_changes = local_profile.version() > remote_profile.version();
-                if profile_has_local_changes {
-                    // TODO do we really need an error here or just log some message and return success?
-                    bail!("Conflict detected: local version {} was modified since last known remote version {}", local_profile.version(), remote_profile.version());
-                }
+                self.ensure_no_local_changes(profile_id)?;
             }
         };
 

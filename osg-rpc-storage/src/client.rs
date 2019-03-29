@@ -108,7 +108,7 @@ where
     pub fn get_node_attribute(&self, key: AttributeId) -> Fallible<Vec<u8>> {
         let params = GetNodeAttributeParams {
             id: self.id.to_owned(),
-            key: key,
+            key,
         };
         let response = self.send_request("get_node_attribute", params)?;
         let attr_val = response
