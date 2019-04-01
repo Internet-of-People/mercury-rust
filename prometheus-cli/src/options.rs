@@ -17,7 +17,7 @@ pub trait Command {
     raw(setting = "structopt::clap::AppSettings::ColoredHelp")
 )]
 pub struct Options {
-    #[structopt(long = "conf_dir", raw(value_name = r#""DIR""#), parse(from_os_str))]
+    #[structopt(long, raw(value_name = r#""DIR""#), parse(from_os_str))]
     /// Configuration directory to pick vault and profile info from.
     /// Default: OS-specific app_cfg_dir/prometheus
     pub config_dir: Option<PathBuf>,
@@ -35,7 +35,7 @@ pub struct Options {
     pub network_timeout_secs: u64,
 
     #[structopt(
-        long = "logger_config",
+        long,
         default_value = "log4rs.yml",
         raw(value_name = r#""FILE""#),
         parse(from_os_str)
@@ -157,7 +157,7 @@ pub enum ShowCommand {
         /// Profile id to be shown, either yours or remote
         profile_id: Option<ProfileId>,
 
-        #[structopt(long = "source", default_value = "remote")]
+        #[structopt(long, default_value = "remote")]
         /// Source of the profile repository to be consulted for the lookup.
         /// Possible values are: local, base, remote
         source: ProfileRepositoryKind,
@@ -181,11 +181,11 @@ pub enum CreateCommand {
     #[structopt(name = "link")]
     /// Create link, i.e. follow/subscribe to a remote profile
     Link {
-        #[structopt(long = "my_profile_id")]
+        #[structopt(long)]
         /// Add link to this profile of yours if other than the active one
         my_profile_id: Option<ProfileId>,
 
-        #[structopt()] // long = "peer_profile_id"
+        #[structopt()]
         /// Create link to this remote profile
         peer_profile_id: ProfileId,
         // TODO is an optional "relation_type" needed here?
@@ -209,11 +209,11 @@ pub enum RemoveCommand {
     #[structopt(name = "link")]
     /// Remove link, i.e. unfollow/unsubscribe from another profile
     Link {
-        #[structopt(long = "my_profile_id")]
+        #[structopt(long)]
         /// Remove link from this profile of yours if other than the active one
         my_profile_id: Option<ProfileId>,
 
-        #[structopt()] // long = "peer_profile_id"
+        #[structopt()]
         /// Remove link with this remote profile
         peer_profile_id: ProfileId,
     },
@@ -236,7 +236,7 @@ pub enum SetCommand {
     ActiveProfile {
         // TODO is activation by profile NUMBER needed or is this enough?
         //      If enough, should be a mandatory positional parameter instead of a named one.
-        #[structopt()] // long = "my_profile_id"
+        #[structopt()]
         /// Profile id to be activated
         my_profile_id: ProfileId,
     },
@@ -244,15 +244,15 @@ pub enum SetCommand {
     #[structopt(name = "attribute")]
     /// Set attribute with name to specified value
     Attribute {
-        #[structopt(long = "my_profile_id")]
+        #[structopt(long)]
         /// Set attribute to this profile of yours if other than the active one
         my_profile_id: Option<ProfileId>,
 
-        #[structopt(long = "key")]
+        #[structopt()]
         /// Attribute name
         key: AttributeId,
 
-        #[structopt(long = "value")]
+        #[structopt()]
         /// Attribute value
         value: AttributeValue,
     },
@@ -273,11 +273,11 @@ pub enum ClearCommand {
     #[structopt(name = "attribute")]
     /// Clear attribute
     Attribute {
-        #[structopt(long = "my_profile_id")]
+        #[structopt(long)]
         /// Clear attribute from this profile of yours if other than the active one
         my_profile_id: Option<ProfileId>,
 
-        #[structopt()] // long = "key"
+        #[structopt()]
         /// Attribute name
         key: AttributeId,
     },
@@ -316,7 +316,7 @@ pub enum RestoreCommand {
     #[structopt(name = "vault")]
     /// (Re)build a profile vault (needed for most commands) from a phraselist
     Vault {
-        #[structopt(long = "demo")]
+        #[structopt(long)]
         demo: bool,
     },
     #[structopt(name = "profile")]
