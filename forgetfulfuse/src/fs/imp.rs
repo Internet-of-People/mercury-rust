@@ -167,12 +167,12 @@ Vestibulum sagittis est dolor, nec euismod massa rhoncus sed. Mauris vel arcu lo
             let mtime_sec = Self::now_utc();
             let blob = Vec::with_capacity(1024);
             self.entries.insert(file_name, Entry::File { mtime_sec, blob });
-            let res = CreatedEntry {
-                ttl: Timespec::new(std::i64::MAX, 0),
-                attr: self.attr(0, mtime_sec, false),
-                fh: 0,
-                flags: 0,
-            };
+            // rust-fuse and fuse-mt lacks notifications from the filesystem to
+            // the kernel at the moment. We need to completely turn off caching
+            // to not confuse the kernel when we delete files unilaterally without
+            // being asked to delete them by the kernel
+            let ttl = Timespec::new(1, 0);
+            let res = CreatedEntry { ttl, attr: self.attr(0, mtime_sec, false), fh: 0, flags: 0 };
             Ok(res)
         }
     }
