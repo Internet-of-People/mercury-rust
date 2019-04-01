@@ -153,6 +153,7 @@ impl<'a> Simulation<'a> {
         let peer_id = self.vault.profile_id(peer)?;
         let mut profile = self.repo.get(&id)?;
         profile.create_link(&peer_id);
+        profile.increase_version();
         self.repo.set(id.clone(), profile)?;
         self.state[idx].add_link(peer);
         *self.inlinks.entry(peer).or_insert(0usize) += 1;
