@@ -4,7 +4,7 @@ use super::{Ed25519, EdSignature, KeyId};
 use crate::*;
 
 /// Implementation of Ed25519::PublicKey
-#[derive(Clone)]
+#[derive(Clone, Eq, PartialEq)]
 pub struct EdPublicKey(ed::PublicKey);
 
 impl EdPublicKey {
