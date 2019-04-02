@@ -4,7 +4,7 @@ use super::{Ed25519, EdSignature, KeyId};
 use crate::*;
 
 /// Implementation of Ed25519::PublicKey
-#[derive(Clone, Eq, PartialEq)]
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct EdPublicKey(ed::PublicKey);
 
 impl EdPublicKey {
@@ -50,6 +50,6 @@ impl ExtendedPublicKey<Ed25519> for EdPublicKey {
         bail!("Normal derivation of Ed25519 is invalid based on SLIP-0010.")
     }
     fn as_public_key(&self) -> EdPublicKey {
-        self.clone()
+        *self
     }
 }

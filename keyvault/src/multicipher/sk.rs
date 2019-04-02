@@ -30,3 +30,9 @@ impl PrivateKey<MultiCipher> for MPrivateKey {
         visit!(sign(self, data))
     }
 }
+
+impl From<ed25519::EdPrivateKey> for MPrivateKey {
+    fn from(src: ed25519::EdPrivateKey) -> Self {
+        erase!(e, MPrivateKey, src)
+    }
+}

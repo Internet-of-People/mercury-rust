@@ -118,7 +118,7 @@ impl Hash for MKeyId {
 impl From<&MKeyId> for String {
     fn from(src: &MKeyId) -> Self {
         let (discriminator, bytes) = visit!(to_bytes_tuple(src));
-        let mut output = multibase::encode(multibase::Base58btc, &bytes);
+        let mut output = multibase::encode(multibase::Base58btc, &bytes[..]);
         output.insert_str(0, discriminator);
         output.insert(0, 'I');
         output

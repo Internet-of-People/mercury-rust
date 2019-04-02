@@ -127,6 +127,8 @@ use std::any::Any;
 use std::hash::Hash;
 use std::hash::Hasher;
 
+use serde::{Deserialize, Serialize};
+
 use crate::ed25519::{self, EdPrivateKey, EdPublicKey, EdSignature};
 use crate::{AsymmetricCrypto, PrivateKey, PublicKey};
 
@@ -159,6 +161,13 @@ impl AsymmetricCrypto for MultiCipher {
     type PublicKey = MPublicKey;
     type PrivateKey = MPrivateKey;
     type Signature = MSignature;
+}
+
+#[derive(Serialize, Deserialize)]
+struct ErasedBytes {
+    discriminator: u8,
+    #[serde(with = "serde_bytes")]
+    value: Vec<u8>,
 }
 
 #[cfg(test)]

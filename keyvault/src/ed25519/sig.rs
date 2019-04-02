@@ -3,6 +3,7 @@ use ed25519_dalek as ed;
 use super::*;
 
 /// Implementation of Ed25519::Signature
+#[derive(Copy, Clone, Eq, PartialEq)]
 pub struct EdSignature(ed::Signature);
 
 impl EdSignature {

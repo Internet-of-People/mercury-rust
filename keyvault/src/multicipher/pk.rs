@@ -10,74 +10,6 @@ erased_type! {
     pub struct MPublicKey {}
 }
 
-macro_rules! to_bytes_tuple {
-    ($suite:ident, $self_:expr) => {
-        (stringify!($suite), reify!($suite, pk, $self_).to_bytes())
-    };
-}
-
-#[derive(Serialize, Deserialize)]
-struct Erased {
-    discriminator: u8,
-    #[serde(with = "serde_bytes")]
-    value: Vec<u8>,
-}
-
-impl Serialize for MPublicKey {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        let (discriminator, bytes) = visit!(to_bytes_tuple(self));
-
-        let erased = Erased { discriminator: discriminator.as_bytes()[0], value: bytes.to_vec() };
-        erased.serialize(serializer)
-    }
-}
-
-macro_rules! from_bytes {
-    ($suite:ident, $data:expr) => {
-        erase!($suite, MPublicKey, <$suite!(pk)>::from_bytes($data)?)
-    };
-}
-
-fn deser(erased: Erased) -> Fallible<MPublicKey> {
-    let discriminator = erased.discriminator as char;
-    let data = &erased.value;
-    let value = visit_fac!(
-        stringify(discriminator.to_string().as_str()) =>
-            from_bytes(data)
-    );
-    Ok(value)
-}
-
-impl<'de> Deserialize<'de> for MPublicKey {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: Deserializer<'de>,
-    {
-        Erased::deserialize(deserializer)
-            .and_then(|b| deser(b).map_err(|e| serde::de::Error::custom(e.to_string())))
-    }
-}
-
-macro_rules! eq {
-    ($suite:ident, $self_:tt, $other:ident) => {
-        reify!($suite, pk, $self_).eq(reify!($suite, pk, $other))
-    };
-}
-
-impl PartialEq<MPublicKey> for MPublicKey {
-    fn eq(&self, other: &Self) -> bool {
-        if self.suite != other.suite {
-            return false;
-        }
-        visit!(eq(self, other))
-    }
-}
-
-impl Eq for MPublicKey {}
-
 macro_rules! key_id {
     ($suite:ident, $self_:tt) => {{
         let result = reify!($suite, pk, $self_).key_id();
@@ -103,10 +35,72 @@ impl PublicKey<MultiCipher> for MPublicKey {
     }
 }
 
+macro_rules! to_bytes_tuple {
+    ($suite:ident, $self_:expr) => {
+        (stringify!($suite), reify!($suite, pk, $self_).to_bytes())
+    };
+}
+
+impl Serialize for MPublicKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        let (discriminator, bytes) = visit!(to_bytes_tuple(self));
+
+        let erased =
+            ErasedBytes { discriminator: discriminator.as_bytes()[0], value: bytes.to_vec() };
+        erased.serialize(serializer)
+    }
+}
+
+macro_rules! from_bytes {
+    ($suite:ident, $data:expr) => {
+        erase!($suite, MPublicKey, <$suite!(pk)>::from_bytes($data)?)
+    };
+}
+
+fn deser(erased: ErasedBytes) -> Fallible<MPublicKey> {
+    let discriminator = erased.discriminator as char;
+    let data = &erased.value;
+    let value = visit_fac!(
+        stringify(discriminator.to_string().as_str()) =>
+            from_bytes(data)
+    );
+    Ok(value)
+}
+
+impl<'de> Deserialize<'de> for MPublicKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        ErasedBytes::deserialize(deserializer)
+            .and_then(|b| deser(b).map_err(|e| serde::de::Error::custom(e.to_string())))
+    }
+}
+
+macro_rules! eq {
+    ($suite:ident, $self_:tt, $other:ident) => {
+        reify!($suite, pk, $self_).eq(reify!($suite, pk, $other))
+    };
+}
+
+impl PartialEq<MPublicKey> for MPublicKey {
+    fn eq(&self, other: &Self) -> bool {
+        if self.suite != other.suite {
+            return false;
+        }
+        visit!(eq(self, other))
+    }
+}
+
+impl Eq for MPublicKey {}
+
 impl From<&MPublicKey> for String {
     fn from(src: &MPublicKey) -> Self {
         let (discriminator, bytes) = visit!(to_bytes_tuple(src));
-        let mut output = multibase::encode(multibase::Base58btc, &bytes);
+        let mut output = multibase::encode(multibase::Base58btc, &bytes[..]);
         output.insert_str(0, discriminator);
         output.insert(0, 'P');
         output
@@ -185,6 +179,30 @@ mod test {
             case(
                 "PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb",
                 "8fe9693f8fa62a4305a140b9764c5ee01e455963744fe18204b4fb948249308a",
+            );
+        }
+
+        #[test]
+        fn test_3() {
+            case(
+                "PezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z",
+                "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
+            );
+        }
+
+        #[test]
+        fn test_4() {
+            case(
+                "Pez586Z7H2vpX9qNhN2T4e9Utugie3ogjbxzGaMtM3E6HR5",
+                "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
+            );
+        }
+
+        #[test]
+        fn test_5() {
+            case(
+                "PezHyx62wPQGyvXCoihZq1BrbUjBRh2LuNxWiiqMkfAuSZr",
+                "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025",
             );
         }
 
