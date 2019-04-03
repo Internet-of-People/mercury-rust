@@ -1,12 +1,5 @@
 extern crate multiaddr;
 extern crate byteorder;
-extern crate signatory;
-extern crate signatory_dalek;
-extern crate ed25519_dalek;
-extern crate hex;
-extern crate rand;
-extern crate sha2;
-extern crate sha3;
 extern crate tokio_io;
 extern crate tokio_timer;
 extern crate tokio_core;
@@ -33,13 +26,8 @@ use futures::stream::{SplitSink, SplitStream};
 
 use self::multiaddr::{Multiaddr, ToMultiaddr};
 use self::byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
-use self::sha2::Sha512;
-use self::sha3::{Digest, Keccak256};
-use self::signatory::ed25519::{FromSeed, Seed, Signer};
-use self::signatory_dalek::Ed25519Signer;
 use async::AsyncResult;
-use mercury_home_protocol::{ProfileId, Profile, ProfileFacet, ProfileRepo, net::HomeConnector};
-use mercury_home_protocol::Signer as MercurySigner;
+use mercury_home_protocol::{ProfileId, Profile, ProfileFacet, ProfileRepo, Signer, net::HomeConnector};
 
 
 use super::StorageError;
@@ -121,12 +109,12 @@ pub struct RouterServiceClient{
     server_address: SocketAddr,
     sock : Rc<RefCell<RequestReplySocket>>,
     home_connector: Rc<HomeConnector>,
-    signer: Rc<MercurySigner>,
+    signer: Rc<Signer>,
 }
 
 impl RouterServiceClient {
     pub fn new(handle : reactor::Handle, host: Box<KeyValueStore<ProfileId, Profile>>,
-               server_address : SocketAddr, home_connector: Rc<HomeConnector>, signer: Rc<MercurySigner>)
+               server_address : SocketAddr, home_connector: Rc<HomeConnector>, signer: Rc<Signer>)
         -> std::io::Result<Self>
     {
         let sock = Rc::new(RefCell::new( RequestReplySocket::new()) );
@@ -189,14 +177,14 @@ pub trait RequestPayload {
 }
 
 pub struct Request {
-    secret_key : ed25519_dalek::SecretKey,
+    signer : Rc<Signer>,
     nonce : u64,
     payload : Box<RequestPayload>,
 }
 
 impl Request {
-    pub fn new(secret_key : ed25519_dalek::SecretKey, payload: Box<RequestPayload>, nonce: u64) -> Self {
-        Self{secret_key, nonce, payload}
+    pub fn new(signer : Rc<Signer>, payload: Box<RequestPayload>, nonce: u64) -> Self {
+        Self{signer, nonce, payload}
     }
 
 
@@ -210,31 +198,21 @@ impl Request {
         retval.write_u64::<BigEndian>(self.nonce)?;
         eprintln!("request id pos: {}", retval.position());
 
-        // home id
-        let public_key = ed25519_dalek::PublicKey::from_secret::<Sha512>(&self.secret_key);
-        let mut hasher = Keccak256::new();
-        hasher.input(public_key.to_bytes());
-        let home_id = hasher.result();
-
-        retval.write_all(&home_id)?;
+        let home_id = self.signer.profile_id();
+        retval.write_all(&home_id.0)?;
         eprintln!("home id pos: {}", retval.position());
 
         // payload
         retval = self.payload.serialize(retval)?;
         eprintln!("payload pos: {}", retval.position());
 
-        let seed = Seed::from_slice(self.secret_key.as_bytes())
-            .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err) )?;
-        let signer = Ed25519Signer::from_seed(seed);
-        let signature = signer.sign(retval.get_ref())
-            .map_err(|err| io::Error::new(io::ErrorKind::InvalidInput, err) )?;
-
         // pk
-        retval.write_all(public_key.as_bytes())?;
+        retval.write_all(&self.signer.public_key().0)?;
         eprintln!("public key pos: {}", retval.position());
 
         // sig
-        retval.write_all(signature.as_bytes())?;
+        let signature = self.signer.sign(retval.get_ref());
+        retval.write_all(&signature.0)?;
         eprintln!("sign pos: {}", retval.position());
 
         Ok(retval.into_inner())
