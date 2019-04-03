@@ -5,7 +5,6 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 
 [dependencies]
 bincode = "*"
-#clap = "2"
 failure = "*"
 futures = "0.1"
 log = "*"

@@ -1,8 +1,7 @@
 
 use multihash;
-use signatory::ed25519::{FromSeed, Seed, Verifier};
-use signatory::ed25519::Signer as SignatoryEdSigner;
-use signatory_dalek::Ed25519Signer as SignatoryEdDalekSigner;
+use signatory::{ed25519, PublicKeyed, Signature as SignatoryEdSignature,
+                Signer as SignatoryEdSigner, Verifier};
 
 use failure::ResultExt;
 use super::*;
@@ -59,15 +58,15 @@ pub struct Ed25519Signer
 {
     profile_id: ProfileId,
     public_key: PublicKey,
-    signer:     SignatoryEdDalekSigner,
+    signer:     signatory_dalek::Ed25519Signer,
 }
 
 impl Ed25519Signer
 {
     pub fn new(private_key: &PrivateKey) -> Result<Self, Error>
     {
-        let seed = Seed::from_slice( private_key.0.as_slice() ).context(ErrorKind::SignerCreationFailed)?;
-        let signer = SignatoryEdDalekSigner::from_seed(seed);
+        let seed = ed25519::Seed::from_bytes( private_key.0.clone() ).context(ErrorKind::SignerCreationFailed)?;
+        let signer = signatory_dalek::Ed25519Signer::from(&seed);
         let ed_public_key = signer.public_key().context(ErrorKind::SignerCreationFailed)?;            
         let public_key = PublicKey( ed_public_key.as_ref().to_vec() );
         //let profile_hash = multihash::encode( multihash::Hash::Keccak256, public_key.0.as_slice() )
@@ -86,7 +85,6 @@ impl Signer for Ed25519Signer
 
     fn sign(&self, data: &[u8]) -> Signature
     {
-        use signatory::ed25519::Signer;
         let signature = self.signer.sign(data)
             .unwrap(); // TODO ERROR HANDLING how to handle possibly returned errors here?
         let signature_bytes: Box<[u8]> = Box::new(signature.0);
@@ -108,10 +106,10 @@ impl SignatureValidator for Ed25519Validator
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
         -> Result<bool, Error>
     {
-        use signatory_dalek::Ed25519Verifier;
         let pubkey = ::signatory::ed25519::PublicKey::from_bytes( public_key.0.as_slice() ).context(ErrorKind::SignatureValidationFailed)?;
+        let verifier = signatory_dalek::Ed25519Verifier::from(&pubkey);
         let signature = ::signatory::ed25519::Signature::from_bytes( signature.0.as_slice()).context(ErrorKind::SignatureValidationFailed)?;
-        Ed25519Verifier::verify(&pubkey, data, &signature).context(ErrorKind::SignatureValidationFailed)?;
+        verifier.verify(data, &signature).context(ErrorKind::SignatureValidationFailed)?;
         // TODO hwo to determine when to return Ok(false) here, i.e. signature does not match but validation was otherwise successful
         Ok(true)
     }

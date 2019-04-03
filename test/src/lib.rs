@@ -19,7 +19,6 @@ extern crate base64;
 use std::{cell::RefCell, rc::Rc};
 
 use rand::rngs::OsRng;
-use sha2::Sha512;
 use tokio_core::reactor;
 
 use mercury_home_protocol::*;
@@ -39,9 +38,8 @@ pub mod home;
 
 pub fn generate_keypair() -> (PrivateKey, PublicKey) {
     let mut csprng: OsRng = OsRng::new().unwrap();
-    let secret_key = ed25519_dalek::SecretKey::generate(&mut csprng);
-    let public_key = ed25519_dalek::PublicKey::from_secret::<Sha512>(&secret_key);
-    (PrivateKey::from(secret_key), PublicKey::from(public_key))
+    let keypair = ed25519_dalek::Keypair::generate::<sha2::Sha512,_>(&mut csprng);
+    (PrivateKey::from(keypair.secret), PublicKey::from(keypair.public))
 }
 
 
