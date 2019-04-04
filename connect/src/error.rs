@@ -15,7 +15,7 @@ pub enum ErrorKind {
     ConnectionToHomeFailed,
 
     #[fail(display="handshake failed")]
-    HandshakeFailed,
+    DiffieHellmanHandshakeFailed,
 
     #[fail(display= "peer id retreival failed")]
     PeerIdRetreivalFailed,

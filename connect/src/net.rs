@@ -81,9 +81,10 @@ impl HomeConnector for SimpleTcpHomeConnector
         let capnp_home = future::select_ok(tcp_conns)
             .and_then( move |(tcp_stream, _pending_futs)|
             {
-                use mercury_home_protocol::handshake::temp_tcp_handshake_until_tls_is_implemented;
-                temp_tcp_handshake_until_tls_is_implemented(tcp_stream, signer)
-                .map_err(|err| err.context(mercury_home_protocol::error::ErrorKind::TlsHandshakeFailed).into())
+                use mercury_home_protocol::handshake::temporary_unsafe_tcp_handshake_until_diffie_hellman_done;
+                temporary_unsafe_tcp_handshake_until_diffie_hellman_done(tcp_stream, signer)
+                    //.map_err(|err| err.context(ErrorKind::HandshakeFailed).into())
+                    .map_err(|err| err.context(mercury_home_protocol::error::ErrorKind::DiffieHellmanHandshakeFailed).into())
             }).map( |(reader, writer, _peer_ctx)| {
                 use mercury_home_protocol::mercury_capnp::client_proxy::HomeClientCapnProto;
                 Rc::new( HomeClientCapnProto::new(reader, writer, handle_clone) ) as Rc<Home>

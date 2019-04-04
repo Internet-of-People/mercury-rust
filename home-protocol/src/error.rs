@@ -24,7 +24,7 @@ pub enum ErrorKind {
     #[fail(display= "signature validation failed")]
     SignatureValidationFailed,
     #[fail(display= "handshake failed")]
-    TlsHandshakeFailed,
+    DiffieHellmanHandshakeFailed,
     #[fail(display= "relation signing failed")]
     RelationSigningFailed,
     #[fail(display= "relation validation failed")]

@@ -54,7 +54,7 @@ fn main()
         let server_clone = server.clone();
 
         // TODO fill this in properly for each connection based on TLS authentication info
-        let handshake_fut = handshake::temp_tcp_handshake_until_tls_is_implemented( socket, signer.clone() )
+        let handshake_fut = handshake::temporary_unsafe_tcp_handshake_until_diffie_hellman_done( socket, signer.clone() )
             .map_err( |e| warn!("Client handshake failed: {:?}", e) )
             .and_then( move |(reader, writer, client_context)|
             {
