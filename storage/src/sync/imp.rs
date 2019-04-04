@@ -42,8 +42,7 @@ for InMemoryStore<KeyType, ValueType>
 #[cfg(test)]
 mod tests
 {
-    use multihash;
-    use multibase;
+    use serde_derive::{Deserialize, Serialize};
 
     use super::*;
     use crate::common::imp::*;

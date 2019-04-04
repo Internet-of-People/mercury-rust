@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use futures::prelude::*;
 use futures::sync::mpsc;
+use log::*;
 
 use super::*;
 use profile::MyProfile;

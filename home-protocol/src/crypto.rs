@@ -1,10 +1,11 @@
-
-use multihash;
 use signatory::{ed25519, PublicKeyed, Signature as SignatoryEdSignature,
                 Signer as SignatoryEdSigner, Verifier};
 
 use failure::ResultExt;
-use super::*;
+
+use crate::*;
+
+
 
 pub trait ProfileValidator
 {
@@ -106,9 +107,9 @@ impl SignatureValidator for Ed25519Validator
     fn validate_signature(&self, public_key: &PublicKey, data: &[u8], signature: &Signature)
         -> Result<bool, Error>
     {
-        let pubkey = ::signatory::ed25519::PublicKey::from_bytes( public_key.0.as_slice() ).context(ErrorKind::SignatureValidationFailed)?;
+        let pubkey = signatory::ed25519::PublicKey::from_bytes( public_key.0.as_slice() ).context(ErrorKind::SignatureValidationFailed)?;
         let verifier = signatory_dalek::Ed25519Verifier::from(&pubkey);
-        let signature = ::signatory::ed25519::Signature::from_bytes( signature.0.as_slice()).context(ErrorKind::SignatureValidationFailed)?;
+        let signature = signatory::ed25519::Signature::from_bytes( signature.0.as_slice()).context(ErrorKind::SignatureValidationFailed)?;
         verifier.verify(data, &signature).context(ErrorKind::SignatureValidationFailed)?;
         // TODO hwo to determine when to return Ok(false) here, i.e. signature does not match but validation was otherwise successful
         Ok(true)

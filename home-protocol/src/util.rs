@@ -1,5 +1,6 @@
 use std::{collections::HashMap, env, fs};
 
+use log::*;
 use structopt::StructOpt;
 
 
@@ -22,7 +23,7 @@ fn read_config_file(config_path: &str) -> Result< Vec<String>, () >
     let file_contents = fs::read_to_string(config_path)
         .map_err( |e| warn!("Error reading config file {}: {}", config_path, e) )?;
 
-    let file_keyvals : HashMap<String, String> = ::toml::from_str(&file_contents)
+    let file_keyvals : HashMap<String, String> = toml::from_str(&file_contents)
         .map_err( |e| {
             error!("Error parsing file {}: {}", config_path, e);
             warn!("Note that only `key = 'value'` format is supported in the config file");

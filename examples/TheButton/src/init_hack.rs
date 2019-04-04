@@ -3,6 +3,7 @@
 //      protected background service and communicate with dApps through IPC.
 //      However, until it's properly implemented, dApps have to contain and instantiate it.
 
+use log::*;
 use multiaddr::ToMultiaddr;
 
 use super::*;

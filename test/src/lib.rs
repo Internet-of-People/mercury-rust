@@ -1,21 +1,3 @@
-extern crate capnp;
-extern crate capnp_rpc;
-extern crate ed25519_dalek;
-extern crate futures;
-extern crate mercury_connect;
-extern crate mercury_home_protocol;
-extern crate mercury_home_node;
-extern crate mercury_storage;
-extern crate tokio_core;
-extern crate tokio_io;
-extern crate tokio_threadpool;
-extern crate memsocket;
-extern crate multiaddr;
-extern crate multihash;
-extern crate rand;
-extern crate sha2;
-extern crate base64;
-
 use std::{cell::RefCell, rc::Rc};
 
 use rand::rngs::OsRng;
@@ -27,7 +9,6 @@ use mercury_home_node::server::HomeServer;
 use mercury_storage::asynch::imp::InMemoryStore;
 
 
-pub mod dummy; // TODO this will not be needed with real components ready and tested
 
 #[cfg(test)]
 pub mod connect;

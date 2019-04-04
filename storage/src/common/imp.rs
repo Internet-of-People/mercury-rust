@@ -1,9 +1,3 @@
-use multihash;
-
-use multibase;
-use serde;
-use serde_json;
-
 use crate::common::*;
 
 
@@ -155,6 +149,7 @@ impl HashCoder<Vec<u8>, String> for MultiBaseHashCoder
 mod tests
 {
     use super::*;
+    use serde_derive::{Deserialize, Serialize};
 
 
     #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]

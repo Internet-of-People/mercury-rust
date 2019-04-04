@@ -1,31 +1,3 @@
-extern crate bincode;
-extern crate bytes;
-extern crate capnp;
-#[macro_use]
-extern crate capnp_rpc;
-extern crate ed25519_dalek;
-//#[macro_use]
-extern crate failure;
-extern crate futures;
-#[macro_use]
-extern crate log;
-extern crate multiaddr;
-extern crate multibase;
-extern crate multihash;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
-extern crate signatory;
-extern crate signatory_dalek;
-extern crate structopt;
-extern crate tokio_core;
-extern crate tokio_io;
-extern crate toml;
-//extern crate x25519_dalek;
-
-
-
 pub mod crypto;
 pub mod error;
 pub mod future;
@@ -40,9 +12,11 @@ use std::{rc::Rc, str};
 
 use bincode::serialize;
 use futures::{Future, sync::mpsc};
+use log::*;
 use multiaddr::{Multiaddr, ToMultiaddr};
 use serde::{Deserialize, Deserializer, Serializer};
 use serde::{de::Error as DeSerError, ser::SerializeSeq};
+use serde_derive::{Deserialize, Serialize};
 
 use crypto::{ProfileValidator, SignatureValidator};
 use crate::error::*;
@@ -430,9 +404,9 @@ impl<'a> From<ProfileId> for Vec<u8>
 
 impl<'a> TryFrom<&'a str> for ProfileId
 {
-    type Error = ::multibase::Error;
+    type Error = multibase::Error;
     fn try_from(src: &'a str) -> Result<Self, Self::Error> {
-        let (_base, binary) = ::multibase::decode(src)?;
+        let (_base, binary) = multibase::decode(src)?;
         Ok( ProfileId(binary) )
     }
 }
@@ -440,7 +414,7 @@ impl<'a> TryFrom<&'a str> for ProfileId
 impl<'a> From<&'a ProfileId> for String
 {
     fn from(src: &'a ProfileId) -> Self
-        { ::multibase::encode(::multibase::Base::Base64url, &src.0) }
+        { multibase::encode(multibase::Base::Base64url, &src.0) }
 }
 
 impl<'a> From<ProfileId> for String
@@ -459,7 +433,7 @@ impl std::fmt::Display for ProfileId {
 impl<'a> From<&'a PublicKey> for String
 {
     fn from(src: &'a PublicKey) -> Self
-        { ::multibase::encode(::multibase::Base::Base64url, &src.0) }
+        { multibase::encode(multibase::Base::Base64url, &src.0) }
 }
 
 impl<'a> From<PublicKey> for String

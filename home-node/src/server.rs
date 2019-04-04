@@ -5,6 +5,7 @@ use std::time::Duration;
 use failure::Fail;
 use futures::{future, stream, Future, Sink};
 use futures::sync::{mpsc, oneshot};
+use log::*;
 use tokio_core::reactor::{self, Timeout};
 
 use mercury_home_protocol::*;

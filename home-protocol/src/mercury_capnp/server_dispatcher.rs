@@ -1,6 +1,7 @@
 use std::rc::Rc;
 
 use capnp::capability::Promise;
+use capnp_rpc::pry;
 use futures::{Future, Stream};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;

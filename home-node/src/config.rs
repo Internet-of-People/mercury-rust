@@ -3,7 +3,11 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use log::*;
+use structopt::StructOpt;
+
 use mercury_home_protocol::{*, crypto::*};
+
 
 
 

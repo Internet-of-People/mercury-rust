@@ -3,6 +3,7 @@ use std::time::Duration;
 
 use futures::prelude::*;
 use futures::sync::mpsc;
+use log::*;
 use tokio_signal::unix::SIGUSR1;
 
 use super::*;

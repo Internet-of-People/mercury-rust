@@ -3,6 +3,7 @@ use std::path::PathBuf;
 
 use failure::Fail;
 use futures::prelude::*;
+use log::*;
 use tokio_codec::{Decoder, Encoder};
 use tokio_core::reactor;
 use tokio_uds::UnixListener;

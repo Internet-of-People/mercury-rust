@@ -14,10 +14,8 @@ use std::rc::Rc;
 use futures::prelude::*;
 use futures::future;
 use futures_state_stream::StateStream;
-use ipfs_api;
-use multibase;
+use serde_derive::{Deserialize, Serialize};
 use tokio_core::reactor;
-use tokio_postgres;
 
 use crate::asynch::*;
 use crate::format::*;
@@ -289,10 +287,10 @@ pub struct Ipfs
 
 impl Ipfs
 {
-    pub fn new(host: &str, port: u16, handle: &reactor::Handle) -> Result<Self, ::std::io::Error>
+    pub fn new(host: &str, port: u16, handle: &reactor::Handle) -> Result<Self, std::io::Error>
     {
         let client = ipfs_api::IpfsClient::new(handle, host, port)
-            .map_err( |e| ::std::io::Error::new(::std::io::ErrorKind::NotFound, e) )?;
+            .map_err( |e| std::io::Error::new(std::io::ErrorKind::NotFound, e) )?;
         Ok( Self{ client: client } )
     }
 }
@@ -303,7 +301,7 @@ impl HashSpace<Vec<u8>, String> for Ipfs
         -> Box< Future<Item=String, Error=HashSpaceError> >
     {
         // TODO maybe we should also pin the object after adding
-        let data = ::std::io::Cursor::new(object);
+        let data = std::io::Cursor::new(object);
         let add_fut = self.client.add(data)
             .map( |resp| resp.hash )
             // TODO error should be mapped to something more descriptive than Other

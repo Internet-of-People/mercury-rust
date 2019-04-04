@@ -118,7 +118,7 @@ impl Fail for Error {
 }
 
 impl Display for Error {
-    fn fmt(&self, f: &mut ::std::fmt::Formatter) -> ::std::fmt::Result {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         Display::fmt(&self.inner, f)
     }
 }

@@ -6,6 +6,7 @@ use std::rc::Rc;
 use failure::Fail; // Backtrace, Context
 use futures::prelude::*;
 use futures::future;
+use log::*;
 use tokio_core::reactor;
 
 use super::*;

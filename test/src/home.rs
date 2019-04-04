@@ -309,7 +309,7 @@ fn test_home_call(mut setup: TestSetup)
                 Err(_) => panic!(),
             }
         })
-        .map_err(|_| ::mercury_home_protocol::error::ErrorKind::CallFailed.into())
+        .map_err(|_| mercury_home_protocol::error::ErrorKind::CallFailed.into())
         .collect();
 
     let call_and_answer = forward_sink_fut.join(backwards_sink_fut);

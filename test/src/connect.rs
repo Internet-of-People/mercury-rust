@@ -18,7 +18,7 @@ use mercury_connect::*;
 use mercury_storage::async::KeyValueStore;
 use mercury_storage::filesys::AsyncFileHandler;
 
-use ::dummy::*;
+use dummy::*;
 use super::*;
 
 

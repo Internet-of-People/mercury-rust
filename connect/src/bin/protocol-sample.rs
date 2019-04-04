@@ -1,26 +1,11 @@
-#[macro_use]
-extern crate clap;
-extern crate failure;
-extern crate futures;
-#[macro_use]
-extern crate log;
-extern crate log4rs;
-extern crate multiaddr;
-//extern crate multihash;
-extern crate tokio_core;
-
-extern crate mercury_connect;
-extern crate mercury_home_protocol;
-
-
-
 use std::net::SocketAddr;
 use std::rc::Rc;
 use std::time::Duration;
 
-use clap::App;
+use clap::{App, load_yaml};
 use failure::Fail;
 use futures::prelude::*;
+use log::*;
 use multiaddr::ToMultiaddr;
 use tokio_core::reactor;
 
@@ -68,7 +53,7 @@ fn main()
     let profile_gw = MyProfileImpl::new( client_own_profile.clone(), client_signer.clone(), Rc::new(profile_store),
         Rc::new(home_connector), reactor.handle() );
     let test_fut = profile_gw.connect_home(&server_id.clone())
-        .map_err(|err| err.context(::mercury_home_protocol::error::ErrorKind::ConnectionToHomeFailed).into())
+        .map_err(|err| err.context(mercury_home_protocol::error::ErrorKind::ConnectionToHomeFailed).into())
         .and_then(|home| {
             info!("connected, registering");
             let halfproof = RelationHalfProof::new(
@@ -85,7 +70,7 @@ fn main()
             };
             match home_proof {
                 Some(proof) => home.login(&proof),
-                None => Box::new( Err(::mercury_home_protocol::error::ErrorKind::LoginFailed.into()).into_future())
+                None => Box::new( Err(mercury_home_protocol::error::ErrorKind::LoginFailed.into()).into_future())
             }
         })
         .and_then(|session| {

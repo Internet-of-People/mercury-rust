@@ -6,6 +6,7 @@ use std::sync::Arc;
 use futures::{prelude::*, future::Either, sync::{mpsc, oneshot}};
 use jsonrpc_core::{Metadata, MetaIoHandler, Params, serde_json as json, types};
 use jsonrpc_pubsub::{PubSubHandler, Session as PubSubSession, PubSubMetadata, Subscriber, SubscriptionId};
+use log::*;
 use tokio_codec::{Decoder, Encoder, Framed};
 use tokio_core::reactor;
 use tokio_io::{AsyncRead, AsyncWrite};

@@ -1,17 +1,4 @@
-#![allow(unused)]
-extern crate mercury_home_protocol;
-
-extern crate multihash;
-extern crate multiaddr;
-
-extern crate tokio_stdin_stdout;
-extern crate tokio_core;
-extern crate tokio_io;
-extern crate futures;
-extern crate base64;
-
 /*
-
 use mercury_connect::*;
 use mercury_home_protocol::*;
 
@@ -494,5 +481,4 @@ impl IncomingCall for Incall{
     }
     fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>) -> CallRequestDetails { self.request }
 }
-
 */

@@ -5,9 +5,10 @@ use std::rc::{Rc, Weak};
 use failure::Fail;
 use futures::prelude::*;
 use futures::{future, sync::mpsc};
+use log::*;
 use tokio_core::reactor;
 
-use super::*;
+use crate::*;
 use mercury_home_protocol::net::HomeConnector;
 use mercury_home_protocol::future as fut;
 
@@ -136,7 +137,7 @@ impl MyProfileImpl
                             home_proof.peer_id(&my_profile_id)
                                 .and_then(|peer_id|
                                     if *peer_id == home_id { Ok(true) }
-                                    else { Err(::mercury_home_protocol::error::ErrorKind::PeerIdRetreivalFailed.into()) }
+                                    else { Err(mercury_home_protocol::error::ErrorKind::PeerIdRetreivalFailed.into()) }
                                 )
                                 .is_ok()
                         )

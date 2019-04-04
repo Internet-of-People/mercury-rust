@@ -1,23 +1,3 @@
-extern crate clap;
-extern crate failure;
-extern crate futures;
-extern crate jsonrpc_core;
-extern crate jsonrpc_pubsub;
-#[macro_use]
-extern crate log;
-extern crate log4rs;
-extern crate multiaddr;
-#[macro_use]
-extern crate structopt;
-extern crate tokio_codec;
-extern crate tokio_core;
-
-extern crate mercury_connect;
-extern crate mercury_home_protocol;
-extern crate mercury_storage;
-
-
-
 use std::collections::HashSet;
 use std::cell::RefCell;
 use std::net::SocketAddr;
@@ -26,7 +6,9 @@ use std::rc::Rc;
 
 use failure::Fail;
 //use futures::prelude::*;
+use log::*;
 use multiaddr::ToMultiaddr;
+use structopt::StructOpt;
 use tokio_codec::LinesCodec;
 use tokio_core::reactor;
 

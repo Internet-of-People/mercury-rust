@@ -3,11 +3,12 @@ use std::rc::Rc;
 
 use failure::Fail;
 use futures::{future, Future};
+use log::*;
 use multiaddr::{Multiaddr, AddrComponent};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 
-use super::*;
+use crate::*;
 use mercury_home_protocol::net::HomeConnector;
 
 

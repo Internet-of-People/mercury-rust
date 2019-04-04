@@ -1,4 +1,5 @@
-use super::*;
+use log::*;
+use crate::*;
 
 pub struct ServerConfig{
     pub event_timer : Option<u64>,

@@ -7,9 +7,11 @@ use std::time::Duration;
 
 //use failure::Fail;
 use futures::prelude::*;
+use futures::try_ready;
 //use jsonrpc_core::{Metadata, MetaIoHandler, Params, serde_json as json, types};
 //use jsonrpc_pubsub::{PubSubHandler, Session as PubSubSession, PubSubMetadata, Subscriber, SubscriptionId};
-use state_machine_future::RentToOwn;
+use log::*;
+use state_machine_future::{RentToOwn, StateMachineFuture, transition};
 //use tokio_codec::{Decoder, Encoder, Framed};
 use tokio_core::{reactor, reactor::Timeout};
 use tokio_io::{AsyncRead, AsyncWrite};

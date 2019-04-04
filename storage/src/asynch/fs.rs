@@ -1,11 +1,10 @@
-extern crate tokio;
-
 use std::cell::RefCell;
 use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
 use futures::prelude::*;
+use log::*;
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json;
@@ -41,7 +40,7 @@ impl BlockingFileStore
         Ok( () )
     }
 
-    fn get_bytes(&self, key: String) -> Result<Vec<u8>, ::std::io::Error>
+    fn get_bytes(&self, key: String) -> Result<Vec<u8>, std::io::Error>
     {
         use std::{io::Read, fs::File};
         let mut file = File::open( self.base_path.join(key) )?;
@@ -82,7 +81,7 @@ impl<V> KeyValueStore<String, V> for BlockingFileStore
 
     fn clear_local(&mut self, key: String) -> AsyncResult<()>
     {
-        let res = ::std::fs::remove_file( self.base_path.join(key) )
+        let res = std::fs::remove_file( self.base_path.join(key) )
             .map_err( |e| StorageError::StringError( e.description().to_owned() ) );
         Box::new( res.into_future() )
     }
@@ -108,12 +107,12 @@ impl AsyncFileStore
     }
 
 
-    fn schedule<T,F>(&self, future: F) -> Box< Future<Item=T, Error=StorageError> + Send + 'static > // ::futures::sync::oneshot::Receiver<Result<T,E>>
+    fn schedule<T,F>(&self, future: F) -> Box< Future<Item=T, Error=StorageError> + Send + 'static >
         where F: Future<Item=T, Error=StorageError> + Send + 'static,
               T: Send + 'static
     {
         trace!("Scheduling file operation on new runtime");
-        let (tx, rx) = ::futures::sync::oneshot::channel();
+        let (tx, rx) = futures::sync::oneshot::channel();
         self.runtime.borrow_mut().spawn(future.then(move |r| tx.send(r).map_err(|_| unreachable!())));
         let retval = rx.then( |result| {
             trace!("File operation finished on new runtime, returning result");
@@ -139,11 +138,11 @@ impl<V> KeyValueStore<String, V> for AsyncFileStore
 
         let file_path = self.base_path.join(key);
         trace!("Serialized {} bytes for file contents of {:?}", bytes.len(), file_path.to_str());
-        let fut = ::tokio_fs::create_dir_all( self.base_path.clone() )
+        let fut = tokio_fs::create_dir_all( self.base_path.clone() )
             .inspect( |_| trace!("Directory path created") )
-            .and_then( move |()| ::tokio_fs::File::create(file_path) )
+            .and_then( move |()| tokio_fs::File::create(file_path) )
             .inspect( |_| trace!("File opened for write") )
-            .and_then( move |file| ::tokio_io::io::write_all(file, bytes) )
+            .and_then( move |file| tokio_io::io::write_all(file, bytes) )
             .inspect( |_| trace!("File written") )
             .map( |(_file,_buf)| () )
             .map_err( |e| { debug!("Failed to write file: {:?}", e); StorageError::StringError( e.description().to_owned() ) } );
@@ -153,9 +152,9 @@ impl<V> KeyValueStore<String, V> for AsyncFileStore
     fn get(&self, key: String) -> AsyncResult<V>
     {
         trace!("Got file reading request for key {}", key);
-        let fut = ::tokio_fs::File::open( self.base_path.join(key) )
+        let fut = tokio_fs::File::open( self.base_path.join(key) )
             .inspect( |_| trace!("File opened for read") )
-            .and_then( |file| ::tokio_io::io::read_to_end( file, Vec::new() ) )
+            .and_then( |file| tokio_io::io::read_to_end( file, Vec::new() ) )
             .inspect( |(_file,bytes)| trace!("Read {} bytes from file", bytes.len()) )
             .map_err( |e| StorageError::StringError( e.description().to_owned())  )
             .and_then( |(_file,bytes)| serde_json::from_slice(&bytes)
@@ -165,7 +164,7 @@ impl<V> KeyValueStore<String, V> for AsyncFileStore
 
     fn clear_local(&mut self, key: String) -> AsyncResult<()>
     {
-        let fut = ::tokio_fs::remove_file( self.base_path.join(key) )
+        let fut = tokio_fs::remove_file( self.base_path.join(key) )
             .map_err( |e| StorageError::StringError( e.description().to_owned() ) );
         Box::new( self.schedule(fut) )
     }
@@ -176,7 +175,7 @@ impl<V> KeyValueStore<String, V> for AsyncFileStore
 #[test]
 fn test_file_store()
 {
-    let mut reactor = ::tokio_core::reactor::Core::new().unwrap();
+    let mut reactor = tokio_core::reactor::Core::new().unwrap();
     // let mut runtime = tokio::runtime::Runtime::new().unwrap();
     let mut storage : Box<KeyValueStore<String,String>> =
         Box::new( FileStore::new("./filetest/store/").unwrap() );

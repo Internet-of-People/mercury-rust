@@ -1,9 +1,3 @@
-extern crate multiaddr;
-extern crate byteorder;
-extern crate tokio_io;
-extern crate tokio_timer;
-extern crate tokio_core;
-
 use std::error::Error;
 use std::io;
 use std::io::{Write, Read, Seek};
@@ -15,12 +9,14 @@ use std::collections::{HashMap, HashSet};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::hash::{Hash, Hasher};
 
+use arrayref::array_ref;
 use byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
 use futures::prelude::*;
 use futures::future::{Either, loop_fn, Loop};
 use futures::sync::mpsc;
 use futures::sync::{oneshot, oneshot::Sender};
 use futures::stream::{SplitSink, SplitStream};
+use log::*;
 use multiaddr::{Multiaddr, ToMultiaddr};
 use tokio_core::reactor;
 use tokio_core::net::{UdpSocket, UdpCodec, UdpFramed};

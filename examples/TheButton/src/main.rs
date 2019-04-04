@@ -1,21 +1,3 @@
-//#[macro_use]
-extern crate clap;
-extern crate failure;
-extern crate futures;
-#[macro_use]
-extern crate log;
-extern crate log4rs;
-extern crate mercury_connect;
-extern crate mercury_home_protocol;
-extern crate mercury_storage;
-extern crate multiaddr;
-extern crate multibase;
-extern crate tokio_uds;
-extern crate tokio_core;
-extern crate tokio_signal;
-
-
-
 pub mod client_config;
 pub mod client;
 mod init_hack;
@@ -36,6 +18,7 @@ use std::rc::Rc;
 use clap::ArgMatches;
 use failure::Fail;
 use futures::prelude::*;
+use log::*;
 use tokio_signal::unix::{Signal, SIGINT};
 use tokio_core::reactor;
 

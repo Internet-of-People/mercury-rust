@@ -1,26 +1,3 @@
-extern crate failure;
-#[macro_use]
-extern crate futures;
-extern crate jsonrpc_core;
-extern crate jsonrpc_pubsub;
-#[macro_use]
-extern crate log;
-extern crate mercury_home_protocol;
-extern crate mercury_storage;
-extern crate multiaddr;
-extern crate serde;
-#[macro_use]
-extern crate serde_derive;
-extern crate serde_json;
-#[macro_use]
-extern crate state_machine_future;
-extern crate tokio_codec;
-extern crate tokio_core;
-extern crate tokio_io;
-extern crate tokio_uds;
-
-
-
 pub mod profile;
 pub mod error;
 pub use error::{Error, ErrorKind};
@@ -38,6 +15,7 @@ pub use simple_profile_repo::SimpleProfileRepo;
 use std::rc::Rc;
 
 use futures::prelude::*;
+use serde_derive::{Deserialize, Serialize};
 
 use mercury_home_protocol::*;
 use mercury_storage::asynch::KeyValueStore;

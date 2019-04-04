@@ -1,5 +1,6 @@
 use capnp;
 use capnp::capability::Promise;
+use capnp_rpc::pry;
 use futures::prelude::*;
 use futures::{future, Sink, sync::mpsc};
 use tokio_core::reactor;
