@@ -15,24 +15,24 @@ use std::collections::{HashMap, HashSet};
 use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::hash::{Hash, Hasher};
 
-use self::tokio_core::reactor;
-use self::tokio_core::net::{UdpSocket, UdpCodec, UdpFramed};
-use self::tokio_timer::Delay;
+use byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
 use futures::prelude::*;
 use futures::future::{Either, loop_fn, Loop};
 use futures::sync::mpsc;
 use futures::sync::{oneshot, oneshot::Sender};
 use futures::stream::{SplitSink, SplitStream};
+use multiaddr::{Multiaddr, ToMultiaddr};
+use tokio_core::reactor;
+use tokio_core::net::{UdpSocket, UdpCodec, UdpFramed};
+use tokio_timer::Delay;
 
-use self::multiaddr::{Multiaddr, ToMultiaddr};
-use self::byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
-use async::AsyncResult;
+use crate::asynch::AsyncResult;
 use mercury_home_protocol::{ProfileId, Profile, ProfileFacet, ProfileRepo, Signer, net::HomeConnector};
 
-
 use super::StorageError;
+use crate::asynch::KeyValueStore;
 
-use async::KeyValueStore;
+
 
 const PROFILE_SIZE : usize = 32;
 

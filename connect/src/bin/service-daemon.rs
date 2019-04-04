@@ -43,7 +43,7 @@ pub fn init_connect_service(my_profile_privkey_file: &PathBuf, home_pubkey_file:
     -> Result<(Rc<ConnectService>, ProfileId, ProfileId), Error>
 {
     use mercury_connect::service::{DummyUserInterface, MyProfileFactory, SignerFactory};
-    use mercury_storage::async::{KeyAdapter, KeyValueStore, fs::FileStore}; //, imp::InMemoryStore};
+    use mercury_storage::asynch::{KeyAdapter, KeyValueStore, fs::FileStore}; //, imp::InMemoryStore};
 
     debug!("Initializing service instance");
 

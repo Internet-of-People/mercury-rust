@@ -19,8 +19,8 @@ use multibase;
 use tokio_core::reactor;
 use tokio_postgres;
 
-use async::*;
-use format::*;
+use crate::asynch::*;
+use crate::format::*;
 
 
 
@@ -595,10 +595,10 @@ mod tests
     use multihash;
     use tokio_core::reactor;
 
-    use common::imp::*;
-    use format::Format_Separator;
-    use meta::Attribute;
-    use meta::tests::{MetaData, MetaAttr, MetaAttrVal};
+    use crate::common::imp::*;
+    use crate::format::Format_Separator;
+    use crate::meta::Attribute;
+    use crate::meta::tests::{MetaData, MetaAttr, MetaAttrVal};
     use super::*;
 
 

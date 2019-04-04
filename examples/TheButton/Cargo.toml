@@ -1,7 +1,11 @@
 [package]
 name = "the_button"
 version = "0.1.0"
-authors = ["Deusz <lovaszoltanr@gmail.com>"]
+authors = ["IoP Ventures LLC <info@iop-ventures.com>", "Deusz <lovaszoltanr@gmail.com>"]
+repository = "https://github.com/Internet-of-People/mercury-rust"
+keywords = ["crypto", "wallet", "iop", "mercury", "morpheus", "prometheus", "vault", "key-vault"]
+license = "LGPL-3.0+"
+edition = "2018"
 
 [dependencies]
 clap = "*"

@@ -5,8 +5,8 @@ use futures::{Future, Stream};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
-use ::*;
-use ::mercury_capnp::*;
+use crate::*;
+use crate::mercury_capnp::FillFrom;
 
 
 
@@ -22,17 +22,17 @@ impl HomeDispatcherCapnProto
 {
     // TODO how to access PeerContext in the Home implementation?
     pub fn dispatch<R,W>(home: Rc<Home>, reader: R, writer: W, handle: reactor::Handle)
-        where R: ::std::io::Read  + 'static,
-              W: ::std::io::Write + 'static
+        where R: std::io::Read  + 'static,
+              W: std::io::Write + 'static
     {
         let dispatcher = Self{ home: home, handle: handle.clone() };
 
-        let home_capnp = ::mercury_capnp::home::ToClient::new(dispatcher)
+        let home_capnp = mercury_capnp::home::ToClient::new(dispatcher)
             .into_client::<::capnp_rpc::Server>();
-        let network = ::capnp_rpc::twoparty::VatNetwork::new( reader, writer,
+        let network = capnp_rpc::twoparty::VatNetwork::new( reader, writer,
             capnp_rpc::rpc_twoparty_capnp::Side::Server, Default::default() );
 
-        let rpc_system = ::capnp_rpc::RpcSystem::new( Box::new(network), Some( home_capnp.clone().client ) );
+        let rpc_system = capnp_rpc::RpcSystem::new( Box::new(network), Some( home_capnp.clone().client ) );
 
         handle.spawn( rpc_system.map_err( |e| warn!("Capnp RPC failed: {}", e) ) );
     }
@@ -54,24 +54,16 @@ impl Drop for HomeDispatcherCapnProto
     { fn drop(&mut self) { debug!("Home connection dropped"); } }
 
 
-impl profile_repo::Server for HomeDispatcherCapnProto
+impl mercury_capnp::profile_repo::Server for HomeDispatcherCapnProto
 {
-//    fn list(&mut self, _params: profile_repo::ListParams, _results: profile_repo::ListResults)
-//        -> Promise<(), ::capnp::Error>
-//    {
-//        // TODO properly implement this
-//        unimplemented!()
-//    }
-
-
-    fn load(&mut self, params: profile_repo::LoadParams,
-            mut results: profile_repo::LoadResults)
-        -> Promise<(), ::capnp::Error>
+    fn load(&mut self, params: mercury_capnp::profile_repo::LoadParams,
+            mut results: mercury_capnp::profile_repo::LoadResults)
+        -> Promise<(), capnp::Error>
     {
         let profile_id_capnp = pry!( pry!( params.get() ).get_profile_id() );
         let load_fut = self.home.load( &profile_id_capnp.into() )
             .map( move |profile| results.get().init_profile().fill_from(&profile) )
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to load profile id: {:?}",e) ) );
+            .map_err( | e| capnp::Error::failed( format!("Failed to load profile id: {:?}",e) ) );
 
         Promise::from_future(load_fut)
     }
@@ -79,12 +71,12 @@ impl profile_repo::Server for HomeDispatcherCapnProto
 
 //    fn resolve(&mut self, params: profile_repo::ResolveParams,
 //               mut results: profile_repo::ResolveResults)
-//        -> Promise<(), ::capnp::Error>
+//        -> Promise<(), capnp::Error>
 //    {
 //        let profile_url = pry!( pry!( params.get() ).get_profile_url() );
 //        let res_fut = self.home.resolve(profile_url)
 //            .map( move |profile| results.get().init_profile().fill_from(&profile) )
-//            .map_err( | e| ::capnp::Error::failed( format!("Failed to resolve url: {:?}",e ) ) );
+//            .map_err( | e| capnp::Error::failed( format!("Failed to resolve url: {:?}",e ) ) );
 //
 //        Promise::from_future(res_fut)
 //    }
@@ -92,15 +84,15 @@ impl profile_repo::Server for HomeDispatcherCapnProto
 
 
 
-impl home::Server for HomeDispatcherCapnProto
+impl mercury_capnp::home::Server for HomeDispatcherCapnProto
 {
-    fn claim(&mut self, params: home::ClaimParams,
-             mut results: home::ClaimResults)
-        -> Promise<(), ::capnp::Error>
+    fn claim(&mut self, params: mercury_capnp::home::ClaimParams,
+             mut results: mercury_capnp::home::ClaimResults)
+        -> Promise<(), capnp::Error>
     {
         let profile_id_capnp = pry!( pry!( params.get() ).get_profile_id() );
         let claim_fut = self.home.claim( profile_id_capnp.into() )
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to claim profile: {:?}", e) ) )
+            .map_err( | e| capnp::Error::failed( format!("Failed to claim profile: {:?}", e) ) )
             .map( move |own_profile|
                 results.get().init_own_profile().fill_from(&own_profile) );
 
@@ -108,9 +100,9 @@ impl home::Server for HomeDispatcherCapnProto
     }
 
 
-    fn register(&mut self, params: home::RegisterParams,
-                mut results: home::RegisterResults)
-        -> Promise<(), ::capnp::Error>
+    fn register(&mut self, params: mercury_capnp::home::RegisterParams,
+                mut results: mercury_capnp::home::RegisterResults)
+        -> Promise<(), capnp::Error>
     {
         let own_prof_capnp = pry!( pry!( params.get() ).get_own_profile() );
         let own_prof = pry!( OwnProfile::try_from(own_prof_capnp) );
@@ -124,7 +116,7 @@ impl home::Server for HomeDispatcherCapnProto
             .ok();
 
         let reg_fut = self.home.register(own_prof, half_proof, invite_opt)
-            .map_err( |e| ::capnp::Error::failed( format!("Failed to register profile: {:?}", e) ) )
+            .map_err( |e| capnp::Error::failed( format!("Failed to register profile: {:?}", e) ) )
             .map( move |own_profile|
                 results.get().init_own_profile().fill_from(&own_profile) );
 
@@ -132,9 +124,9 @@ impl home::Server for HomeDispatcherCapnProto
     }
 
 
-    fn login(&mut self, params: home::LoginParams,
-             mut results: home::LoginResults)
-        -> Promise<(), ::capnp::Error>
+    fn login(&mut self, params: mercury_capnp::home::LoginParams,
+             mut results: mercury_capnp::home::LoginResults)
+        -> Promise<(), capnp::Error>
     {
         let handle_clone = self.handle.clone();
         //let profile_id = pry!( pry!( params.get() ).get_profile_id() );
@@ -144,48 +136,48 @@ impl home::Server for HomeDispatcherCapnProto
             .map( move |session_impl|
             {
                 let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl, handle_clone);
-                let session = home_session::ToClient::new(session_dispatcher)
-                    .into_client::<::capnp_rpc::Server>();
+                let session = mercury_capnp::home_session::ToClient::new(session_dispatcher)
+                    .into_client::<capnp_rpc::Server>();
                 results.get().set_session(session);
                 ()
             } )
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to login: {:?}", e) ) );
+            .map_err( | e| capnp::Error::failed( format!("Failed to login: {:?}", e) ) );
 
         Promise::from_future(session_fut)
     }
 
 
-    fn pair_request(&mut self, params: home::PairRequestParams,
-                    mut _results: home::PairRequestResults)
-        -> Promise<(), ::capnp::Error>
+    fn pair_request(&mut self, params: mercury_capnp::home::PairRequestParams,
+                    mut _results: mercury_capnp::home::PairRequestResults)
+        -> Promise<(), capnp::Error>
     {
         let half_proof_capnp = pry!( pry!( params.get() ).get_half_proof() );
         let half_proof = pry!( RelationHalfProof::try_from(half_proof_capnp) );
 
         let pair_req_fut = self.home.pair_request(half_proof)
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to request pairing {:?}", e) ) );
+            .map_err( | e| capnp::Error::failed( format!("Failed to request pairing {:?}", e) ) );
 
         Promise::from_future(pair_req_fut)
     }
 
 
-    fn pair_response(&mut self, params: home::PairResponseParams,
-                     mut _results: home::PairResponseResults)
-        -> Promise<(), ::capnp::Error>
+    fn pair_response(&mut self, params: mercury_capnp::home::PairResponseParams,
+                     mut _results: mercury_capnp::home::PairResponseResults)
+        -> Promise<(), capnp::Error>
     {
         let proof_capnp = pry!( pry!( params.get() ).get_relation() );
         let proof = pry!( RelationProof::try_from(proof_capnp) );
 
         let pair_resp_fut = self.home.pair_response(proof)
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to send pairing response: {:?}", e) ) );
+            .map_err( | e| capnp::Error::failed( format!("Failed to send pairing response: {:?}", e) ) );
 
         Promise::from_future(pair_resp_fut)
     }
 
 
-    fn call(&mut self, params: home::CallParams,
-            mut results: home::CallResults)
-        -> Promise<(), ::capnp::Error>
+    fn call(&mut self, params: mercury_capnp::home::CallParams,
+            mut results: mercury_capnp::home::CallResults)
+        -> Promise<(), capnp::Error>
     {
         let opts = pry!( params.get() );
         let rel_capnp = pry!( opts.get_relation() );
@@ -213,7 +205,7 @@ impl home::Server for HomeDispatcherCapnProto
                     results.get().set_to_callee(to_callee_capnp);
                 } );
             } )
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to call profile: {:?}", e) ) );
+            .map_err( | e| capnp::Error::failed( format!("Failed to call profile: {:?}", e) ) );
 
         Promise::from_future(call_fut)
     }
@@ -237,25 +229,25 @@ impl HomeSessionDispatcherCapnProto
 impl Drop for HomeSessionDispatcherCapnProto
     { fn drop(&mut self) { debug!("Session over Home connection dropped"); } }
 
-impl home_session::Server for HomeSessionDispatcherCapnProto
+impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto
 {
-    fn update(&mut self, params: home_session::UpdateParams,
-              mut _results: home_session::UpdateResults)
-        -> Promise<(), ::capnp::Error>
+    fn update(&mut self, params: mercury_capnp::home_session::UpdateParams,
+              mut _results: mercury_capnp::home_session::UpdateResults)
+        -> Promise<(), capnp::Error>
     {
         let own_profile_capnp = pry!( pry!( params.get() ).get_own_profile() );
         let own_profile = pry!( OwnProfile::try_from(own_profile_capnp) );
 
         let upd_fut = self.session.update(own_profile)
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to update profile: {:?}", e) ) );
+            .map_err( | e| capnp::Error::failed( format!("Failed to update profile: {:?}", e) ) );
 
         Promise::from_future(upd_fut)
     }
 
 
-    fn unregister(&mut self, params: home_session::UnregisterParams,
-                   mut _results: home_session::UnregisterResults)
-        -> Promise<(), ::capnp::Error>
+    fn unregister(&mut self, params: mercury_capnp::home_session::UnregisterParams,
+                   mut _results: mercury_capnp::home_session::UnregisterResults)
+        -> Promise<(), capnp::Error>
     {
         let new_home_res_capnp = pry!( params.get() ).get_new_home();
         let new_home_opt = new_home_res_capnp
@@ -263,31 +255,31 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
             .ok();
 
         let upd_fut = self.session.unregister(new_home_opt)
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to unregister profile: {:?}", e) ) );
+            .map_err( | e| capnp::Error::failed( format!("Failed to unregister profile: {:?}", e) ) );
 
         Promise::from_future(upd_fut)
     }
 
 
-    fn ping(&mut self, params: home_session::PingParams,
-            mut results: home_session::PingResults)
-        -> Promise<(), ::capnp::Error>
+    fn ping(&mut self, params: mercury_capnp::home_session::PingParams,
+            mut results: mercury_capnp::home_session::PingResults)
+        -> Promise<(), capnp::Error>
     {
         let txt = pry!( pry!( params.get() ).get_txt() );
         let ping_fut = self.session.ping(txt)
-            .map_err( | e| ::capnp::Error::failed( format!("Failed ping: {:?}", e) ) )
+            .map_err( | e| capnp::Error::failed( format!("Failed ping: {:?}", e) ) )
             .map( move |pong| results.get().set_pong(&pong) );
         Promise::from_future(ping_fut)
     }
 
 
-    fn events(&mut self, params: home_session::EventsParams,
-              mut _results: home_session::EventsResults)
-        -> Promise<(), ::capnp::Error>
+    fn events(&mut self, params: mercury_capnp::home_session::EventsParams,
+              mut _results: mercury_capnp::home_session::EventsResults)
+        -> Promise<(), capnp::Error>
     {
         let callback = pry!( pry!( params.get() ).get_event_listener() );
         let events_fut = self.session.events()
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to get profile events: {:?}", e) ) )
+            .map_err( | e| capnp::Error::failed( format!("Failed to get profile events: {:?}", e) ) )
             .for_each( move |item|
             {
                 match item
@@ -299,7 +291,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                         let fut = request.send().promise
                             .map( | _resp| () );
                         // TODO .map_err() what to do here in case of an error?
-                        Box::new(fut) as AsyncResult<(), ::capnp::Error>
+                        Box::new(fut) as AsyncResult<(), capnp::Error>
                     },
                     Err(err) =>
                     {
@@ -317,9 +309,9 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
     }
 
 
-    fn checkin_app(&mut self, params: home_session::CheckinAppParams,
-                   _results: home_session::CheckinAppResults)
-        -> Promise<(), ::capnp::Error>
+    fn checkin_app(&mut self, params: mercury_capnp::home_session::CheckinAppParams,
+                   _results: mercury_capnp::home_session::CheckinAppResults)
+        -> Promise<(), capnp::Error>
     {
         // Receive a proxy from client to which the server will send notifications on incoming calls
         let params = pry!( params.get() );
@@ -329,7 +321,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
         // Forward incoming calls from business logic into capnp proxy stub of client
         let handle_clone = self.handle.clone();
         let calls_fut = self.session.checkin_app( &app_id.into() )
-            .map_err( | e| ::capnp::Error::failed( format!("Failed to checkin app: {:?}", e) ) )
+            .map_err( | e| capnp::Error::failed( format!("Failed to checkin app: {:?}", e) ) )
             .for_each( move |item|
             {
                 let handle_clone = handle_clone.clone();
@@ -343,7 +335,7 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                         if let Some(ref to_caller) = incoming_call.request_details().to_caller
                         {
                             // Set up a capnp channel to the caller for the callee
-                            let listener = AppMessageDispatcherCapnProto::new(to_caller.clone() );
+                            let listener = mercury_capnp::AppMessageDispatcherCapnProto::new(to_caller.clone() );
                             // TODO consider how to drop/unregister this object from capnp if the stream is dropped
                             let listener_capnp = mercury_capnp::app_message_listener::ToClient::new(listener)
                                 .into_client::<::capnp_rpc::Server>();
@@ -357,12 +349,12 @@ impl home_session::Server for HomeSessionDispatcherCapnProto
                                 let answer = resp.get()
                                     .and_then( |res| res.get_to_callee() )
                                     .map( |to_callee_capnp|
-                                        fwd_appmsg( to_callee_capnp, handle_clone ) )
+                                        mercury_capnp::fwd_appmsg( to_callee_capnp, handle_clone ) )
                                     .map_err( |e| e ) // TODO should we something about errors here?
                                     .ok();
                                 incoming_call.answer(answer);
                             } );
-                        Box::new(fut) as AsyncResult<(), ::capnp::Error>
+                        Box::new(fut) as AsyncResult<(), capnp::Error>
                     },
                     Err(err) =>
                     {

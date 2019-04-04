@@ -8,8 +8,7 @@ use failure::Fail;
 use futures::prelude::*;
 
 use mercury_home_protocol::{*, error::*};
-use mercury_storage::async::{KeyValueStore, imp::InMemoryStore};
-use ::AsyncResult;
+use mercury_storage::asynch::{KeyValueStore, imp::InMemoryStore};
 
 
 

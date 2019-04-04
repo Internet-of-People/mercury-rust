@@ -2,7 +2,7 @@ use futures::prelude::*;
 
 use mercury_home_protocol::*;
 use super::*;
-use ::init_hack::init_app_common;
+use crate::init_hack::init_app_common;
 
 
 

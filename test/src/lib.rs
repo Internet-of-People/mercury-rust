@@ -24,7 +24,7 @@ use tokio_core::reactor;
 use mercury_home_protocol::*;
 use mercury_home_protocol::crypto::*;
 use mercury_home_node::server::HomeServer;
-use mercury_storage::async::imp::InMemoryStore;
+use mercury_storage::asynch::imp::InMemoryStore;
 
 
 pub mod dummy; // TODO this will not be needed with real components ready and tested

@@ -6,7 +6,7 @@ use futures::future::{self, loop_fn, poll_fn, Loop};
 use futures::stream::StreamFuture;
 use tokio_core::reactor;
 
-use ::AsyncResult;
+use crate::AsyncResult;
 
 
 

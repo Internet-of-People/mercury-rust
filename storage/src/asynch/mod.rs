@@ -5,8 +5,8 @@ use std::rc::Rc;
 use futures::prelude::*;
 use futures::future;
 
-use common::*;
-use error::*;
+use crate::common::*;
+use crate::error::*;
 
 pub mod fs;
 pub mod imp;
@@ -24,7 +24,7 @@ pub trait HashSpace<ObjectType, ReadableHashType>
         -> Box< Future<Item=bool, Error=HashSpaceError> >;
 }
 
-type AsyncResult<T> = Box<Future<Item=T, Error=StorageError>>;
+type AsyncResult<T> = mercury_home_protocol::AsyncResult<T, StorageError>; // Box<Future<Item=T, Error=StorageError>>;
 
 // TODO probably we should have references (e.g. maybe use AsRef) to keys whenever possible
 // NOTE this interface can be potentially implemented using a simple local in-memory storage

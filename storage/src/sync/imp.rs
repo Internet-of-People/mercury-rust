@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
-use sync::*;
+use crate::sync::*;
 
 
 
@@ -46,7 +46,7 @@ mod tests
     use multibase;
 
     use super::*;
-    use common::imp::*;
+    use crate::common::imp::*;
 
 
     #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]

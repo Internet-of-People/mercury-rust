@@ -9,7 +9,7 @@ use tokio_core::reactor::{self, Timeout};
 
 use mercury_home_protocol::*;
 use mercury_home_protocol::error::*;
-use mercury_storage::{async::KeyValueStore, error::StorageError};
+use mercury_storage::{asynch::KeyValueStore, error::StorageError};
 
 
 

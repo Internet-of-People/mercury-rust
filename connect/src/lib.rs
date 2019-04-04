@@ -40,7 +40,7 @@ use std::rc::Rc;
 use futures::prelude::*;
 
 use mercury_home_protocol::*;
-use mercury_storage::async::KeyValueStore;
+use mercury_storage::asynch::KeyValueStore;
 
 
 

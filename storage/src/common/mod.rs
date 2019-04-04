@@ -1,6 +1,6 @@
-use error::*;
-use meta;
-use meta::{Attribute, AttributeValue};
+use crate::error::*;
+use crate::meta;
+use crate::meta::{Attribute, AttributeValue};
 
 pub mod imp;
 

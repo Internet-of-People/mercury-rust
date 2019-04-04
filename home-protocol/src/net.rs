@@ -2,8 +2,8 @@ use std::rc::Rc;
 
 use multiaddr::Multiaddr;
 
-use ::*;
-use ::error::*;
+use crate::*;
+use crate::error::*;
 
 
 

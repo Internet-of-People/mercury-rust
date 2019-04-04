@@ -70,7 +70,7 @@ pub fn iter_first_attrval_by_path<'a,'p>(
 pub mod tests
 {
     use super::*;
-    use common::Data;
+    use crate::common::Data;
 
 
     #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]

@@ -10,7 +10,8 @@ use tokio_core::net::TcpStream;
 use tokio_io::io;
 //use x25519_dalek::diffie_hellman;
 
-use ::*;
+use crate::*;
+use crate::error::*;
 
 
 

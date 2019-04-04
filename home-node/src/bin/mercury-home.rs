@@ -20,7 +20,7 @@ use tokio_core::{reactor, net::TcpListener};
 
 use mercury_home_protocol::{crypto::*, handshake, mercury_capnp::server_dispatcher::HomeDispatcherCapnProto};
 use mercury_home_node::{config::*, server::*};
-use mercury_storage::async::{KeyAdapter, fs::FileStore, imp::InMemoryStore};
+use mercury_storage::asynch::{KeyAdapter, fs::FileStore, imp::InMemoryStore};
 
 
 

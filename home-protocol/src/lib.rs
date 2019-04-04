@@ -45,7 +45,7 @@ use serde::{Deserialize, Deserializer, Serializer};
 use serde::{de::Error as DeSerError, ser::SerializeSeq};
 
 use crypto::{ProfileValidator, SignatureValidator};
-use ::error::*;
+use crate::error::*;
 
 
 
@@ -53,7 +53,7 @@ pub const CHANNEL_CAPACITY: usize = 1;
 
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct ProfileId(pub Vec<u8>); // NOTE multihash::encode() output
+pub struct ProfileId(pub Vec<u8>);
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct PublicKey(pub Vec<u8>);

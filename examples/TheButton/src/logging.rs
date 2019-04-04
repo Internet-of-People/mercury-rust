@@ -10,7 +10,7 @@ use log4rs::config::{Appender, Config, Logger, Root};
 
 pub fn start_logging(matches : &ArgMatches)
 {
-    let level = match matches.occurrences_of(::cli::CLI_VERBOSE) {
+    let level = match matches.occurrences_of(crate::cli::CLI_VERBOSE) {
         0 => LevelFilter::Info,
         1 => LevelFilter::Debug,
         _ => LevelFilter::Trace,

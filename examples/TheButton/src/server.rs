@@ -6,7 +6,7 @@ use futures::sync::mpsc;
 use tokio_signal::unix::SIGUSR1;
 
 use super::*;
-use ::init_hack::init_server;
+use crate::init_hack::init_server;
 
 
 

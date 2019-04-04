@@ -7,15 +7,15 @@ use futures::sync::{mpsc, oneshot};
 use tokio_core::reactor;
 use tokio_core::net::TcpStream;
 
-use ::*;
-use ::mercury_capnp::*;
+use crate::*;
+use crate::mercury_capnp::{FillFrom, PromiseUtil};
 
 
 
 pub struct HomeClientCapnProto
 {
-    repo:    profile_repo::Client,
-    home:    home::Client,
+    repo:    mercury_capnp::profile_repo::Client,
+    home:    mercury_capnp::home::Client,
     handle:  reactor::Handle,
 }
 
@@ -23,19 +23,19 @@ pub struct HomeClientCapnProto
 impl HomeClientCapnProto
 {
     pub fn new<R,W>(reader: R, writer: W, handle: reactor::Handle) -> Self
-        where R: ::std::io::Read + 'static,
-              W: ::std::io::Write + 'static
+        where R: std::io::Read + 'static,
+              W: std::io::Write + 'static
     {
         debug!("Initializing Cap'n'Proto Home client");
 
-        let rpc_network = Box::new( ::capnp_rpc::twoparty::VatNetwork::new( reader, writer,
-            ::capnp_rpc::rpc_twoparty_capnp::Side::Client, Default::default() ) );
-        let mut rpc_system = ::capnp_rpc::RpcSystem::new(rpc_network, None);
+        let rpc_network = Box::new( capnp_rpc::twoparty::VatNetwork::new( reader, writer,
+            capnp_rpc::rpc_twoparty_capnp::Side::Client, Default::default() ) );
+        let mut rpc_system = capnp_rpc::RpcSystem::new(rpc_network, None);
 
-        let home: ::mercury_capnp::home::Client =
-            rpc_system.bootstrap(::capnp_rpc::rpc_twoparty_capnp::Side::Server);
-        let repo: ::mercury_capnp::profile_repo::Client =
-            rpc_system.bootstrap(::capnp_rpc::rpc_twoparty_capnp::Side::Server);
+        let home: mercury_capnp::home::Client =
+            rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
+        let repo: mercury_capnp::profile_repo::Client =
+            rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
 
         handle.spawn( rpc_system.map_err( |e| warn!("Capnp RPC failed: {}", e) ) );
 
@@ -239,25 +239,25 @@ impl mercury_capnp::profile_event_listener::Server for ProfileEventDispatcherCap
 {
     fn receive(&mut self, params: mercury_capnp::profile_event_listener::ReceiveParams,
                _results: mercury_capnp::profile_event_listener::ReceiveResults)
-        -> Promise<(), ::capnp::Error>
+        -> Promise<(), capnp::Error>
     {
         let event_capnp = pry!( pry!( params.get() ).get_event() );
         let event = pry!( ProfileEvent::try_from(event_capnp) );
         let recv_fut = self.sender.clone().send( Ok(event) )
             .map( |_sink| () )
-            .map_err( |e| ::capnp::Error::failed( format!("Failed to delegate event: {}", e) ) );
+            .map_err( |e| capnp::Error::failed( format!("Failed to delegate event: {}", e) ) );
         Promise::from_future(recv_fut)
     }
 
 
     fn error(&mut self, params: mercury_capnp::profile_event_listener::ErrorParams,
               _results: mercury_capnp::profile_event_listener::ErrorResults)
-        -> Promise<(), ::capnp::Error>
+        -> Promise<(), capnp::Error>
     {
         let error = pry!( pry!( params.get() ).get_error() ).into();
         let recv_fut = self.sender.clone().send( Err(error) )
             .map( |_sink| () )
-            .map_err( |e| ::capnp::Error::failed( format!("Failed to delegate event error: {}", e) ) );
+            .map_err( |e| capnp::Error::failed( format!("Failed to delegate event error: {}", e) ) );
         Promise::from_future(recv_fut)
     }
 }
@@ -404,7 +404,7 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
     // send back a message channel if answering the call
     fn receive(&mut self, params: mercury_capnp::call_listener::ReceiveParams,
                mut results: mercury_capnp::call_listener::ReceiveResults)
-        -> Promise<(), ::capnp::Error>
+        -> Promise<(), capnp::Error>
     {
         // NOTE there's no way to add the i/o streams in try_from without extra context,
         //      we have to set them manually
@@ -422,20 +422,20 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
             // If the call is accepted then set up a to_callee channel and send it back in the response
             to_callee_opt.map( move |to_callee|
             {
-                let listener = AppMessageDispatcherCapnProto::new(to_callee);
+                let listener = mercury_capnp::AppMessageDispatcherCapnProto::new(to_callee);
                 // TODO consider how to drop/unregister this object from capnp if the stream is dropped
                 let listener_capnp = mercury_capnp::app_message_listener::ToClient::new(listener)
                     .into_client::<::capnp_rpc::Server>();
                 results.get().set_to_callee(listener_capnp);
             } );
         } )
-        .map_err( |e| ::capnp::Error::failed( format!("Failed to get answer from callee: {:?}", e) ) ); // TODO should we send an error back to the caller?
+        .map_err( |e| capnp::Error::failed( format!("Failed to get answer from callee: {:?}", e) ) ); // TODO should we send an error back to the caller?
 
         // TODO make this timeout period user-configurable
         let timeout_res = reactor::Timeout::new(
             Duration::from_secs( CALL_TIMEOUT_SECS.into() ), &self.handle );
         let timeout_fut = pry!(timeout_res)
-            .map_err( |e| ::capnp::Error::failed( format!("Call timed out without answer: {:?}", e) ) ); // TODO should we send an error back to the caller?
+            .map_err( |e| capnp::Error::failed( format!("Call timed out without answer: {:?}", e) ) ); // TODO should we send an error back to the caller?
 
         // Call will time out if not answered in a given period
         let answer_or_timeout_fut = answer_fut.select(timeout_fut)
@@ -447,7 +447,7 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
         let incoming_call = Box::new( IncomingCallCapnProto::new(call, one_send) );
         let call_fut = self.sender.clone().send( Ok( incoming_call) )
             .map( |_sink| () )
-            .map_err( |e| ::capnp::Error::failed( format!("Failed to dispatch call: {:?}", e) ) ) // TODO should we send an error back to the caller?
+            .map_err( |e| capnp::Error::failed( format!("Failed to dispatch call: {:?}", e) ) ) // TODO should we send an error back to the caller?
             // and require the call to be answered or dropped
             .and_then( |()| answer_or_timeout_fut );
 
@@ -459,12 +459,12 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto
 
     fn error(&mut self, params: mercury_capnp::call_listener::ErrorParams,
              _results: mercury_capnp::call_listener::ErrorResults)
-        -> Promise<(), ::capnp::Error>
+        -> Promise<(), capnp::Error>
     {
         let error = pry!( pry!( params.get() ).get_error() ).into();
         let recv_fut = self.sender.clone().send( Err(error) )
             .map( |_sink| () )
-            .map_err( |e| ::capnp::Error::failed( format!("Failed to dispatch call error: {}", e) ) );
+            .map_err( |e| capnp::Error::failed( format!("Failed to dispatch call error: {}", e) ) );
         Promise::from_future(recv_fut)
     }
 }
