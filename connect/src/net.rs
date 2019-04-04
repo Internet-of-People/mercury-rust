@@ -108,43 +108,6 @@ impl HomeConnector for SimpleTcpHomeConnector
 
 
 
-//pub struct StunTurnTcpConnector
-//{
-//    // TODO
-//}
-//
-//
-//impl StunTurnTcpConnector
-//{
-//    pub fn connect(&self, _addr: &SocketAddr) -> AsyncResult<TcpStream, Error>
-//    {
-//        // TODO
-//        unimplemented!()
-//        // Box::new( future::err(ErrorToBeSpecified::TODO(String::from("StunTurnTcpConnector.connect "))) )
-//    }
-//}
-//
-//
-//
-//pub struct TcpHomeConnector
-//{
-//    // TODO
-//}
-//
-//
-//impl HomeConnector for TcpHomeConnector
-//{
-//    fn connect(&self, _home_profile: &Profile, _signer: Rc<Signer>) -> AsyncResult<Rc<Home>, Error>
-//    {
-//        unimplemented!()
-//        // TODO in case of TCP addresses, use StunTurnTcpConnector to build an async TcpStream
-//        //      to it and build a Home proxy on top of it
-//        // Box::new( future::err(ErrorToBeSpecified::TODO(String::from("TcpHomeConnector.connect "))) )
-//    }
-//}
-
-
-
 #[cfg(test)]
 mod tests
 {
