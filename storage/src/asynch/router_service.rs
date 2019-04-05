@@ -22,7 +22,7 @@ use tokio_core::reactor;
 use tokio_core::net::{UdpSocket, UdpCodec, UdpFramed};
 use tokio_timer::Delay;
 
-use crate::asynch::AsyncResult;
+use crate::asynch::StorageResult;
 use mercury_home_protocol::{ProfileId, Profile, ProfileFacet, ProfileRepo, Signer, net::HomeConnector};
 
 use super::StorageError;
@@ -89,7 +89,7 @@ impl RequestReplySocket {
         RequestReplySocket {last_nonce, sessions}
     }
 
-    pub fn query<T: MercuryRouterQuery>(&mut self, qry: Query<T>) -> AsyncResult<Reply> {
+    pub fn query<T: MercuryRouterQuery>(&mut self, qry: Query<T>) -> StorageResult<Reply> {
         // let request = Request::new();
         let (tx, rx) = oneshot::channel();
         Box::new(
@@ -120,11 +120,11 @@ impl RouterServiceClient {
 }
 
 impl KeyValueStore<ProfileId,Profile>  for RouterServiceClient {
-    fn set(&mut self, profile_id: ProfileId, profile: Profile) -> AsyncResult<()> {
+    fn set(&mut self, profile_id: ProfileId, profile: Profile) -> StorageResult<()> {
         unimplemented!();
     }
 
-    fn get(&self, key: ProfileId) -> AsyncResult<Profile> {
+    fn get(&self, key: ProfileId) -> StorageResult<Profile> {
         // 1. issue a profile_homes request
         let p = from_slice(key.0.as_slice());
         let query = ProfileHomes::new(p);
@@ -162,7 +162,7 @@ impl KeyValueStore<ProfileId,Profile>  for RouterServiceClient {
         Box::new(get_fut)
     }
 
-    fn clear_local(&mut self, key: ProfileId) -> AsyncResult<()> {
+    fn clear_local(&mut self, key: ProfileId) -> StorageResult<()> {
         unimplemented!();
     }
 }

@@ -7,6 +7,7 @@ use futures::future;
 
 use crate::common::*;
 use crate::error::*;
+use mercury_home_protocol::AsyncResult;
 
 pub mod fs;
 pub mod imp;
@@ -14,17 +15,7 @@ pub mod router_service;
 
 
 
-pub trait HashSpace<ObjectType, ReadableHashType>
-{
-    fn store(&mut self, object: ObjectType)
-        -> Box< Future<Item=ReadableHashType, Error=HashSpaceError> >;
-    fn resolve(&self, hash: &ReadableHashType)
-        -> Box< Future<Item=ObjectType, Error=HashSpaceError> >;
-    fn validate(&self, object: &ObjectType, hash: &ReadableHashType)
-        -> Box< Future<Item=bool, Error=HashSpaceError> >;
-}
-
-type AsyncResult<T> = mercury_home_protocol::AsyncResult<T, StorageError>; // Box<Future<Item=T, Error=StorageError>>;
+type StorageResult<T> = AsyncResult<T, StorageError>;
 
 // TODO probably we should have references (e.g. maybe use AsRef) to keys whenever possible
 // NOTE this interface can be potentially implemented using a simple local in-memory storage
@@ -35,12 +26,54 @@ type AsyncResult<T> = mercury_home_protocol::AsyncResult<T, StorageError>; // Bo
 //      Instead, we clear all *local* data and let remaining nodes expire the data if unused.
 pub trait KeyValueStore<KeyType, ValueType>
 {
-    fn set(&mut self, key: KeyType, value: ValueType)
-        -> AsyncResult<()>;
-    fn get(&self, key: KeyType)
-        -> AsyncResult<ValueType>;
-    fn clear_local(&mut self, key: KeyType)
-        -> AsyncResult<()>;
+    fn set(&mut self, key: KeyType, value: ValueType) -> StorageResult<()>;
+    fn get(&self, key: KeyType) -> StorageResult<ValueType>;
+    fn clear_local(&mut self, key: KeyType) -> StorageResult<()>;
+}
+
+
+
+use std::marker::PhantomData;
+pub struct KeyAdapter<K,V,T:KeyValueStore<K,V>>
+{
+    store: T,
+    _k: PhantomData<K>,
+    _v: PhantomData<V>,
+}
+
+impl <K,V,T:KeyValueStore<K,V>> KeyAdapter<K,V,T>
+{
+    pub fn new(store: T) -> Self
+        { Self{store, _k: PhantomData, _v: PhantomData} }
+}
+
+
+impl <PreferredKeyType, AvailableKeyType, ValueType, T>
+KeyValueStore<PreferredKeyType,ValueType>
+for KeyAdapter<AvailableKeyType, ValueType, T>
+    where T: KeyValueStore<AvailableKeyType, ValueType>,
+          PreferredKeyType: Into<AvailableKeyType>
+{
+    fn set(&mut self, key: PreferredKeyType, value: ValueType) -> StorageResult<()>
+        { self.store.set( key.into(), value) }
+
+    fn get(&self, key: PreferredKeyType) -> StorageResult<ValueType>
+        { self.store.get( key.into() ) }
+
+    fn clear_local(&mut self, key: PreferredKeyType) -> StorageResult<()>
+        { self.store.clear_local( key.into() ) }
+}
+
+
+
+pub trait HashSpace<ObjectType, ReadableHashType>
+{
+    fn store(&mut self, object: ObjectType)
+        -> AsyncResult<ReadableHashType, HashSpaceError>;
+    fn resolve(&self, hash: &ReadableHashType)
+        -> AsyncResult<ObjectType, HashSpaceError>;
+    fn validate(&self, object: &ObjectType, hash: &ReadableHashType)
+        -> AsyncResult<bool, HashSpaceError>;
 }
 
 
@@ -91,7 +124,7 @@ for ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
           ReadableHashType: 'static
 {
     fn store(&mut self, serialized_obj: SerializedType)
-        -> Box< Future<Item=ReadableHashType, Error=HashSpaceError> >
+        -> AsyncResult<ReadableHashType, HashSpaceError>
     {
 //        let hash_bytes_result = self.serializer.serialize(object)
 //            .map_err( |e| HashSpaceError::SerializerError(e) )
@@ -122,7 +155,7 @@ for ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
 
 
     fn resolve(&self, hash_str: &ReadableHashType)
-        -> Box< Future<Item=SerializedType, Error=HashSpaceError> >
+        -> AsyncResult<SerializedType, HashSpaceError>
     {
         let hash_bytes_result = self.hash_coder.decode(&hash_str)
             .map_err( |e| HashSpaceError::StringCoderError(e) );
@@ -157,41 +190,8 @@ for ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
     }
 
     fn validate(&self, object: &SerializedType, hash_str: &ReadableHashType)
-        -> Box< Future<Item=bool, Error=HashSpaceError> >
+        -> AsyncResult<bool, HashSpaceError>
     {
         Box::new( future::result( self.sync_validate( &object, &hash_str) ) )
     }
-}
-
-
-
-use std::marker::PhantomData;
-pub struct KeyAdapter<K,V,T:KeyValueStore<K,V>>
-{
-    store: T,
-    _k: PhantomData<K>,
-    _v: PhantomData<V>,
-}
-
-impl <K,V,T:KeyValueStore<K,V>> KeyAdapter<K,V,T>
-{
-    pub fn new(store: T) -> Self
-        { Self{store, _k: PhantomData, _v: PhantomData} }
-}
-
-
-impl <PreferredKeyType, AvailableKeyType, ValueType, T>
-KeyValueStore<PreferredKeyType,ValueType>
-for KeyAdapter<AvailableKeyType, ValueType, T>
-    where T: KeyValueStore<AvailableKeyType, ValueType>,
-          PreferredKeyType: Into<AvailableKeyType>
-{
-    fn set(&mut self, key: PreferredKeyType, value: ValueType) -> AsyncResult<()>
-        { self.store.set( key.into(), value) }
-
-    fn get(&self, key: PreferredKeyType) -> AsyncResult<ValueType>
-        { self.store.get( key.into() ) }
-
-    fn clear_local(&mut self, key: PreferredKeyType) -> AsyncResult<()>
-        { self.store.clear_local( key.into() ) }
 }

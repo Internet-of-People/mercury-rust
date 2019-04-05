@@ -1,16 +1,10 @@
 #![allow(unused, non_snake_case)]
 
-use std::collections::{HashMap}; //, HashSet};
+use std::collections::HashMap;
 use std::error::Error;
 use std::hash::Hash;
-//use std::net::{SocketAddr, Ipv4Addr, SocketAddrV4, ToSocketAddrs};
 use std::rc::Rc;
-//use std::thread;
 
-//use bip_dht::{DhtBuilder, MainlineDht, Router};
-//use bip_dht::Handshaker;
-//use bip_magnet::Topic;
-//use bip_util::bt::{InfoHash, PeerId};
 use futures::prelude::*;
 use futures::future;
 use futures_state_stream::StateStream;
@@ -18,7 +12,6 @@ use serde_derive::{Deserialize, Serialize};
 use tokio_core::reactor;
 
 use crate::asynch::*;
-use crate::format::*;
 
 
 
@@ -220,244 +213,6 @@ for HashWeb<ObjectType>
 
 
 
-pub struct AddressResolver
-{
-    hashweb:            Rc< HashWeb< Vec<u8> > >,
-    format_registry:    Rc<FormatRegistry>,
-}
-
-
-type FutureBlob = Box< Future<Item=Vec<u8>, Error=AddressResolutionError> >;
-
-impl AddressResolver
-{
-    pub fn new(formats: FormatRegistry, hashweb: HashWeb< Vec<u8> >) -> Self
-        { Self{ format_registry: Rc::new(formats), hashweb: Rc::new(hashweb) } }
-
-
-    // Address format expected by the parser, optionally with a starting /
-    // hashspaceId/hash#formatId@path/to/hashlink/attribute&formatId@path/to/another/attribute
-    //  ^^ hashlink ^^ # ^^^^^ (link) attr specifier ^^^^^ & ^^^^^^ attribute specifier ^^^^^
-    pub fn resolve_blob<'s,'a>(&'s self, address: &'a str) -> FutureBlob
-    {
-        // Separate starting hashlink part from attributes
-        let attr_separ_idx = address.find(HashWebLink_Attribute_Separator).unwrap_or( address.len() );
-        let (hashlink_str, hashed_attr_specs_str) = address.split_at(attr_separ_idx);
-
-        // Resolve hashlink into binary blob
-        let mut blob_fut: FutureBlob = Box::new(
-            self.hashweb.resolve( &hashlink_str.to_owned() )
-                .map_err( |e| AddressResolutionError::HashSpaceError(e) ) );
-
-        // Separate (possibly many) attribute references
-        let attr_specs_str = &hashed_attr_specs_str[1..];
-        let attribute_specs: Vec<&str> = attr_specs_str.split('&').collect();
-        for attr_spec in attribute_specs
-        {
-            let formats_clone = self.format_registry.clone();
-            let hashweb_clone = self.hashweb.clone();
-            let attrspec_clone = attr_spec.to_owned();
-            // Perform resolution of next attribute apecifier
-            blob_fut = Box::new( blob_fut.and_then( move |blob|
-            {
-                // Parse blob and query attribute path as hashweblink
-                let hashlink_res = formats_clone.resolve_attr_link(&blob, &attrspec_clone);
-                match hashlink_res {
-                    Err(e) => Box::new( future::err(e) ) as FutureBlob,
-                    Ok(hashlink) => {
-                        // Resolve hashweblink as blob
-                        let resolved_link_fut = hashweb_clone.resolve( &hashlink.to_owned() )
-                            .map_err( |e| AddressResolutionError::HashSpaceError(e) );
-                        Box::new(resolved_link_fut) as FutureBlob
-                    }
-                }
-
-            } ) );
-        }
-        blob_fut
-    }
-}
-
-
-
-pub struct Ipfs
-{
-    client: ipfs_api::IpfsClient,
-}
-
-impl Ipfs
-{
-    pub fn new(host: &str, port: u16, handle: &reactor::Handle) -> Result<Self, std::io::Error>
-    {
-        let client = ipfs_api::IpfsClient::new(handle, host, port)
-            .map_err( |e| std::io::Error::new(std::io::ErrorKind::NotFound, e) )?;
-        Ok( Self{ client: client } )
-    }
-}
-
-impl HashSpace<Vec<u8>, String> for Ipfs
-{
-    fn store(&mut self, object: Vec<u8>)
-        -> Box< Future<Item=String, Error=HashSpaceError> >
-    {
-        // TODO maybe we should also pin the object after adding
-        let data = std::io::Cursor::new(object);
-        let add_fut = self.client.add(data)
-            .map( |resp| resp.hash )
-            // TODO error should be mapped to something more descriptive than Other
-            .map_err( |e| HashSpaceError::Other( Box::new(e) ) );
-        Box::new(add_fut)
-    }
-
-    fn resolve(&self, hash: &String)
-        -> Box< Future<Item=Vec<u8>, Error=HashSpaceError> >
-    {
-        let cat_fut = self.client.cat(hash).concat2()
-            .map( |chunk| chunk.to_vec() )
-            // TODO error should be mapped to something more descriptive than Other
-            .map_err( |e| HashSpaceError::Other( Box::new(e) ) );
-        Box::new(cat_fut)
-    }
-
-    // fn resolve(&self, hash: &String)
-    //     -> Box< Future<Item=Vec<u8>, Error=HashSpaceError> >
-    // {
-    //     unimplemented!();
-    //     let res = self.client.object_stat(hash);
-        // .map_err( |e| HashSpaceError::Other( Box::new(e) ) )
-        // .and_then(|stat|{
-        //     let link_number = stat.num_links;
-        //     if link_number == 0 {
-        //         let file_fut = self.client.cat(hash).concat2()
-        //             .map( |chunk| chunk.to_vec() )
-        //             // TODO error should be mapped to something more descriptive than Other
-        //             .map_err( |e| HashSpaceError::Other( Box::new(e) ) );
-        //         return Box::new(file_fut) as Box<Future<Item=Vec<u8>, Error = _>>
-        //     }
-        //     else {
-        //         //this gives back an LsResponse that contains a vec of ipfs files that has its ipfs hash as "hash" field
-        //         let dir_fut = self.client.ls(Some(hash))
-        //         .map( |response| {
-        //             let out = String::new();
-        //             for file in response.objects{
-        //                 out.push_str(&file.hash)
-        //             }
-        //             out.into_bytes()
-        //         })
-        //         // TODO error should be mapped to something more descriptive than Other
-        //         .map_err( |e| HashSpaceError::Other( Box::new(e) ) );
-        //         return Box::new(dir_fut) as Box<Future<Item=Vec<u8>, Error = _>>
-        //     }
-        // });
-        // Box::new(res)
-    // }
-
-    fn validate(&self, object: &Vec<u8>, hash: &String)
-        -> Box< Future<Item=bool, Error=HashSpaceError> >
-    {
-        let obj = object.to_owned(); // TODO this is potentially very expensive for huge blobs, can this be done more effectively?
-        let val_fut = self.resolve(hash)
-            .map( move | bytes| bytes == obj );
-        Box::new(val_fut)
-    }
-}
-
-
-//impl KeyValueStore<String, String> for Ipfs
-//{
-//    fn set(&mut self, key: String, value: String)
-//        -> Box< Future<Item=(), Error=StorageError> >
-//    {
-//        self.client.dht_put(&key, &value).collect()
-//            //.and_then( |_| self.client.dht_provide(&key) )
-//    }
-//
-//    fn get(&self, key: String)
-//        -> Box< Future<Item=String, Error=StorageError> >
-//    {
-//        unimplemented!();
-//        //future::err(StorageError::InvalidKey) // TODO
-//    }
-//}
-
-
-
-//struct SimpleHandshaker
-//{
-//    filter: HashSet<SocketAddr>,
-//}
-//
-//impl Handshaker for SimpleHandshaker
-//{
-//    fn id(&self) -> PeerId { [0u8; 20].into() } // My unique peer id
-//    fn port(&self) -> u16 { 6889 }
-//
-//    // Initiates a handshake with other peer on the given socket address.
-//    fn connect(&mut self, _: Option<PeerId>, _: InfoHash, addr: SocketAddr)
-//    {
-//        if ! self.filter.contains(&addr)
-//        {
-//            self.filter.insert(addr);
-//            println!( "Received new peer {:?}, total unique peers {}", addr, self.filter.len() );
-//        }
-//    }
-//
-//    // TODO Type of stream used to receive connections from.
-//    type MetadataEnvelope = ();
-//
-//    // TODO Send the given Metadata back to the client.
-//    fn metadata(&mut self, _: Self::MetadataEnvelope) { () }
-//}
-//
-//pub struct MagnetDht
-//{
-//    dht: MainlineDht,
-//}
-//
-//impl MagnetDht
-//{
-//    fn new() -> Self
-//    {
-//        let handshaker = SimpleHandshaker{ filter: HashSet::new() };
-//        let dht = DhtBuilder::with_router(Router::uTorrent)
-//            .set_source_addr( SocketAddr::V4( SocketAddrV4::new( Ipv4Addr::new(0, 0, 0, 0), 6889 ) ) )
-//            .start_mainline(handshaker)
-//            .unwrap();
-//
-//        let events = dht.events();
-//        thread::spawn( move || {
-//            for event in events {
-//                println!("\nReceived Dht Event {:?}", event);
-//            }
-//        } );
-//        Self{ dht: dht }
-//    }
-//}
-//
-//impl HashSpace<Vec<u8>, String> for MagnetDht
-//{
-//    fn store(&mut self, object: Vec<u8>)
-//        -> Box< Future<Item=String, Error=HashSpaceError> >
-//    {
-//        unimplemented!(); // TODO should return a more reasonable error here
-//    }
-//
-//    fn resolve(&self, hash: &String)
-//        -> Box< Future<Item=Vec<u8>, Error=HashSpaceError> >
-//    {
-//        let infohash = Topic::parse(hash);
-//        self.dht.search( infohash.into(), false );
-//    }
-//
-//    fn validate(&self, object: &Vec<u8>, hash: &String)
-//        -> Box< Future<Item=bool, Error=HashSpaceError> >
-//    {
-//        unimplemented!(); // TODO should return a more reasonable error here
-//    }
-//}
-
-
-
 pub struct InMemoryStore<KeyType, ValueType>
 {
     map: HashMap<KeyType, ValueType>,
@@ -475,13 +230,13 @@ for InMemoryStore<KeyType, ValueType>
     where KeyType: Eq + Hash,
           ValueType: Clone + Send + 'static
 {
-    fn set(&mut self, key: KeyType, object: ValueType) -> AsyncResult<()>
+    fn set(&mut self, key: KeyType, object: ValueType) -> StorageResult<()>
     {
         self.map.insert(key, object );
         Box::new( Ok( () ).into_future() )
     }
 
-    fn get(&self, key: KeyType) -> AsyncResult<ValueType>
+    fn get(&self, key: KeyType) -> StorageResult<ValueType>
     {
         let result = match self.map.get(&key) {
             Some(val) => Ok( val.to_owned() ),
@@ -490,7 +245,7 @@ for InMemoryStore<KeyType, ValueType>
         Box::new( result.into_future() )
     }
 
-    fn clear_local(&mut self, key: KeyType) -> AsyncResult<()>
+    fn clear_local(&mut self, key: KeyType) -> StorageResult<()>
     {
         let result = self.map.remove(&key)
             .map( |_| () )
@@ -498,95 +253,6 @@ for InMemoryStore<KeyType, ValueType>
         Box::new( result.into_future() )
     }
 }
-
-
-
-//pub struct PostgresStore
-//{
-//    reactor_handle: reactor::Handle,
-//    postgres_url:   String,
-//    table:          String,
-//    key_col:        String,
-//    value_col:      String,
-//}
-//
-//impl PostgresStore
-//{
-//    pub fn new(reactor_handle: &reactor::Handle, postgres_url: &str,
-//               table: &str, key_col: &str, value_col: &str) -> Self
-//    {
-//        Self{ reactor_handle:   reactor_handle.clone(),
-//              postgres_url:     postgres_url.to_string(),
-//              table:            table.to_string(),
-//              key_col:          key_col.to_string(),
-//              value_col:        value_col.to_string(), }
-//    }
-//
-//    fn prepare(&self, sql_statement: String)
-//        -> Box< Future<Item=(tokio_postgres::stmt::Statement,tokio_postgres::Connection), Error=(tokio_postgres::Error,tokio_postgres::Connection)> >
-//    {
-//        let result = tokio_postgres::Connection::connect( self.postgres_url.as_str(),
-//                tokio_postgres::TlsMode::None, &self.reactor_handle)
-//            .then( move |conn| {
-//                conn.expect("Connection to database failed")
-//                    .prepare(&sql_statement)
-//            } );
-//        Box::new(result)
-//    }
-//}
-//
-//impl KeyValueStore<Vec<u8>, Vec<u8>> for PostgresStore
-//{
-//    fn set(&mut self, key: Vec<u8>, value: Vec<u8>)
-//        -> Box< Future<Item=(), Error=StorageError> + Send >
-//    {
-//        let key_str = multibase::encode(multibase::Base64, &key);
-//        let sql = format!("INSERT INTO {0} ({1}, {2}) VALUES ($1, $2)",
-//            self.table, self.key_col, self.value_col);
-//        let result = self.prepare(sql)
-//            .and_then( move |(stmt, conn)| {
-//                conn.execute(&stmt, &[&key_str, &value])
-//            } )
-//            .map_err( |(e, conn)| StorageError::StringError( e.description().to_owned() ) )
-//            .map( | exec_res| () );
-//        Box::new(result)
-//    }
-//
-//
-//    fn get(&self, key: Vec<u8>)
-//        -> Box< Future<Item=Vec<u8>, Error=StorageError> + Send >
-//    {
-//        let key_str = multibase::encode(multibase::Base64, &key);
-//        let sql = format!("SELECT {1}, {2} FROM {0} WHERE {1}=$1",
-//            self.table, self.key_col, self.value_col);
-//        let result = self.prepare( sql.to_string() )
-//            .and_then( move |(stmt, conn)|
-//                conn.query(&stmt, &[&key_str])
-//                    .map( |row| {
-//                        let value: Vec<u8> = row.get(1);
-//                        value
-//                    } )
-//                    .collect()
-//                    // TODO reducing results by concatenating provides bad results
-//                    //      if multiple rows are found in the result set
-//                    .map( |(vec, state)| vec.concat() )
-//            )
-//            .map_err( |(e, conn)| StorageError::StringError( e.description().to_owned() ) );
-//
-//        Box::new(result)
-//    }
-//
-//
-//    fn clear_local(&mut self, key: Vec<u8>)
-//        -> Box< Future<Item=(), Error=StorageError> + Send >
-//    {
-//        // TODO will PostGres storage be needed?
-//        unimplemented!()
-//    }
-//}
-
-
-
 #[cfg(test)]
 mod tests
 {
@@ -594,7 +260,6 @@ mod tests
     use tokio_core::reactor;
 
     use crate::common::imp::*;
-    use crate::format::Format_Separator;
     use crate::meta::Attribute;
     use crate::meta::tests::{MetaData, MetaAttr, MetaAttrVal};
     use super::*;
@@ -623,31 +288,6 @@ mod tests
         assert!( lookup_res.is_ok() );
         assert_eq!( lookup_res.unwrap(), object );
     }
-
-
-//    #[test]
-//    #[ignore]
-//    fn test_postgres_storage()
-//    {
-//        let mut reactor = reactor::Core::new()
-//            .expect("Failed to initialize the reactor event loop");
-//
-//        // This URL should be assembled from the gitlab-ci.yml
-//        let postgres_url = "postgresql://testuser:testpass@postgres/testdb";
-//        let mut storage = PostgresStore::new( &reactor.handle(),
-//            postgres_url, "storagetest", "key", "data");
-//
-//        let key = b"key".to_vec();
-//        let value = b"value".to_vec();
-//        let store_future = storage.set( key.clone(), value.clone() );
-//        let store_res = reactor.run(store_future);
-//        assert!( store_res.is_ok(), "store failed with {:?}", store_res );
-//
-//        let lookup_future = storage.get(key);
-//        let lookup_res = reactor.run(lookup_future);
-//        assert!( lookup_res.is_ok(), "lookup failed with {:?}", lookup_res );
-//        assert_eq!( lookup_res.unwrap(), value );
-//    }
 
 
     #[test]
@@ -689,16 +329,6 @@ mod tests
         let mut reactor = reactor::Core::new()
             .expect("Failed to initialize the reactor event loop");
 
-//        // This URL should be assembled from the gitlab-ci.yml
-//        let postgres_url = "postgresql://testuser:testpass@postgres/testdb";
-//        let postgres_storage = PostgresStore::new( &reactor.handle(),
-//            postgres_url, "storagetest", "key", "data");
-//        let postgres_space: ModularHashSpace< Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
-////            Rc::new( IdentitySerializer{} ),
-//            Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
-//            Box::new(postgres_storage),
-//            Box::new( MultiBaseHashCoder::new(multibase::Base64) ) );
-
         let default_space = "cache".to_owned();
         let mut spaces: HashMap< String, Box< HashSpace< Vec<u8>, String > > > = HashMap::new();
         spaces.insert( default_space.clone(), Box::new(cache_space) );
@@ -714,90 +344,5 @@ mod tests
         let bytes_future = hashweb.resolve(&link);
         let bytes = reactor.run(bytes_future).unwrap();
         assert_eq!( bytes, content);
-    }
-
-    #[test]
-    #[ignore]  // TODO add reason for this ignore (do we plan to restore it? if yes, when?)
-    fn test_ipfs_hashspace()
-    {
-        let mut reactor = reactor::Core::new()
-            .expect("Failed to initialize the reactor event loop");
-
-        let mut ipfs = Ipfs::new( "localhost", 5001, &reactor.handle() ).unwrap();
-        let orig_data = b"Tear down the wall!".to_vec();
-        let hash_fut = ipfs.store( orig_data.clone() );
-        let hash = reactor.run(hash_fut).unwrap();
-        let resolve_fut = ipfs.resolve(&hash);
-        let resolved_data = reactor.run(resolve_fut).unwrap();
-        assert_eq!(orig_data, resolved_data);
-    }
-
-
-    struct DummyFormatParser
-    {
-        link_attr: MetaAttr,
-    }
-
-    impl FormatParser for DummyFormatParser
-    {
-        fn parse<'b>(&self, blob: &'b [u8])
-            -> Result< Box<Data + 'b>, FormatParserError >
-        {
-            let mut attrs = Vec::new();
-            attrs.push( self.link_attr.clone() );
-            Ok( Box::new( MetaData::new( blob.to_owned(), "dummy_hash".as_bytes().to_owned(), attrs ) ) )
-        }
-    }
-
-    #[test]
-    fn test_blob_address_resolution()
-    {
-        let cache_store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
-        let modular_cache: ModularHashSpace<Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
-            Rc::new( MultiHasher::new(multihash::Hash::Keccak512) ),
-            Box::new(cache_store),
-            Box::new( MultiBaseHashCoder::new(multibase::Base64) ) );
-        let mut cache_space = Box::new(modular_cache) as Box< HashSpace<Vec<u8>, String> >;
-
-        let mut reactor = reactor::Core::new()
-            .expect("Failed to initialize the reactor event loop");
-        let myblob = Vec::from("This is my custom binary data");
-        let myblob_hash_fut = cache_space.store( myblob.clone() );
-        let myblob_hash = reactor.run(myblob_hash_fut).unwrap();
-
-        let default_space = "mystore".to_owned();
-        let mut spacemap = HashMap::new();
-        spacemap.insert( default_space.clone(), cache_space );
-        let hashweb = HashWeb::new( spacemap, default_space.clone() );
-
-        // Test hashweb blob address resolution (without attributes), format:
-        // hashspaceId/hash
-        let hashlink_str = default_space.clone() + HashWebLink_HashSpaceId_Separator + &myblob_hash;
-        let resolved_fut = hashweb.resolve(&hashlink_str);
-        let resolved = reactor.run(resolved_fut).unwrap();
-        assert_eq!(resolved, myblob);
-
-        let link_attr = MetaAttr::new( "hashweblink", MetaAttrVal::LINK(
-            default_space.to_string() + HashWebLink_HashSpaceId_Separator + &myblob_hash) );
-        let mut attrs_vec = Vec::new();
-        attrs_vec.push( link_attr.clone() );
-        let container_attr = MetaAttr::new( "attributes", MetaAttrVal::OBJECT(attrs_vec) );
-
-        let myformat = "myformat".to_owned();
-        let myparser = DummyFormatParser{ link_attr: container_attr.clone() };
-        let mut formats = HashMap::new();
-        formats.insert( myformat.clone(), Box::new(myparser) as Box<FormatParser> );
-        let registry = FormatRegistry::new(formats);
-
-        // Test blob address resolution with link attributes, format:
-        // hashspaceId/hash#formatId@path/to/hashlink/attribute&formatId@path/to/another/attribute
-        let link_address = hashlink_str + HashWebLink_Attribute_Separator + &myformat +
-            Format_Separator.to_string().as_str() +
-            container_attr.name() + HashWebLink_HashSpaceId_Separator + link_attr.name();
-        let resolver = AddressResolver::new(registry, hashweb);
-        let resolved_fut = resolver.resolve_blob(&link_address);
-
-        let resolved = reactor.run(resolved_fut).unwrap();
-        assert_eq!(resolved, myblob);
     }
 }

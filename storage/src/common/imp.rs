@@ -26,31 +26,7 @@ impl MultiHasher
         multihash::encode(self.hash_algorithm, data)
             .map_err(MultiHasher::to_hasher_error)
     }
-
-//    fn get_hash_string(&self, data: &Vec<u8>) -> Result<String, HashError>
-//    {
-//        self.get_hash_bytes(&data)
-//            .map( |bytes| multibase::encode(multibase::Base64, &bytes) )
-//    }
 }
-
-//impl Hasher<Vec<u8>, Vec<u8>> for MultiHasher
-//{
-//    fn get_hash(&self, data: &Vec<u8>) -> Result<Vec<u8>, HashError>
-//        { self.get_hash_bytes(&data) }
-//
-//    fn validate(&self, data: &Vec<u8>, expected_hash: &Vec<u8>) -> Result<bool, HashError>
-//    {
-//        // TODO should we do this here or just drop this step and check hash equality?
-//        let decode_result = decode(expected_hash)
-//            .map_err(MultiHasher::to_hasher_error)?;
-//        if decode_result.alg != self.hash_algorithm
-//            { return Err(HashError::UnsupportedType); }
-//
-//        let calculated_hash = self.get_hash_bytes(&data)?;
-//        Ok(*expected_hash == calculated_hash)
-//    }
-//}
 
 impl Hasher<Vec<u8>, Vec<u8>> for MultiHasher
 {
