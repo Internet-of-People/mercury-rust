@@ -1,0 +1,21 @@
+[package]
+name = "forgetfulfuse"
+version = "0.1.0"
+license = "GPL-3.0-or-later"
+authors = ["wigy <wigy_opensource_developer@yahoo.com>"]
+edition = "2018"
+
+[badges]
+gitlab = { repository = "https://gitlab.libertaria.community/iop-stack/communication/prometheus" }
+maintenance = { status = "actively-developed" }
+
+[dependencies]
+failure = "0.1.5"
+fuse = "0.3.1"
+fuse_mt = "0.4.4"
+libc = "0.2"
+log = "0.4.6"
+log4rs = "0.8.1"
+structopt = "0.2.15"
+time = "0.1"
+users = "0.9.1"
