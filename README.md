@@ -17,14 +17,15 @@ Even worse, the biggest of them make a living from taxing your payments,
 constantly spying on you for selling your data and usually hinder or censor you
 for their advantage or political orders, already much further than just targeted ads. 
 Just as an appetizer, some Asian countries require a mandatory digital identifier
-for every payment you make and they plan to punish or reward their citizens
-based on their collected digital data, essentially building the Thought Police.
+for every payment you make and monitor all of your online activity.
+Using this collected data, they plan to automatically punish or reward their citizens
+based on arbitrary loyalty measures, essentially building the Thought Police.
 
-Mercury aims to brings balance by protecting you from all of this.
+Mercury aims to bring balance by protecting you from all of this.
 Your identity is a cryptographic key owned by you and noone else.
 Data storage and communication is organized around this identity which you can keep
-even changing service provider or application.
-Your data is encrypted until you decide to publicly share.
+even changing service provider or applications.
+Your data is encrypted until you decide to share it with a specific peer or publicize it.
 Furthermore, you can have several unconnected identities, e.g. for work, family and hobby.
 The network is truly distributed and built on encrypted peer to peer communication
 so you're safe. You can add your own node to the network under your control and trust.
@@ -64,10 +65,21 @@ We'd like to have feedback to learn problems in the earliest phases,
 priorities of missing features and your requirements we haven't thought of yet.
 
 We think to have an initial functional implementation of the architecture.
-We're drafting our SDK API for distributed applications.
+We're currently merging in the KeyVault and Open Social Graph codebase
+while drafting our SDK API for distributed applications.
 There are still a lot of important components to be added,
 existing ones might be changed or redesigned,
 documentation is still lacking nearly everywhere.
+
+Experimental features present:
+ - Storage plugin interfaces (considering potentially distributed storages) 
+ - Protocol for communication between Home node and clients
+ - Home node binaries
+ - Client library
+
+Merging in:
+ - KeyVault: HD Secret key generation with seeds (Bip32, Bip39, etc)
+ - Open Social Graph features
 
 Rough edges of the existing server and client are
  - documentation
@@ -76,7 +88,6 @@ Rough edges of the existing server and client are
 Missing important parts are
  - dApp SDK, including
    - native GUI plugins interfaces for profile, home and contact management
-   - HD Secret key generation with seeds (Bip32, Bip39)
    - hiding all possible tech details to be convenient
  - Diffie-Hellman key exchange and encryption, maybe with TLS
  - hole punching support (Stun, Upnp, NatPmp, etc)
@@ -93,20 +104,15 @@ Directories/crates of the project are
    It contains the basic definition of basic data structures, interfaces
    and network protocols plus some common utility code.
    Your starting point is maybe `protocol/mercury.capnp` describing a simple
-   network protocol with Cap'n'Proto while `lib.rs` translates it to business logic in Rust. 
-   Note that the `handshake` modul is only for testing, we'll drop it when a
-   Diffie-Hellman key exchange is properly implemented.
+   network protocol with Cap'n'Proto while `mercury-capnp/mod.rs` contains
+   client and server implementations for Rust. 
  - `home-node` implements a server for the protocol.
- - `connect` implements a client. You can use `HomeClientCapnProto` from `protocol_capnp.rs`
-   as a proxy object to a remote home server. File `lib.rs` aims to provide more convenience
-   on top but we're planning to redesign it.
+ - `connect` implements a client library.
  - `test` contain integration tests to check if our server and client implementation
    work together as expected.
  - `storage` contains experimentation on a generic storage layer using hash-based "indexing"
    that could use IPFS, BitTorrent, StoreJ, etc as a simple plugin.
-   We currently use minimal code like a `KeyValueStore` interface and `AsyncFileHandler`
-   implementation from this crate, you should ignore it for now.
 
-Copyright © 2017-2018  
+Copyright © 2017-2019  
 Libertaria Ventures LLP, UK  
 Decentralized Society Foundation, PA
