@@ -16,15 +16,12 @@ bincode = "*"
 bytes = "*"
 capnp = "*"
 capnp-rpc = "*"
-ed25519-dalek = { version="*", features=["std"] }
 failure= "*"
 futures = "0.1"
 log = "*"
 multiaddr = "*"
 multibase = "*"
 multihash = "*"
-signatory = { version="*", features=["std"] }
-signatory-dalek = "*"
 tokio-core = "0.1"
 tokio-io = "0.1"
 serde = "*"
@@ -32,4 +29,9 @@ serde_derive = "*"
 serde_json = "*"
 structopt = "*"
 toml = "*"
+
+#osg = { path="../osg/osg" }
+ed25519-dalek = { version="*", features=["std"] }
+signatory = { version="*", features=["std"] }
+signatory-dalek = "*"
 #x25519-dalek = { version="*", default-features=false, features=["std"] }

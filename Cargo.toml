@@ -3,6 +3,12 @@ members = [
     "connect",
     "home-protocol",
     "home-node",
+    "osg/forgetfulfuse",
+    "osg/keyvault",
+    "osg/osg",
+    "osg/osg-rpc-storage",
+    "osg/prometheus-cli",
+    "osg/prometheus-tester",
     "storage",
     "test",
     "examples/TheButton"

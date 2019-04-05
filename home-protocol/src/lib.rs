@@ -13,7 +13,7 @@ use futures::{sync::mpsc, Future};
 use log::*;
 use multiaddr::{Multiaddr, ToMultiaddr};
 use serde::{de::Error as DeSerError, ser::SerializeSeq};
-use serde::{Deserialize, Deserializer, Serializer};
+use serde::{Deserialize as DeSer, Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::error::*;
@@ -426,7 +426,7 @@ fn deserialize_multiaddr_vec<'de, D>(
 where
     D: Deserializer<'de>,
 {
-    let mapped: Vec<String> = Deserialize::deserialize(deserializer)?;
+    let mapped: Vec<String> = DeSer::deserialize(deserializer)?;
     let mut res = Vec::new();
     for str_ma in mapped.iter() {
         match str_ma.to_multiaddr() {
