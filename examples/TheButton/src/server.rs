@@ -9,29 +9,24 @@ use tokio_signal::unix::SIGUSR1;
 use super::*;
 use crate::init_hack::init_server;
 
-
-
-pub struct Server{
-    pub cfg : ServerConfig,
+pub struct Server {
+    pub cfg: ServerConfig,
     pub appctx: AppContext,
-    active_calls: Rc<RefCell< Vec<DAppCall> >>,
+    active_calls: Rc<RefCell<Vec<DAppCall>>>,
 }
 
-impl Server{
-    pub fn new(cfg: ServerConfig, appctx: AppContext) -> Self
-        { Self{ cfg, appctx, active_calls: Default::default() } }
+impl Server {
+    pub fn new(cfg: ServerConfig, appctx: AppContext) -> Self {
+        Self { cfg, appctx, active_calls: Default::default() }
+    }
 }
 
-
-
-impl IntoFuture for Server
-{
+impl IntoFuture for Server {
     type Item = ();
     type Error = Error;
     type Future = AsyncResult<Self::Item, Self::Error>;
 
-    fn into_future(self) -> Self::Future
-    {
+    fn into_future(self) -> Self::Future {
         // Create dApp session with Mercury Connect and listen for incoming events, automatically accept calls
         let active_calls_rc = self.active_calls.clone();
         let dapp_events_fut = self.appctx.service.dapp_session(&self.appctx.app_id, None)
@@ -66,53 +61,63 @@ impl IntoFuture for Server
         let handle = self.appctx.handle.clone();
         let active_calls_rc = self.active_calls.clone();
         let (generate_button_press, got_button_press) = mpsc::channel(CHANNEL_CAPACITY);
-        let fwd_pressed_fut = got_button_press.for_each( move |()|
-        {
-            // TODO use something better here then handle.spawn() for all clients,
-            //      we should also detect and remove failing senders
-            let calls = active_calls_rc.borrow();
-            debug!( "Notifying {} connected clients", calls.len() );
-            for call in calls.iter() {
-                let to_client = call.outgoing.clone();
-                handle.spawn( to_client.send( Ok(AppMessageFrame( vec![42] )) )
-                    .map(|_| ()).map_err(|_|()) );
-            }
-            Ok(())
-        } ).map_err( |_err| Error::from(ErrorKind::ImplementationError) );
+        let fwd_pressed_fut = got_button_press
+            .for_each(move |()| {
+                // TODO use something better here then handle.spawn() for all clients,
+                //      we should also detect and remove failing senders
+                let calls = active_calls_rc.borrow();
+                debug!("Notifying {} connected clients", calls.len());
+                for call in calls.iter() {
+                    let to_client = call.outgoing.clone();
+                    handle.spawn(
+                        to_client.send(Ok(AppMessageFrame(vec![42]))).map(|_| ()).map_err(|_| ()),
+                    );
+                }
+                Ok(())
+            })
+            .map_err(|_err| Error::from(ErrorKind::ImplementationError));
 
         // Receiving a SIGUSR1 signal generates an event
         let button_press_generator = generate_button_press.clone();
         let press_on_sigusr1_fut = signal_recv(SIGUSR1).for_each(move |_| {
-            info!("received SIGUSR1, generating event");                                    
-            button_press_generator.clone().send(()).map(|_| ())
-                .map_err( |_err| Error::from(ErrorKind::ImplementationError) )
-        } );
+            info!("received SIGUSR1, generating event");
+            button_press_generator
+                .clone()
+                .send(())
+                .map(|_| ())
+                .map_err(|_err| Error::from(ErrorKind::ImplementationError))
+        });
 
         // Combine all three for_each() tasks to be run in "parallel" on the reactor
         let server_fut = dapp_events_fut
-            .select(fwd_pressed_fut).map(|_| ()).map_err(|(e,_)| e)
-            .select(press_on_sigusr1_fut).map(|_| ()).map_err(|(e,_)| e);
+            .select(fwd_pressed_fut)
+            .map(|_| ())
+            .map_err(|(e, _)| e)
+            .select(press_on_sigusr1_fut)
+            .map(|_| ())
+            .map_err(|(e, _)| e);
 
         // Combine an optional fourth one if timer option is present
-        let server_fut = match self.cfg.event_timer
-        {
-            None => Box::new(server_fut) as AsyncResult<_,_>,
+        let server_fut = match self.cfg.event_timer {
+            None => Box::new(server_fut) as AsyncResult<_, _>,
 
             // Repeatedly generate an event with the given interval
             Some(interval_secs) => {
-                let press_on_timer_fut = reactor::Interval::new( Duration::from_secs(interval_secs), &self.appctx.handle ).unwrap()
-                    .map_err( |err| Error::from( err.context(ErrorKind::ImplementationError) ) )
-                    .for_each( move |_| {
-                        info!("interval timer fired, generating event");
-                        generate_button_press.clone().send(()).map(|_| ())
-                            .map_err( |err| Error::from( err.context(ErrorKind::ImplementationError) ) )
-                    } );
+                let press_on_timer_fut =
+                    reactor::Interval::new(Duration::from_secs(interval_secs), &self.appctx.handle)
+                        .unwrap()
+                        .map_err(|err| Error::from(err.context(ErrorKind::ImplementationError)))
+                        .for_each(move |_| {
+                            info!("interval timer fired, generating event");
+                            generate_button_press.clone().send(()).map(|_| ()).map_err(|err| {
+                                Error::from(err.context(ErrorKind::ImplementationError))
+                            })
+                        });
 
-                Box::new( server_fut.select(press_on_timer_fut)
-                    .map(|_| ()).map_err(|(e,_)| e) )
-            },
+                Box::new(server_fut.select(press_on_timer_fut).map(|_| ()).map_err(|(e, _)| e))
+            }
         };
 
-        Box::new( init_server(&self).then( |_| server_fut ) )
+        Box::new(init_server(&self).then(|_| server_fut))
     }
 }

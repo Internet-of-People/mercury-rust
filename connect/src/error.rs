@@ -2,91 +2,89 @@ use std::fmt::Display;
 
 use failure::{Backtrace, Context, Fail};
 
-
-
 #[derive(Debug)]
 pub struct Error {
-    inner: Context<ErrorKind>
+    inner: Context<ErrorKind>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
 pub enum ErrorKind {
-    #[fail(display= "connection to home failed")]
+    #[fail(display = "connection to home failed")]
     ConnectionToHomeFailed,
 
-    #[fail(display="handshake failed")]
+    #[fail(display = "handshake failed")]
     DiffieHellmanHandshakeFailed,
 
-    #[fail(display= "peer id retreival failed")]
+    #[fail(display = "peer id retreival failed")]
     PeerIdRetreivalFailed,
 
-    #[fail(display= "failed to get contacts")]
+    #[fail(display = "failed to get contacts")]
     FailedToGetContacts,
 
-    #[fail(display="failed to get session")]
+    #[fail(display = "failed to get session")]
     FailedToGetSession,
 
-    #[fail(display="address conversion failed")]
+    #[fail(display = "address conversion failed")]
     AddressConversionFailed,
 
-    #[fail(display="failed to connect tcp stream")]
+    #[fail(display = "failed to connect tcp stream")]
     ConnectionFailed,
 
-    #[fail(display="failed to load profile")]
+    #[fail(display = "failed to load profile")]
     FailedToLoadProfile,
 
-    #[fail(display="failed to resolve profile")]
+    #[fail(display = "failed to resolve profile")]
     FailedToResolveProfile,
 
-    #[fail(display="home profile expected")]
+    #[fail(display = "home profile expected")]
     HomeProfileExpected,
 
-    #[fail(display="failed to claim profile")]
+    #[fail(display = "failed to claim profile")]
     FailedToClaimProfile,
 
-    #[fail(display="registration failed")]
+    #[fail(display = "registration failed")]
     RegistrationFailed,
 
-    #[fail(display="deregistration failed")]
+    #[fail(display = "deregistration failed")]
     DeregistrationFailed,
 
-    #[fail(display="pair request failed")]
+    #[fail(display = "pair request failed")]
     PairRequestFailed,
 
-    #[fail(display="peer response failed")]
+    #[fail(display = "peer response failed")]
     PeerResponseFailed,
 
-    #[fail(display="profile update failed")]
+    #[fail(display = "profile update failed")]
     ProfileUpdateFailed,
 
-    #[fail(display="call failed")]
+    #[fail(display = "call failed")]
     CallFailed,
 
-    #[fail(display="call refused")]
+    #[fail(display = "call refused")]
     CallRefused,
 
-    #[fail(display="lookup failed")]
+    #[fail(display = "lookup failed")]
     LookupFailed,
 
-    #[fail(display="no proof found for home")]
+    #[fail(display = "no proof found for home")]
     HomeProofNotFound,
 
-    #[fail(display="persona profile expected")]
+    #[fail(display = "persona profile expected")]
     PersonaProfileExpected,
 
-    #[fail(display="no homes found")]
+    #[fail(display = "no homes found")]
     NoHomesFound,
 
-    #[fail(display="login failed")]
+    #[fail(display = "login failed")]
     LoginFailed,
 
-    #[fail(display="failed to get peer id")]
+    #[fail(display = "failed to get peer id")]
     FailedToGetPeerId,
 
-    #[fail(display="failed to authorize")]
+    #[fail(display = "failed to authorize")]
     FailedToAuthorize,
 
-    #[fail(display="implementation error")]
+    #[fail(display = "implementation error")]
     ImplementationError,
 }
 
@@ -126,6 +124,6 @@ impl From<ErrorKind> for Error {
 
 impl From<Context<ErrorKind>> for Error {
     fn from(inner: Context<ErrorKind>) -> Error {
-        Error { inner: inner }
+        Error { inner }
     }
 }

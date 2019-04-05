@@ -1,7 +1,5 @@
-use mercury_home_protocol::*;
 use crate::*;
-
-
+use mercury_home_protocol::*;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct GetSessionRequest {
@@ -14,10 +12,7 @@ pub struct GetSessionResponse {
     pub profile_id: String,
 }
 
-
-
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct EventNotification {
     pub kind: String,
 }
-

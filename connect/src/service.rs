@@ -4,8 +4,8 @@ use std::collections::{HashMap, HashSet};
 use std::rc::Rc;
 
 use failure::Fail; // Backtrace, Context
-use futures::prelude::*;
 use futures::future;
+use futures::prelude::*;
 use log::*;
 use tokio_core::reactor;
 
@@ -13,8 +13,6 @@ use super::*;
 use mercury_home_protocol::net::HomeConnector;
 use profile::{MyProfile, MyProfileImpl};
 use sdk::DAppSessionImpl;
-
-
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct DAppAction(Vec<u8>);
@@ -26,11 +24,8 @@ pub struct DeviceAuthorization(Vec<u8>);
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Bip32Path(String);
 
-
-
 // Hierarchical deterministic seed for identity handling to generate profiles
-pub trait KeyVault
-{
+pub trait KeyVault {
     // Get the next hierarchical path to generate a new profile with
     fn next(&self) -> Bip32Path;
 
@@ -39,10 +34,8 @@ pub trait KeyVault
     fn unlock_profile(&self, bip32_path: &Bip32Path) -> Rc<Signer>;
 }
 
-
 // Usage of Bip32 hierarchy, format: path => data stored with that key
-pub trait Bip32PathMapper
-{
+pub trait Bip32PathMapper {
     // master_seed/purpose_mercury => last_profile_number and profile {id: number} map
     fn root_path(&self) -> Bip32Path;
 
@@ -53,19 +46,14 @@ pub trait Bip32PathMapper
     fn app_path(&self, profile_id: &ProfileId, app_id: &ApplicationId) -> Bip32Path;
 }
 
-
-pub trait AccessManager
-{
+pub trait AccessManager {
     fn ask_read_access(&self, resource: &Bip32Path) -> AsyncResult<PublicKey, Error>;
     fn ask_write_access(&self, resource: &Bip32Path) -> AsyncResult<Rc<Signer>, Error>;
 }
 
-
-
 // User interface (probably implemented with platform-native GUI) for actions
 // that are initiated by the SDK and require some kind of user interaction
-pub trait UserInterface
-{
+pub trait UserInterface {
     // Initialize system components and configuration where user interaction is needed,
     // e.g. HD wallets need manually saving generated new seed or entering old one
     fn initialize(&self) -> AsyncResult<(), Error>;
@@ -96,257 +84,256 @@ pub trait UserInterface
     fn manage_profiles(&self) -> AsyncResult<(), Error>;
 }
 
-
-
-pub trait AdminSession
-{
+pub trait AdminSession {
     fn profiles(&self) -> AsyncResult<Vec<Rc<MyProfile>>, Error>;
     fn profile(&self, id: ProfileId) -> AsyncResult<Rc<MyProfile>, Error>;
     fn create_profile(&self) -> AsyncResult<Rc<MyProfile>, Error>;
     fn remove_profile(&self, profile: &ProfileId) -> AsyncResult<(), Error>;
-//    fn claim_profile(&self, home: ProfileId, profile: ProfileId)
-//        -> AsyncResult<Rc<MyProfile>, Error>;
+    //    fn claim_profile(&self, home: ProfileId, profile: ProfileId)
+    //        -> AsyncResult<Rc<MyProfile>, Error>;
 }
 
-
-
-pub struct SignerFactory
-{
+pub struct SignerFactory {
     // TODO this should also support HW wallets
     signers: HashMap<ProfileId, Rc<Signer>>,
 }
 
-impl SignerFactory
-{
-    pub fn new(signers: HashMap<ProfileId, Rc<Signer>>) -> Self
-        { Self{signers} }
+impl SignerFactory {
+    pub fn new(signers: HashMap<ProfileId, Rc<Signer>>) -> Self {
+        Self { signers }
+    }
 
-    pub fn signer(&self, profile_id: &ProfileId) -> Option<Rc<Signer>>
-        { self.signers.get(profile_id).map( |s| s.clone() ) }
+    pub fn signer(&self, profile_id: &ProfileId) -> Option<Rc<Signer>> {
+        self.signers.get(profile_id).map(|s| s.clone())
+    }
 }
 
-
-
-pub struct MyProfileFactory
-{
+pub struct MyProfileFactory {
     signer_factory: Rc<SignerFactory>,
-    profile_repo:   Rc<SimpleProfileRepo>, // TODO use Rc<ProfileRepo> after TheButton testing
+    profile_repo: Rc<SimpleProfileRepo>, // TODO use Rc<ProfileRepo> after TheButton testing
     home_connector: Rc<HomeConnector>,
-    handle:         reactor::Handle,
-    cache:          Rc<RefCell< HashMap<ProfileId, Rc<MyProfile>> >>,
+    handle: reactor::Handle,
+    cache: Rc<RefCell<HashMap<ProfileId, Rc<MyProfile>>>>,
 }
-
 
 // TODO maybe this should be merged into AdminSessionImpl, the only thing it does is caching
-impl MyProfileFactory
-{
+impl MyProfileFactory {
     //pub fn new(signer_factory: Rc<SignerFactory>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
-    pub fn new(signer_factory: Rc<SignerFactory>, profile_repo: Rc<SimpleProfileRepo>,
-               home_connector: Rc<HomeConnector>, handle: reactor::Handle) -> Self
-        { Self{ signer_factory, profile_repo, home_connector, handle, cache: Default::default() } }
+    pub fn new(
+        signer_factory: Rc<SignerFactory>,
+        profile_repo: Rc<SimpleProfileRepo>,
+        home_connector: Rc<HomeConnector>,
+        handle: reactor::Handle,
+    ) -> Self {
+        Self { signer_factory, profile_repo, home_connector, handle, cache: Default::default() }
+    }
 
-    pub fn create(&self, own_profile: OwnProfile) -> Result<Rc<MyProfile>,Error>
-    {
+    pub fn create(&self, own_profile: OwnProfile) -> Result<Rc<MyProfile>, Error> {
         let profile_id = own_profile.profile.id.clone();
-        if let Some(ref my_profile_rc) = self.cache.borrow().get(&profile_id)
-            { return Ok( Rc::clone(my_profile_rc) ) }
+        if let Some(ref my_profile_rc) = self.cache.borrow().get(&profile_id) {
+            return Ok(Rc::clone(my_profile_rc));
+        }
 
         debug!("Creating new profile wrapper for profile {}", profile_id);
-        self.signer_factory.signer(&profile_id)
-            .map( |signer| {
-                let result = MyProfileImpl::new(own_profile, signer, self.profile_repo.clone(),
-                    self.home_connector.clone(), self.handle.clone() );
+        self.signer_factory
+            .signer(&profile_id)
+            .map(|signer| {
+                let result = MyProfileImpl::new(
+                    own_profile,
+                    signer,
+                    self.profile_repo.clone(),
+                    self.home_connector.clone(),
+                    self.handle.clone(),
+                );
                 let result_rc = Rc::new(result) as Rc<MyProfile>;
                 // TODO this allows initiating several fill attempts in parallel
                 //      until first one succeeds, last one wins by overwriting.
                 //      Is this acceptable?
-                self.cache.borrow_mut().insert(profile_id, result_rc.clone() );
+                self.cache.borrow_mut().insert(profile_id, result_rc.clone());
                 result_rc
-            } )
-            .ok_or( ErrorKind::FailedToAuthorize.into() )
+            })
+            .ok_or(ErrorKind::FailedToAuthorize.into())
     }
 }
 
-
-
-pub struct AdminSessionImpl
-{
-//    keyvault:   Rc<KeyVault>,
-//    pathmap:    Rc<Bip32PathMapper>,
-//    accessman:  Rc<AccessManager>,
-    ui:             Rc<UserInterface>,
+pub struct AdminSessionImpl {
+    //    keyvault:   Rc<KeyVault>,
+    //    pathmap:    Rc<Bip32PathMapper>,
+    //    accessman:  Rc<AccessManager>,
+    ui: Rc<UserInterface>,
     my_profile_ids: Rc<HashSet<ProfileId>>,
-    profile_store:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-    profile_factory:Rc<MyProfileFactory>,
-//    handle:         reactor::Handle,
+    profile_store: Rc<RefCell<KeyValueStore<ProfileId, OwnProfile>>>,
+    profile_factory: Rc<MyProfileFactory>,
+    //    handle:         reactor::Handle,
 }
 
-
-impl AdminSessionImpl
-{
-    pub fn new(ui: Rc<UserInterface>, my_profile_ids: Rc<HashSet<ProfileId>>,
-               profile_store: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-               profile_factory: Rc<MyProfileFactory>) //, handle: reactor::Handle)
-        -> Rc<AdminSession>
-    {
-        let this = Self{ ui, profile_store, my_profile_ids, profile_factory }; //, handle };
+impl AdminSessionImpl {
+    pub fn new(
+        ui: Rc<UserInterface>,
+        my_profile_ids: Rc<HashSet<ProfileId>>,
+        profile_store: Rc<RefCell<KeyValueStore<ProfileId, OwnProfile>>>,
+        profile_factory: Rc<MyProfileFactory>,
+    ) -> Rc<AdminSession> {
+        let this = Self { ui, profile_store, my_profile_ids, profile_factory }; //, handle };
         Rc::new(this)
     }
 }
 
-
-impl AdminSession for AdminSessionImpl
-{
-    fn profiles(&self) -> AsyncResult<Vec<Rc<MyProfile>>, Error>
-    {
+impl AdminSession for AdminSessionImpl {
+    fn profiles(&self) -> AsyncResult<Vec<Rc<MyProfile>>, Error> {
         // TODO consider delegating implementation to profile(id)
         let store = self.profile_store.clone();
         let prof_factory = self.profile_factory.clone();
-        let profile_futs = self.my_profile_ids.iter()
-            .map( |prof_id| {
+        let profile_futs = self
+            .my_profile_ids
+            .iter()
+            .map(|prof_id| {
                 let prof_factory = prof_factory.clone();
-                store.borrow().get( prof_id.to_owned() )
-                    .map_err( |e| e.context(ErrorKind::FailedToLoadProfile).into() )
-                    .and_then( move |own_profile| prof_factory.create(own_profile) )
-            } )
+                store
+                    .borrow()
+                    .get(prof_id.to_owned())
+                    .map_err(|e| e.context(ErrorKind::FailedToLoadProfile).into())
+                    .and_then(move |own_profile| prof_factory.create(own_profile))
+            })
             .collect::<Vec<_>>();
         let profiles_fut = future::join_all(profile_futs);
         Box::new(profiles_fut)
     }
 
-    fn profile(&self, id: ProfileId) -> AsyncResult<Rc<MyProfile>, Error>
-    {
+    fn profile(&self, id: ProfileId) -> AsyncResult<Rc<MyProfile>, Error> {
         let profile_factory = self.profile_factory.clone();
-        let fut = self.profile_store.borrow().get( id.to_owned() )
-            .map_err( |e| e.context(ErrorKind::FailedToLoadProfile).into() )
-            .and_then( move |own_profile| profile_factory.create(own_profile) );
+        let fut = self
+            .profile_store
+            .borrow()
+            .get(id.to_owned())
+            .map_err(|e| e.context(ErrorKind::FailedToLoadProfile).into())
+            .and_then(move |own_profile| profile_factory.create(own_profile));
         Box::new(fut)
     }
 
-    fn create_profile(&self) -> AsyncResult<Rc<MyProfile>, Error>
-    {
+    fn create_profile(&self) -> AsyncResult<Rc<MyProfile>, Error> {
         unimplemented!()
     }
 
-//    fn claim_profile(&self, home_id: ProfileId, profile: ProfileId) ->
-//        AsyncResult<Rc<MyProfile>, Error>
-//    {
-//        let claim_fut = self.connect_home(&home_id)
-//            .map_err(|err| err.context(ErrorKind::ConnectionToHomeFailed).into())
-//            .and_then( move |home| {
-//                home.claim(profile)
-//                    .map_err(|err| err.context(ErrorKind::FailedToClaimProfile).into())
-//            });
-//        Box::new(claim_fut)
-//    }
+    //    fn claim_profile(&self, home_id: ProfileId, profile: ProfileId) ->
+    //        AsyncResult<Rc<MyProfile>, Error>
+    //    {
+    //        let claim_fut = self.connect_home(&home_id)
+    //            .map_err(|err| err.context(ErrorKind::ConnectionToHomeFailed).into())
+    //            .and_then( move |home| {
+    //                home.claim(profile)
+    //                    .map_err(|err| err.context(ErrorKind::FailedToClaimProfile).into())
+    //            });
+    //        Box::new(claim_fut)
+    //    }
 
-    fn remove_profile(&self, _profile: &ProfileId)
-        -> AsyncResult<(), Error>
-    {
+    fn remove_profile(&self, _profile: &ProfileId) -> AsyncResult<(), Error> {
         unimplemented!()
     }
 }
 
-
-
-pub struct ConnectService
-{
-//    keyvault:       Rc<KeyVault>,
-//    pathmap:        Rc<Bip32PathMapper>,
-//    accessman:      Rc<AccessManager>,
-    ui:             Rc<UserInterface>,
+pub struct ConnectService {
+    //    keyvault:       Rc<KeyVault>,
+    //    pathmap:        Rc<Bip32PathMapper>,
+    //    accessman:      Rc<AccessManager>,
+    ui: Rc<UserInterface>,
     my_profile_ids: Rc<HashSet<ProfileId>>,
-    profile_store:  Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-    profile_factory:Rc<MyProfileFactory>,
-//    handle:         reactor::Handle,
+    profile_store: Rc<RefCell<KeyValueStore<ProfileId, OwnProfile>>>,
+    profile_factory: Rc<MyProfileFactory>,
+    //    handle:         reactor::Handle,
 }
 
+impl ConnectService {
+    pub fn new(
+        ui: Rc<UserInterface>,
+        my_profile_ids: Rc<HashSet<ProfileId>>,
+        profile_store: Rc<RefCell<KeyValueStore<ProfileId, OwnProfile>>>,
+        profile_factory: Rc<MyProfileFactory>,
+    ) -> Self {
+        Self { ui, my_profile_ids, profile_store, profile_factory }
+    } //, handle: handle.clone() } }
 
-impl ConnectService
-{
-    pub fn new(ui: Rc<UserInterface>, my_profile_ids: Rc<HashSet<ProfileId>>,
-               profile_store: Rc<RefCell< KeyValueStore<ProfileId, OwnProfile> >>,
-               profile_factory: Rc<MyProfileFactory>) //, handle: &reactor::Handle)
-        -> Self
-    { Self{ ui, my_profile_ids: my_profile_ids, profile_store, profile_factory: profile_factory } } //, handle: handle.clone() } }
+    pub fn admin_session(
+        &self,
+        authorization: Option<DAppPermission>,
+    ) -> AsyncResult<Rc<AdminSession>, Error> {
+        let adm = AdminSessionImpl::new(
+            self.ui.clone(),
+            self.my_profile_ids.clone(),
+            self.profile_store.clone(),
+            self.profile_factory.clone(),
+        ); //, self.handle.clone() );
 
-
-    pub fn admin_session(&self, authorization: Option<DAppPermission>)
-        -> AsyncResult<Rc<AdminSession>, Error>
-    {
-        let adm = AdminSessionImpl::new(self.ui.clone(), self.my_profile_ids.clone(),
-            self.profile_store.clone(), self.profile_factory.clone() ); //, self.handle.clone() );
-
-        Box::new( Ok(adm).into_future() )
+        Box::new(Ok(adm).into_future())
     }
 }
 
-
-impl DAppEndpoint for ConnectService
-{
-    fn dapp_session(&self, app: &ApplicationId, authorization: Option<DAppPermission>)
-        -> AsyncResult<Rc<DAppSession>, Error>
-    {
+impl DAppEndpoint for ConnectService {
+    fn dapp_session(
+        &self,
+        app: &ApplicationId,
+        authorization: Option<DAppPermission>,
+    ) -> AsyncResult<Rc<DAppSession>, Error> {
         let app = app.to_owned();
         let profile_store = self.profile_store.clone();
         let profile_factory = self.profile_factory.clone();
-        let fut = self.ui.select_profile()
-            .and_then( move |profile_id| {
+        let fut = self
+            .ui
+            .select_profile()
+            .and_then(move |profile_id| {
                 let store = profile_store.borrow();
-                store.get(profile_id)
-                    .map_err( |err| err.context(ErrorKind::FailedToLoadProfile).into() )
-            } )
-            .and_then( move |own_profile| profile_factory.create(own_profile) )
-            .map( move |my_profile| DAppSessionImpl::new(my_profile, app) )
-            .map_err( |err| { debug!("Failed to initialize dapp session: {:?}", err); err } );
+                store
+                    .get(profile_id)
+                    .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
+            })
+            .and_then(move |own_profile| profile_factory.create(own_profile))
+            .map(move |my_profile| DAppSessionImpl::new(my_profile, app))
+            .map_err(|err| {
+                debug!("Failed to initialize dapp session: {:?}", err);
+                err
+            });
         Box::new(fut)
     }
 }
 
-
-
-pub struct DummyUserInterface
-{
+pub struct DummyUserInterface {
     my_profiles: Rc<HashSet<ProfileId>>,
 }
 
-impl DummyUserInterface
-{
-    pub fn new(my_profiles: Rc<HashSet<ProfileId>>) -> Self
-        { Self{my_profiles} }
+impl DummyUserInterface {
+    pub fn new(my_profiles: Rc<HashSet<ProfileId>>) -> Self {
+        Self { my_profiles }
+    }
 }
 
-impl UserInterface for DummyUserInterface
-{
-    fn initialize(&self) -> AsyncResult<(), Error>
-    {
-        Box::new( Ok( () ).into_future() )
+impl UserInterface for DummyUserInterface {
+    fn initialize(&self) -> AsyncResult<(), Error> {
+        Box::new(Ok(()).into_future())
     }
 
-    fn confirm_dappaction(&self, _action: &DAppAction) -> AsyncResult<(), Error>
-    {
-        Box::new( Ok( () ).into_future() )
+    fn confirm_dappaction(&self, _action: &DAppAction) -> AsyncResult<(), Error> {
+        Box::new(Ok(()).into_future())
     }
 
-    fn confirm_pairing(&self, _request: &RelationHalfProof) -> AsyncResult<(), Error>
-    {
-        Box::new( Ok( () ).into_future() )
+    fn confirm_pairing(&self, _request: &RelationHalfProof) -> AsyncResult<(), Error> {
+        Box::new(Ok(()).into_future())
     }
 
-    fn notify_pairing(&self, _response: &RelationProof) -> AsyncResult<(), Error>
-    {
-        Box::new( Ok( () ).into_future() )
+    fn notify_pairing(&self, _response: &RelationProof) -> AsyncResult<(), Error> {
+        Box::new(Ok(()).into_future())
     }
 
-    fn select_profile(&self) -> AsyncResult<ProfileId, Error>
-    {
-        let first_profile_res = self.my_profiles.iter().cloned().nth(0)
-            .ok_or( Error::from(ErrorKind::FailedToAuthorize) );
-        Box::new( first_profile_res.into_future() )
+    fn select_profile(&self) -> AsyncResult<ProfileId, Error> {
+        let first_profile_res = self
+            .my_profiles
+            .iter()
+            .cloned()
+            .nth(0)
+            .ok_or(Error::from(ErrorKind::FailedToAuthorize));
+        Box::new(first_profile_res.into_future())
     }
 
-    fn manage_profiles(&self) -> AsyncResult<(), Error>
-    {
-        Box::new( Ok( () ).into_future() )
+    fn manage_profiles(&self) -> AsyncResult<(), Error> {
+        Box::new(Ok(()).into_future())
     }
 }

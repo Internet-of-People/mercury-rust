@@ -2,102 +2,100 @@ use std::fmt::Display;
 
 use failure::{Backtrace, Context, Fail};
 
-
-
 #[derive(Debug)]
 pub struct Error {
-    inner: Context<ErrorKind>
+    inner: Context<ErrorKind>,
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Debug, Fail)]
 pub enum ErrorKind {
-    #[fail(display= "profile lookup failed")]
+    #[fail(display = "profile lookup failed")]
     ProfileLookupFailed,
-    #[fail(display="profile update failed")]
+    #[fail(display = "profile update failed")]
     ProfileUpdateFailed,
-    #[fail(display= "hash decode failed")]
+    #[fail(display = "hash decode failed")]
     HashDecodeFailed,
-    #[fail(display= "hash encode failed")]
+    #[fail(display = "hash encode failed")]
     HashEncodeFailed,
-    #[fail(display= "signer creation failed")]
+    #[fail(display = "signer creation failed")]
     SignerCreationFailed,
-    #[fail(display= "signature validation failed")]
+    #[fail(display = "signature validation failed")]
     SignatureValidationFailed,
-    #[fail(display= "handshake failed")]
+    #[fail(display = "handshake failed")]
     DiffieHellmanHandshakeFailed,
-    #[fail(display= "relation signing failed")]
+    #[fail(display = "relation signing failed")]
     RelationSigningFailed,
-    #[fail(display= "relation validation failed")]
+    #[fail(display = "relation validation failed")]
     RelationValidationFailed,
-    #[fail(display= "profile validation failed")]
+    #[fail(display = "profile validation failed")]
     ProfileValidationFailed,
-    #[fail(display= "multiaddress serialization failed")]
+    #[fail(display = "multiaddress serialization failed")]
     MultiaddrSerializationFailed,
-    #[fail(display= "multiaddress deserialization failed")]
+    #[fail(display = "multiaddress deserialization failed")]
     MultiaddrDeserializationFailed,
-    #[fail(display= "failed to fetch peer id")]
+    #[fail(display = "failed to fetch peer id")]
     PeerIdRetreivalFailed,
-    #[fail(display= "profile claim failed")]
+    #[fail(display = "profile claim failed")]
     FailedToClaimProfile,
-    #[fail(display="persona expected")]
+    #[fail(display = "persona expected")]
     PersonaExpected,
-    #[fail(display="already registered")]
+    #[fail(display = "already registered")]
     AlreadyRegistered,
-    #[fail(display="home id mismatch")]
+    #[fail(display = "home id mismatch")]
     HomeIdMismatch,
-    #[fail(display="relation type mismatch")]
+    #[fail(display = "relation type mismatch")]
     RelationTypeMismatch,
-    #[fail(display="invalid signature")]
+    #[fail(display = "invalid signature")]
     InvalidSignature,
-    #[fail(display="storage failed")]
+    #[fail(display = "storage failed")]
     StorageFailed,
-    #[fail(display= "profile mismatch")]
+    #[fail(display = "profile mismatch")]
     ProfileMismatch,
-    #[fail(display="public key mismatch")]
+    #[fail(display = "public key mismatch")]
     PublicKeyMismatch,
-    #[fail(display="signer mismatch")]
+    #[fail(display = "signer mismatch")]
     SignerMismatch,
-    #[fail(display="peer not hosted here")]
+    #[fail(display = "peer not hosted here")]
     PeerNotHostedHere,
-    #[fail(display="invalid relation proof")]
+    #[fail(display = "invalid relation proof")]
     InvalidRelationProof,
-    #[fail(display="timeout failed")]
+    #[fail(display = "timeout failed")]
     TimeoutFailed,
-    #[fail(display="failed to read response")]
+    #[fail(display = "failed to read response")]
     FailedToReadResponse,
-    #[fail(display="deregistered")]
+    #[fail(display = "deregistered")]
     ProfileDeregistered,
-    #[fail(display= "profile load failed")]
+    #[fail(display = "profile load failed")]
     FailedToLoadProfile,
-    #[fail(display="call failed")]
+    #[fail(display = "call failed")]
     CallFailed,
-    #[fail(display="failed to push event")]
+    #[fail(display = "failed to push event")]
     FailedToPushEvent,
-    #[fail(display= "connection to home failed")]
+    #[fail(display = "connection to home failed")]
     ConnectionToHomeFailed,
-    #[fail(display="failed to send")]
+    #[fail(display = "failed to send")]
     FailedToSend,
-    #[fail(display="context validation failed")]
+    #[fail(display = "context validation failed")]
     ContextValidationFailed,
-    #[fail(display="failed to get session")]
+    #[fail(display = "failed to get session")]
     FailedToGetSession,
-    #[fail(display="failed to resolve URL")]
+    #[fail(display = "failed to resolve URL")]
     FailedToResolveUrl,
-    #[fail(display="pair request failed")]
+    #[fail(display = "pair request failed")]
     PairRequestFailed,
-    #[fail(display="pair response failed")]
+    #[fail(display = "pair response failed")]
     PairResponseFailed,
-    #[fail(display="profile registration failed")]
+    #[fail(display = "profile registration failed")]
     RegisterFailed,
-    #[fail(display="profile deregistration failed")]
+    #[fail(display = "profile deregistration failed")]
     UnregisterFailed,
-    #[fail(display="failed to create session")]
+    #[fail(display = "failed to create session")]
     FailedToCreateSession,
-    #[fail(display="DHT lookup failed")]
+    #[fail(display = "DHT lookup failed")]
     DhtLookupFailed,
-    #[fail(display="ping failed")]
+    #[fail(display = "ping failed")]
     PingFailed,
-    #[fail(display="login failed")]
+    #[fail(display = "login failed")]
     LoginFailed,
 }
 
@@ -137,6 +135,6 @@ impl From<ErrorKind> for Error {
 
 impl From<Context<ErrorKind>> for Error {
     fn from(inner: Context<ErrorKind>) -> Error {
-        Error { inner: inner }
+        Error { inner }
     }
 }

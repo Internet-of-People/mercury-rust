@@ -1,46 +1,46 @@
-use std::error::Error;
-use std::io;
-use std::io::{Write, Read, Seek};
-use std::fmt;
-use std::str::FromStr;
 use std::cell::RefCell;
-use std::rc::Rc;
 use std::collections::{HashMap, HashSet};
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::error::Error;
+use std::fmt;
 use std::hash::{Hash, Hasher};
+use std::io;
+use std::io::{Read, Seek, Write};
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::rc::Rc;
+use std::str::FromStr;
 
 use arrayref::array_ref;
-use byteorder::{WriteBytesExt, ReadBytesExt, BigEndian};
+use byteorder::{BigEndian, ReadBytesExt, WriteBytesExt};
+use futures::future::{loop_fn, Either, Loop};
 use futures::prelude::*;
-use futures::future::{Either, loop_fn, Loop};
+use futures::stream::{SplitSink, SplitStream};
 use futures::sync::mpsc;
 use futures::sync::{oneshot, oneshot::Sender};
-use futures::stream::{SplitSink, SplitStream};
 use log::*;
 use multiaddr::{Multiaddr, ToMultiaddr};
+use tokio_core::net::{UdpCodec, UdpFramed, UdpSocket};
 use tokio_core::reactor;
-use tokio_core::net::{UdpSocket, UdpCodec, UdpFramed};
 use tokio_timer::Delay;
 
 use crate::asynch::StorageResult;
-use mercury_home_protocol::{ProfileId, Profile, ProfileFacet, ProfileRepo, Signer, net::HomeConnector};
+use mercury_home_protocol::{
+    net::HomeConnector, Profile, ProfileFacet, ProfileId, ProfileRepo, Signer,
+};
 
 use super::StorageError;
 use crate::asynch::KeyValueStore;
 
+const PROFILE_SIZE: usize = 32;
 
-
-const PROFILE_SIZE : usize = 32;
-
-const ADD_PERSONAS_REQUEST_ID           : u8 = 1;
-const DROP_PERSONAS_REQUEST_ID          : u8 = 2;
-const SET_HOME_REQUEST_ID               : u8 = 3;
-const HOME_ADDRESSES_QUERY_ID           : u8 = 4;
-const PROFILE_HOMES_QUERY_ID            : u8 = 5;
+const ADD_PERSONAS_REQUEST_ID: u8 = 1;
+const DROP_PERSONAS_REQUEST_ID: u8 = 2;
+const SET_HOME_REQUEST_ID: u8 = 3;
+const HOME_ADDRESSES_QUERY_ID: u8 = 4;
+const PROFILE_HOMES_QUERY_ID: u8 = 5;
 
 fn from_slice(v: &[u8]) -> [u8; 32] {
     if v.len() != 32 {
-        panic!(format!("unexpected profile id size: {}",v.len()));
+        panic!(format!("unexpected profile id size: {}", v.len()));
     }
     array_ref!(v, 0, 32).clone()
 }
@@ -62,15 +62,14 @@ impl UdpCodec for RouterCodec {
             Ok(msgbuf) => {
                 buf.clone_from(msgbuf);
                 self.dest.clone()
-            },
+            }
             Err(e) => {
                 error!("Failed to serialize message: {}", e);
-                SocketAddr::V4( SocketAddrV4::new( Ipv4Addr::UNSPECIFIED, 0) )
+                SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::UNSPECIFIED, 0))
             }
         }
     }
 }
-
 
 ///
 /// RequestReplySocket is responsible for serializing requests and waiting for the responses
@@ -78,48 +77,47 @@ impl UdpCodec for RouterCodec {
 struct RequestReplySocket {
     // 1. socket + codec
     // 2. pending requests in a map
-    last_nonce : u64,
-    sessions : HashMap<u64, Box<Sender<Reply>>>,
+    last_nonce: u64,
+    sessions: HashMap<u64, Box<Sender<Reply>>>,
 }
 
 impl RequestReplySocket {
     pub fn new() -> Self {
         let last_nonce = 0;
         let sessions = HashMap::new();
-        RequestReplySocket {last_nonce, sessions}
+        RequestReplySocket { last_nonce, sessions }
     }
 
     pub fn query<T: MercuryRouterQuery>(&mut self, qry: Query<T>) -> StorageResult<Reply> {
         // let request = Request::new();
         let (tx, rx) = oneshot::channel();
-        Box::new(
-            rx.map_err(|err| StorageError::StringError(err.description().to_string()))
-        )
+        Box::new(rx.map_err(|err| StorageError::StringError(err.description().to_string())))
     }
 }
 
-
-pub struct RouterServiceClient{
+pub struct RouterServiceClient {
     host: Box<KeyValueStore<ProfileId, Profile>>,
     handle: reactor::Handle,
     server_address: SocketAddr,
-    sock : Rc<RefCell<RequestReplySocket>>,
+    sock: Rc<RefCell<RequestReplySocket>>,
     home_connector: Rc<HomeConnector>,
     signer: Rc<Signer>,
 }
 
 impl RouterServiceClient {
-    pub fn new(handle : reactor::Handle, host: Box<KeyValueStore<ProfileId, Profile>>,
-               server_address : SocketAddr, home_connector: Rc<HomeConnector>, signer: Rc<Signer>)
-        -> std::io::Result<Self>
-    {
-        let sock = Rc::new(RefCell::new( RequestReplySocket::new()) );
-        Ok(RouterServiceClient { host, handle, server_address, sock, home_connector, signer})
+    pub fn new(
+        handle: reactor::Handle,
+        host: Box<KeyValueStore<ProfileId, Profile>>,
+        server_address: SocketAddr,
+        home_connector: Rc<HomeConnector>,
+        signer: Rc<Signer>,
+    ) -> std::io::Result<Self> {
+        let sock = Rc::new(RefCell::new(RequestReplySocket::new()));
+        Ok(RouterServiceClient { host, handle, server_address, sock, home_connector, signer })
     }
-
 }
 
-impl KeyValueStore<ProfileId,Profile>  for RouterServiceClient {
+impl KeyValueStore<ProfileId, Profile> for RouterServiceClient {
     fn set(&mut self, profile_id: ProfileId, profile: Profile) -> StorageResult<()> {
         unimplemented!();
     }
@@ -128,35 +126,53 @@ impl KeyValueStore<ProfileId,Profile>  for RouterServiceClient {
         // 1. issue a profile_homes request
         let p = from_slice(key.0.as_slice());
         let query = ProfileHomes::new(p);
-        let nonce : u64 = 1;
+        let nonce: u64 = 1;
         let query = Query::new(query, nonce);
 
         let connector = self.home_connector.clone();
         let signer = self.signer.clone();
-        let get_fut = self.sock.borrow_mut()
+        let get_fut = self
+            .sock
+            .borrow_mut()
             .query(query)
             .map_err(|err| StorageError::StringError("query failed".to_string()))
             .and_then(move |reply| {
                 // process reply
                 if reply.code != 0 {
-                    return Either::A( Err(StorageError::StringError("request failed with an error code".to_string())).into_future() )
+                    return Either::A(
+                        Err(StorageError::StringError(
+                            "request failed with an error code".to_string(),
+                        ))
+                        .into_future(),
+                    );
                 }
 
                 // 2. on success create a Home around the remote home
                 let payload = match reply.payload {
                     Some(p) => p,
-                    None => return Either::A( Err(StorageError::StringError("no payload in reply".to_string())).into_future() )
+                    None => {
+                        return Either::A(
+                            Err(StorageError::StringError("no payload in reply".to_string()))
+                                .into_future(),
+                        );
+                    }
                 };
 
                 match payload {
                     ReplyPayload::Addresses(addrs) => {
-                        let profile_fut = connector.connect_to_addrs(addrs.as_slice(), signer)
-                            .map_err( |e| StorageError::StringError( e.to_string() ) )
-                            .and_then( move |home| home.load(&key)
-                                .map_err( |e| StorageError::StringError( e.to_string() ) ) );
+                        let profile_fut = connector
+                            .connect_to_addrs(addrs.as_slice(), signer)
+                            .map_err(|e| StorageError::StringError(e.to_string()))
+                            .and_then(move |home| {
+                                home.load(&key)
+                                    .map_err(|e| StorageError::StringError(e.to_string()))
+                            });
                         Either::B(profile_fut)
-                    },
-                    _ => Either::A( Err(StorageError::StringError("invalid payload type".to_string())).into_future() )
+                    }
+                    _ => Either::A(
+                        Err(StorageError::StringError("invalid payload type".to_string()))
+                            .into_future(),
+                    ),
                 }
             });
         Box::new(get_fut)
@@ -173,16 +189,15 @@ pub trait RequestPayload {
 }
 
 pub struct Request {
-    signer : Rc<Signer>,
-    nonce : u64,
-    payload : Box<RequestPayload>,
+    signer: Rc<Signer>,
+    nonce: u64,
+    payload: Box<RequestPayload>,
 }
 
 impl Request {
-    pub fn new(signer : Rc<Signer>, payload: Box<RequestPayload>, nonce: u64) -> Self {
-        Self{signer, nonce, payload}
+    pub fn new(signer: Rc<Signer>, payload: Box<RequestPayload>, nonce: u64) -> Self {
+        Self { signer, nonce, payload }
     }
-
 
     pub fn serialize(&self) -> io::Result<Vec<u8>> {
         let mut retval = io::Cursor::new(Vec::new());
@@ -216,12 +231,12 @@ impl Request {
 }
 
 pub struct SetHomeRequest {
-    addresses : Vec<Multiaddr>
+    addresses: Vec<Multiaddr>,
 }
 
 impl SetHomeRequest {
-    pub fn new(addresses : Vec<Multiaddr>) -> Self {
-        Self {addresses}
+    pub fn new(addresses: Vec<Multiaddr>) -> Self {
+        Self { addresses }
     }
 }
 
@@ -231,26 +246,28 @@ impl RequestPayload for SetHomeRequest {
     }
 
     fn serialize(&self, out: io::Cursor<Vec<u8>>) -> io::Result<io::Cursor<Vec<u8>>> {
-        self.addresses.iter().fold(Ok(out), |out : io::Result<io::Cursor<Vec<u8>>>, addr: &Multiaddr| {
-            out.and_then(|mut out| {
-                let mut v= addr.to_string().as_bytes().to_vec();
-                v.truncate(255);
-                out.write_u8(v.len() as u8)?;
-                out.write_all(&v)?;
-                Ok(out)
-            })
-        })
+        self.addresses.iter().fold(
+            Ok(out),
+            |out: io::Result<io::Cursor<Vec<u8>>>, addr: &Multiaddr| {
+                out.and_then(|mut out| {
+                    let mut v = addr.to_string().as_bytes().to_vec();
+                    v.truncate(255);
+                    out.write_u8(v.len() as u8)?;
+                    out.write_all(&v)?;
+                    Ok(out)
+                })
+            },
+        )
     }
-
 }
 
 pub struct AddPersonasRequest {
-    profiles : Vec<[u8; PROFILE_SIZE]>,
+    profiles: Vec<[u8; PROFILE_SIZE]>,
 }
 
 impl AddPersonasRequest {
-    pub fn new(profiles : Vec<[u8; PROFILE_SIZE]>) -> Self {
-        Self{profiles}
+    pub fn new(profiles: Vec<[u8; PROFILE_SIZE]>) -> Self {
+        Self { profiles }
     }
 }
 
@@ -260,7 +277,7 @@ impl RequestPayload for AddPersonasRequest {
     }
 
     fn serialize(&self, out: io::Cursor<Vec<u8>>) -> io::Result<io::Cursor<Vec<u8>>> {
-        self.profiles.iter().fold(Ok(out), |out : io::Result<io::Cursor<Vec<u8>>>, profile| {
+        self.profiles.iter().fold(Ok(out), |out: io::Result<io::Cursor<Vec<u8>>>, profile| {
             out.and_then(|mut out| {
                 out.write_all(profile)?;
                 Ok(out)
@@ -270,15 +287,14 @@ impl RequestPayload for AddPersonasRequest {
 }
 
 pub struct DropPersonasRequest {
-    profiles : Vec<[u8; PROFILE_SIZE]>
+    profiles: Vec<[u8; PROFILE_SIZE]>,
 }
 
 impl DropPersonasRequest {
-    pub fn new(profiles : Vec<[u8; PROFILE_SIZE]>) -> Self {
-        Self{profiles}
+    pub fn new(profiles: Vec<[u8; PROFILE_SIZE]>) -> Self {
+        Self { profiles }
     }
 }
-
 
 impl RequestPayload for DropPersonasRequest {
     fn request_type_id(&self) -> u8 {
@@ -286,7 +302,7 @@ impl RequestPayload for DropPersonasRequest {
     }
 
     fn serialize(&self, out: io::Cursor<Vec<u8>>) -> io::Result<io::Cursor<Vec<u8>>> {
-        self.profiles.iter().fold(Ok(out), |out : io::Result<io::Cursor<Vec<u8>>>, profile| {
+        self.profiles.iter().fold(Ok(out), |out: io::Result<io::Cursor<Vec<u8>>>, profile| {
             out.and_then(|mut out| {
                 out.write_all(profile)?;
                 Ok(out)
@@ -295,22 +311,22 @@ impl RequestPayload for DropPersonasRequest {
     }
 }
 
-
-
 pub trait MercuryRouterQuery {
     fn request_type_id(&self) -> u8;
-    fn serialize(&self, out : io::Cursor<Vec<u8>>) -> io::Result<io::Cursor<Vec<u8>>>;
+    fn serialize(&self, out: io::Cursor<Vec<u8>>) -> io::Result<io::Cursor<Vec<u8>>>;
 }
 
-pub struct Query <T : Sized + MercuryRouterQuery> {
-    nonce : u64,
-    payload : T
-
+pub struct Query<T: Sized + MercuryRouterQuery> {
+    nonce: u64,
+    payload: T,
 }
 
-impl<T> Query<T> where T : Sized + MercuryRouterQuery {
+impl<T> Query<T>
+where
+    T: Sized + MercuryRouterQuery,
+{
     pub fn new(payload: T, nonce: u64) -> Self {
-        Self{nonce, payload}
+        Self { nonce, payload }
     }
 
     pub fn serialize(&self) -> io::Result<Vec<u8>> {
@@ -329,12 +345,12 @@ impl<T> Query<T> where T : Sized + MercuryRouterQuery {
 }
 
 pub struct ProfileHomes {
-    profile : [u8; PROFILE_SIZE]
+    profile: [u8; PROFILE_SIZE],
 }
 
 impl ProfileHomes {
-    pub fn new(profile : [u8; PROFILE_SIZE]) -> Self{
-        Self{profile}
+    pub fn new(profile: [u8; PROFILE_SIZE]) -> Self {
+        Self { profile }
     }
 }
 
@@ -343,21 +359,20 @@ impl MercuryRouterQuery for ProfileHomes {
         PROFILE_HOMES_QUERY_ID
     }
 
-    fn serialize(&self, mut out : io::Cursor<Vec<u8>>) -> io::Result<io::Cursor<Vec<u8>>> {
+    fn serialize(&self, mut out: io::Cursor<Vec<u8>>) -> io::Result<io::Cursor<Vec<u8>>> {
         out.write_all(&self.profile)?;
         Ok(out)
     }
 }
 
 pub struct HomeAddresses {
-    home_id : [u8; PROFILE_SIZE]
+    home_id: [u8; PROFILE_SIZE],
 }
 
 impl HomeAddresses {
-    pub fn new(home_id : [u8; PROFILE_SIZE]) -> Self {
-        Self{home_id}
+    pub fn new(home_id: [u8; PROFILE_SIZE]) -> Self {
+        Self { home_id }
     }
-
 }
 
 impl MercuryRouterQuery for HomeAddresses {
@@ -365,7 +380,7 @@ impl MercuryRouterQuery for HomeAddresses {
         HOME_ADDRESSES_QUERY_ID
     }
 
-    fn serialize(&self, mut out : io::Cursor<Vec<u8>>) -> io::Result<io::Cursor<Vec<u8>>> {
+    fn serialize(&self, mut out: io::Cursor<Vec<u8>>) -> io::Result<io::Cursor<Vec<u8>>> {
         out.write_all(&self.home_id)?;
         Ok(out)
     }
@@ -373,20 +388,20 @@ impl MercuryRouterQuery for HomeAddresses {
 
 enum ReplyPayload {
     Profiles(Vec<[u8; 32]>),
-    Addresses(Vec<Multiaddr>)
+    Addresses(Vec<Multiaddr>),
 }
 
 pub struct Reply {
     nonce: u64,
     code: u8,
     msg: String,
-    payload: Option<ReplyPayload>
+    payload: Option<ReplyPayload>,
 }
 
 impl Reply {
-    pub fn parse<T>(data : &mut io::Cursor<T>)
-        -> io::Result<Self>
-    where T: AsRef<[u8]>
+    pub fn parse<T>(data: &mut io::Cursor<T>) -> io::Result<Self>
+    where
+        T: AsRef<[u8]>,
     {
         let request_type_id = data.read_u8()?;
         let nonce = data.read_u64::<BigEndian>()?;
@@ -394,16 +409,17 @@ impl Reply {
         let msgsize = data.read_u8()?;
         // let msg_raw : [u8; msgsize];
         // data.read_exact(msg_raw);
-        let mut msg_raw : Vec<u8> = Vec::new();
+        let mut msg_raw: Vec<u8> = Vec::new();
         msg_raw.resize(msgsize as usize, 0);
         data.read_exact(&mut msg_raw)?;
-        let msg= String::from_utf8(msg_raw).map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
+        let msg = String::from_utf8(msg_raw)
+            .map_err(|err| io::Error::new(io::ErrorKind::InvalidData, err))?;
 
         let mut payload = None;
         match request_type_id {
             PROFILE_HOMES_QUERY_ID => {
                 //
-            },
+            }
             HOME_ADDRESSES_QUERY_ID => {
                 let pos = data.position();
                 data.seek(io::SeekFrom::End(0))?;
@@ -411,13 +427,15 @@ impl Reply {
                 data.seek(io::SeekFrom::Start(pos));
                 let mut addrs = Vec::new();
 
-
                 while data.position() < endpos {
                     let addr_size = data.read_u8()?;
-                    if (addr_size as u64> endpos - data.position()) {
-                        return Err(io::Error::new(io::ErrorKind::InvalidData, "unexpected end of packet"));
+                    if (addr_size as u64 > endpos - data.position()) {
+                        return Err(io::Error::new(
+                            io::ErrorKind::InvalidData,
+                            "unexpected end of packet",
+                        ));
                     }
-                    let mut addr_raw : Vec<u8> = Vec::new();
+                    let mut addr_raw: Vec<u8> = Vec::new();
                     addr_raw.resize(addr_size as usize, 0);
                     data.read_exact(&mut addr_raw)?;
                     let addr = String::from_utf8(addr_raw)
@@ -428,12 +446,10 @@ impl Reply {
                 }
 
                 payload = Some(ReplyPayload::Addresses(addrs));
-            },
-            _ => {
-
             }
+            _ => {}
         }
-        Ok(Self{nonce, code, msg, payload})
+        Ok(Self { nonce, code, msg, payload })
     }
 }
 

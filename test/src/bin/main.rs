@@ -29,10 +29,10 @@ fn main(){
     let reactorhandle = reactor.handle();
     let homeaddr = "/ip4/127.0.0.1/udp/9876";
     let homemultiaddr = homeaddr.to_multiaddr().unwrap();
-    
+
     let (profile, signo) = generate_profile(ProfileFacet::Persona(PersonaFacet{homes: vec![], data: vec![]}));
     let (homeprof, homesigno) = generate_profile(ProfileFacet::Home(HomeFacet{addrs: vec![homemultiaddr.clone().into()], data: vec![]}));
-    
+
     println!("Setting up connection\n");
 
     let mut dht = ProfileStore::new();
@@ -51,49 +51,49 @@ fn main(){
     println!("\nRegistering\n");
     let reg = profilegateway.register(homesigno.profile_id().to_owned(), dummy::create_ownprofile( profile ), None);
     let ownprofile = reactor.run(reg).unwrap();
-    
+
     println!("\nLogging in\n");
 
     let session = reactor.run( profilegateway.login() ).unwrap();
-    
+
     println!("\nAll set up\n");
-    
+
     println!("Menu\n1. Connect\n2. Call(crashes)\n3. Pair\n4. Ping\n5. Show profile\nExit with ctrl+d");
     let stdin = tokio_stdin_stdout::stdin(1);
     let bufreader = std::io::BufReader::new(stdin);
     let instream = tokio_io::io::lines(bufreader);
-    let stdin_closed = instream.for_each(|line|{     
+    let stdin_closed = instream.for_each(|line|{
         match line.as_ref(){
             "1" =>{
                 let signer = profilegateway.signer.to_owned();
                 profilegateway.home_connector.connect(&homeprof, signer);
                 println!("connect");
-    
+
             },
             // "2" =>{
             //     profilegateway.call(
-            //         dummy::dummy_relation("work"), 
-            //         ApplicationId( String::from("SampleApp") ), 
+            //         dummy::dummy_relation("work"),
+            //         ApplicationId( String::from("SampleApp") ),
             //         AppMessageFrame("whatever".as_bytes().to_owned() ),
             //         None
             //     );
-    
+
             // }
             "3" =>{
                 profilegateway.pair_request("relation_dummy_type", &ProfileId(b"profile_id".to_vec()), None);
-    
+
             }
             "4" =>{
                 session.ping("dummy_ping");
-    
+
             }
             "5" =>{
                 println!("{:?}", ownprofile);
-    
+
             }
             _ =>{
                 println!("nope");
-    
+
             },
         };
         futures::future::ok::<(),std::io::Error>(())
@@ -104,7 +104,7 @@ fn main(){
 
 //Call handling test code
 
-/*       
+/*
         let (sen, rec) : (mpsc::Sender<Result<AppMessageFrame, String>>, mpsc::Receiver<Result<AppMessageFrame, String>>) = mpsc::channel(1);
 
         let incoming = CallRequest{
@@ -114,18 +114,13 @@ fn main(){
         };
         let incall_impl = Incall{request : incoming};
         let ptr = incall_impl.request();
-        
+
         let sink = ptr.to_caller.to_owned().unwrap();
         reactor.run(sink.send(Ok(AppMessageFrame(Vec::from("sink.send")))));
         println!("\n {:?}", AppMessageFrame(Vec::from("sink.send")));
         let receive_fut = rec.take(1).collect();
         let received_msg = reactor.run(receive_fut);
         println!("\n {:?}", received_msg);*/
-
-
 */
 
-
-pub fn main() {
-    
-}
+pub fn main() {}
