@@ -2,9 +2,17 @@ use signatory::{
     ed25519, PublicKeyed, Signature as SignatoryEdSignature, Signer as SignatoryEdSigner, Verifier,
 };
 
-use failure::ResultExt;
-
 use crate::*;
+
+/// Something that can sign data, but cannot give out the private key.
+/// Usually implemented using a private key internally, but also enables hardware wallets.
+pub trait Signer {
+    fn profile_id(&self) -> &ProfileId;
+
+    fn public_key(&self) -> &PublicKey;
+    // NOTE the data to be signed ideally will be the output from Mudlee's multicodec lib
+    fn sign(&self, data: &[u8]) -> Signature;
+}
 
 pub trait ProfileValidator {
     fn validate_profile(
@@ -17,6 +25,77 @@ pub trait ProfileValidator {
 impl Default for Box<ProfileValidator> {
     fn default() -> Self {
         Box::new(MultiHashProfileValidator::default())
+    }
+}
+
+pub trait SignatureValidator {
+    fn validate_signature(
+        &self,
+        public_key: &PublicKey,
+        data: &[u8],
+        signature: &Signature,
+    ) -> Result<bool, Error>;
+}
+
+impl Default for Box<SignatureValidator> {
+    fn default() -> Self {
+        Box::new(Ed25519Validator::default())
+    }
+}
+
+pub trait Validator: ProfileValidator + SignatureValidator {
+    fn validate_half_proof(
+        &self,
+        half_proof: &RelationHalfProof,
+        signer_pubkey: &PublicKey,
+    ) -> Result<(), Error> {
+        self.validate_signature(
+            signer_pubkey,
+            &RelationSignablePart::from(half_proof).serialized(),
+            &half_proof.signature,
+        )?;
+        Ok(())
+    }
+
+    fn validate_relation_proof(
+        &self,
+        relation_proof: &RelationProof,
+        id_1: &ProfileId,
+        public_key_1: &PublicKey,
+        id_2: &ProfileId,
+        public_key_2: &PublicKey,
+    ) -> Result<(), Error> {
+        // TODO consider inverting relation_type for different directions
+        let signable_a = RelationSignablePart::new(
+            &relation_proof.relation_type,
+            &relation_proof.a_id,
+            &relation_proof.b_id,
+        )
+        .serialized();
+
+        let signable_b = RelationSignablePart::new(
+            &relation_proof.relation_type,
+            &relation_proof.b_id,
+            &relation_proof.a_id,
+        )
+        .serialized();
+
+        let peer_of_id_1 = relation_proof.peer_id(&id_1)?;
+        if peer_of_id_1 != id_2 {
+            Err(ErrorKind::RelationValidationFailed)?
+        }
+
+        if *peer_of_id_1 == relation_proof.b_id {
+            // id_1 is 'proof.id_a'
+            self.validate_signature(&public_key_1, &signable_a, &relation_proof.a_signature)?;
+            self.validate_signature(&public_key_2, &signable_b, &relation_proof.b_signature)?;
+        } else {
+            // id_1 is 'proof.id_b'
+            self.validate_signature(&public_key_1, &signable_b, &relation_proof.b_signature)?;
+            self.validate_signature(&public_key_2, &signable_a, &relation_proof.a_signature)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -39,21 +118,6 @@ impl ProfileValidator for MultiHashProfileValidator {
         let key_hash = multihash::encode(id_hashalgo, public_key.0.as_slice())
             .context(ErrorKind::HashEncodeFailed)?;
         Ok(key_hash == profile_id.0)
-    }
-}
-
-pub trait SignatureValidator {
-    fn validate_signature(
-        &self,
-        public_key: &PublicKey,
-        data: &[u8],
-        signature: &Signature,
-    ) -> Result<bool, Error>;
-}
-
-impl Default for Box<SignatureValidator> {
-    fn default() -> Self {
-        Box::new(Ed25519Validator::default())
     }
 }
 

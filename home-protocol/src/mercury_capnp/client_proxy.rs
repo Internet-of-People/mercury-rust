@@ -1,10 +1,6 @@
-use std::time::Duration;
-
 use capnp::capability::Promise;
 use capnp_rpc::pry;
 use failure::Fail;
-use futures::prelude::*;
-use futures::sync::{mpsc, oneshot};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 

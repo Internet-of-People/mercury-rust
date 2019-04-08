@@ -1,16 +1,12 @@
 use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use std::mem;
-use std::rc::Rc;
 
 //bincode::{deserialize, serialize};
-use failure::Fail;
-use futures::prelude::*;
 use serde_json::{from_slice, to_vec};
 use tokio_core::net::TcpStream;
 use tokio_io::io;
 //use x25519_dalek::diffie_hellman;
 
-use crate::error::*;
 use crate::*;
 
 #[derive(Deserialize, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize)]

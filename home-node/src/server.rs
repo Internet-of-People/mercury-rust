@@ -8,6 +8,7 @@ use futures::{future, stream, Future, Sink};
 use log::*;
 use tokio_core::reactor::{self, Timeout};
 
+use mercury_home_protocol::api::AsyncSink; // TODO this should normally work with protocol::*, why is this needed?
 use mercury_home_protocol::error::*;
 use mercury_home_protocol::*;
 use mercury_storage::{asynch::KeyValueStore, error::StorageError};

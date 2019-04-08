@@ -2,7 +2,6 @@ use std::rc::Rc;
 
 use multiaddr::Multiaddr;
 
-use crate::error::*;
 use crate::*;
 
 pub trait HomeConnector {

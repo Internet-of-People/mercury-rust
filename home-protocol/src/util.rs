@@ -1,7 +1,8 @@
 use std::{collections::HashMap, env, fs};
 
-use log::*;
 use structopt::StructOpt;
+
+use crate::*;
 
 pub fn parse_config<T: StructOpt>(config_path: &str) -> T {
     let cli_args = env::args().collect::<Vec<_>>();
