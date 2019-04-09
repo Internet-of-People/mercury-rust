@@ -16,6 +16,7 @@ use mercury_connect::jsonrpc;
 use mercury_connect::service::*;
 use mercury_connect::*;
 use mercury_home_protocol::crypto::*;
+use mercury_home_protocol::keyvault::PublicKey as KeyVaultPublicKey;
 use mercury_home_protocol::*;
 
 pub fn init_connect_service(
@@ -31,8 +32,10 @@ pub fn init_connect_service(
 
     let home_pubkey_bytes = std::fs::read(home_pubkey_file)
         .map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
-    let home_pubkey = PublicKey(home_pubkey_bytes);
-    let home_id = ProfileId::from(&home_pubkey);
+    let home_pubkey_ed = ed25519::EdPublicKey::from_bytes(home_pubkey_bytes)
+        .map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
+    let home_pubkey = PublicKey::from(home_pubkey_ed);
+    let home_id = home_pubkey.key_id();
     let home_addr: SocketAddr =
         home_addr_str.parse().map_err(|_e| Error::from(ErrorKind::LookupFailed))?;
     let home_multiaddr = home_addr.to_multiaddr().expect("Failed to parse server address");
@@ -40,12 +43,14 @@ pub fn init_connect_service(
 
     let my_private_key_bytes = std::fs::read(my_profile_privkey_file)
         .map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
-    let my_private_key = PrivateKey(my_private_key_bytes);
-    let my_signer = Rc::new(Ed25519Signer::new(&my_private_key).unwrap()) as Rc<Signer>;
+    let my_private_key_ed = ed25519::EdPrivateKey::from_bytes(my_private_key_bytes)
+        .map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
+    let my_private_key = PrivateKey::from(my_private_key_ed);
+    let my_signer = Rc::new(PrivateKeySigner::new(my_private_key).unwrap()) as Rc<Signer>;
     let my_profile_id = my_signer.profile_id().to_owned();
     let my_profile = Profile::new(
         &my_profile_id,
-        my_signer.public_key(),
+        &my_signer.public_key(),
         &ProfileFacet::Persona(PersonaFacet { homes: vec![], data: vec![] }),
     );
 

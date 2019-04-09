@@ -59,7 +59,7 @@ impl ProfileRepo for HomeClientCapnProto {
 
     fn load(&self, id: &ProfileId) -> AsyncResult<Profile, Error> {
         let mut request = self.repo.load_request();
-        request.get().set_profile_id(id.into());
+        request.get().set_profile_id(&id.to_bytes());
 
         let resp_fut = request
             .send()
@@ -96,7 +96,7 @@ impl ProfileRepo for HomeClientCapnProto {
 impl Home for HomeClientCapnProto {
     fn claim(&self, profile_id: ProfileId) -> AsyncResult<OwnProfile, Error> {
         let mut request = self.home.claim_request();
-        request.get().set_profile_id((&profile_id).into());
+        request.get().set_profile_id(&profile_id.to_bytes());
 
         let resp_fut = request
             .send()
@@ -115,14 +115,14 @@ impl Home for HomeClientCapnProto {
         &self,
         own_profile: OwnProfile,
         half_proof: RelationHalfProof,
-        invite: Option<HomeInvitation>,
+        //invite: Option<HomeInvitation>,
     ) -> AsyncResult<OwnProfile, (OwnProfile, Error)> {
         let mut request = self.home.register_request();
         request.get().init_own_profile().fill_from(&own_profile);
         request.get().init_half_proof().fill_from(&half_proof);
-        if let Some(inv) = invite {
-            request.get().init_invite().fill_from(&inv);
-        }
+        //if let Some(inv) = invite {
+        //    request.get().init_invite().fill_from(&inv);
+        //}
 
         let resp_fut = request
             .send()

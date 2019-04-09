@@ -174,7 +174,7 @@ impl DAppEndpoint for DAppEndpointClient {
 pub struct DAppSessionClient {}
 
 impl DAppSession for DAppSessionClient {
-    fn selected_profile(&self) -> &ProfileId {
+    fn selected_profile(&self) -> ProfileId {
         unimplemented!()
     }
 

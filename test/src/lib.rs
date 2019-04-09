@@ -5,6 +5,7 @@ use tokio_core::reactor;
 
 use mercury_home_node::server::HomeServer;
 use mercury_home_protocol::crypto::*;
+use mercury_home_protocol::keyvault::PrivateKey as KeyVaultPrivateKey;
 use mercury_home_protocol::*;
 use mercury_storage::asynch::imp::InMemoryStore;
 
@@ -15,32 +16,34 @@ pub mod home;
 
 pub fn generate_keypair() -> (PrivateKey, PublicKey) {
     let mut csprng: OsRng = OsRng::new().unwrap();
-    let keypair = ed25519_dalek::Keypair::generate::<sha2::Sha512, _>(&mut csprng);
-    (PrivateKey::from(keypair.secret), PublicKey::from(keypair.public))
+    let ed_rnd_keypair = ed25519_dalek::Keypair::generate(&mut csprng);
+    let private_key = PrivateKey::from(ed25519::EdPrivateKey::from(ed_rnd_keypair));
+    let public_key = private_key.public_key();
+    (private_key, public_key)
 }
 
 pub fn generate_ownprofile(
     facet: ProfileFacet,
     private_data: Vec<u8>,
-) -> (OwnProfile, Ed25519Signer) {
+) -> (OwnProfile, PrivateKeySigner) {
     let (private_key, _public_key) = generate_keypair();
-    let signer = Ed25519Signer::new(&private_key).expect("TODO: this should not be able to fail");
+    let signer = PrivateKeySigner::new(private_key).expect("TODO: this should not ever fail");
     let profile = Profile::new(&signer.profile_id(), &signer.public_key(), &facet);
     let own_profile = OwnProfile::new(&profile, &private_data);
     (own_profile, signer)
 }
 
-pub fn generate_profile(facet: ProfileFacet) -> (Profile, Ed25519Signer) {
+pub fn generate_profile(facet: ProfileFacet) -> (Profile, PrivateKeySigner) {
     let (own_profile, signer) = generate_ownprofile(facet, vec![]);
     (own_profile.profile, signer)
 }
 
-pub fn generate_persona() -> (OwnProfile, Ed25519Signer) {
+pub fn generate_persona() -> (OwnProfile, PrivateKeySigner) {
     let persona_facet = ProfileFacet::Persona(PersonaFacet { homes: vec![], data: Vec::new() });
     generate_ownprofile(persona_facet, vec![])
 }
 
-pub fn generate_home() -> (Profile, Ed25519Signer) {
+pub fn generate_home() -> (Profile, PrivateKeySigner) {
     let home_facet = ProfileFacet::Home(HomeFacet { addrs: vec![], data: Vec::new() });
     generate_profile(home_facet)
 }

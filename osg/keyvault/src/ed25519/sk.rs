@@ -47,3 +47,9 @@ impl PrivateKey<Ed25519> for EdPrivateKey {
         sig.into()
     }
 }
+
+impl From<ed::Keypair> for EdPrivateKey {
+    fn from(kp: ed::Keypair) -> Self {
+        Self(kp)
+    }
+}

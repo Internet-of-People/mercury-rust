@@ -55,6 +55,19 @@ impl<'de> Deserialize<'de> for MSignature {
     }
 }
 
+macro_rules! clone {
+    ($suite:ident, $self_:expr) => {{
+        let result = reify!($suite, sig, $self_).clone();
+        erase!($suite, MSignature, result)
+    }};
+}
+
+impl Clone for MSignature {
+    fn clone(&self) -> Self {
+        visit!(clone(self))
+    }
+}
+
 macro_rules! eq {
     ($suite:ident, $self_:tt, $other:ident) => {
         reify!($suite, sig, $self_).eq(reify!($suite, sig, $other))
@@ -121,6 +134,17 @@ impl std::str::FromStr for MSignature {
 impl From<ed25519::EdSignature> for MSignature {
     fn from(src: ed25519::EdSignature) -> Self {
         erase!(e, MSignature, src)
+    }
+}
+
+// TODO this should not be based on the String conversions
+impl MSignature {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        String::from(self).as_bytes().to_vec()
+    }
+    pub fn from_bytes(bytes: &[u8]) -> Fallible<Self> {
+        let string = String::from_utf8(bytes.to_owned())?;
+        string.parse()
     }
 }
 

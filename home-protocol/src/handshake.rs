@@ -2,6 +2,7 @@ use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use std::mem;
 
 //bincode::{deserialize, serialize};
+use failure::Fail;
 use serde_json::{from_slice, to_vec};
 use tokio_core::net::TcpStream;
 use tokio_io::io;
@@ -9,7 +10,7 @@ use tokio_io::io;
 
 use crate::*;
 
-#[derive(Deserialize, Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[derive(Deserialize, Clone, Debug, Eq, PartialEq, Serialize)]
 struct AuthenticationInfo {
     profile_id: ProfileId,
     public_key: PublicKey,
@@ -98,13 +99,10 @@ where
 {
     let ecdh_fut = exchange_identities(reader, writer, signer.clone()).and_then(
         |(reader, writer, peer_auth)| {
-            let _my_secret_key: [u8; 32] = Default::default(); // TODO how to get secret key as bytes, especially when HW wallet support is planned?
+            //let _my_secret_key: [u8; 32] = Default::default(); // TODO how to get secret key as bytes, especially when HW wallet support is planned?
 
-            if peer_auth.public_key.0.len() != 32 {
-                return Err(ErrorKind::DiffieHellmanHandshakeFailed.into());
-            }
-            let mut peer_ed25519_pubkey: [u8; 32] = Default::default();
-            peer_ed25519_pubkey.copy_from_slice(peer_auth.public_key.0.as_slice());
+            //let mut peer_pubkey: [u8; 32] = Default::default();
+            //peer_pubkey.copy_from_slice(peer_auth.public_key.to_bytes());
 
             // TODO shadow reader and writer with ones using the shared secret to do symmetric en/decryption
             //      and return them with a proper peercontext

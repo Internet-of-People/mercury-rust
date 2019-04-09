@@ -164,7 +164,7 @@ impl Home for HomeConnectionServer {
         &self,
         own_prof: OwnProfile,
         half_proof: RelationHalfProof,
-        _invite: Option<HomeInvitation>,
+        //_invite: Option<HomeInvitation>,
     ) -> Box<Future<Item = OwnProfile, Error = (OwnProfile, Error)>> {
         if own_prof.profile.id != *self.context.peer_id() {
             return Box::new(future::err((own_prof, ErrorKind::ProfileMismatch.into())));
@@ -181,9 +181,9 @@ impl Home for HomeConnectionServer {
         trace!(
             "Request was sent for home_id: {:?}, this should be me, i.e. match my id: {:?}",
             half_proof.peer_id,
-            *self.context.my_signer().profile_id()
+            self.context.my_signer().profile_id()
         );
-        if half_proof.peer_id != *self.context.my_signer().profile_id() {
+        if half_proof.peer_id != self.context.my_signer().profile_id() {
             return Box::new(future::err((own_prof, ErrorKind::HomeIdMismatch.into())));
         }
 
@@ -268,7 +268,7 @@ impl Home for HomeConnectionServer {
             return Box::new(future::err(ErrorKind::RelationTypeMismatch.into()));
         }
 
-        let profile_id = match proof_of_home.peer_id(self.context.my_signer().profile_id()) {
+        let profile_id = match proof_of_home.peer_id(&self.context.my_signer().profile_id()) {
             Ok(profile_id) => profile_id.to_owned(),
             Err(e) => return Box::new(future::err(e.context(ErrorKind::ProfileMismatch).into())),
         };
@@ -439,8 +439,10 @@ impl IncomingCall for Call {
     fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>) -> CallRequestDetails {
         // NOTE needed to dereference Box because otherwise the whole self is moved at its first dereference
         let this = *self;
-        if let Err(e) = this.sender.send(to_callee) {} // TODO We should at least log the error here.
-                                                       //      To solve this better, the function probably should return a Result<T,E> instead of T.
+        if let Err(e) = this.sender.send(to_callee) {
+            // TODO We should at least log the error here.
+            //      To solve this better, the function probably should return a Result<T,E> instead of T.
+        }
         this.request
     }
 }
@@ -483,7 +485,7 @@ impl HomeSessionServer {
                     .send(Ok(event))
                     .map(|_sender| ())
                     // TODO if call dispatch fails we probably should replace the sender with a buffer
-                    .map_err(|e| e.context(ErrorKind::FailedToSend).into()),
+                    .map_err(|e| ErrorKind::FailedToSend.into()),
             ),
         }
     }

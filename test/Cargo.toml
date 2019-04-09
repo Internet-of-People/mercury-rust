@@ -11,7 +11,7 @@ edition = "2018"
 base64 = "0.9.0"
 capnp = "*"
 capnp-rpc = "*"
-ed25519-dalek = "*"
+ed25519-dalek = "1.0.0-pre.1"
 futures = "0.1"
 memsocket = "*"
 mercury-home-protocol = { path="../home-protocol" }

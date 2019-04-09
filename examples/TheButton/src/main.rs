@@ -29,7 +29,6 @@ use mercury_connect::net::SimpleTcpHomeConnector;
 use mercury_connect::profile::MyProfile;
 use mercury_connect::service::ConnectService;
 use mercury_connect::*;
-use mercury_home_protocol::crypto::Ed25519Signer;
 use mercury_home_protocol::*;
 use server::Server;
 use server_config::*;

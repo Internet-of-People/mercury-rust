@@ -161,7 +161,7 @@ fn register_client(setup: &mut TestSetup, client: &TestClient) -> OwnProfile {
         setup.testclient.home_context.peer_id(),
         client.home_context.my_signer(),
     );
-    let reg_fut = client.home_connection.register(client.ownprofile.clone(), half_proof, None);
+    let reg_fut = client.home_connection.register(client.ownprofile.clone(), half_proof);
     setup.reactor.run(reg_fut).unwrap()
 }
 
@@ -415,15 +415,16 @@ fn test_home_login_configs() {
     do_test(&test_home_login);
 }
 
+// TODO make this compile again
 #[ignore]
 #[test]
 fn test_generate_key_files() {
-    let (PrivateKey(priv1), PublicKey(pub1)) = generate_keypair();
-    std::fs::write("../etc/homenode.id", priv1).unwrap();
-    std::fs::write("../etc/homenode.id.pub", pub1).unwrap();
-    let (PrivateKey(priv2), PublicKey(pub2)) = generate_keypair();
-    std::fs::write("../etc/client.id", priv2).unwrap();
-    std::fs::write("../etc/client.id.pub", pub2).unwrap();
+    //let (priv1, pub1) = generate_keypair();
+    //std::fs::write("../etc/homenode.id", String::from(priv1)).unwrap();
+    //std::fs::write("../etc/homenode.id.pub", String::from(pub1)).unwrap();
+    //let (priv2, pub2) = generate_keypair();
+    //std::fs::write("../etc/client.id", priv2.to_string()).unwrap();
+    //std::fs::write("../etc/client.id.pub", pub2.to_string()).unwrap();
 }
 
 #[test]

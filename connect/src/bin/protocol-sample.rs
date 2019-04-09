@@ -9,9 +9,9 @@ use log::*;
 use multiaddr::ToMultiaddr;
 use tokio_core::reactor;
 
+use keyvault::PublicKey as KeyVaultPublicKey;
 use mercury_connect::profile::MyProfileImpl;
 use mercury_connect::*;
-use mercury_home_protocol::crypto::*;
 use mercury_home_protocol::*;
 
 fn main() {
@@ -21,8 +21,11 @@ fn main() {
     let matches = App::from_yaml(yaml).get_matches();
 
     let client_private_key_file = matches.value_of("client-key-file").unwrap();
-    let client_private_key = PrivateKey(std::fs::read(client_private_key_file).unwrap());
-    let client_signer = Rc::new(Ed25519Signer::new(&client_private_key).unwrap());
+    let client_private_key_bytes = std::fs::read(client_private_key_file).unwrap();
+    let client_private_key_ed =
+        ed25519::EdPrivateKey::from_bytes(client_private_key_bytes).unwrap();
+    let client_private_key = PrivateKey::from(client_private_key_ed);
+    let client_signer = Rc::new(crypto::PrivateKeySigner::new(client_private_key).unwrap());
     let client_facet = ProfileFacet::Persona(PersonaFacet { homes: vec![], data: vec![] });
     let client_profile =
         Profile::new(&client_signer.profile_id(), &client_signer.public_key(), &client_facet);
@@ -38,9 +41,11 @@ fn main() {
         matches.value_of("server-addr").unwrap().parse().expect("Failed to parse server address");
     let addr = srv_addr.to_multiaddr().expect("Failed to parse server address");
 
-    let server_key = PublicKey(std::fs::read(server_key_file).unwrap());
+    let server_key_bytes = std::fs::read(server_key_file).unwrap();
+    let server_key_ed = ed25519::EdPublicKey::from_bytes(server_key_bytes).unwrap();
+    let server_key = PublicKey::from(server_key_ed);
     info!("homenode public key: {:?}", server_key);
-    let server_id = ProfileId::from(&server_key);
+    let server_id = server_key.key_id();
     info!("homenode profile id: {:?}", server_id);
     let home_profile = Profile::new_home(server_id.clone(), server_key, addr);
 
@@ -68,7 +73,7 @@ fn main() {
                 &server_id,
                 &*client_signer,
             );
-            home.register(client_own_profile, halfproof, None)
+            home.register(client_own_profile, halfproof)
                 .map(|own_profile| (own_profile, home))
                 .map_err(|(_own_profile, e)| e)
         })

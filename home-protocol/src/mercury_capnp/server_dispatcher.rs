@@ -6,7 +6,7 @@ use futures::{Future, Stream};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
-use crate::mercury_capnp::FillFrom;
+use crate::mercury_capnp::{capnp_err, FillFrom};
 use crate::*;
 
 pub struct HomeDispatcherCapnProto {
@@ -62,9 +62,10 @@ impl mercury_capnp::profile_repo::Server for HomeDispatcherCapnProto {
         mut results: mercury_capnp::profile_repo::LoadResults,
     ) -> Promise<(), capnp::Error> {
         let profile_id_capnp = pry!(pry!(params.get()).get_profile_id());
+        let profile_id = pry!(ProfileId::from_bytes(profile_id_capnp).map_err(|e| capnp_err(e)));
         let load_fut = self
             .home
-            .load(&profile_id_capnp.into())
+            .load(&profile_id)
             .map(move |profile| results.get().init_profile().fill_from(&profile))
             .map_err(|e| capnp::Error::failed(format!("Failed to load profile id: {:?}", e)));
 
@@ -91,9 +92,10 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto {
         mut results: mercury_capnp::home::ClaimResults,
     ) -> Promise<(), capnp::Error> {
         let profile_id_capnp = pry!(pry!(params.get()).get_profile_id());
+        let profile_id = pry!(ProfileId::from_bytes(profile_id_capnp).map_err(|e| capnp_err(e)));
         let claim_fut = self
             .home
-            .claim(profile_id_capnp.into())
+            .claim(profile_id)
             .map_err(|e| capnp::Error::failed(format!("Failed to claim profile: {:?}", e)))
             .map(move |own_profile| results.get().init_own_profile().fill_from(&own_profile));
 
@@ -111,13 +113,13 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto {
         let half_proof_capnp = pry!(pry!(params.get()).get_half_proof());
         let half_proof = pry!(RelationHalfProof::try_from(half_proof_capnp));
 
-        let inv_capnp_res = pry!(params.get()).get_invite();
-        let invite_opt =
-            inv_capnp_res.and_then(|inv_capnp| HomeInvitation::try_from(inv_capnp)).ok();
+        //let inv_capnp_res = pry!(params.get()).get_invite();
+        //let invite_opt =
+        //    inv_capnp_res.and_then(|inv_capnp| HomeInvitation::try_from(inv_capnp)).ok();
 
         let reg_fut = self
             .home
-            .register(own_prof, half_proof, invite_opt)
+            .register(own_prof, half_proof) //, invite_opt)
             .map_err(|e| capnp::Error::failed(format!("Failed to register profile: {:?}", e)))
             .map(move |own_profile| results.get().init_own_profile().fill_from(&own_profile));
 

@@ -167,6 +167,17 @@ impl From<ed25519::KeyId> for MKeyId {
     }
 }
 
+// TODO this should not be based on the String conversions
+impl MKeyId {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        String::from(self).as_bytes().to_vec()
+    }
+    pub fn from_bytes(bytes: &[u8]) -> Fallible<Self> {
+        let string = String::from_utf8(bytes.to_owned())?;
+        string.parse()
+    }
+}
+
 #[cfg(test)]
 mod test {
     mod parse_key_id {

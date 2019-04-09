@@ -10,6 +10,7 @@ using ProfileId = Data;
 using Signature = Data;
 using ApplicationId = Text;
 using AppMessageFrame = Data;
+using HomeInvitation = Data;
 
 
 
@@ -62,12 +63,6 @@ struct RelationProof
     bId             @3 : ProfileId;
     bSignature      @4 : Signature;
 }
-
-struct HomeInvitation
-{
-    data @0 : Data;
-}
-
 
 struct OwnProfile
 {

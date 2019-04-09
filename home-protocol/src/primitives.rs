@@ -7,22 +7,15 @@ use multiaddr::{Multiaddr, ToMultiaddr};
 
 use crate::*;
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct ProfileId(pub Vec<u8>);
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct PublicKey(pub Vec<u8>);
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct PrivateKey(pub Vec<u8>);
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct Signature(pub Vec<u8>);
+pub type ProfileId = keyvault::multicipher::MKeyId;
+pub type PublicKey = keyvault::multicipher::MPublicKey;
+pub type PrivateKey = keyvault::multicipher::MPrivateKey;
+pub type Signature = keyvault::multicipher::MSignature;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ApplicationId(pub String);
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PersonaFacet {
     /// `homes` contain items with `relation_type` "home", with proofs included.
     /// Current implementation supports only a single home stored in `homes[0]`,
@@ -31,7 +24,7 @@ pub struct PersonaFacet {
     pub data: Vec<u8>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct HomeFacet {
     /// Addresses of the same home server. A typical scenario of multiple addresses is when there is
     /// one IPv4 address/port, one onion address/port and some IPv6 address/port pairs.
@@ -42,19 +35,19 @@ pub struct HomeFacet {
 }
 
 // NOTE Given for each SUPPORTED app, not currently available (checked in) app, checkins are managed differently
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, PartialOrd, Serialize)]
 pub struct ApplicationFacet {
     /// unique id of the application - like 'iop-chat'
     pub id: ApplicationId,
     pub data: Vec<u8>,
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, PartialOrd, Serialize)]
 pub struct RawFacet {
     pub data: Vec<u8>, // TODO or maybe multicodec output?
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ProfileFacet {
     Home(HomeFacet),
     Persona(PersonaFacet),
@@ -62,7 +55,7 @@ pub enum ProfileFacet {
     Unknown(RawFacet),
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct Profile {
     /// The Profile ID is a hash of the public key, similar to cryptocurrency addresses.
     pub id: ProfileId,
@@ -73,7 +66,7 @@ pub struct Profile {
                              // TODO consider having a signature of the profile data here
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct OwnProfile {
     /// The public part of the profile. In the current implementation it must contain a single PersonaFacet.
     pub profile: Profile,
@@ -99,7 +92,7 @@ pub struct RelationSignablePart {
     // TODO is a nonce needed?
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RelationHalfProof {
     pub relation_type: String,
     pub signer_id: ProfileId,
@@ -110,18 +103,17 @@ pub struct RelationHalfProof {
 
 impl RelationHalfProof {
     pub fn new(relation_type: &str, peer_id: &ProfileId, signer: &Signer) -> Self {
-        let mut result = Self {
+        let signable = RelationSignablePart::new(relation_type, &signer.profile_id(), peer_id);
+        Self {
             relation_type: relation_type.to_owned(),
             signer_id: signer.profile_id().to_owned(),
             peer_id: peer_id.to_owned(),
-            signature: Signature(Vec::new()),
-        };
-        result.signature = RelationSignablePart::from(&result).sign(signer);
-        result
+            signature: signable.sign(signer),
+        }
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RelationProof {
     pub relation_type: String, // TODO inline halfproof fields with macro, if possible at all
     pub a_id: ProfileId,
@@ -131,29 +123,30 @@ pub struct RelationProof {
     // TODO is a nonce needed?
 }
 
+// TODO should we ignore this in early stages?
 /// This invitation allows a persona to register on the specified home.
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct HomeInvitation {
-    pub home_id: ProfileId,
-
-    /// A unique string that identifies the invitation
-    pub voucher: String,
-
-    /// The signature of the home
-    pub signature: Signature,
-    // TODO is a nonce needed?
-    // TODO is an expiration time needed?
-}
-
-impl HomeInvitation {
-    pub fn new(home_id: &ProfileId, voucher: &str, signature: &Signature) -> Self {
-        Self {
-            home_id: home_id.to_owned(),
-            voucher: voucher.to_owned(),
-            signature: signature.to_owned(),
-        }
-    }
-}
+//#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+//pub struct HomeInvitation {
+//    pub home_id: ProfileId,
+//
+//    /// A unique string that identifies the invitation
+//    pub voucher: String,
+//
+//    /// The signature of the home
+//    pub signature: Signature,
+//    // TODO is a nonce needed?
+//    // TODO is an expiration time needed?
+//}
+//
+//impl HomeInvitation {
+//    pub fn new(home_id: &ProfileId, voucher: &str, signature: &Signature) -> Self {
+//        Self {
+//            home_id: home_id.to_owned(),
+//            voucher: voucher.to_owned(),
+//            signature: signature.to_owned(),
+//        }
+//    }
+//}
 
 // NOTE this is identical to the currently experimental std::convert::TryFrom.
 //      Hopefully this will not be needed soon when it stabilizes.
@@ -162,67 +155,67 @@ pub trait TryFrom<T>: Sized {
     fn try_from(value: T) -> Result<Self, Self::Error>;
 }
 
-impl<'a> From<&'a [u8]> for ProfileId {
-    fn from(src: &'a [u8]) -> Self {
-        ProfileId(src.to_owned())
-    }
-}
-
-impl<'a> From<&'a ProfileId> for &'a [u8] {
-    fn from(src: &'a ProfileId) -> Self {
-        &src.0
-    }
-}
-
-impl<'a> From<ProfileId> for Vec<u8> {
-    fn from(src: ProfileId) -> Self {
-        src.0
-    }
-}
-
-impl<'a> TryFrom<&'a str> for ProfileId {
-    type Error = multibase::Error;
-    fn try_from(src: &'a str) -> Result<Self, Self::Error> {
-        let (_base, binary) = multibase::decode(src)?;
-        Ok(ProfileId(binary))
-    }
-}
-
-impl<'a> From<&'a ProfileId> for String {
-    fn from(src: &'a ProfileId) -> Self {
-        multibase::encode(multibase::Base::Base64url, &src.0)
-    }
-}
-
-impl<'a> From<ProfileId> for String {
-    fn from(src: ProfileId) -> Self {
-        Self::from(&src)
-    }
-}
-
-impl std::fmt::Display for ProfileId {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", String::from(self))
-    }
-}
-
-impl<'a> From<&'a PublicKey> for String {
-    fn from(src: &'a PublicKey) -> Self {
-        multibase::encode(multibase::Base::Base64url, &src.0)
-    }
-}
-
-impl<'a> From<PublicKey> for String {
-    fn from(src: PublicKey) -> Self {
-        Self::from(&src)
-    }
-}
-
-impl std::fmt::Display for PublicKey {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "{}", String::from(self))
-    }
-}
+//impl<'a> From<&'a [u8]> for ProfileId {
+//    fn from(src: &'a [u8]) -> Self {
+//        ProfileId(src.to_owned())
+//    }
+//}
+//
+//impl<'a> From<&'a ProfileId> for &'a [u8] {
+//    fn from(src: &'a ProfileId) -> Self {
+//        &src.0
+//    }
+//}
+//
+//impl<'a> From<ProfileId> for Vec<u8> {
+//    fn from(src: ProfileId) -> Self {
+//        src.0
+//    }
+//}
+//
+//impl<'a> TryFrom<&'a str> for ProfileId {
+//    type Error = multibase::Error;
+//    fn try_from(src: &'a str) -> Result<Self, Self::Error> {
+//        let (_base, binary) = multibase::decode(src)?;
+//        Ok(ProfileId(binary))
+//    }
+//}
+//
+//impl<'a> From<&'a ProfileId> for String {
+//    fn from(src: &'a ProfileId) -> Self {
+//        multibase::encode(multibase::Base::Base64url, &src.0)
+//    }
+//}
+//
+//impl<'a> From<ProfileId> for String {
+//    fn from(src: ProfileId) -> Self {
+//        Self::from(&src)
+//    }
+//}
+//
+//impl std::fmt::Display for ProfileId {
+//    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+//        write!(f, "{}", String::from(self))
+//    }
+//}
+//
+//impl<'a> From<&'a PublicKey> for String {
+//    fn from(src: &'a PublicKey) -> Self {
+//        multibase::encode(multibase::Base::Base64url, &src.0)
+//    }
+//}
+//
+//impl<'a> From<PublicKey> for String {
+//    fn from(src: PublicKey) -> Self {
+//        Self::from(&src)
+//    }
+//}
+//
+//impl std::fmt::Display for PublicKey {
+//    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+//        write!(f, "{}", String::from(self))
+//    }
+//}
 
 fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> std::result::Result<S::Ok, S::Error>
 where

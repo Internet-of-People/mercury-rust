@@ -19,7 +19,10 @@ pub trait MyProfile {
     fn homes(&self) -> AsyncResult<Vec<RelationProof>, Error>;
     // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
     /// `invite` is needed only if the home has a restrictive registration policy.
-    fn join_home(&self, home: ProfileId, invite: Option<HomeInvitation>) -> AsyncResult<(), Error>;
+    fn join_home(
+        &self,
+        home: ProfileId, //invite: Option<HomeInvitation>
+    ) -> AsyncResult<(), Error>;
     // NOTE newhome is a profile that contains at least one HomeSchema different than this home
     fn leave_home(&self, home: ProfileId, newhome: Option<Profile>) -> AsyncResult<(), Error>;
     //    fn home_endpoint_hint(&self, home: &ProfileId, endpoint: multiaddr);
@@ -323,7 +326,7 @@ impl MyProfile for MyProfileImpl {
             // .inspect( |rel| debug!("Checking relation {:?}", rel) )
             .filter(|proof| {
                 proof
-                    .peer_id(self.signer().profile_id())
+                    .peer_id(&self.signer().profile_id())
                     .map(|p_id| *p_id == *peer_id)
                     .unwrap_or(false)
             })
@@ -347,7 +350,7 @@ impl MyProfile for MyProfileImpl {
     fn join_home(
         &self,
         home_id: ProfileId,
-        invite: Option<HomeInvitation>,
+        //invite: Option<HomeInvitation>,
     ) -> AsyncResult<(), Error> {
         let half_proof = RelationHalfProof::new(
             RelationProof::RELATION_TYPE_HOSTED_ON_HOME,
@@ -361,7 +364,7 @@ impl MyProfile for MyProfileImpl {
         let reg_fut = self
             .connect_home(&home_id)
             .and_then(move |home| {
-                home.register(own_profile_dataclone, half_proof, invite)
+                home.register(own_profile_dataclone, half_proof) //, invite)
                     .map_err(|(_own_prof, err)| err.context(ErrorKind::RegistrationFailed).into())
             })
             // TODO we should also notify the AdminSession here to update its profile_store
@@ -494,7 +497,7 @@ impl MyProfile for MyProfileImpl {
         init_payload: AppMessageFrame,
         to_caller: Option<AppMsgSink>,
     ) -> AsyncResult<Option<AppMsgSink>, Error> {
-        let peer_id = match proof.peer_id(self.signer.profile_id()) {
+        let peer_id = match proof.peer_id(&self.signer.profile_id()) {
             Ok(id) => id.to_owned(),
             Err(e) => return Box::new(Err(e.context(ErrorKind::LookupFailed).into()).into_future()),
         };
@@ -528,7 +531,7 @@ impl MyProfile for MyProfileImpl {
         let relations_weak = Rc::downgrade(&self.relations);
         let log_fut = self
             .profile_repo
-            .load(self.signer.profile_id())
+            .load(&self.signer.profile_id())
             .map_err(|err| err.context(ErrorKind::LoginFailed).into())
             .and_then({
                 let profile_repo_clone = self.profile_repo.clone();

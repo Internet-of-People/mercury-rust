@@ -1,3 +1,8 @@
+// TODO this client and also the related network protocol (thus also the server)
+//      seems to rely heavily on ProfileIds being sized constant 32-bytes.
+//      As we're using multicipher profile cryptography now, this needs elaborate fixing.
+//      Until then it's commented as a whole.
+/*
 use std::cell::RefCell;
 use std::collections::{HashMap, HashSet};
 use std::error::Error;
@@ -459,3 +464,4 @@ impl fmt::Display for Reply {
         write!(f, "code: {} msg: '{}'", self.code, self.msg)
     }
 }
+*/

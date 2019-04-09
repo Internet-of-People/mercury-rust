@@ -52,7 +52,7 @@ pub trait DAppEndpoint {
 //      A DApp might have several sessions, e.g. running in the name of multiple profiles.
 pub trait DAppSession {
     // After the session was initialized, the profile is selected and can be queried any time
-    fn selected_profile(&self) -> &ProfileId;
+    fn selected_profile(&self) -> ProfileId;
 
     // TODO merge these two operations using an optional profile argument
     fn contacts(&self) -> AsyncResult<Vec<Box<Contact>>, Error>;

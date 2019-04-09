@@ -41,6 +41,15 @@ macro_rules! to_bytes_tuple {
     };
 }
 
+//impl MPublicKey {
+//    pub fn to_bytes(&self) -> Vec<u8> {
+//        let (discriminator, id_bytes) = visit!(to_bytes_tuple(self));
+//        let mut bytes = id_bytes.to_vec();
+//        bytes.insert(0, discriminator.as_bytes()[0]);
+//        bytes
+//    }
+//}
+
 impl Serialize for MPublicKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
     where
@@ -77,6 +86,19 @@ impl<'de> Deserialize<'de> for MPublicKey {
     {
         ErasedBytes::deserialize(deserializer)
             .and_then(|b| deser(b).map_err(|e| serde::de::Error::custom(e.to_string())))
+    }
+}
+
+macro_rules! clone {
+    ($suite:ident, $self_:expr) => {{
+        let result = reify!($suite, pk, $self_).clone();
+        erase!($suite, MPublicKey, result)
+    }};
+}
+
+impl Clone for MPublicKey {
+    fn clone(&self) -> Self {
+        visit!(clone(self))
     }
 }
 
@@ -146,6 +168,17 @@ impl std::str::FromStr for MPublicKey {
 impl From<ed25519::EdPublicKey> for MPublicKey {
     fn from(src: ed25519::EdPublicKey) -> Self {
         erase!(e, MPublicKey, src)
+    }
+}
+
+// TODO this should not be based on the String conversions
+impl MPublicKey {
+    pub fn to_bytes(&self) -> Vec<u8> {
+        String::from(self).as_bytes().to_vec()
+    }
+    pub fn from_bytes(bytes: &[u8]) -> Fallible<Self> {
+        let string = String::from_utf8(bytes.to_owned())?;
+        string.parse()
     }
 }
 

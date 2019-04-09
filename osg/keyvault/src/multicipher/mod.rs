@@ -60,7 +60,7 @@ macro_rules! erased_type {
         $(#[$meta])*
         $v struct $type {
             pub(super) suite: CipherSuite,
-            pub(super) erased: Box<Any>,
+            pub(super) erased: Box<Any + Send>,
         }
     };
 }
@@ -74,7 +74,7 @@ macro_rules! reify {
 
 macro_rules! erase {
     ($suite:ident, $type:ident, $result:expr) => {
-        $type { suite: $suite!(variant), erased: Box::new($result) as Box<Any> }
+        $type { suite: $suite!(variant), erased: Box::new($result) as Box<Any + Send> }
     };
 }
 

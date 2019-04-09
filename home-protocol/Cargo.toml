@@ -18,20 +18,18 @@ capnp = "*"
 capnp-rpc = "*"
 failure= "*"
 futures = "0.1"
+keyvault = { path="../osg/keyvault" }
 log = "*"
 multiaddr = "*"
 multibase = "*"
 multihash = "*"
-tokio-core = "0.1"
-tokio-io = "0.1"
+osg = { path="../osg/osg" }
 serde = "*"
 serde_derive = "*"
 serde_json = "*"
 structopt = "*"
+tokio-core = "0.1"
+tokio-io = "0.1"
 toml = "*"
 
-#osg = { path="../osg/osg" }
-ed25519-dalek = { version="*", features=["std"] }
-signatory = { version="*", features=["std"] }
-signatory-dalek = "*"
 #x25519-dalek = { version="*", default-features=false, features=["std"] }

@@ -25,8 +25,10 @@ impl ClientConfig {
         info!("On fail: {:?}", on_fail);
 
         let callee_id_str = args.value_of(cli::CLI_SERVER_PROFILE).unwrap();
-        let (_base, callee_id_decoded) = ::multibase::decode(callee_id_str).unwrap();
+        let callee_profile_id = callee_id_str
+            .parse::<ProfileId>()
+            .map_err(|e| e.context(ErrorKind::AddressConversionFailed))?;
 
-        Ok(Self { callee_profile_id: ProfileId(callee_id_decoded), on_fail })
+        Ok(Self { callee_profile_id, on_fail })
     }
 }

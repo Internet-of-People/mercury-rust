@@ -75,7 +75,7 @@ impl DAppSessionImpl {
 // TODO this aims only feature-completeness initially for a HelloWorld dApp,
 //      but we also have to include security with authorization and UI-plugins later
 impl DAppSession for DAppSessionImpl {
-    fn selected_profile(&self) -> &ProfileId {
+    fn selected_profile(&self) -> ProfileId {
         self.my_profile.signer().profile_id()
     }
 

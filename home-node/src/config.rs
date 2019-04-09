@@ -6,7 +6,7 @@ use std::rc::Rc;
 use log::*;
 use structopt::StructOpt;
 
-use mercury_home_protocol::{crypto::*, *};
+use mercury_home_protocol::*;
 
 #[derive(Debug, StructOpt)]
 struct CliConfig {
@@ -60,10 +60,13 @@ impl Config {
             cli.storage_path.to_str().expect("Storage path should have a default value").to_owned();
 
         // TODO support hardware wallets
-        // TODO consider supporting base64 and/or multibase parsing
         // NOTE for some test keys see https://github.com/tendermint/signatory/blob/master/src/ed25519/test_vectors.rs
-        let private_key = PrivateKey(fs::read(cli.private_key_file).unwrap());
-        let signer = Rc::new(Ed25519Signer::new(&private_key).expect("Invalid private key"));
+        let bytes = fs::read(cli.private_key_file).unwrap();
+        // TODO consider loading flexible string multicipher key instead of fixed binary ed25519
+        let edpk = ed25519::EdPrivateKey::from_bytes(bytes).unwrap();
+        let signer = Rc::new(
+            crypto::PrivateKeySigner::new(PrivateKey::from(edpk)).expect("Invalid private key"),
+        );
 
         info!("homenode public key: {}", signer.public_key());
         info!("homenode profile id: {}", signer.profile_id());

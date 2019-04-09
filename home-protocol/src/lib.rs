@@ -11,7 +11,6 @@ pub mod util;
 use std::rc::Rc;
 use std::time::Duration;
 
-use failure::{Fail, ResultExt};
 use futures::prelude::*;
 use futures::sync::{mpsc, oneshot};
 use log::*;
@@ -21,5 +20,7 @@ pub use crate::api::*;
 pub use crate::crypto::{Signer, Validator};
 pub(crate) use crate::error::*;
 pub use crate::primitives::*;
+pub use keyvault;
+pub use keyvault::ed25519;
 
 pub const CHANNEL_CAPACITY: usize = 1;

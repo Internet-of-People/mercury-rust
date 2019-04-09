@@ -76,7 +76,7 @@ pub trait Home: ProfileRepo {
         &self,
         own_prof: OwnProfile,
         half_proof: RelationHalfProof,
-        invite: Option<HomeInvitation>,
+        //        invite: Option<HomeInvitation>,
     ) -> AsyncResult<OwnProfile, (OwnProfile, Error)>;
 
     /// By calling this method, any active session of the same profile is closed.
@@ -103,7 +103,7 @@ pub trait Home: ProfileRepo {
     //        AsyncResult<Option<AppMessageFrame>, Error>;
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ProfileEvent {
     Unknown(Vec<u8>), // forward compatibility for protocol extension
     PairingRequest(RelationHalfProof),
