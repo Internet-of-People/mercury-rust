@@ -2,15 +2,14 @@ use std::collections::HashMap;
 
 use serde_derive::{Deserialize, Serialize};
 
+pub type ProfileId = keyvault::multicipher::MKeyId;
 pub type Version = u64; // monotonically increasing, e.g. normal version, unix datetime or blockheight
 pub type AttributeId = String;
 pub type AttributeValue = String;
-pub type Signature = Vec<u8>;
-pub type PublicKey = Vec<u8>;
-pub type ProfileId = keyvault::multicipher::MKeyId;
-
 pub type AttributeMap = HashMap<AttributeId, AttributeValue>;
 
+// TODO generalize links (i.e. edges) between two profiles into verifiable claims,
+//      i.e. signed hyperedges in the graph with any number of referenced profiles
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Link {
     pub peer_profile: ProfileId,
@@ -25,6 +24,7 @@ pub struct ProfileData {
     version: Version,
     links: Vec<Link>,
     attributes: AttributeMap,
+    // TODO consider adding both a public key and a signature of the profile data here
 }
 
 impl ProfileData {

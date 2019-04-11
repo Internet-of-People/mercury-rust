@@ -12,6 +12,8 @@ use keyvault::{
     BIP43_PURPOSE_MERCURY,
 };
 
+// TODO this should work with MPrivateKey to support any key type,
+//      and thus key derivation should be exported to the keyvault::PrivateKey trait
 pub struct MercuryProfiles {
     mercury_xsk: EdExtPrivateKey,
 }
@@ -25,9 +27,6 @@ impl MercuryProfiles {
 }
 
 pub trait ProfileVault {
-    fn len(&self) -> usize;
-    fn profiles(&self) -> Fallible<MercuryProfiles>;
-
     fn list(&self) -> Fallible<Vec<ProfileId>>;
     fn create_id(&mut self) -> Fallible<ProfileId>;
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()>;
@@ -35,12 +34,14 @@ pub trait ProfileVault {
     fn get_active(&self) -> Fallible<Option<ProfileId>>;
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
 
-    // TODO this should not be on this interface on the long run
-    fn save(&self, filename: &PathBuf) -> Fallible<()>;
+    // TODO these probably should not be on this interface on the long run.
+    //      Used only for restoring all profiles of a vault with gap detection.
+    fn profiles(&self) -> Fallible<MercuryProfiles>;
+    fn len(&self) -> usize;
 
-    fn is_empty(&self) -> bool {
-        self.len() == 0
-    }
+    // TODO this should not be on this interface on the long run.
+    //      Used for saving vault state when CLI finished.
+    fn save(&self, filename: &PathBuf) -> Fallible<()>;
 }
 
 pub const GAP: usize = 20;

@@ -65,7 +65,7 @@ pub trait Api {
 pub struct Context {
     vault_path: PathBuf,
     vault: Option<Box<ProfileVault>>,
-    local_repo: FileProfileRepository,
+    local_repo: FileProfileRepository, // NOTE match arms of show_profile() conflicts with Box<LocalProfileRepository>
     base_repo: Box<ProfileRepository>,
     remote_repo: Box<ProfileRepository>,
     explorer: Box<ProfileExplorer>,
