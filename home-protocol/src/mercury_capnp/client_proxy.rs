@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use capnp::capability::Promise;
 use capnp_rpc::pry;
 use failure::Fail;

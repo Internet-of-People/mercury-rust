@@ -3,6 +3,8 @@ include!(concat!(env!("OUT_DIR"), "/protocol/mercury_capnp.rs"));
 pub mod client_proxy;
 pub mod server_dispatcher;
 
+use std::convert::TryFrom;
+
 use capnp;
 use capnp::capability::Promise;
 use capnp_rpc::pry;

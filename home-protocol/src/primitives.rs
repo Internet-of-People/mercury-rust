@@ -148,13 +148,6 @@ pub struct RelationProof {
 //    }
 //}
 
-// NOTE this is identical to the currently experimental std::convert::TryFrom.
-//      Hopefully this will not be needed soon when it stabilizes.
-pub trait TryFrom<T>: Sized {
-    type Error;
-    fn try_from(value: T) -> Result<Self, Self::Error>;
-}
-
 //impl<'a> From<&'a [u8]> for ProfileId {
 //    fn from(src: &'a [u8]) -> Self {
 //        ProfileId(src.to_owned())

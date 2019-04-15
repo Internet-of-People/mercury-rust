@@ -1,3 +1,4 @@
+use std::convert::TryFrom;
 use std::rc::Rc;
 
 use capnp::capability::Promise;
