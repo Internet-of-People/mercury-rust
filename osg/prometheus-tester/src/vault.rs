@@ -2,10 +2,10 @@ use failure::Fallible;
 
 use keyvault::{
     ed25519::{Ed25519, EdExtPrivateKey},
-    ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PublicKey, Seed,
-    BIP43_PURPOSE_MERCURY,
+    ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PublicKey as KeyVaultPublicKey,
+    Seed, BIP43_PURPOSE_MERCURY,
 };
-use osg::model::ProfileId;
+use osg::model::{ProfileId, PublicKey};
 
 pub struct Vault {
     mercury_xsk: EdExtPrivateKey,
@@ -18,9 +18,13 @@ impl Vault {
         Ok(Self { mercury_xsk })
     }
 
-    pub fn profile_id(&self, idx: usize) -> Fallible<ProfileId> {
+    pub fn public_key(&self, idx: usize) -> Fallible<PublicKey> {
         let profile_xsk = self.mercury_xsk.derive_hardened_child(idx as i32)?;
-        let key_id = profile_xsk.neuter().as_public_key().key_id();
+        let key_id = profile_xsk.neuter().as_public_key();
         Ok(key_id.into())
+    }
+
+    pub fn profile_id(&self, idx: usize) -> Fallible<ProfileId> {
+        self.public_key(idx).map(|pubkey| pubkey.key_id())
     }
 }

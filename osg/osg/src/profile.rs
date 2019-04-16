@@ -11,6 +11,7 @@ pub type ProfilePtr = Rc<RefCell<Profile>>;
 
 pub trait Profile {
     fn id(&self) -> ProfileId;
+    fn public_key(&self) -> Fallible<PublicKey>;
     fn version(&self) -> Fallible<Version>;
     fn attributes(&self) -> Fallible<AttributeMap>;
     fn links(&self) -> Fallible<Vec<Link>>;
@@ -32,7 +33,7 @@ impl TryFrom<ProfilePtr> for ProfileData {
     fn try_from(value: ProfilePtr) -> Result<Self, Self::Error> {
         let profile = value.borrow();
         Ok(ProfileData::create(
-            profile.id(),
+            profile.public_key()?,
             profile.version()?,
             profile.links()?,
             profile.attributes()?,

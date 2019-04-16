@@ -7,6 +7,7 @@ use failure::{bail, err_msg, Fail, Fallible};
 use log::*;
 
 use crate::messages::*;
+use keyvault::PublicKey as KeyVaultPublicKey;
 use osg::model::*;
 use osg::profile::Profile;
 
@@ -93,7 +94,7 @@ where
     }
 
     pub fn get_node_attribute(&self, key: AttributeId) -> Fallible<Vec<u8>> {
-        let params = GetNodeAttributeParams { id: self.id.to_owned(), key };
+        let params = GetNodeAttributeParams { id: self.id(), key };
         let response = self.send_request("get_node_attribute", params)?;
         let attr_val =
             response.reply.ok_or_else(|| RpcError::NoResponse.into()).and_then(|resp_val| {
@@ -106,19 +107,20 @@ where
     }
 
     pub fn set_node_attribute(&self, key: AttributeId, value: Vec<u8>) -> Fallible<()> {
-        let params = SetNodeAttributeParams { id: self.id.to_owned(), key, value };
+        let params = SetNodeAttributeParams { id: self.id(), key, value };
         let _response = self.send_request("set_node_attribute", params)?;
         Ok(())
     }
 
     pub fn clear_node_attribute(&self, key: String) -> Fallible<()> {
-        let params = ClearNodeAttributeParams { id: self.id.to_owned(), key };
+        let params = ClearNodeAttributeParams { id: self.id(), key };
         let _response = self.send_request("clear_node_attribute", params)?;
         Ok(())
     }
 
     const VERSION_ATTRIBUTE: &'static str = "version";
-    const OPEN_SOCIAL_GRAPH_ATTRIBUTE: &'static str = "osg";
+    const OPEN_SOCIAL_GRAPH_ATTRIBUTE: &'static str = "osg_profile_attributes";
+    const PUBLIC_KEY_ATTRIBUTE: &'static str = "osg_profile_public_key";
 
     pub fn get_osg_attribute_map(&self) -> Fallible<AttributeMap> {
         let attr_map_bin = self.get_node_attribute(Self::OPEN_SOCIAL_GRAPH_ATTRIBUTE.to_owned())?;
@@ -129,6 +131,11 @@ where
     pub fn set_osg_attribute_map(&self, attributes: &AttributeMap) -> Fallible<()> {
         let attr_map_bin = serde_json::to_vec(attributes)?;
         self.set_node_attribute(Self::OPEN_SOCIAL_GRAPH_ATTRIBUTE.to_owned(), attr_map_bin)
+    }
+
+    pub(crate) fn set_public_key(&self, key: &PublicKey) -> Fallible<()> {
+        let key_bytes = key.to_bytes();
+        self.set_node_attribute(Self::PUBLIC_KEY_ATTRIBUTE.to_owned(), key_bytes)
     }
 
     // TODO either source or target should be self.id but how to differentiate incoming and outgoing edges?
@@ -183,7 +190,13 @@ where
     W: 'static + Write,
 {
     fn id(&self) -> ProfileId {
+        //self.public_key.key_id()
         self.id.clone()
+    }
+
+    fn public_key(&self) -> Fallible<PublicKey> {
+        let key_bytes = self.get_node_attribute(Self::PUBLIC_KEY_ATTRIBUTE.to_owned())?;
+        PublicKey::from_bytes(&key_bytes)
     }
 
     fn version(&self) -> Fallible<Version> {
@@ -308,7 +321,6 @@ where
 mod test {
     use super::*;
     use crate::repo::RpcProfileRepository;
-    use osg::model::ProfileId;
     use osg::repo::{ProfileExplorer, ProfileRepository};
     use std::str::FromStr;
     use std::time::Duration;
@@ -322,13 +334,15 @@ mod test {
 
         assert_eq!(repo.list_nodes()?.len(), 0);
 
-        let my_id = ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?;
-        let my_data = ProfileData::new(&my_id);
-        repo.set(my_id.clone(), my_data.clone())?;
+        let my_pubkey = PublicKey::from_str("PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb")?;
+        let my_id = my_pubkey.key_id();
+        let my_data = ProfileData::new(&my_pubkey);
+        repo.set(my_data.clone())?;
         let me = repo.get_node(&my_id)?;
-        let peer_id = ProfileId::from_str("Iez25N5WZ1Q6TQpgpyYgiu9gTX")?;
-        let peer_data = ProfileData::new(&peer_id);
-        repo.set(peer_id.clone(), peer_data.clone())?;
+        let peer_pubkey = PublicKey::from_str("PezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z")?;
+        let peer_id = peer_pubkey.key_id();
+        let peer_data = ProfileData::new(&peer_pubkey);
+        repo.set(peer_data.clone())?;
         let peer = repo.get_node(&peer_id)?;
 
         assert_eq!(repo.list_nodes()?.len(), 2);
@@ -379,8 +393,8 @@ mod test {
         assert_eq!(me.borrow().version()?, 42);
 
         assert_eq!(repo.list_nodes()?.len(), 2);
-        repo.clear(&my_id)?;
-        repo.clear(&peer_id)?;
+        repo.clear(&my_pubkey)?;
+        repo.clear(&peer_pubkey)?;
         // NOTE deleting nodes erases all details and keeps an empty profile as a tombstone for followers
         assert_eq!(repo.list_nodes()?.len(), 2);
         // NOTE current clear() implementation deletes node, then adds it back (update tombstone and set empty osg attribute)

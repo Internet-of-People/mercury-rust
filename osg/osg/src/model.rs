@@ -2,7 +2,10 @@ use std::collections::HashMap;
 
 use serde_derive::{Deserialize, Serialize};
 
+use keyvault::PublicKey as KeyVaultPublicKey;
+
 pub type ProfileId = keyvault::multicipher::MKeyId;
+pub type PublicKey = keyvault::multicipher::MPublicKey;
 pub type Version = u64; // monotonically increasing, e.g. normal version, unix datetime or blockheight
 pub type AttributeId = String;
 pub type AttributeValue = String;
@@ -20,35 +23,35 @@ pub struct Link {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ProfileData {
-    id: ProfileId,
+    public_key: PublicKey,
     version: Version,
     links: Vec<Link>,
     attributes: AttributeMap,
-    // TODO consider adding both a public key and a signature of the profile data here
+    // TODO consider adding a signature of the profile data here
 }
 
 impl ProfileData {
     pub fn create(
-        id: ProfileId,
+        public_key: PublicKey,
         version: Version,
         links: Vec<Link>,
         attributes: AttributeMap,
     ) -> Self {
-        Self { id, version, links, attributes }
+        Self { public_key, version, links, attributes }
     }
 
-    pub fn new(id: &ProfileId) -> Self {
+    pub fn new(public_key: &PublicKey) -> Self {
         Self {
-            id: id.to_owned(),
+            public_key: public_key.to_owned(),
             version: 1,
             links: Default::default(),
             attributes: Default::default(),
         }
     }
 
-    pub fn tombstone(id: &ProfileId, last_version: Version) -> Self {
+    pub fn tombstone(public_key: &PublicKey, last_version: Version) -> Self {
         Self {
-            id: id.to_owned(),
+            public_key: public_key.to_owned(),
             version: last_version + 1,
             links: Default::default(),
             attributes: Default::default(),
@@ -58,9 +61,14 @@ impl ProfileData {
     // TODO these operations are basically the same as of trait Profile
     //      (created towards the concepts of RpcProfile) but cannot fail.
     //      We should either kill trait Profile or fit it like this.
-    pub fn id(&self) -> &ProfileId {
-        &self.id
+    pub fn id(&self) -> ProfileId {
+        self.public_key.key_id()
     }
+
+    pub fn public_key(&self) -> PublicKey {
+        self.public_key.clone() // TODO in the dev branches this is already Copy, remove cloning after it's merged
+    }
+
     pub fn version(&self) -> Version {
         self.version
     }

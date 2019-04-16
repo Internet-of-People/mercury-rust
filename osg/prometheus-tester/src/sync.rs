@@ -1,6 +1,7 @@
 use failure::Fallible;
 use log::*;
 
+use keyvault::PublicKey as KeyVaultPublicKey;
 use osg::model::{ProfileData, ProfileId};
 use osg::repo::ProfileRepository;
 
@@ -12,13 +13,14 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
 
     info!("Synchronizing profiles");
     for (idx, _user) in state.into_iter().enumerate() {
-        let id = vault.profile_id(idx)?;
+        let key = vault.public_key(idx)?;
+        let id = key.key_id();
         id_map.insert(idx, id.clone());
 
         if repo.get(&id).is_err() {
             info!("Reconstructing profile {}", id);
-            let profile = ProfileData::new(&id);
-            repo.set(id, profile)?;
+            let profile = ProfileData::new(&key);
+            repo.set(profile)?;
         }
     }
 
@@ -36,7 +38,7 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
             }
         }
 
-        repo.set(id.clone(), profile)?;
+        repo.set(profile)?;
     }
     Ok(())
 }

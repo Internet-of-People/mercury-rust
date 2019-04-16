@@ -8,8 +8,8 @@ use serde_derive::{Deserialize, Serialize};
 use crate::model::*;
 use keyvault::{
     ed25519::{Ed25519, EdExtPrivateKey},
-    ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PublicKey, Seed,
-    BIP43_PURPOSE_MERCURY,
+    ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PublicKey as KeyVaultPublicKey,
+    Seed, BIP43_PURPOSE_MERCURY,
 };
 
 // TODO this should work with MPrivateKey to support any key type,
@@ -19,16 +19,20 @@ pub struct MercuryProfiles {
 }
 
 impl MercuryProfiles {
-    pub fn id(&self, idx: i32) -> Fallible<ProfileId> {
+    pub fn public_key(&self, idx: i32) -> Fallible<PublicKey> {
         let profile_xsk = self.mercury_xsk.derive_hardened_child(idx)?;
-        let key_id = profile_xsk.neuter().as_public_key().key_id();
-        Ok(key_id.into())
+        let key = profile_xsk.neuter().as_public_key();
+        Ok(key.into())
+    }
+
+    pub fn id(&self, idx: i32) -> Fallible<ProfileId> {
+        self.public_key(idx).map(|key| key.key_id())
     }
 }
 
 pub trait ProfileVault {
     fn list(&self) -> Fallible<Vec<ProfileId>>;
-    fn create_id(&mut self) -> Fallible<ProfileId>;
+    fn create_key(&mut self) -> Fallible<PublicKey>;
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()>;
 
     fn get_active(&self) -> Fallible<Option<ProfileId>>;
@@ -103,12 +107,12 @@ impl ProfileVault for HdProfileVault {
         self.list_range(0..self.next_idx)
     }
 
-    fn create_id(&mut self) -> Fallible<ProfileId> {
-        let profile_id = self.profiles()?.id(self.next_idx)?;
+    fn create_key(&mut self) -> Fallible<PublicKey> {
+        let key = self.profiles()?.public_key(self.next_idx)?;
         self.active_idx = Option::Some(self.next_idx);
         self.next_idx += 1;
-        debug!("Setting active profile to {}", profile_id);
-        Ok(profile_id)
+        debug!("Setting active profile to {}", key.key_id());
+        Ok(key)
     }
 
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()> {

@@ -9,6 +9,7 @@ use rand::{
 };
 
 use crate::{state::State, vault::Vault};
+use keyvault::PublicKey as KeyVaultPublicKey;
 use osg::model::{ProfileData, ProfileId};
 use osg::repo::ProfileRepository;
 
@@ -103,11 +104,11 @@ impl<'a> Simulation<'a> {
         let old_profile_count = self.state.len();
 
         let idx = self.state.add_user();
-        let id = self.vault.profile_id(idx)?;
+        let key = self.vault.public_key(idx)?;
 
-        let profile = ProfileData::new(&id);
-        self.repo.set(id.clone(), profile)?;
-        info!("Generated profile {}: {}", idx, id);
+        let profile = ProfileData::new(&key);
+        self.repo.set(profile)?;
+        info!("Generated profile {}: {}", idx, key.key_id());
 
         if old_profile_count > 0 {
             self.add_link_to_user(idx)
@@ -154,7 +155,7 @@ impl<'a> Simulation<'a> {
         let mut profile = self.repo.get(&id)?;
         profile.create_link(&peer_id);
         profile.increase_version();
-        self.repo.set(id.clone(), profile)?;
+        self.repo.set(profile)?;
         self.state[idx].add_link(peer);
         *self.inlinks.entry(peer).or_insert(0usize) += 1;
         info!("Generated link {}->{}: {}->{}", idx, peer, id, peer_id);

@@ -7,6 +7,7 @@ use log::*;
 use crate::model::*;
 use crate::repo::*;
 use crate::vault::{self, ProfileVault};
+use keyvault::PublicKey as KeyVaultPublicKey;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum ProfileRepositoryKind {
@@ -134,6 +135,8 @@ before trying to restore another vault."#,
         Ok(())
     }
 
+    // NOTE needed besides selected_profile() because some operations do not require a profile
+    //      to be present in local profile repository, operation still has to work
     fn selected_profile_id(&self, my_profile_option: Option<ProfileId>) -> Fallible<ProfileId> {
         let profile_id_opt = my_profile_option.or_else(|| self.vault().get_active().ok()?);
         let profile_id = match profile_id_opt {
@@ -162,7 +165,7 @@ before trying to restore another vault."#,
     fn pull_base_profile(&mut self, profile_id: &ProfileId) -> ApiRes {
         debug!("Fetching remote version of profile {} to base cache", profile_id);
         let remote_profile = self.remote_repo.get(&profile_id)?;
-        self.base_repo.set(profile_id.to_owned(), remote_profile)
+        self.base_repo.set(remote_profile)
     }
 
     //         | none | some  (base)
@@ -251,7 +254,7 @@ impl Api for Context {
 
     fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> ApiRes {
         let profile = self.selected_profile(my_profile_id)?;
-        let followers = self.explorer.followers(profile.id())?;
+        let followers = self.explorer.followers(&profile.id())?;
         info!("You have {} followers", followers.len());
         for (idx, follower) in followers.iter().enumerate() {
             info!("  {}: {:?}", idx, follower);
@@ -286,15 +289,15 @@ impl Api for Context {
     }
 
     fn create_profile(&mut self) -> ApiRes {
-        let new_profile_id = self.mut_vault().create_id()?;
-        let empty_profile = ProfileData::new(&new_profile_id);
-        self.local_repo.set(new_profile_id.to_owned(), empty_profile)?;
-        info!("Created and activated profile with id {}", new_profile_id);
+        let new_profile_key = self.mut_vault().create_key()?;
+        let empty_profile = ProfileData::new(&new_profile_key);
+        self.local_repo.set(empty_profile)?;
+        info!("Created and activated profile with id {}", new_profile_key.key_id());
         Ok(())
     }
 
     fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
-        let profile_id = self.selected_profile_id(my_profile_id)?;
+        let profile_id = self.selected_profile(my_profile_id)?.id();
         let profile = self.revert_local_profile_to_base(&profile_id)?;
         info!("Reverted profile {} to last known remote version {}", profile_id, profile.version());
         Ok(())
@@ -306,21 +309,18 @@ impl Api for Context {
 
         if force {
             debug!("Publishing local profile version, overwriting any remote changes if present");
-            let remote_profile_res = self.remote_repo.get(&profile_id);
-            if remote_profile_res.is_ok() {
-                let remote_profile = remote_profile_res.unwrap();
-                if remote_profile.version() >= profile.version() {
-                    info!("Conflicting profile version found on remote server, forcing overwrite");
-                    profile.set_version(remote_profile.version() + 1);
-                    self.local_repo.set(profile_id.clone(), profile.clone())?;
-                }
+            let remote_profile = self.remote_repo.get(&profile_id)?;
+            if remote_profile.version() >= profile.version() {
+                info!("Conflicting profile version found on remote server, forcing overwrite");
+                profile.set_version(remote_profile.version() + 1);
+                self.local_repo.set(profile.clone())?;
             }
         } else {
             debug!("Publishing local profile version with conflict detection");
             self.ensure_no_remote_changes(&profile_id)?;
         }
 
-        self.remote_repo.set(profile_id.clone(), profile)?;
+        self.remote_repo.set(profile)?;
         info!("Published profile {} to remote repository", profile_id);
 
         self.pull_base_profile(&profile_id)
@@ -341,7 +341,7 @@ impl Api for Context {
         let mut profile = self.selected_profile(my_profile_id)?;
         let link = profile.create_link(&peer_profile_id);
         profile.increase_version();
-        self.local_repo.set(profile.id().to_owned(), profile)?;
+        self.local_repo.set(profile)?;
         debug!("Created link: {:?}", link);
         info!("Created link to peer profile {}", peer_profile_id);
         Ok(())
@@ -355,7 +355,7 @@ impl Api for Context {
         let mut profile = self.selected_profile(my_profile_id)?;
         profile.remove_link(&peer_profile_id);
         profile.increase_version();
-        self.local_repo.set(profile.id().to_owned(), profile)?;
+        self.local_repo.set(profile)?;
         info!("Removed link from profile {}", peer_profile_id);
         Ok(())
     }
@@ -376,14 +376,14 @@ impl Api for Context {
         info!("Setting attribute {} to {}", key, value);
         profile.set_attribute(key, value);
         profile.increase_version();
-        self.local_repo.set(profile.id().to_owned(), profile)
+        self.local_repo.set(profile)
     }
 
     fn clear_attribute(&mut self, my_profile_id: Option<ProfileId>, key: AttributeId) -> ApiRes {
         let mut profile = self.selected_profile(my_profile_id)?;
         profile.clear_attribute(&key);
         profile.increase_version();
-        self.local_repo.set(profile.id().to_owned(), profile)?;
+        self.local_repo.set(profile)?;
         info!("Cleared attribute: {}", key);
         Ok(())
     }

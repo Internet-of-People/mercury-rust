@@ -4,11 +4,12 @@ use std::net::{SocketAddr, TcpStream};
 use std::rc::Rc;
 use std::time::Duration;
 
-use failure::{ensure, err_msg, Fallible};
+use failure::{err_msg, Fallible};
 use log::*;
 
 use crate::client::{FallibleExtension, MsgPackRpc, RpcProfile, RpcPtr};
 use crate::messages;
+use keyvault::PublicKey as KeyVaultPublicKey;
 use osg::model::*;
 use osg::profile::{Profile, ProfilePtr};
 use osg::repo::{ProfileExplorer, ProfileRepository};
@@ -68,9 +69,9 @@ impl RpcProfileRepository {
         })
     }
 
-    pub fn remove_node(&self, id: &ProfileId) -> Fallible<()> {
+    pub fn remove_node(&self, key: &PublicKey) -> Fallible<()> {
         self.rpc().and_then(|rpc| {
-            let params = messages::RemoveNodeParams { id: id.clone() };
+            let params = messages::RemoveNodeParams { id: key.key_id() };
             rpc.borrow_mut().send_request("remove_node", params)?;
             Ok(())
         })
@@ -85,29 +86,23 @@ impl ProfileRepository for RpcProfileRepository {
     }
 
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#create-profile
-    fn set(&mut self, id: ProfileId, profile: ProfileData) -> Fallible<()> {
-        ensure!(
-            id == *profile.id(),
-            "Implementation error: RpcProfileRepository got conlicting key and value: {} vs {}",
-            id,
-            profile.id()
-        );
-
-        match self.remove_node(&id) {
+    fn set(&mut self, profile: ProfileData) -> Fallible<()> {
+        match self.remove_node(&profile.public_key()) {
             Ok(()) => debug!("Profile existed, removed it as part of overwriting"),
             Err(_e) => debug!("Failed to remove profile, creating it as new one"),
         };
 
         self.rpc().and_then(|rpc| {
-            let request = messages::AddNodeParams { id: id.clone() };
+            let request = messages::AddNodeParams { id: profile.id() };
             rpc.borrow_mut()
                 .send_request("add_node", request)
                 .map(|_r| ())
                 .key_not_existed_or_else(|| Ok(()))?;
 
-            let mut rpc_profile = RpcProfile::new(&id, rpc);
+            let mut rpc_profile = RpcProfile::new(&profile.id(), rpc);
             // TODO consider version conflict checks here
             rpc_profile.set_version(profile.version())?;
+            rpc_profile.set_public_key(&profile.public_key())?;
             rpc_profile.set_osg_attribute_map(profile.attributes())?;
 
             for link in profile.links() {
@@ -118,9 +113,9 @@ impl ProfileRepository for RpcProfileRepository {
         Ok(())
     }
 
-    fn clear(&mut self, id: &ProfileId) -> Fallible<()> {
-        let profile = self.get(id)?;
-        self.set(id.to_owned(), ProfileData::tombstone(id, profile.version()))
+    fn clear(&mut self, key: &PublicKey) -> Fallible<()> {
+        let profile = self.get(&key.key_id())?;
+        self.set(ProfileData::tombstone(key, profile.version()))
     }
 }
 
