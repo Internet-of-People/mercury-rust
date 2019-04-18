@@ -63,11 +63,8 @@ impl TestClient {
         let (receiver_from_server, sender_from_server) = memsocket::unbounded(); // server to client
 
         // server
-        let home_client_context = Rc::new(PeerContext::new(
-            home_signer.clone(),
-            ownprofile.profile.public_key.clone(),
-            ownprofile.profile.id.clone(),
-        ));
+        let home_client_context =
+            Rc::new(PeerContext::new(home_signer.clone(), ownprofile.profile.public_key()));
 
         let home_connection =
             Rc::new(HomeConnectionServer::new(home_client_context, home_server.clone()).unwrap());
@@ -80,7 +77,7 @@ impl TestClient {
         );
 
         // client
-        let home_context = PeerContext::new_from_profile(client_signer.clone(), &home_profile);
+        let home_context = PeerContext::new(client_signer.clone(), home_profile.public_key());
 
         let client_capnp = HomeClientCapnProto::new(
             receiver_from_server,
@@ -103,16 +100,13 @@ impl TestClient {
         home_signer: Rc<Signer>,
         home_profile: &Profile,
     ) -> Self {
-        let home_client_context = Rc::new(PeerContext::new(
-            home_signer.clone(),
-            client_ownprofile.profile.public_key.clone(),
-            client_ownprofile.profile.id.clone(),
-        ));
+        let home_client_context =
+            Rc::new(PeerContext::new(home_signer.clone(), client_ownprofile.profile.public_key()));
 
         let client_home_connection =
             Rc::new(HomeConnectionServer::new(home_client_context, home_server.clone()).unwrap());
         let client_home_context =
-            PeerContext::new_from_profile(client_signer.clone(), &home_profile);
+            PeerContext::new(client_signer.clone(), home_profile.public_key());
 
         TestClient {
             ownprofile: client_ownprofile,
@@ -158,7 +152,7 @@ impl TestSetup {
 fn register_client(setup: &mut TestSetup, client: &TestClient) -> OwnProfile {
     let half_proof = RelationHalfProof::new(
         RelationProof::RELATION_TYPE_HOSTED_ON_HOME,
-        setup.testclient.home_context.peer_id(),
+        &setup.testclient.home_context.peer_id(),
         client.home_context.my_signer(),
     );
     let reg_fut = client.home_connection.register(client.ownprofile.clone(), half_proof);
@@ -167,7 +161,9 @@ fn register_client(setup: &mut TestSetup, client: &TestClient) -> OwnProfile {
 
 fn register_client_from_setup(setup: &mut TestSetup) -> OwnProfile {
     let testclient = setup.testclient.clone();
-    register_client(setup, &testclient)
+    let own_prof = register_client(setup, &testclient);
+    println!("Registration returned profile: {:#?}", own_prof);
+    own_prof
 }
 
 fn test_home_events(mut setup: TestSetup) {
@@ -192,17 +188,17 @@ fn test_home_events(mut setup: TestSetup) {
 
     let session1 = setup
         .reactor
-        .run(setup.testclient.home_connection.login(first_home_of(&ownprofile1)))
+        .run(setup.testclient.home_connection.login(&first_home_of(&ownprofile1)))
         .unwrap();
     let session2 =
-        setup.reactor.run(testclient2.home_connection.login(first_home_of(&ownprofile2))).unwrap();
+        setup.reactor.run(testclient2.home_connection.login(&first_home_of(&ownprofile2))).unwrap();
 
     let events1 = session1.events();
     let events2 = session2.events();
 
     let half_proof = RelationHalfProof::new(
         "friend",
-        &ownprofile2.profile.id,
+        &ownprofile2.profile.id(),
         setup.testclient.home_context.my_signer(),
     );
     let pair_result =
@@ -215,7 +211,7 @@ fn test_home_events(mut setup: TestSetup) {
 
     match pairing_request_event {
         ProfileEvent::PairingRequest(half_proof) => {
-            assert_eq!(half_proof.peer_id, ownprofile2.profile.id);
+            assert_eq!(half_proof.peer_id, ownprofile2.profile.id());
 
             let proof = RelationProof::sign_remaining_half(&half_proof, &*signer2).unwrap();
             setup.reactor.run(testclient2.home_connection.pair_response(proof)).unwrap();
@@ -233,10 +229,10 @@ fn test_home_events(mut setup: TestSetup) {
             validator
                 .validate_relation_proof(
                     &proof,
-                    &ownprofile1.profile.id,
-                    &ownprofile1.profile.public_key,
-                    &ownprofile2.profile.id,
-                    &ownprofile2.profile.public_key,
+                    &ownprofile1.profile.id(),
+                    &ownprofile1.profile.public_key(),
+                    &ownprofile2.profile.id(),
+                    &ownprofile2.profile.public_key(),
                 )
                 .expect("proof should be valid");
         }
@@ -248,7 +244,7 @@ fn test_home_login(mut setup: TestSetup) {
     let ownprofile = register_client_from_setup(&mut setup);
     let session = setup
         .reactor
-        .run(setup.testclient.home_connection.login(first_home_of(&ownprofile)))
+        .run(setup.testclient.home_connection.login(&first_home_of(&ownprofile)))
         .unwrap();
     let pong = setup.reactor.run(session.ping("ping")).unwrap();
     assert_eq!("ping", pong);
@@ -258,7 +254,7 @@ fn test_home_claim(mut setup: TestSetup) {
     let registered_ownprofile = register_client_from_setup(&mut setup);
 
     let claim_fut =
-        setup.testclient.home_connection.claim(setup.testclient.ownprofile.profile.id.clone());
+        setup.testclient.home_connection.claim(setup.testclient.ownprofile.profile.id());
     let claimed_ownprofile = setup.reactor.run(claim_fut).unwrap();
 
     assert_eq!(registered_ownprofile, claimed_ownprofile);
@@ -268,22 +264,22 @@ fn test_home_register(mut setup: TestSetup) {
     let registered_ownprofile = register_client_from_setup(&mut setup);
     let validator = CompositeValidator::default();
 
-    match registered_ownprofile.profile.facet {
-        ProfileFacet::Persona(ref facet) => {
-            let home_proof = &facet.homes[0];
+    match registered_ownprofile.profile.as_persona() {
+        Some(ref persona) => {
+            let home_proof = &persona.homes[0];
 
             assert_eq!(
                 validator.validate_relation_proof(
                     &home_proof,
                     &setup.testclient.home_context.peer_id(),
                     &setup.testclient.home_context.peer_pubkey(),
-                    &setup.testclient.ownprofile.profile.id,
-                    &setup.testclient.ownprofile.profile.public_key
+                    &setup.testclient.ownprofile.profile.id(),
+                    &setup.testclient.ownprofile.profile.public_key()
                 ),
                 Ok(())
             );
         }
-        _ => panic!(),
+        None => panic!(),
     }
 }
 
@@ -306,13 +302,13 @@ fn test_home_call(mut setup: TestSetup) {
     let app = ApplicationId::from("chat");
     let callee_session = setup
         .reactor
-        .run(setup.testclient.home_connection.login(first_home_of(&callee_ownprofile)))
+        .run(setup.testclient.home_connection.login(&first_home_of(&callee_ownprofile)))
         .unwrap();
     let callee_calls = callee_session.checkin_app(&app);
 
     let relation_type = "friend";
     let relation_half_proof =
-        RelationHalfProof::new(relation_type, &callee_ownprofile.profile.id, &*caller_signer);
+        RelationHalfProof::new(relation_type, &callee_ownprofile.profile.id(), &*caller_signer);
     let relation = RelationProof::sign_remaining_half(
         &relation_half_proof,
         &*setup.testclient.home_context.my_signer(),

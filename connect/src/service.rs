@@ -129,7 +129,7 @@ impl MyProfileFactory {
     }
 
     pub fn create(&self, own_profile: OwnProfile) -> Result<Rc<MyProfile>, Error> {
-        let profile_id = own_profile.profile.id.clone();
+        let profile_id = own_profile.profile.id();
         if let Some(ref my_profile_rc) = self.cache.borrow().get(&profile_id) {
             return Ok(Rc::clone(my_profile_rc));
         }

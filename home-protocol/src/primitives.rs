@@ -7,8 +7,8 @@ use multiaddr::{Multiaddr, ToMultiaddr};
 
 use crate::*;
 
-pub type ProfileId = keyvault::multicipher::MKeyId;
-pub type PublicKey = keyvault::multicipher::MPublicKey;
+pub type Profile = osg::model::ProfileData;
+pub use osg::model::{AttributeId, AttributeMap, AttributeValue, ProfileId, PublicKey, Version};
 pub type PrivateKey = keyvault::multicipher::MPrivateKey;
 pub type Signature = keyvault::multicipher::MSignature;
 
@@ -24,6 +24,28 @@ pub struct PersonaFacet {
     pub data: Vec<u8>,
 }
 
+impl PersonaFacet {
+    const PERSONA_FACET_ATTRIBUTE: &'static str = "osg_persona_homes";
+
+    pub fn new(homes: Vec<RelationProof>, data: Vec<u8>) -> Self {
+        Self { homes, data }
+    }
+
+    pub fn to_attributes(&self) -> AttributeMap {
+        let mut attributes = AttributeMap::new();
+        let facet_str = serde_json::to_string(&self)
+            .expect("This can fail only with failing custom Serialize() or having non-string keys");
+        attributes.insert(Self::PERSONA_FACET_ATTRIBUTE.to_string(), facet_str);
+        attributes
+    }
+
+    fn as_persona(attributes: &AttributeMap) -> Option<Self> {
+        attributes
+            .get(Self::PERSONA_FACET_ATTRIBUTE)
+            .and_then(|facet_str| serde_json::from_str(facet_str).ok())
+    }
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct HomeFacet {
     /// Addresses of the same home server. A typical scenario of multiple addresses is when there is
@@ -34,36 +56,41 @@ pub struct HomeFacet {
     pub data: Vec<u8>,
 }
 
-// NOTE Given for each SUPPORTED app, not currently available (checked in) app, checkins are managed differently
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, PartialOrd, Serialize)]
-pub struct ApplicationFacet {
-    /// unique id of the application - like 'iop-chat'
-    pub id: ApplicationId,
-    pub data: Vec<u8>,
+impl HomeFacet {
+    const HOME_FACET_ATTRIBUTE: &'static str = "osg_home_addresses";
+
+    pub fn new(addrs: Vec<Multiaddr>, data: Vec<u8>) -> Self {
+        Self { addrs, data }
+    }
+
+    pub fn to_attributes(&self) -> AttributeMap {
+        let mut attributes = AttributeMap::new();
+        let facet_str = serde_json::to_string(&self)
+            .expect("This can fail only with failing custom Serialize() or having non-string keys");
+        attributes.insert(Self::HOME_FACET_ATTRIBUTE.to_string(), facet_str);
+        attributes
+    }
+
+    fn as_home(attributes: &AttributeMap) -> Option<Self> {
+        attributes
+            .get(Self::HOME_FACET_ATTRIBUTE)
+            .and_then(|facet_str| serde_json::from_str(facet_str).ok())
+    }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, PartialOrd, Serialize)]
-pub struct RawFacet {
-    pub data: Vec<u8>, // TODO or maybe multicodec output?
+pub trait FacetExtractor {
+    fn as_home(&self) -> Option<HomeFacet>;
+    fn as_persona(&self) -> Option<PersonaFacet>;
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ProfileFacet {
-    Home(HomeFacet),
-    Persona(PersonaFacet),
-    Application(ApplicationFacet),
-    Unknown(RawFacet),
-}
+impl FacetExtractor for Profile {
+    fn as_home(&self) -> Option<HomeFacet> {
+        HomeFacet::as_home(self.attributes())
+    }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct Profile {
-    /// The Profile ID is a hash of the public key, similar to cryptocurrency addresses.
-    pub id: ProfileId,
-
-    /// Public key used for validating the identity of the profile.
-    pub public_key: PublicKey,
-    pub facet: ProfileFacet, // TODO consider redesigning facet Rust types/storage
-                             // TODO consider having a signature of the profile data here
+    fn as_persona(&self) -> Option<PersonaFacet> {
+        PersonaFacet::as_persona(self.attributes())
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -148,68 +175,6 @@ pub struct RelationProof {
 //    }
 //}
 
-//impl<'a> From<&'a [u8]> for ProfileId {
-//    fn from(src: &'a [u8]) -> Self {
-//        ProfileId(src.to_owned())
-//    }
-//}
-//
-//impl<'a> From<&'a ProfileId> for &'a [u8] {
-//    fn from(src: &'a ProfileId) -> Self {
-//        &src.0
-//    }
-//}
-//
-//impl<'a> From<ProfileId> for Vec<u8> {
-//    fn from(src: ProfileId) -> Self {
-//        src.0
-//    }
-//}
-//
-//impl<'a> TryFrom<&'a str> for ProfileId {
-//    type Error = multibase::Error;
-//    fn try_from(src: &'a str) -> Result<Self, Self::Error> {
-//        let (_base, binary) = multibase::decode(src)?;
-//        Ok(ProfileId(binary))
-//    }
-//}
-//
-//impl<'a> From<&'a ProfileId> for String {
-//    fn from(src: &'a ProfileId) -> Self {
-//        multibase::encode(multibase::Base::Base64url, &src.0)
-//    }
-//}
-//
-//impl<'a> From<ProfileId> for String {
-//    fn from(src: ProfileId) -> Self {
-//        Self::from(&src)
-//    }
-//}
-//
-//impl std::fmt::Display for ProfileId {
-//    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-//        write!(f, "{}", String::from(self))
-//    }
-//}
-//
-//impl<'a> From<&'a PublicKey> for String {
-//    fn from(src: &'a PublicKey) -> Self {
-//        multibase::encode(multibase::Base::Base64url, &src.0)
-//    }
-//}
-//
-//impl<'a> From<PublicKey> for String {
-//    fn from(src: PublicKey) -> Self {
-//        Self::from(&src)
-//    }
-//}
-//
-//impl std::fmt::Display for PublicKey {
-//    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-//        write!(f, "{}", String::from(self))
-//    }
-//}
-
 fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> std::result::Result<S::Ok, S::Error>
 where
     S: Serializer,
@@ -247,18 +212,6 @@ where
         }
     }
     Ok(res)
-}
-
-impl Profile {
-    pub fn new(id: &ProfileId, public_key: &PublicKey, facet: &ProfileFacet) -> Self {
-        Self { id: id.to_owned(), public_key: public_key.to_owned(), facet: facet.to_owned() }
-    }
-
-    pub fn new_home(id: ProfileId, public_key: PublicKey, address: Multiaddr) -> Self {
-        let facet = HomeFacet { addrs: vec![address], data: vec![] };
-
-        Self { id, public_key, facet: ProfileFacet::Home(facet) }
-    }
 }
 
 impl RelationSignablePart {

@@ -5,7 +5,6 @@ use tokio_core::reactor;
 
 use mercury_home_node::server::HomeServer;
 use mercury_home_protocol::crypto::*;
-use mercury_home_protocol::keyvault::PrivateKey as KeyVaultPrivateKey;
 use mercury_home_protocol::*;
 use mercury_storage::asynch::imp::InMemoryStore;
 
@@ -14,38 +13,34 @@ pub mod connect;
 #[cfg(test)]
 pub mod home;
 
-pub fn generate_keypair() -> (PrivateKey, PublicKey) {
+pub fn generate_keypair() -> PrivateKey {
     let mut csprng: OsRng = OsRng::new().unwrap();
     let ed_rnd_keypair = ed25519_dalek::Keypair::generate(&mut csprng);
-    let private_key = PrivateKey::from(ed25519::EdPrivateKey::from(ed_rnd_keypair));
-    let public_key = private_key.public_key();
-    (private_key, public_key)
+    PrivateKey::from(ed25519::EdPrivateKey::from(ed_rnd_keypair))
 }
 
-pub fn generate_ownprofile(
-    facet: ProfileFacet,
-    private_data: Vec<u8>,
-) -> (OwnProfile, PrivateKeySigner) {
-    let (private_key, _public_key) = generate_keypair();
+pub fn generate_ownprofile(attributes: AttributeMap) -> (OwnProfile, PrivateKeySigner) {
+    let private_key = generate_keypair();
     let signer = PrivateKeySigner::new(private_key).expect("TODO: this should not ever fail");
-    let profile = Profile::new(&signer.profile_id(), &signer.public_key(), &facet);
-    let own_profile = OwnProfile::new(&profile, &private_data);
+    let profile = Profile::create(signer.public_key(), 1, vec![], attributes);
+    let own_profile = OwnProfile::new(&profile, &vec![]);
     (own_profile, signer)
 }
 
-pub fn generate_profile(facet: ProfileFacet) -> (Profile, PrivateKeySigner) {
-    let (own_profile, signer) = generate_ownprofile(facet, vec![]);
+//facet: ProfileFacet
+pub fn generate_profile(attributes: AttributeMap) -> (Profile, PrivateKeySigner) {
+    let (own_profile, signer) = generate_ownprofile(attributes);
     (own_profile.profile, signer)
 }
 
 pub fn generate_persona() -> (OwnProfile, PrivateKeySigner) {
-    let persona_facet = ProfileFacet::Persona(PersonaFacet { homes: vec![], data: Vec::new() });
-    generate_ownprofile(persona_facet, vec![])
+    let attributes = PersonaFacet::new(vec![], vec![]).to_attributes();
+    generate_ownprofile(attributes)
 }
 
 pub fn generate_home() -> (Profile, PrivateKeySigner) {
-    let home_facet = ProfileFacet::Home(HomeFacet { addrs: vec![], data: Vec::new() });
-    generate_profile(home_facet)
+    let attributes = HomeFacet::new(vec![], vec![]).to_attributes();
+    generate_profile(attributes)
 }
 
 pub fn default_home_server(handle: &reactor::Handle) -> HomeServer {
@@ -57,9 +52,9 @@ pub fn default_home_server(handle: &reactor::Handle) -> HomeServer {
     )
 }
 
-pub fn first_home_of(own_profile: &OwnProfile) -> &RelationProof {
-    match own_profile.profile.facet {
-        ProfileFacet::Persona(ref persona) => persona.homes.get(0).unwrap(),
+pub fn first_home_of(own_profile: &OwnProfile) -> RelationProof {
+    match own_profile.profile.as_persona() {
+        Some(ref persona) => persona.homes[0].clone(),
         _ => panic!("Profile is not a persona, no home found"),
     }
 }

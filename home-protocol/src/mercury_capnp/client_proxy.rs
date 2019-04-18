@@ -6,8 +6,8 @@ use failure::Fail;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
+use super::*;
 use crate::mercury_capnp::{FillFrom, PromiseUtil};
-use crate::*;
 
 pub struct HomeClientCapnProto {
     repo: mercury_capnp::profile_repo::Client,
@@ -68,7 +68,7 @@ impl ProfileRepo for HomeClientCapnProto {
             .promise
             .and_then(|resp| {
                 let profile_capnp = pry!(pry!(resp.get()).get_profile());
-                let profile = Profile::try_from(profile_capnp);
+                let profile = bytes_to_profile(profile_capnp);
                 Promise::result(profile)
             })
             .map_err(|e| e.context(ErrorKind::FailedToLoadProfile).into());
@@ -296,7 +296,7 @@ impl HomeSession for HomeSessionClientCapnProto {
     fn unregister(&self, newhome: Option<Profile>) -> AsyncResult<(), Error> {
         let mut request = self.session.unregister_request();
         if let Some(new_home_profile) = newhome {
-            request.get().init_new_home().fill_from(&new_home_profile);
+            request.get().set_new_home(&profile_to_bytes(&new_home_profile));
         }
 
         let resp_fut = request

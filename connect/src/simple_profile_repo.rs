@@ -28,7 +28,7 @@ impl SimpleProfileRepo {
         &self,
         profile: Profile,
     ) -> AsyncResult<(), ::mercury_storage::error::StorageError> {
-        self.profiles.borrow_mut().set(profile.id.clone(), profile.clone())
+        self.profiles.borrow_mut().set(profile.id(), profile.clone())
     }
 }
 

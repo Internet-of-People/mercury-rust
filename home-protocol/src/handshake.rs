@@ -12,8 +12,9 @@ use crate::*;
 
 #[derive(Deserialize, Clone, Debug, Eq, PartialEq, Serialize)]
 struct AuthenticationInfo {
-    profile_id: ProfileId,
     public_key: PublicKey,
+    // TODO this might not be needed, can be deduced from public_key
+    profile_id: ProfileId,
 }
 
 fn exchange_identities<R, W>(
@@ -108,7 +109,7 @@ where
             //      and return them with a proper peercontext
             // let shared_secret = diffie_hellman(&my_secret_key, &peer_ed25519_pubkey);
 
-            let peer_ctx = PeerContext::new(signer, peer_auth.public_key, peer_auth.profile_id);
+            let peer_ctx = PeerContext::new(signer, peer_auth.public_key);
             Ok((reader, writer, peer_ctx))
         },
     );
@@ -128,7 +129,7 @@ where
         .map_err(|err| err.context(ErrorKind::DiffieHellmanHandshakeFailed).into())
         .and_then(|(reader, writer, peer_auth)| {
             warn!("No proper peer validation was performed, safety is ignored");
-            let peer_ctx = PeerContext::new(signer, peer_auth.public_key, peer_auth.profile_id);
+            let peer_ctx = PeerContext::new(signer, peer_auth.public_key);
             debug!("Handshake succeeded");
             Ok((reader, writer, peer_ctx))
         });

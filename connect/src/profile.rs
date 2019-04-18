@@ -125,7 +125,7 @@ impl MyProfileImpl {
         let home_conn_fut = prof_repo
             .load(home_profile_id)
             .inspect(move |home_profile| {
-                debug!("Finished loading details for home {}", home_profile.id)
+                debug!("Finished loading details for home {}", home_profile.id())
             })
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
             .and_then(move |home_profile| {
@@ -149,9 +149,9 @@ impl MyProfileImpl {
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
             .and_then( |profile|
             {
-                match profile.facet
+                match profile.as_persona()
                 {
-                    ProfileFacet::Persona(persona) => persona.homes.iter()
+                    Some(persona) => persona.homes.iter()
                         .filter(move |home_proof|
                             home_proof.peer_id(&my_profile_id)
                                 .and_then(|peer_id|
@@ -164,7 +164,7 @@ impl MyProfileImpl {
                         .nth(0)
                         .ok_or(ErrorKind::HomeProofNotFound.into()),
 
-                    _ => Err(ErrorKind::PersonaProfileExpected.into())
+                    None => Err(ErrorKind::PersonaProfileExpected.into())
                 }
             } )
             .and_then(
@@ -210,10 +210,9 @@ impl MyProfileImpl {
         connector: Rc<HomeConnector>,
         signer: Rc<Signer>,
     ) -> AsyncResult<(RelationProof, Rc<Home>), Error> {
-        let homes = match profile.facet {
-            // TODO consider how to get homes/addresses for apps and smartfridges
-            ProfileFacet::Persona(ref facet) => facet.homes.clone(),
-            _ => return Box::new(future::err(ErrorKind::HomeProfileExpected.into())),
+        let homes = match profile.as_persona() {
+            Some(ref persona) => persona.homes.clone(),
+            None => return Box::new(future::err(ErrorKind::PersonaProfileExpected.into())),
         };
 
         let home_conn_futs = homes
@@ -222,7 +221,7 @@ impl MyProfileImpl {
                 let prof_repo = prof_repo.clone();
                 let connector = connector.clone();
                 let proof = home_proof.to_owned();
-                match home_proof.peer_id(&profile.id) {
+                match home_proof.peer_id(&profile.id()) {
                     Ok(ref home_id) => {
                         debug!("Scheduling connect_home2 for home id {}", home_id);
                         let conn_fut = Self::connect_home2(
@@ -340,9 +339,9 @@ impl MyProfile for MyProfileImpl {
     }
 
     fn homes(&self) -> AsyncResult<Vec<RelationProof>, Error> {
-        let res = match self.own_profile.borrow().profile.facet {
-            ProfileFacet::Persona(ref persona) => Ok(persona.homes.clone()),
-            _ => Err(Error::from(ErrorKind::PersonaProfileExpected)),
+        let res = match self.own_profile.borrow().profile.as_persona() {
+            Some(ref persona) => Ok(persona.homes.clone()),
+            None => Err(Error::from(ErrorKind::PersonaProfileExpected)),
         };
         Box::new(res.into_future())
     }
@@ -433,7 +432,7 @@ impl MyProfile for MyProfileImpl {
             .and_then(move |profile| {
                 //let half_proof = MyProfileImpl::new_half_proof(rel_type_clone.as_str(), &profile.id, signer_clone.clone() );
                 let half_proof =
-                    RelationHalfProof::new(&rel_type_clone, &profile.id, &*signer_clone.clone());
+                    RelationHalfProof::new(&rel_type_clone, &profile.id(), &*signer_clone.clone());
                 MyProfileImpl::any_home_of2(
                     &profile,
                     profile_repo_clone,
@@ -453,7 +452,7 @@ impl MyProfile for MyProfileImpl {
     fn accept_relation(&self, half_proof: &RelationHalfProof) -> AsyncResult<RelationProof, Error> {
         debug!("Trying to send pairing response");
 
-        if half_proof.peer_id != self.own_profile.borrow().profile.id {
+        if half_proof.peer_id != self.own_profile.borrow().profile.id() {
             return Box::new(Err(ErrorKind::LookupFailed.into()).into_future());
         }
 
@@ -499,7 +498,9 @@ impl MyProfile for MyProfileImpl {
     ) -> AsyncResult<Option<AppMsgSink>, Error> {
         let peer_id = match proof.peer_id(&self.signer.profile_id()) {
             Ok(id) => id.to_owned(),
-            Err(e) => return Box::new(Err(e.context(ErrorKind::LookupFailed).into()).into_future()),
+            Err(e) => {
+                return Box::new(Err(e.context(ErrorKind::LookupFailed).into()).into_future())
+            }
         };
 
         let profile_repo = self.profile_repo.clone();

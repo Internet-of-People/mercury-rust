@@ -5,38 +5,16 @@
 #        remote errors from internal capnp errors is not solved/implemented yet
 
 
+# NOTE that though these types all hold complex serialized data,
+#      communication must not depend on their format and interpretation
 using PublicKey = Data;
 using ProfileId = Data;
 using Signature = Data;
 using ApplicationId = Text;
 using AppMessageFrame = Data;
 using HomeInvitation = Data;
+using Profile = Data;
 
-
-
-struct Profile
-{
-    # data      @0 : Data; # output of multicodec encode()
-
-    # NOTE these are mandatory in the API, but will be serialized into the data instead
-    id        @0 : ProfileId;
-    publicKey @1 : PublicKey;
-
-    facet        : union {
-        persona :group {
-            homes @2 : List(RelationProof);
-            # data: TODO
-        }
-        home :group {
-            addresses @3 : List(Text);  # MultiAddress
-            # data: TODO
-        }
-        application :group {
-            id @4 : Text;
-            # data: TODO
-        }
-    }
-}
 
 
 interface ProfileRepo
@@ -67,7 +45,7 @@ struct RelationProof
 struct OwnProfile
 {
     profile     @0 : Profile;
-    privateData @1 : Data; # TODO maybe multicodec output?
+    privateData @1 : Data;
 }
 
 

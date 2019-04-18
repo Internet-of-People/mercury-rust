@@ -39,7 +39,8 @@ pub fn init_connect_service(
     let home_addr: SocketAddr =
         home_addr_str.parse().map_err(|_e| Error::from(ErrorKind::LookupFailed))?;
     let home_multiaddr = home_addr.to_multiaddr().expect("Failed to parse server address");
-    let home_profile = Profile::new_home(home_id.clone(), home_pubkey.clone(), home_multiaddr);
+    let home_attrs = HomeFacet::new(vec![home_multiaddr], vec![]).to_attributes();
+    let home_profile = Profile::create(home_pubkey, 1, vec![], home_attrs);
 
     let my_private_key_bytes = std::fs::read(my_profile_privkey_file)
         .map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
@@ -48,11 +49,8 @@ pub fn init_connect_service(
     let my_private_key = PrivateKey::from(my_private_key_ed);
     let my_signer = Rc::new(PrivateKeySigner::new(my_private_key).unwrap()) as Rc<Signer>;
     let my_profile_id = my_signer.profile_id().to_owned();
-    let my_profile = Profile::new(
-        &my_profile_id,
-        &my_signer.public_key(),
-        &ProfileFacet::Persona(PersonaFacet { homes: vec![], data: vec![] }),
-    );
+    let my_attrs = PersonaFacet::new(vec![], vec![]).to_attributes();
+    let my_profile = Profile::create(my_signer.public_key(), 1, vec![], my_attrs);
 
     // TODO consider that client should be able to start up without being a DHT client,
     //      e.g. with having only a Home URL including hints to access Home

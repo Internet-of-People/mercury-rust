@@ -1,6 +1,7 @@
 use std::str;
 
 use crate::*;
+use keyvault::PublicKey as KeyVaultPublicKey;
 
 pub const CHANNEL_CAPACITY: usize = 1;
 
@@ -9,7 +10,35 @@ pub const CHANNEL_CAPACITY: usize = 1;
 pub struct PeerContext {
     my_signer: Rc<Signer>,
     peer_pubkey: PublicKey,
-    peer_id: ProfileId,
+}
+
+impl PeerContext {
+    pub fn new(my_signer: Rc<Signer>, peer_pubkey: PublicKey) -> Self {
+        Self { my_signer, peer_pubkey }
+    }
+    //pub fn new_from_profile(my_signer: Rc<Signer>, peer: &Profile) -> Self {
+    //    Self::new(my_signer, peer.public_key.clone(), peer.id.clone())
+    //}
+
+    pub fn my_signer(&self) -> &Signer {
+        &*self.my_signer
+    }
+    pub fn peer_pubkey(&self) -> PublicKey {
+        self.peer_pubkey.clone()
+    }
+    pub fn peer_id(&self) -> ProfileId {
+        self.peer_pubkey.key_id()
+    }
+
+    pub fn validate(&self, validator: &Validator) -> Result<(), Error> {
+        validator.validate_profile(&self.peer_pubkey(), &self.peer_id()).and_then(|valid| {
+            if valid {
+                Ok(())
+            } else {
+                Err(ErrorKind::ProfileValidationFailed)?
+            }
+        })
+    }
 }
 
 pub type AsyncResult<T, E> = Box<Future<Item = T, Error = E>>;
@@ -151,33 +180,4 @@ pub trait HomeSession {
     //    fn banned_profiles(&self) -> AsyncResult<Vec<ProfileId>, Error>;
     //    fn ban(&self, profile: &ProfileId) -> AsyncResult<(), Error>;
     //    fn unban(&self, profile: &ProfileId) -> AsyncResult<(), Error>;
-}
-
-impl PeerContext {
-    pub fn new(my_signer: Rc<Signer>, peer_pubkey: PublicKey, peer_id: ProfileId) -> Self {
-        Self { my_signer, peer_pubkey, peer_id }
-    }
-    pub fn new_from_profile(my_signer: Rc<Signer>, peer: &Profile) -> Self {
-        Self::new(my_signer, peer.public_key.clone(), peer.id.clone())
-    }
-
-    pub fn my_signer(&self) -> &Signer {
-        &*self.my_signer
-    }
-    pub fn peer_pubkey(&self) -> &PublicKey {
-        &self.peer_pubkey
-    }
-    pub fn peer_id(&self) -> &ProfileId {
-        &self.peer_id
-    }
-
-    pub fn validate(&self, validator: &Validator) -> Result<(), Error> {
-        validator.validate_profile(self.peer_pubkey(), self.peer_id()).and_then(|valid| {
-            if valid {
-                Ok(())
-            } else {
-                Err(ErrorKind::ProfileValidationFailed)?
-            }
-        })
-    }
 }

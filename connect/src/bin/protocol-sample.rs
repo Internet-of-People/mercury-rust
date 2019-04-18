@@ -26,9 +26,8 @@ fn main() {
         ed25519::EdPrivateKey::from_bytes(client_private_key_bytes).unwrap();
     let client_private_key = PrivateKey::from(client_private_key_ed);
     let client_signer = Rc::new(crypto::PrivateKeySigner::new(client_private_key).unwrap());
-    let client_facet = ProfileFacet::Persona(PersonaFacet { homes: vec![], data: vec![] });
-    let client_profile =
-        Profile::new(&client_signer.profile_id(), &client_signer.public_key(), &client_facet);
+    //let client_facet = ProfileFacet::Persona(PersonaFacet { homes: vec![], data: vec![] });
+    let client_profile = Profile::new(&client_signer.public_key()); //, &client_facet);
     let client_own_profile = OwnProfile::new(&client_profile, &vec![]);
 
     // server details has to be taken from the command line
@@ -47,7 +46,8 @@ fn main() {
     info!("homenode public key: {:?}", server_key);
     let server_id = server_key.key_id();
     info!("homenode profile id: {:?}", server_id);
-    let home_profile = Profile::new_home(server_id.clone(), server_key, addr);
+    let home_attrs = HomeFacet::new(vec![addr], vec![]).to_attributes();
+    let home_profile = Profile::create(server_key, 1, vec![], home_attrs);
 
     let profile_store = SimpleProfileRepo::default();
     profile_store.insert(home_profile);
@@ -79,9 +79,9 @@ fn main() {
         })
         .and_then(move |(own_profile, home)| {
             info!("registered, logging in");
-            let home_proof = match own_profile.profile.facet {
-                ProfileFacet::Persona(persona) => persona.homes.get(0).map(|item| item.to_owned()),
-                _ => None,
+            let home_proof = match own_profile.profile.as_persona() {
+                Some(ref persona) => persona.homes.get(0).map(|item| item.to_owned()),
+                None => None,
             };
             match home_proof {
                 Some(proof) => home.login(&proof),

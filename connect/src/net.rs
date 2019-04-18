@@ -91,9 +91,9 @@ impl HomeConnector for SimpleTcpHomeConnector {
         home_profile: &Profile,
         signer: Rc<Signer>,
     ) -> AsyncResult<Rc<Home>, mercury_home_protocol::error::Error> {
-        let addrs = match home_profile.facet {
-            ProfileFacet::Home(ref home_facet) => home_facet.addrs.clone(),
-            _ => {
+        let addrs = match home_profile.as_home() {
+            Some(ref home_facet) => home_facet.addrs.clone(),
+            None => {
                 return Box::new(future::err(
                     mercury_home_protocol::error::ErrorKind::ProfileMismatch.into(),
                 ));

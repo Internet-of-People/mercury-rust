@@ -7,8 +7,8 @@ use futures::{Future, Stream};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
+use super::*;
 use crate::mercury_capnp::{capnp_err, FillFrom};
-use crate::*;
 
 pub struct HomeDispatcherCapnProto {
     home: Rc<Home>,
@@ -67,7 +67,7 @@ impl mercury_capnp::profile_repo::Server for HomeDispatcherCapnProto {
         let load_fut = self
             .home
             .load(&profile_id)
-            .map(move |profile| results.get().init_profile().fill_from(&profile))
+            .map(move |profile| results.get().set_profile(&profile_to_bytes(&profile)))
             .map_err(|e| capnp::Error::failed(format!("Failed to load profile id: {:?}", e)));
 
         Promise::from_future(load_fut)
@@ -265,7 +265,7 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto {
     ) -> Promise<(), capnp::Error> {
         let new_home_res_capnp = pry!(params.get()).get_new_home();
         let new_home_opt =
-            new_home_res_capnp.and_then(|new_home_capnp| Profile::try_from(new_home_capnp)).ok();
+            new_home_res_capnp.and_then(|new_home_capnp| bytes_to_profile(&new_home_capnp)).ok();
 
         let upd_fut = self
             .session

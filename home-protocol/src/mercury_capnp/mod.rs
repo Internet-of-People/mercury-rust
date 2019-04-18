@@ -64,65 +64,75 @@ fn capnp_err(err: failure::Error) -> capnp::Error {
     capnp::Error::failed(err.to_string())
 }
 
-impl<'a> TryFrom<profile::Reader<'a>> for Profile {
-    type Error = capnp::Error;
+//impl<'a> TryFrom<profile::Reader<'a>> for Profile {
+//    type Error = capnp::Error;
+//
+//    fn try_from(src: profile::Reader) -> Result<Self, Self::Error> {
+//        let profile_id = ProfileId::from_bytes(src.get_id()?).map_err(|e| capnp_err(e))?;
+//        let public_key = PublicKey::from_bytes(src.get_public_key()?).map_err(|e| capnp_err(e))?;
+//
+//        let facet_res = match src.get_facet().which() {
+//            Ok(profile::facet::Which::Persona(r)) => {
+//                if let Some(proof_reader) = r.get_homes()?.iter().next() {
+//                    // only 0 or 1 home is supported in the current impl
+//                    let home_relation = RelationProof::try_from(proof_reader)?;
+//                    Ok(ProfileFacet::Persona(PersonaFacet {
+//                        homes: vec![home_relation],
+//                        data: vec![],
+//                    }))
+//                } else {
+//                    Ok(ProfileFacet::Persona(PersonaFacet { homes: vec![], data: vec![] }))
+//                }
+//            }
+//            // TODO finish this implementation to be able to send HomeProfiles, too
+//            // Ok(profile::facet::Which::Home(r)) => {
+//            //     let addrs = r.get_addresses()?.iter().map(|addr| Multiaddr::from(addr?));
+//            //     Ok(ProfileFacet::Home(HomeFacet{addrs, data: vec![]}))
+//            // },
+//            _ => Err("Unimplemented"),
+//        };
+//
+//        match facet_res {
+//            Ok(facet) => Ok(Profile::new(&profile_id, &public_key, &facet)),
+//            Err(e) => Err(capnp::Error::failed(e.to_owned())),
+//        }
+//    }
+//}
+//
+//impl<'a> FillFrom<Profile> for profile::Builder<'a> {
+//    fn fill_from(mut self, src: &Profile) {
+//        self.set_id(&src.id.to_bytes());
+//        self.set_public_key(&src.public_key.to_bytes());
+//        match src.facet {
+//            ProfileFacet::Persona(ref facet) => {
+//                let persona_builder = self.init_facet().init_persona();
+//                let mut homes = persona_builder.init_homes(facet.homes.len() as u32);
+//                for (i, home) in facet.homes.iter().enumerate() {
+//                    homes.reborrow().get(i as u32).fill_from(&home);
+//                }
+//            }
+//            _ => {
+//                panic!("Unimplemented"); // TODO implement home and application facets
+//            }
+//        }
+//    }
+//}
 
-    fn try_from(src: profile::Reader) -> Result<Self, Self::Error> {
-        let profile_id = ProfileId::from_bytes(src.get_id()?).map_err(|e| capnp_err(e))?;
-        let public_key = PublicKey::from_bytes(src.get_public_key()?).map_err(|e| capnp_err(e))?;
-
-        let facet_res = match src.get_facet().which() {
-            Ok(profile::facet::Which::Persona(r)) => {
-                if let Some(proof_reader) = r.get_homes()?.iter().next() {
-                    // only 0 or 1 home is supported in the current impl
-                    let home_relation = RelationProof::try_from(proof_reader)?;
-                    Ok(ProfileFacet::Persona(PersonaFacet {
-                        homes: vec![home_relation],
-                        data: vec![],
-                    }))
-                } else {
-                    Ok(ProfileFacet::Persona(PersonaFacet { homes: vec![], data: vec![] }))
-                }
-            }
-            // TODO finish this implementation to be able to send HomeProfiles, too
-            // Ok(profile::facet::Which::Home(r)) => {
-            //     let addrs = r.get_addresses()?.iter().map(|addr| Multiaddr::from(addr?));
-            //     Ok(ProfileFacet::Home(HomeFacet{addrs, data: vec![]}))
-            // },
-            _ => Err("Unimplemented"),
-        };
-
-        match facet_res {
-            Ok(facet) => Ok(Profile::new(&profile_id, &public_key, &facet)),
-            Err(e) => Err(capnp::Error::failed(e.to_owned())),
-        }
-    }
+fn bytes_to_profile(src: &[u8]) -> Result<Profile, capnp::Error> {
+    serde_json::from_slice(&src).map_err(|e| capnp::Error::failed(e.to_string()))
 }
 
-impl<'a> FillFrom<Profile> for profile::Builder<'a> {
-    fn fill_from(mut self, src: &Profile) {
-        self.set_id(&src.id.to_bytes());
-        self.set_public_key(&src.public_key.to_bytes());
-        match src.facet {
-            ProfileFacet::Persona(ref facet) => {
-                let persona_builder = self.init_facet().init_persona();
-                let mut homes = persona_builder.init_homes(facet.homes.len() as u32);
-                for (i, home) in facet.homes.iter().enumerate() {
-                    homes.reborrow().get(i as u32).fill_from(&home);
-                }
-            }
-            _ => {
-                panic!("Unimplemented"); // TODO implement home and application facets
-            }
-        }
-    }
+fn profile_to_bytes(src: &Profile) -> Vec<u8> {
+    // TODO how to return error here without changing the signature of fill_from()?
+    serde_json::to_vec(src)
+        .expect("Implementation error: serialization can fail only if Serialize implementation returns error or with non-string keys in the type")
 }
 
 impl<'a> TryFrom<own_profile::Reader<'a>> for OwnProfile {
     type Error = capnp::Error;
 
     fn try_from(src: own_profile::Reader) -> Result<Self, Self::Error> {
-        let profile = Profile::try_from(src.get_profile()?)?;
+        let profile = bytes_to_profile(src.get_profile()?)?;
         let private_data = src.get_private_data()?;
         Ok(OwnProfile::new(&profile, &private_data))
     }
@@ -131,7 +141,7 @@ impl<'a> TryFrom<own_profile::Reader<'a>> for OwnProfile {
 impl<'a> FillFrom<OwnProfile> for own_profile::Builder<'a> {
     fn fill_from(mut self, src: &OwnProfile) {
         self.set_private_data(&src.priv_data);
-        self.init_profile().fill_from(&src.profile);
+        self.set_profile(&profile_to_bytes(&src.profile));
     }
 }
 
