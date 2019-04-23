@@ -1,4 +1,5 @@
 use failure::Fallible;
+use futures::prelude::*;
 use log::*;
 
 use keyvault::PublicKey as KeyVaultPublicKey;
@@ -17,17 +18,17 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
         let id = key.key_id();
         id_map.insert(idx, id.clone());
 
-        if repo.get(&id).is_err() {
+        if repo.get(&id).wait().is_err() {
             info!("Reconstructing profile {}", id);
             let profile = ProfileData::new(&key);
-            repo.set(profile)?;
+            repo.set(profile).wait()?;
         }
     }
 
     info!("Synchronizing links");
     for (idx, user) in state.into_iter().enumerate() {
         let id = &id_map[&idx];
-        let mut profile = repo.get(id)?;
+        let mut profile = repo.get(id).wait()?;
         profile.increase_version();
 
         for peer in user.into_iter() {
@@ -38,7 +39,7 @@ pub fn synchronize(state: &mut State, repo: &mut ProfileRepository) -> Fallible<
             }
         }
 
-        repo.set(profile)?;
+        repo.set(profile).wait()?;
     }
     Ok(())
 }

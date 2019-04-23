@@ -9,6 +9,7 @@ edition = "2018"
 
 [dependencies]
 failure = "*"
+futures = "0.1"
 log = "*"
 keyvault = { path="../keyvault" }
 osg-rpc-storage = { path="../osg-rpc-storage" }

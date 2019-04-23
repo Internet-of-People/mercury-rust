@@ -321,7 +321,7 @@ where
 mod test {
     use super::*;
     use crate::repo::RpcProfileRepository;
-    use osg::repo::{ProfileExplorer, ProfileRepository};
+    use osg::repo::ProfileExplorer; //, ProfileRepository};
     use std::str::FromStr;
     use std::time::Duration;
 
@@ -337,12 +337,12 @@ mod test {
         let my_pubkey = PublicKey::from_str("PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb")?;
         let my_id = my_pubkey.key_id();
         let my_data = ProfileData::new(&my_pubkey);
-        repo.set(my_data.clone())?;
+        repo.set_node(my_data.clone())?;
         let me = repo.get_node(&my_id)?;
         let peer_pubkey = PublicKey::from_str("PezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z")?;
         let peer_id = peer_pubkey.key_id();
         let peer_data = ProfileData::new(&peer_pubkey);
-        repo.set(peer_data.clone())?;
+        repo.set_node(peer_data.clone())?;
         let peer = repo.get_node(&peer_id)?;
 
         assert_eq!(repo.list_nodes()?.len(), 2);
@@ -393,8 +393,8 @@ mod test {
         assert_eq!(me.borrow().version()?, 42);
 
         assert_eq!(repo.list_nodes()?.len(), 2);
-        repo.clear(&my_pubkey)?;
-        repo.clear(&peer_pubkey)?;
+        repo.remove_node(&my_pubkey)?;
+        repo.remove_node(&peer_pubkey)?;
         // NOTE deleting nodes erases all details and keeps an empty profile as a tombstone for followers
         assert_eq!(repo.list_nodes()?.len(), 2);
         // NOTE current clear() implementation deletes node, then adds it back (update tombstone and set empty osg attribute)

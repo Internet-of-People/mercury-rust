@@ -2,6 +2,7 @@ use std::collections::{BTreeMap, BinaryHeap};
 use std::fmt;
 
 use failure::Fallible;
+use futures::prelude::*;
 use log::*;
 use rand::{
     distributions::{Distribution, Uniform, WeightedError},
@@ -107,7 +108,7 @@ impl<'a> Simulation<'a> {
         let key = self.vault.public_key(idx)?;
 
         let profile = ProfileData::new(&key);
-        self.repo.set(profile)?;
+        self.repo.set(profile).wait()?;
         info!("Generated profile {}: {}", idx, key.key_id());
 
         if old_profile_count > 0 {
@@ -152,10 +153,10 @@ impl<'a> Simulation<'a> {
 
     fn create_link(&mut self, id: ProfileId, idx: usize, peer: usize) -> Fallible<()> {
         let peer_id = self.vault.profile_id(peer)?;
-        let mut profile = self.repo.get(&id)?;
+        let mut profile = self.repo.get(&id).wait()?;
         profile.create_link(&peer_id);
         profile.increase_version();
-        self.repo.set(profile)?;
+        self.repo.set(profile).wait()?;
         self.state[idx].add_link(peer);
         *self.inlinks.entry(peer).or_insert(0usize) += 1;
         info!("Generated link {}->{}: {}->{}", idx, peer, id, peer_id);

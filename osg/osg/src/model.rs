@@ -1,5 +1,6 @@
 use std::collections::HashMap;
 
+use futures::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
 use keyvault::PublicKey as KeyVaultPublicKey;
@@ -10,6 +11,9 @@ pub type Version = u64; // monotonically increasing, e.g. normal version, unix d
 pub type AttributeId = String;
 pub type AttributeValue = String;
 pub type AttributeMap = HashMap<AttributeId, AttributeValue>;
+
+pub type AsyncResult<T, E> = Box<Future<Item = T, Error = E>>;
+pub type AsyncFallible<T> = Box<Future<Item = T, Error = failure::Error>>;
 
 // TODO generalize links (i.e. edges) between two profiles into verifiable claims,
 //      i.e. signed hyperedges in the graph with any number of referenced profiles

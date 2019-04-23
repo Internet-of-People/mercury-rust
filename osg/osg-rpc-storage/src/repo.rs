@@ -5,6 +5,7 @@ use std::rc::Rc;
 use std::time::Duration;
 
 use failure::{err_msg, Fallible};
+use futures::{future, prelude::*};
 use log::*;
 
 use crate::client::{FallibleExtension, MsgPackRpc, RpcProfile, RpcPtr};
@@ -76,17 +77,9 @@ impl RpcProfileRepository {
             Ok(())
         })
     }
-}
-
-impl ProfileRepository for RpcProfileRepository {
-    /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#show-profile
-    fn get(&self, id: &ProfileId) -> Fallible<ProfileData> {
-        let rpc_profile = self.get_node(id)?;
-        ProfileData::try_from(rpc_profile)
-    }
 
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#create-profile
-    fn set(&mut self, profile: ProfileData) -> Fallible<()> {
+    pub fn set_node(&mut self, profile: ProfileData) -> Fallible<()> {
         match self.remove_node(&profile.public_key()) {
             Ok(()) => debug!("Profile existed, removed it as part of overwriting"),
             Err(_e) => debug!("Failed to remove profile, creating it as new one"),
@@ -112,10 +105,33 @@ impl ProfileRepository for RpcProfileRepository {
         })?;
         Ok(())
     }
+}
 
-    fn clear(&mut self, key: &PublicKey) -> Fallible<()> {
-        let profile = self.get(&key.key_id())?;
-        self.set(ProfileData::tombstone(key, profile.version()))
+// TODO !!! This implementation must not be used in real async environment !!!
+//          Synchronous calls in the implementation like get_node() and set_node()
+//          use std networking and block the current thread, violating async execution.
+impl ProfileRepository for RpcProfileRepository {
+    /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#show-profile
+    fn get(&self, id: &ProfileId) -> AsyncFallible<ProfileData> {
+        let res = self.get_node(id).and_then(|rpc_profile| ProfileData::try_from(rpc_profile));
+        Box::new(res.into_future())
+    }
+
+    /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#create-profile
+    fn set(&mut self, profile: ProfileData) -> AsyncFallible<()> {
+        let res = self.set_node(profile);
+        Box::new(res.into_future())
+    }
+
+    fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()> {
+        let profile_res =
+            self.get_node(&key.key_id()).and_then(|rpc_profile| ProfileData::try_from(rpc_profile));
+        let profile = match profile_res {
+            Ok(profile) => profile,
+            Err(e) => return Box::new(future::err(e)),
+        };
+        let res = self.set(ProfileData::tombstone(key, profile.version()));
+        Box::new(res)
     }
 }
 

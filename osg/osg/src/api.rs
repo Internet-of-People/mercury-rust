@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 use failure::{bail, ensure, err_msg, Fallible};
+use futures::prelude::*;
 use log::*;
 
 use crate::model::*;
@@ -72,6 +73,9 @@ pub struct Context {
     explorer: Box<ProfileExplorer>,
 }
 
+// TODO !!! The current implementation assumes that though the ProfileRepository
+//      shows an asynchronous interface, in reality all results are ready without waiting.
+//      For real asynchronous repositories this implementation has to be changed.
 impl Context {
     pub fn new(
         vault_path: PathBuf,
@@ -151,21 +155,21 @@ before trying to restore another vault."#,
 
     fn selected_profile(&self, my_profile_option: Option<ProfileId>) -> Fallible<ProfileData> {
         let profile_id = self.selected_profile_id(my_profile_option)?;
-        let profile = self.local_repo.get(&profile_id)?;
+        let profile = self.local_repo.get(&profile_id).wait()?;
         Ok(profile)
     }
 
     fn revert_local_profile_to_base(&mut self, profile_id: &ProfileId) -> Fallible<ProfileData> {
         self.mut_vault().restore_id(&profile_id)?;
-        let profile = self.base_repo.get(&profile_id)?;
+        let profile = self.base_repo.get(&profile_id).wait()?;
         self.local_repo.restore(profile_id.clone(), profile.clone())?;
         Ok(profile)
     }
 
     fn pull_base_profile(&mut self, profile_id: &ProfileId) -> ApiRes {
         debug!("Fetching remote version of profile {} to base cache", profile_id);
-        let remote_profile = self.remote_repo.get(&profile_id)?;
-        self.base_repo.set(remote_profile)
+        let remote_profile = self.remote_repo.get(&profile_id).wait()?;
+        self.base_repo.set(remote_profile).wait()
     }
 
     //         | none | some  (base)
@@ -174,8 +178,8 @@ before trying to restore another vault."#,
     //    some | err  | err if local.ver > base.ver
     // (local)
     fn ensure_no_local_changes(&self, profile_id: &ProfileId) -> ApiRes {
-        let base_profile_res = self.base_repo.get(&profile_id);
-        let local_profile_res = self.local_repo.get(&profile_id);
+        let base_profile_res = self.base_repo.get(&profile_id).wait();
+        let local_profile_res = self.local_repo.get(&profile_id).wait();
 
         let implementation_error = base_profile_res.is_ok() && local_profile_res.is_err();
         if implementation_error {
@@ -199,8 +203,8 @@ before trying to restore another vault."#,
     //    some | err  | err if remote.ver > base.ver
     // (remote)
     fn ensure_no_remote_changes(&self, profile_id: &ProfileId) -> ApiRes {
-        let remote_profile_res = self.remote_repo.get(&profile_id);
-        let base_profile_res = self.base_repo.get(&profile_id);
+        let remote_profile_res = self.remote_repo.get(&profile_id).wait();
+        let base_profile_res = self.base_repo.get(&profile_id).wait();
 
         let implementation_error = base_profile_res.is_ok() && remote_profile_res.is_err();
         if implementation_error {
@@ -271,7 +275,7 @@ impl Api for Context {
             Base => self.base_repo.as_ref(),
             Remote => self.remote_repo.as_ref(),
         };
-        let profile = repo.get(&profile_id)?;
+        let profile = repo.get(&profile_id).wait()?;
         let links = profile.links();
         let attributes = profile.attributes();
 
@@ -291,7 +295,7 @@ impl Api for Context {
     fn create_profile(&mut self) -> ApiRes {
         let new_profile_key = self.mut_vault().create_key()?;
         let empty_profile = ProfileData::new(&new_profile_key);
-        self.local_repo.set(empty_profile)?;
+        self.local_repo.set(empty_profile).wait()?;
         info!("Created and activated profile with id {}", new_profile_key.key_id());
         Ok(())
     }
@@ -309,18 +313,18 @@ impl Api for Context {
 
         if force {
             debug!("Publishing local profile version, overwriting any remote changes if present");
-            let remote_profile = self.remote_repo.get(&profile_id)?;
+            let remote_profile = self.remote_repo.get(&profile_id).wait()?;
             if remote_profile.version() >= profile.version() {
                 info!("Conflicting profile version found on remote server, forcing overwrite");
                 profile.set_version(remote_profile.version() + 1);
-                self.local_repo.set(profile.clone())?;
+                self.local_repo.set(profile.clone()).wait()?;
             }
         } else {
             debug!("Publishing local profile version with conflict detection");
             self.ensure_no_remote_changes(&profile_id)?;
         }
 
-        self.remote_repo.set(profile)?;
+        self.remote_repo.set(profile).wait()?;
         info!("Published profile {} to remote repository", profile_id);
 
         self.pull_base_profile(&profile_id)
@@ -341,7 +345,7 @@ impl Api for Context {
         let mut profile = self.selected_profile(my_profile_id)?;
         let link = profile.create_link(&peer_profile_id);
         profile.increase_version();
-        self.local_repo.set(profile)?;
+        self.local_repo.set(profile).wait()?;
         debug!("Created link: {:?}", link);
         info!("Created link to peer profile {}", peer_profile_id);
         Ok(())
@@ -355,7 +359,7 @@ impl Api for Context {
         let mut profile = self.selected_profile(my_profile_id)?;
         profile.remove_link(&peer_profile_id);
         profile.increase_version();
-        self.local_repo.set(profile)?;
+        self.local_repo.set(profile).wait()?;
         info!("Removed link from profile {}", peer_profile_id);
         Ok(())
     }
@@ -376,14 +380,14 @@ impl Api for Context {
         info!("Setting attribute {} to {}", key, value);
         profile.set_attribute(key, value);
         profile.increase_version();
-        self.local_repo.set(profile)
+        self.local_repo.set(profile).wait()
     }
 
     fn clear_attribute(&mut self, my_profile_id: Option<ProfileId>, key: AttributeId) -> ApiRes {
         let mut profile = self.selected_profile(my_profile_id)?;
         profile.clear_attribute(&key);
         profile.increase_version();
-        self.local_repo.set(profile)?;
+        self.local_repo.set(profile).wait()?;
         info!("Cleared attribute: {}", key);
         Ok(())
     }
