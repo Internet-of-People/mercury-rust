@@ -11,7 +11,7 @@ use tokio_core::reactor::{self, Timeout};
 use mercury_home_protocol::api::AsyncSink; // TODO this should normally work with protocol::*, why is this needed?
 use mercury_home_protocol::error::*;
 use mercury_home_protocol::*;
-use mercury_storage::{asynch::KeyValueStore, error::StorageError};
+use mercury_storage::asynch::KeyValueStore;
 
 // TODO this should come from user configuration with a reasonable default value close to this
 const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
@@ -201,7 +201,8 @@ impl Home for HomeConnectionServer {
         }
 
         let own_prof_clone = own_prof.clone();
-        let error_mapper = move |e: StorageError| (own_prof_clone, ErrorKind::StorageFailed.into());
+        let error_mapper =
+            move |e: failure::Error| (own_prof_clone, ErrorKind::StorageFailed.into());
         let error_mapper_clone = error_mapper.clone();
 
         let home_proof =

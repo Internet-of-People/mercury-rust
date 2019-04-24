@@ -1,3 +1,5 @@
+use failure::Fallible;
+
 use crate::common::*;
 
 pub struct MultiHasher {
@@ -9,25 +11,18 @@ impl MultiHasher {
         MultiHasher { hash_algorithm }
     }
 
-    fn to_hasher_error(error: multihash::Error) -> HashError {
-        match error {
-            multihash::Error::BadInputLength => HashError::BadInputLength,
-            multihash::Error::UnknownCode => HashError::UnknownCode,
-            multihash::Error::UnsupportedType => HashError::UnsupportedType,
-        }
-    }
-
-    fn get_hash_bytes(&self, data: &Vec<u8>) -> Result<Vec<u8>, HashError> {
-        multihash::encode(self.hash_algorithm, data).map_err(MultiHasher::to_hasher_error)
+    fn get_hash_bytes(&self, data: &Vec<u8>) -> Fallible<Vec<u8>> {
+        let bytes = multihash::encode(self.hash_algorithm, data)?;
+        Ok(bytes)
     }
 }
 
 impl Hasher<Vec<u8>, Vec<u8>> for MultiHasher {
-    fn get_hash(&self, data: &Vec<u8>) -> Result<Vec<u8>, HashError> {
+    fn get_hash(&self, data: &Vec<u8>) -> Fallible<Vec<u8>> {
         self.get_hash_bytes(&data)
     }
 
-    fn validate(&self, data: &Vec<u8>, expected_hash: &Vec<u8>) -> Result<bool, HashError> {
+    fn validate(&self, data: &Vec<u8>, expected_hash: &Vec<u8>) -> Fallible<bool> {
         //        // TODO should we do this here or just drop this step and check hash equality?
         //        let decode_result = decode(expected_hash)
         //            .map_err(MultiHasher::to_hasher_error)?;
@@ -42,10 +37,10 @@ impl Hasher<Vec<u8>, Vec<u8>> for MultiHasher {
 pub struct IdentitySerializer;
 
 impl Serializer<Vec<u8>, Vec<u8>> for IdentitySerializer {
-    fn serialize(&self, object: Vec<u8>) -> Result<Vec<u8>, SerializerError> {
+    fn serialize(&self, object: Vec<u8>) -> Fallible<Vec<u8>> {
         Ok(object)
     }
-    fn deserialize(&self, serialized_object: Vec<u8>) -> Result<Vec<u8>, SerializerError> {
+    fn deserialize(&self, serialized_object: Vec<u8>) -> Fallible<Vec<u8>> {
         Ok(serialized_object)
     }
 }
@@ -54,26 +49,19 @@ impl Serializer<Vec<u8>, Vec<u8>> for IdentitySerializer {
 //      Maybe should contain Box<serde::ser::De/Serializer> data members
 pub struct SerdeJsonSerializer;
 
-impl SerdeJsonSerializer {
-    fn to_serializer_error(error: serde_json::Error) -> SerializerError {
-        SerializerError::SerializationError(Box::new(error))
-    }
-}
-
 impl<ObjectType> Serializer<ObjectType, Vec<u8>> for SerdeJsonSerializer
 where
     ObjectType: serde::Serialize + serde::de::DeserializeOwned,
 {
-    fn serialize(&self, object: ObjectType) -> Result<Vec<u8>, SerializerError> {
-        serde_json::to_string(&object)
-            .map(|str| str.into_bytes())
-            .map_err(SerdeJsonSerializer::to_serializer_error)
+    fn serialize(&self, object: ObjectType) -> Fallible<Vec<u8>> {
+        let bytes = serde_json::to_string(&object).map(|str| str.into_bytes())?;
+        Ok(bytes)
     }
 
-    fn deserialize(&self, serialized_object: Vec<u8>) -> Result<ObjectType, SerializerError> {
-        let json_string = String::from_utf8(serialized_object)
-            .map_err(|e| SerializerError::DeserializationError(Box::new(e)))?;
-        serde_json::from_str(&json_string).map_err(SerdeJsonSerializer::to_serializer_error)
+    fn deserialize(&self, serialized_object: Vec<u8>) -> Fallible<ObjectType> {
+        let json_string = String::from_utf8(serialized_object)?;
+        let obj = serde_json::from_str(&json_string)?;
+        Ok(obj)
     }
 }
 
@@ -88,15 +76,14 @@ impl MultiBaseHashCoder {
 }
 
 impl HashCoder<Vec<u8>, String> for MultiBaseHashCoder {
-    fn encode(&self, hash_bytes: &Vec<u8>) -> Result<String, StringCoderError> {
+    fn encode(&self, hash_bytes: &Vec<u8>) -> Fallible<String> {
         let hash_str = multibase::encode(self.base_algorithm, &hash_bytes);
         Ok(hash_str)
     }
 
-    fn decode(&self, hash_str: &String) -> Result<Vec<u8>, StringCoderError> {
-        multibase::decode(&hash_str)
-            .map(|(_, bytes)| bytes)
-            .map_err(|e| StringCoderError::Other(Box::new(e)))
+    fn decode(&self, hash_str: &String) -> Fallible<Vec<u8>> {
+        let bytes = multibase::decode(&hash_str).map(|(_, bytes)| bytes)?;
+        Ok(bytes)
     }
 }
 

@@ -1,6 +1,8 @@
 use std::collections::HashMap;
 use std::hash::Hash;
 
+use failure::{err_msg, Fallible};
+
 use crate::sync::*;
 
 pub struct InMemoryStore<KeyType, ValueType> {
@@ -21,13 +23,13 @@ where
     KeyType: Eq + Hash + Clone,
     ValueType: Clone,
 {
-    fn store(&mut self, key: &KeyType, object: ValueType) -> Result<(), StorageError> {
+    fn store(&mut self, key: &KeyType, object: ValueType) -> Fallible<()> {
         self.map.insert(key.to_owned(), object);
         Ok(())
     }
 
-    fn lookup(&self, key: &KeyType) -> Result<ValueType, StorageError> {
-        self.map.get(&key).map(|v| v.to_owned()).ok_or(StorageError::InvalidKey)
+    fn lookup(&self, key: &KeyType) -> Fallible<ValueType> {
+        self.map.get(&key).map(|v| v.to_owned()).ok_or(err_msg("Invalid key"))
     }
 }
 

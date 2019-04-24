@@ -10,6 +10,7 @@ edition = "2018"
 [dependencies]
 arrayref = "*"
 byteorder = "*"
+failure = "*"
 futures = "0.1"
 futures-state-stream = "0.2"
 log = "*"

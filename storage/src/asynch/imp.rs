@@ -5,6 +5,7 @@ use std::error::Error;
 use std::hash::Hash;
 use std::rc::Rc;
 
+use failure::{err_msg, format_err, Fallible};
 use futures::future;
 use futures::prelude::*;
 use futures_state_stream::StateStream;
@@ -43,13 +44,13 @@ impl HashWebLink {
         self.hash.as_ref()
     }
 
-    pub fn parse(address_str: &str) -> Result<HashWebLink, HashSpaceError> {
+    pub fn parse(address_str: &str) -> Fallible<HashWebLink> {
         // Ignore starting slash
         let address = if address_str.starts_with('/') { &address_str[1..] } else { address_str };
 
         // Split hashspaceId and hash parts
         let slash_pos =
-            address.find('/').ok_or(HashSpaceError::LinkFormatError(address_str.to_owned()))?; //.unwrap_or( address.len() );
+            address.find('/').ok_or(format_err!("Failed to parse address {}", address_str))?; //.unwrap_or( address.len() );
         let (hashspace_id, slashed_hash) = address.split_at(slash_pos);
         let hash = &slashed_hash[1..]; // Ignore starting slash
 
@@ -143,11 +144,11 @@ impl<ObjectType> HashSpace<ObjectType, String> for HashWeb<ObjectType>
 where
     ObjectType: 'static,
 {
-    fn store(&mut self, object: ObjectType) -> Box<Future<Item = String, Error = HashSpaceError>> {
+    fn store(&mut self, object: ObjectType) -> AsyncFallible<String> {
         let mut hashspace_res = self
             .hashspaces
             .get_mut(&self.default)
-            .ok_or(HashSpaceError::UnsupportedHashSpace(self.default.to_owned()));;
+            .ok_or(format_err!("Unsupported hash space: {}", self.default));
         let hashspace = match hashspace_res {
             Ok(ref mut space) => space,
             Err(e) => return Box::new(future::err(e)),
@@ -159,10 +160,7 @@ where
         Box::new(result)
     }
 
-    fn resolve(
-        &self,
-        hashlink_str: &String,
-    ) -> Box<Future<Item = ObjectType, Error = HashSpaceError>> {
+    fn resolve(&self, hashlink_str: &String) -> AsyncFallible<ObjectType> {
         let hashlink = match HashWebLink::parse(hashlink_str) {
             Ok(link) => link,
             Err(e) => return Box::new(future::err(e)),
@@ -171,7 +169,7 @@ where
         let hashspace_res = self
             .hashspaces
             .get(hashlink.hashspace())
-            .ok_or(HashSpaceError::UnsupportedHashSpace(hashlink.hashspace().to_owned()));
+            .ok_or(format_err!("Unsupported hash space: {}", hashlink.hashspace()));
         let hashspace = match hashspace_res {
             Ok(space) => space,
             Err(e) => return Box::new(future::err(e)),
@@ -180,11 +178,7 @@ where
         Box::new(data)
     }
 
-    fn validate(
-        &self,
-        object: &ObjectType,
-        hashlink_str: &String,
-    ) -> Box<Future<Item = bool, Error = HashSpaceError>> {
+    fn validate(&self, object: &ObjectType, hashlink_str: &String) -> AsyncFallible<bool> {
         let hashlink = match HashWebLink::parse(hashlink_str) {
             Ok(link) => link,
             Err(e) => return Box::new(future::err(e)),
@@ -193,7 +187,7 @@ where
         let hashspace_res = self
             .hashspaces
             .get(hashlink.hashspace())
-            .ok_or(HashSpaceError::UnsupportedHashSpace(hashlink.hashspace().to_owned()));
+            .ok_or(format_err!("Unsupported hash space: {}", hashlink.hashspace()));
         let hashspace = match hashspace_res {
             Ok(ref space) => space,
             Err(e) => return Box::new(future::err(e)),
@@ -230,13 +224,13 @@ where
     fn get(&self, key: KeyType) -> StorageResult<ValueType> {
         let result = match self.map.get(&key) {
             Some(val) => Ok(val.to_owned()),
-            None => Err(StorageError::InvalidKey),
+            None => Err(err_msg("invalid key")),
         };
         Box::new(result.into_future())
     }
 
     fn clear_local(&mut self, key: KeyType) -> StorageResult<()> {
-        let result = self.map.remove(&key).map(|_| ()).ok_or(StorageError::InvalidKey);
+        let result = self.map.remove(&key).map(|_| ()).ok_or(err_msg("invalid key"));
         Box::new(result.into_future())
     }
 }

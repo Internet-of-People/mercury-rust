@@ -3,6 +3,7 @@ use std::error::Error;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 
+use failure::{err_msg, Fallible};
 use futures::prelude::*;
 use log::*;
 use serde::de::DeserializeOwned;
@@ -10,7 +11,6 @@ use serde::Serialize;
 use serde_json;
 
 use crate::asynch::*;
-use crate::error::StorageError;
 
 //pub type FileStore = AsyncFileStore;
 pub type FileStore = BlockingFileStore;
@@ -20,7 +20,7 @@ pub struct BlockingFileStore {
 }
 
 impl BlockingFileStore {
-    pub fn new(base_path_str: &str) -> Result<Self, StorageError> {
+    pub fn new(base_path_str: &str) -> Fallible<Self> {
         Ok(Self { base_path: base_path_str.into() })
     }
 
@@ -52,16 +52,12 @@ where
     fn set(&mut self, key: String, value: V) -> StorageResult<()> {
         let bytes = match serde_json::to_vec(&value) {
             Ok(bytes) => bytes,
-            Err(e) => {
-                return Box::new(
-                    Err(StorageError::StringError(e.description().to_owned())).into_future(),
-                );
-            }
+            Err(e) => return Box::new(Err(e.into()).into_future()),
         };
 
         let res = self.set_bytes(key, &bytes).map_err(|e| {
             debug!("Failed to write file: {:?}", e);
-            StorageError::StringError(e.description().to_owned())
+            e.into()
         });
         Box::new(res.into_future())
     }
@@ -69,21 +65,15 @@ where
     fn get(&self, key: String) -> StorageResult<V> {
         let bytes = match self.get_bytes(key) {
             Ok(bytes) => bytes,
-            Err(e) => {
-                return Box::new(
-                    Err(StorageError::StringError(e.description().to_owned())).into_future(),
-                );
-            }
+            Err(e) => return Box::new(Err(e.into()).into_future()),
         };
 
-        let res = serde_json::from_slice(&bytes)
-            .map_err(|e| StorageError::StringError(e.description().to_owned()));
+        let res = serde_json::from_slice(&bytes).map_err(|e| e.into());
         Box::new(res.into_future())
     }
 
     fn clear_local(&mut self, key: String) -> StorageResult<()> {
-        let res = std::fs::remove_file(self.base_path.join(key))
-            .map_err(|e| StorageError::StringError(e.description().to_owned()));
+        let res = std::fs::remove_file(self.base_path.join(key)).map_err(|e| e.into());
         Box::new(res.into_future())
     }
 }
@@ -94,18 +84,17 @@ pub struct AsyncFileStore {
 }
 
 impl AsyncFileStore {
-    pub fn new(base_path_str: &str) -> Result<Self, StorageError> {
-        let runtime = tokio::runtime::Runtime::new()
-            .map_err(|e| StorageError::StringError(e.description().to_owned()))?;
+    pub fn new(base_path_str: &str) -> Fallible<Self> {
+        let runtime = tokio::runtime::Runtime::new()?;
         Ok(Self { base_path: base_path_str.into(), runtime: RefCell::new(runtime) })
     }
 
     fn schedule<T, F>(
         &self,
         future: F,
-    ) -> Box<Future<Item = T, Error = StorageError> + Send + 'static>
+    ) -> Box<Future<Item = T, Error = failure::Error> + Send + 'static>
     where
-        F: Future<Item = T, Error = StorageError> + Send + 'static,
+        F: Future<Item = T, Error = failure::Error> + Send + 'static,
         T: Send + 'static,
     {
         trace!("Scheduling file operation on new runtime");
@@ -119,7 +108,7 @@ impl AsyncFileStore {
                 Ok(val) => val,
                 Err(e) => {
                     trace!("Returning error {}", e);
-                    Err(StorageError::StringError(e.description().to_owned()))
+                    Err(err_msg("Channel was cancelled"))
                 }
             }
         });
@@ -134,11 +123,7 @@ where
     fn set(&mut self, key: String, value: V) -> StorageResult<()> {
         let bytes = match serde_json::to_vec(&value) {
             Ok(bytes) => bytes,
-            Err(e) => {
-                return Box::new(
-                    Err(StorageError::StringError(e.description().to_owned())).into_future(),
-                );
-            }
+            Err(e) => return Box::new(Err(format_err!("{}", e)).into_future()),
         };
 
         let file_path = self.base_path.join(key);
@@ -150,10 +135,7 @@ where
             .and_then(move |file| tokio_io::io::write_all(file, bytes))
             .inspect(|_| trace!("File written"))
             .map(|(_file, _buf)| ())
-            .map_err(|e| {
-                debug!("Failed to write file: {:?}", e);
-                StorageError::StringError(e.description().to_owned())
-            });
+            .map_err(|e| format_err!("Failed to write file: {:?}", e));
         Box::new(self.schedule(fut))
     }
 
@@ -163,19 +145,18 @@ where
             .inspect(|_| trace!("File opened for read"))
             .and_then(|file| tokio_io::io::read_to_end(file, Vec::new()))
             .inspect(|(_file, bytes)| trace!("Read {} bytes from file", bytes.len()))
-            .map_err(|e| StorageError::StringError(e.description().to_owned()))
+            .map_err(|e| format_err!("{}", e))
             .and_then(|(_file, bytes)| {
                 serde_json::from_slice(&bytes).map_err(|e| {
                     debug!("Failed to read file: {:?}", e);
-                    StorageError::StringError(e.description().to_owned())
+                    format_err!("{}", e)
                 })
             });
         Box::new(self.schedule(fut))
     }
 
     fn clear_local(&mut self, key: String) -> StorageResult<()> {
-        let fut = tokio_fs::remove_file(self.base_path.join(key))
-            .map_err(|e| StorageError::StringError(e.description().to_owned()));
+        let fut = tokio_fs::remove_file(self.base_path.join(key)).map_err(|e| format_err!("{}", e));
         Box::new(self.schedule(fut))
     }
 }

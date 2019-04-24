@@ -41,8 +41,6 @@ impl PeerContext {
     }
 }
 
-pub type AsyncResult<T, E> = Box<Future<Item = T, Error = E>>;
-
 pub type AsyncStream<Elem, RemoteErr> = mpsc::Receiver<std::result::Result<Elem, RemoteErr>>;
 pub type AsyncSink<Elem, RemoteErr> = mpsc::Sender<std::result::Result<Elem, RemoteErr>>;
 

@@ -24,10 +24,7 @@ impl<T: KeyValueStore<ProfileId, Profile> + 'static> From<T> for SimpleProfileRe
 }
 
 impl SimpleProfileRepo {
-    pub fn insert(
-        &self,
-        profile: Profile,
-    ) -> AsyncResult<(), ::mercury_storage::error::StorageError> {
+    pub fn insert(&self, profile: Profile) -> AsyncFallible<()> {
         self.profiles.borrow_mut().set(profile.id(), profile.clone())
     }
 }
