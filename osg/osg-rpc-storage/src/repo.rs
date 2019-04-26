@@ -82,7 +82,7 @@ impl RpcProfileRepository {
     // TODO this should set private_data as well
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#create-profile
     pub fn set_node(&mut self, profile: PrivateProfileData) -> Fallible<()> {
-        match self.remove_node(&profile.public_data().public_key()) {
+        match self.remove_node(&profile.public_key()) {
             Ok(()) => debug!("Profile existed, removed it as part of overwriting"),
             Err(_e) => debug!("Failed to remove profile, creating it as new one"),
         };
@@ -97,7 +97,7 @@ impl RpcProfileRepository {
             let mut rpc_profile = RpcProfile::new(&profile.id(), rpc);
             // TODO consider version conflict checks here
             rpc_profile.set_version(profile.version())?;
-            rpc_profile.set_public_key(&profile.public_data().public_key())?;
+            rpc_profile.set_public_key(&profile.public_key())?;
             rpc_profile.set_osg_attribute_map(profile.public_data().attributes())?;
 
             for link in profile.public_data().links() {

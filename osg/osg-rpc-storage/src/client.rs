@@ -340,12 +340,12 @@ mod test {
 
         let my_pubkey = PublicKey::from_str("PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb")?;
         let my_id = my_pubkey.key_id();
-        let my_data = PrivateProfileData::new(&my_pubkey);
+        let my_data = PrivateProfileData::empty(&my_pubkey);
         repo.set_node(my_data.clone())?;
         let me = repo.get_node(&my_id)?;
         let peer_pubkey = PublicKey::from_str("PezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z")?;
         let peer_id = peer_pubkey.key_id();
-        let peer_data = PrivateProfileData::new(&peer_pubkey);
+        let peer_data = PrivateProfileData::empty(&peer_pubkey);
         repo.set_node(peer_data.clone())?;
         let peer = repo.get_node(&peer_id)?;
 

@@ -35,7 +35,7 @@ pub struct PublicProfileData {
 }
 
 impl PublicProfileData {
-    pub fn create(
+    pub fn new(
         public_key: PublicKey,
         version: Version,
         links: Vec<Link>,
@@ -44,13 +44,8 @@ impl PublicProfileData {
         Self { public_key, version, links, attributes }
     }
 
-    pub fn new(public_key: &PublicKey) -> Self {
-        Self {
-            public_key: public_key.to_owned(),
-            version: 1,
-            links: Default::default(),
-            attributes: Default::default(),
-        }
+    pub fn empty(public_key: &PublicKey) -> Self {
+        Self::new(public_key.to_owned(), 1, Default::default(), Default::default())
     }
 
     pub fn tombstone(public_key: &PublicKey, last_version: Version) -> Self {
@@ -121,12 +116,12 @@ pub struct PrivateProfileData {
 }
 
 impl PrivateProfileData {
-    pub fn create(public_data: PublicProfileData, private_data: Vec<u8>) -> Self {
+    pub fn new(public_data: PublicProfileData, private_data: Vec<u8>) -> Self {
         Self { public_data, private_data }
     }
 
-    pub fn new(public_key: &PublicKey) -> Self {
-        Self { public_data: PublicProfileData::new(public_key), private_data: Default::default() }
+    pub fn empty(public_key: &PublicKey) -> Self {
+        Self::new(PublicProfileData::empty(public_key), vec![])
     }
 
     pub fn tombstone(public_key: &PublicKey, last_version: Version) -> Self {
@@ -155,5 +150,8 @@ impl PrivateProfileData {
     }
     pub fn version(&self) -> Version {
         self.public_data.version()
+    }
+    pub fn public_key(&self) -> PublicKey {
+        self.public_data.public_key()
     }
 }

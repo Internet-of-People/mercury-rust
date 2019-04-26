@@ -301,7 +301,7 @@ impl Api for Context {
 
     fn create_profile(&mut self) -> ApiRes {
         let new_profile_key = self.mut_vault().create_key()?;
-        let empty_profile = PrivateProfileData::new(&new_profile_key);
+        let empty_profile = PrivateProfileData::empty(&new_profile_key);
         self.local_repo.set(empty_profile).wait()?;
         info!("Created and activated profile with id {}", new_profile_key.key_id());
         Ok(())

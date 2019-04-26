@@ -143,13 +143,13 @@ mod test {
         let my_pubkey = PublicKey::from_str("PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb")?;
         //let my_id = ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?;
         let my_id = my_pubkey.key_id();
-        let mut my_data = PrivateProfileData::new(&my_pubkey);
+        let mut my_data = PrivateProfileData::empty(&my_pubkey);
         repo.set(my_data.clone()).wait()?;
 
         let peer_pubkey = PublicKey::from_str("PezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z")?;
         //let peer_id = ProfileId::from_str("Iez25N5WZ1Q6TQpgpyYgiu9gTX")?;
         let peer_id = peer_pubkey.key_id();
-        let peer_data = PrivateProfileData::new(&peer_pubkey);
+        let peer_data = PrivateProfileData::empty(&peer_pubkey);
         repo.set(peer_data.clone()).wait()?;
 
         let mut me = repo.get(&my_id).wait()?;
@@ -173,8 +173,8 @@ mod test {
         me = repo.get(&my_id).wait()?;
         assert_eq!(
             me,
-            PrivateProfileData::create(
-                PublicProfileData::create(my_pubkey, 3, Default::default(), Default::default()),
+            PrivateProfileData::new(
+                PublicProfileData::new(my_pubkey, 3, Default::default(), Default::default()),
                 vec![]
             )
         );

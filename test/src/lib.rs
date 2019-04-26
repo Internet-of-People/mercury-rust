@@ -22,15 +22,15 @@ pub fn generate_keypair() -> PrivateKey {
 pub fn generate_ownprofile(attributes: AttributeMap) -> (OwnProfile, PrivateKeySigner) {
     let private_key = generate_keypair();
     let signer = PrivateKeySigner::new(private_key).expect("TODO: this should not ever fail");
-    let profile = Profile::create(signer.public_key(), 1, vec![], attributes);
-    let own_profile = OwnProfile::new(&profile, &vec![]);
+    let profile = Profile::new(signer.public_key(), 1, vec![], attributes);
+    let own_profile = OwnProfile::new(profile, vec![]);
     (own_profile, signer)
 }
 
 //facet: ProfileFacet
 pub fn generate_profile(attributes: AttributeMap) -> (Profile, PrivateKeySigner) {
     let (own_profile, signer) = generate_ownprofile(attributes);
-    (own_profile.profile, signer)
+    (own_profile.public_data(), signer)
 }
 
 pub fn generate_persona() -> (OwnProfile, PrivateKeySigner) {
@@ -53,7 +53,7 @@ pub fn default_home_server(handle: &reactor::Handle) -> HomeServer {
 }
 
 pub fn first_home_of(own_profile: &OwnProfile) -> RelationProof {
-    match own_profile.profile.as_persona() {
+    match own_profile.public_data().as_persona() {
         Some(ref persona) => persona.homes[0].clone(),
         _ => panic!("Profile is not a persona, no home found"),
     }

@@ -339,7 +339,7 @@ impl MyProfile for MyProfileImpl {
     }
 
     fn homes(&self) -> AsyncResult<Vec<RelationProof>, Error> {
-        let res = match self.own_profile.borrow().profile.as_persona() {
+        let res = match self.own_profile.borrow().public_data().as_persona() {
             Some(ref persona) => Ok(persona.homes.clone()),
             None => Err(Error::from(ErrorKind::PersonaProfileExpected)),
         };
@@ -371,7 +371,7 @@ impl MyProfile for MyProfileImpl {
             .map(move |own_profile| {
                 own_profile_cell.replace(own_profile.clone());
                 // TODO remove this after testing
-                profile_repo.insert(own_profile.profile);
+                profile_repo.insert(own_profile.public_data());
             });
         Box::new(reg_fut)
     }
@@ -452,7 +452,7 @@ impl MyProfile for MyProfileImpl {
     fn accept_relation(&self, half_proof: &RelationHalfProof) -> AsyncResult<RelationProof, Error> {
         debug!("Trying to send pairing response");
 
-        if half_proof.peer_id != self.own_profile.borrow().profile.id() {
+        if half_proof.peer_id != self.own_profile.borrow().id() {
             return Box::new(Err(ErrorKind::LookupFailed.into()).into_future());
         }
 

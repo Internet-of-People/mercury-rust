@@ -30,7 +30,7 @@ pub fn init_connect_service(
         home_addr_str.parse().map_err(|_e| Error::from(ErrorKind::LookupFailed))?;
     let home_multiaddr = home_addr.to_multiaddr().expect("Failed to parse server address");
     let home_attrs = HomeFacet::new(vec![home_multiaddr], vec![]).to_attributes();
-    let home_profile = Profile::create(home_pubkey, 1, vec![], home_attrs);
+    let home_profile = Profile::new(home_pubkey, 1, vec![], home_attrs);
 
     let my_private_key_bytes = std::fs::read(my_private_profilekey_file)
         .map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
@@ -40,7 +40,7 @@ pub fn init_connect_service(
     let my_signer = Rc::new(crypto::PrivateKeySigner::new(my_private_key).unwrap()) as Rc<Signer>;
     let my_profile_id = my_signer.profile_id().to_owned();
     let my_attrs = PersonaFacet::new(vec![], vec![]).to_attributes();
-    let my_profile = Profile::create(my_signer.public_key(), 1, vec![], my_attrs);
+    let my_profile = Profile::new(my_signer.public_key(), 1, vec![], my_attrs);
 
     // TODO consider that client should be able to start up without being a DHT client,
     //      e.g. with having only a Home URL including hints to access Home
@@ -59,7 +59,7 @@ pub fn init_connect_service(
     let profile_repo = Rc::new(profile_repo);
 
     let my_profiles = Rc::new(vec![my_profile_id.clone()].iter().cloned().collect::<HashSet<_>>());
-    let my_own_profile = OwnProfile::new(&my_profile, &[]);
+    let my_own_profile = OwnProfile::new(my_profile, vec![]);
     let signers = vec![(my_profile_id.clone(), my_signer)].into_iter().collect();
     let signer_factory: Rc<SignerFactory> = Rc::new(SignerFactory::new(signers));
     let home_connector = Rc::new(SimpleTcpHomeConnector::new(reactor.handle()));

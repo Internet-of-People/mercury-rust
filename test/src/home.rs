@@ -64,7 +64,7 @@ impl TestClient {
 
         // server
         let home_client_context =
-            Rc::new(PeerContext::new(home_signer.clone(), ownprofile.profile.public_key()));
+            Rc::new(PeerContext::new(home_signer.clone(), ownprofile.public_key()));
 
         let home_connection =
             Rc::new(HomeConnectionServer::new(home_client_context, home_server.clone()).unwrap());
@@ -101,7 +101,7 @@ impl TestClient {
         home_profile: &Profile,
     ) -> Self {
         let home_client_context =
-            Rc::new(PeerContext::new(home_signer.clone(), client_ownprofile.profile.public_key()));
+            Rc::new(PeerContext::new(home_signer.clone(), client_ownprofile.public_key()));
 
         let client_home_connection =
             Rc::new(HomeConnectionServer::new(home_client_context, home_server.clone()).unwrap());
@@ -198,7 +198,7 @@ fn test_home_events(mut setup: TestSetup) {
 
     let half_proof = RelationHalfProof::new(
         "friend",
-        &ownprofile2.profile.id(),
+        &ownprofile2.id(),
         setup.testclient.home_context.my_signer(),
     );
     let pair_result =
@@ -211,7 +211,7 @@ fn test_home_events(mut setup: TestSetup) {
 
     match pairing_request_event {
         ProfileEvent::PairingRequest(half_proof) => {
-            assert_eq!(half_proof.peer_id, ownprofile2.profile.id());
+            assert_eq!(half_proof.peer_id, ownprofile2.id());
 
             let proof = RelationProof::sign_remaining_half(&half_proof, &*signer2).unwrap();
             setup.reactor.run(testclient2.home_connection.pair_response(proof)).unwrap();
@@ -229,10 +229,10 @@ fn test_home_events(mut setup: TestSetup) {
             validator
                 .validate_relation_proof(
                     &proof,
-                    &ownprofile1.profile.id(),
-                    &ownprofile1.profile.public_key(),
-                    &ownprofile2.profile.id(),
-                    &ownprofile2.profile.public_key(),
+                    &ownprofile1.id(),
+                    &ownprofile1.public_key(),
+                    &ownprofile2.id(),
+                    &ownprofile2.public_key(),
                 )
                 .expect("proof should be valid");
         }
@@ -253,8 +253,7 @@ fn test_home_login(mut setup: TestSetup) {
 fn test_home_claim(mut setup: TestSetup) {
     let registered_ownprofile = register_client_from_setup(&mut setup);
 
-    let claim_fut =
-        setup.testclient.home_connection.claim(setup.testclient.ownprofile.profile.id());
+    let claim_fut = setup.testclient.home_connection.claim(setup.testclient.ownprofile.id());
     let claimed_ownprofile = setup.reactor.run(claim_fut).unwrap();
 
     assert_eq!(registered_ownprofile, claimed_ownprofile);
@@ -264,7 +263,7 @@ fn test_home_register(mut setup: TestSetup) {
     let registered_ownprofile = register_client_from_setup(&mut setup);
     let validator = CompositeValidator::default();
 
-    match registered_ownprofile.profile.as_persona() {
+    match registered_ownprofile.public_data().as_persona() {
         Some(ref persona) => {
             let home_proof = &persona.homes[0];
 
@@ -273,8 +272,8 @@ fn test_home_register(mut setup: TestSetup) {
                     &home_proof,
                     &setup.testclient.home_context.peer_id(),
                     &setup.testclient.home_context.peer_pubkey(),
-                    &setup.testclient.ownprofile.profile.id(),
-                    &setup.testclient.ownprofile.profile.public_key()
+                    &setup.testclient.ownprofile.id(),
+                    &setup.testclient.ownprofile.public_key()
                 ),
                 Ok(())
             );
@@ -308,7 +307,7 @@ fn test_home_call(mut setup: TestSetup) {
 
     let relation_type = "friend";
     let relation_half_proof =
-        RelationHalfProof::new(relation_type, &callee_ownprofile.profile.id(), &*caller_signer);
+        RelationHalfProof::new(relation_type, &callee_ownprofile.id(), &*caller_signer);
     let relation = RelationProof::sign_remaining_half(
         &relation_half_proof,
         &*setup.testclient.home_context.my_signer(),

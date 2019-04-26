@@ -134,14 +134,14 @@ impl<'a> TryFrom<own_profile::Reader<'a>> for OwnProfile {
     fn try_from(src: own_profile::Reader) -> Result<Self, Self::Error> {
         let profile = bytes_to_profile(src.get_profile()?)?;
         let private_data = src.get_private_data()?;
-        Ok(OwnProfile::new(&profile, &private_data))
+        Ok(OwnProfile::new(profile, private_data.to_owned()))
     }
 }
 
 impl<'a> FillFrom<OwnProfile> for own_profile::Builder<'a> {
     fn fill_from(mut self, src: &OwnProfile) {
-        self.set_private_data(&src.priv_data);
-        self.set_profile(&profile_to_bytes(&src.profile));
+        self.set_private_data(&src.private_data());
+        self.set_profile(&profile_to_bytes(&src.public_data()));
     }
 }
 

@@ -20,7 +20,7 @@ pub fn synchronize(state: &mut State, repo: &mut PrivateProfileRepository) -> Fa
 
         if repo.get(&id).wait().is_err() {
             info!("Reconstructing profile {}", id);
-            let profile = PrivateProfileData::new(&key);
+            let profile = PrivateProfileData::empty(&key);
             repo.set(profile).wait()?;
         }
     }

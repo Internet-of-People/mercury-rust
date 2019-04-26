@@ -166,11 +166,11 @@ impl Home for HomeConnectionServer {
         half_proof: RelationHalfProof,
         //_invite: Option<HomeInvitation>,
     ) -> Box<Future<Item = OwnProfile, Error = (OwnProfile, Error)>> {
-        if own_prof.profile.id() != self.context.peer_id() {
+        if own_prof.id() != self.context.peer_id() {
             return Box::new(future::err((own_prof, ErrorKind::ProfileMismatch.into())));
         }
 
-        if own_prof.profile.public_key() != self.context.peer_pubkey() {
+        if own_prof.public_key() != self.context.peer_pubkey() {
             return Box::new(future::err((own_prof, ErrorKind::PublicKeyMismatch.into())));
         }
 
@@ -211,30 +211,31 @@ impl Home for HomeConnectionServer {
                 Ok(proof) => proof,
             };
 
-        let own_prof_modified = match own_prof.profile.as_persona() {
+        let pub_prof = own_prof.public_data();
+        let own_prof_modified = match pub_prof.as_persona() {
             Some(ref mut persona_facet) => {
                 // TODO this should be shorter, just adds a new home but rebuilds a lot of data structure
                 persona_facet.homes.push(home_proof);
                 let attributes = persona_facet.to_attributes();
-                let profile = Profile::create(
-                    own_prof.profile.public_key(),
-                    own_prof.profile.version(),
-                    own_prof.profile.links().to_owned(),
+                let profile = Profile::new(
+                    pub_prof.public_key(),
+                    pub_prof.version(),
+                    pub_prof.links().to_owned(),
                     attributes,
                 );
-                OwnProfile::new(&profile, &own_prof.priv_data)
+                OwnProfile::new(profile, own_prof.private_data())
             }
             None => return Box::new(future::err((own_prof, ErrorKind::PersonaExpected.into()))),
         };
 
-        let pub_prof_modified = own_prof_modified.profile.clone();
+        let pub_prof_modified = own_prof_modified.public_data();
         let local_store = self.server.hosted_profile_db.clone();
         let distributed_store = self.server.public_profile_dht.clone();
         let reg_fut = self
             .server
             .hosted_profile_db
             .borrow()
-            .get(own_prof.profile.id())
+            .get(own_prof.id())
             .then(|get_res| {
                 match get_res {
                     Ok(_stored_prof) => {
@@ -260,7 +261,7 @@ impl Home for HomeConnectionServer {
                 return local_store
                     .borrow_mut()
                     .set(
-                        own_prof_modified.profile.id(),
+                        own_prof_modified.id(),
                         own_prof_modified.clone(),
                     )
                     .map(|_| own_prof_modified)
@@ -352,8 +353,8 @@ impl Home for HomeConnectionServer {
                         &relation,
                         &peer_id_clone,
                         &peer_pubkey_clone,
-                        &profile_data.profile.id(),
-                        &profile_data.profile.public_key(),
+                        &profile_data.id(),
+                        &profile_data.public_key(),
                     )
                     .map_err(|err| err.context(ErrorKind::InvalidRelationProof).into())
             })
@@ -408,8 +409,8 @@ impl Home for HomeConnectionServer {
                         &relation,
                         &peer_id_clone,
                         &peer_pubkey_clone,
-                        &profile_data.profile.id(),
-                        &profile_data.profile.public_key(),
+                        &profile_data.id(),
+                        &profile_data.public_key(),
                     )
                     .map_err(|err| err.context(ErrorKind::InvalidRelationProof).into())
             })
@@ -534,11 +535,11 @@ impl Drop for HomeSessionServer {
 
 impl HomeSession for HomeSessionServer {
     fn update(&self, own_prof: OwnProfile) -> Box<Future<Item = (), Error = Error>> {
-        if own_prof.profile.id() != self.context.peer_id() {
+        if own_prof.id() != self.context.peer_id() {
             return Box::new(future::err(ErrorKind::ProfileMismatch.into()));
         }
 
-        if own_prof.profile.public_key() != self.context.peer_pubkey() {
+        if own_prof.public_key() != self.context.peer_pubkey() {
             return Box::new(future::err(ErrorKind::PublicKeyMismatch.into()));
         }
 
@@ -546,11 +547,11 @@ impl HomeSession for HomeSessionServer {
             .server
             .hosted_profile_db
             .borrow()
-            .get(own_prof.profile.id())
+            .get(own_prof.id())
             // NOTE Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
             .and_then({
                 let distributed_store = self.server.public_profile_dht.clone();
-                let pub_prof = own_prof.profile.clone();
+                let pub_prof = own_prof.public_data();
                 move |_own_prof_orig| {
                     // Update public profile parts in distributed storage (e.g. DHT)
                     return distributed_store
@@ -564,7 +565,7 @@ impl HomeSession for HomeSessionServer {
                     // Update private profile info in local storage only (e.g. SQL)
                     return local_store
                         .borrow_mut()
-                        .set(own_prof.profile.id(), own_prof);
+                        .set(own_prof.id(), own_prof);
                 }
             })
             // TODO: fix it after storage error refactorings

@@ -33,8 +33,8 @@ impl TryFrom<ProfilePtr> for PrivateProfileData {
     type Error = failure::Error;
     fn try_from(value: ProfilePtr) -> Result<Self, Self::Error> {
         let profile = value.borrow();
-        Ok(PrivateProfileData::create(
-            PublicProfileData::create(
+        Ok(PrivateProfileData::new(
+            PublicProfileData::new(
                 profile.public_key()?,
                 profile.version()?,
                 profile.links()?,

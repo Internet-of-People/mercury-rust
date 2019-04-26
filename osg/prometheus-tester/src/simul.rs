@@ -107,7 +107,7 @@ impl<'a> Simulation<'a> {
         let idx = self.state.add_user();
         let key = self.vault.public_key(idx)?;
 
-        let profile = PrivateProfileData::new(&key);
+        let profile = PrivateProfileData::empty(&key);
         self.repo.set(profile).wait()?;
         info!("Generated profile {}: {}", idx, key.key_id());
 

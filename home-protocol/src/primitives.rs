@@ -8,6 +8,7 @@ use multiaddr::{Multiaddr, ToMultiaddr};
 use crate::*;
 
 pub type Profile = osg::model::PublicProfileData;
+pub type OwnProfile = osg::model::PrivateProfileData;
 pub use osg::model::{AttributeId, AttributeMap, AttributeValue, ProfileId, PublicKey, Version};
 pub type PrivateKey = keyvault::multicipher::MPrivateKey;
 pub type Signature = keyvault::multicipher::MSignature;
@@ -90,22 +91,6 @@ impl FacetExtractor for Profile {
 
     fn as_persona(&self) -> Option<PersonaFacet> {
         PersonaFacet::as_persona(self.attributes())
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct OwnProfile {
-    /// The public part of the profile. In the current implementation it must contain a single PersonaFacet.
-    pub profile: Profile,
-
-    /// Hierarchical, json-like data structure, encoded using multicodec library,
-    /// encrypted with the persona's keys, and stored on the home server
-    pub priv_data: Vec<u8>, // TODO maybe multicodec output?
-}
-
-impl OwnProfile {
-    pub fn new(profile: &Profile, private_data: &[u8]) -> Self {
-        Self { profile: profile.clone(), priv_data: private_data.to_owned() }
     }
 }
 
