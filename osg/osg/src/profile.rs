@@ -15,6 +15,7 @@ pub trait Profile {
     fn version(&self) -> Fallible<Version>;
     fn attributes(&self) -> Fallible<AttributeMap>;
     fn links(&self) -> Fallible<Vec<Link>>;
+    fn private_data(&self) -> Fallible<Vec<u8>>;
 
     fn set_version(&mut self, version: Version) -> Fallible<()>;
 
@@ -28,15 +29,18 @@ pub trait Profile {
     //fn get_signer(&self) -> Arc<Signer>;
 }
 
-impl TryFrom<ProfilePtr> for ProfileData {
+impl TryFrom<ProfilePtr> for PrivateProfileData {
     type Error = failure::Error;
     fn try_from(value: ProfilePtr) -> Result<Self, Self::Error> {
         let profile = value.borrow();
-        Ok(ProfileData::create(
-            profile.public_key()?,
-            profile.version()?,
-            profile.links()?,
-            profile.attributes()?,
+        Ok(PrivateProfileData::create(
+            PublicProfileData::create(
+                profile.public_key()?,
+                profile.version()?,
+                profile.links()?,
+                profile.attributes()?,
+            ),
+            profile.private_data()?,
         ))
     }
 }

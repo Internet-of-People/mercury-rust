@@ -10,25 +10,33 @@ use serde_derive::{Deserialize, Serialize};
 use crate::model::*;
 use keyvault::PublicKey as KeyVaultPublicKey;
 
-pub trait ProfileRepository {
-    fn get(&self, id: &ProfileId) -> AsyncFallible<ProfileData>;
-    fn set(&mut self, profile: ProfileData) -> AsyncFallible<()>;
-    // clear up links and attributes to leave an empty tombstone in place of the profile.
-    fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()>;
+// TODO consider authorization: should we require signatures here or leave it to a different layer?
+pub trait PublicProfileRepository {
+    fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData>;
+    //    fn set(&mut self, profile: PublicProfileData) -> AsyncFallible<()>;
+    //    fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()>;
 }
 
-pub trait LocalProfileRepository: ProfileRepository {
-    // NOTE similar to set() but without version check, must be able to revert to a previous version
-    fn restore(&mut self, id: ProfileId, profile: ProfileData) -> Fallible<()>;
-}
-
+// TODO should we merge this with PublicProfileRepository?
 pub trait ProfileExplorer {
     fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>>;
 }
 
+pub trait PrivateProfileRepository: PublicProfileRepository {
+    fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData>;
+    fn set(&mut self, profile: PrivateProfileData) -> AsyncFallible<()>;
+    // clear up links and attributes to leave an empty tombstone in place of the profile.
+    fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()>;
+}
+
+pub trait LocalProfileRepository: PublicProfileRepository {
+    // NOTE similar to set() but without version check, must be able to revert to a previous version
+    fn restore(&mut self, profile: PrivateProfileData) -> Fallible<()>;
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct FileProfileRepository {
-    profiles: HashMap<ProfileId, ProfileData>,
+    profiles: HashMap<ProfileId, PrivateProfileData>,
     #[serde(skip)]
     filename: PathBuf,
 }
@@ -60,7 +68,7 @@ impl FileProfileRepository {
         Ok(repo)
     }
 
-    fn put(&mut self, id: ProfileId, profile: ProfileData) -> Fallible<()> {
+    fn put(&mut self, id: ProfileId, profile: PrivateProfileData) -> Fallible<()> {
         self.profiles.insert(id, profile);
         self.save()?;
         Ok(())
@@ -70,13 +78,23 @@ impl FileProfileRepository {
         let id = key.key_id();
         let profile =
             self.profiles.get(&id).ok_or_else(|| format_err!("Profile not found: {}", key))?;
-        self.put(id, ProfileData::tombstone(key, profile.version()))
+        self.put(id, PrivateProfileData::tombstone(key, profile.version()))
     }
 }
 
-impl ProfileRepository for FileProfileRepository {
-    fn get(&self, id: &ProfileId) -> AsyncFallible<ProfileData> {
-        // TODO we probably should also have some nicely typed errors here
+impl PublicProfileRepository for FileProfileRepository {
+    fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
+        let res = self
+            .profiles
+            .get(id)
+            .map(|prof_ref| prof_ref.public_data())
+            .ok_or_else(|| format_err!("Profile not found: {}", id));
+        Box::new(res.into_future())
+    }
+}
+
+impl PrivateProfileRepository for FileProfileRepository {
+    fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData> {
         let res = self
             .profiles
             .get(id)
@@ -85,7 +103,7 @@ impl ProfileRepository for FileProfileRepository {
         Box::new(res.into_future())
     }
 
-    fn set(&mut self, profile: ProfileData) -> AsyncFallible<()> {
+    fn set(&mut self, profile: PrivateProfileData) -> AsyncFallible<()> {
         if let Some(old_profile) = self.profiles.get(&profile.id()) {
             if old_profile.version() > profile.version()
                 || (old_profile.version() == profile.version() && *old_profile != profile)
@@ -105,8 +123,8 @@ impl ProfileRepository for FileProfileRepository {
 }
 
 impl LocalProfileRepository for FileProfileRepository {
-    fn restore(&mut self, id: ProfileId, profile: ProfileData) -> Fallible<()> {
-        self.put(id, profile)
+    fn restore(&mut self, profile: PrivateProfileData) -> Fallible<()> {
+        self.put(profile.id(), profile)
     }
 }
 
@@ -125,13 +143,13 @@ mod test {
         let my_pubkey = PublicKey::from_str("PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb")?;
         //let my_id = ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?;
         let my_id = my_pubkey.key_id();
-        let mut my_data = ProfileData::new(&my_pubkey);
+        let mut my_data = PrivateProfileData::new(&my_pubkey);
         repo.set(my_data.clone()).wait()?;
 
         let peer_pubkey = PublicKey::from_str("PezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z")?;
         //let peer_id = ProfileId::from_str("Iez25N5WZ1Q6TQpgpyYgiu9gTX")?;
         let peer_id = peer_pubkey.key_id();
-        let peer_data = ProfileData::new(&peer_pubkey);
+        let peer_data = PrivateProfileData::new(&peer_pubkey);
         repo.set(peer_data.clone()).wait()?;
 
         let mut me = repo.get(&my_id).wait()?;
@@ -141,19 +159,25 @@ mod test {
 
         let attr_id = "1 2 3".to_owned();
         let attr_val = "one two three".to_owned();
-        my_data.set_attribute(attr_id, attr_val);
-        let _link = my_data.create_link(&peer_id);
-        my_data.increase_version();
+        my_data.mut_public_data().set_attribute(attr_id, attr_val);
+        let _link = my_data.mut_public_data().create_link(&peer_id);
+        my_data.mut_public_data().increase_version();
         repo.set(my_data.clone()).wait()?;
         me = repo.get(&my_id).wait()?;
         assert_eq!(me, my_data);
         assert_eq!(me.version(), 2);
-        assert_eq!(me.attributes().len(), 1);
-        assert_eq!(me.links().len(), 1);
+        assert_eq!(me.public_data().attributes().len(), 1);
+        assert_eq!(me.public_data().links().len(), 1);
 
         repo.clear(&my_pubkey).wait()?;
         me = repo.get(&my_id).wait()?;
-        assert_eq!(me, ProfileData::create(my_pubkey, 3, Default::default(), Default::default()));
+        assert_eq!(
+            me,
+            PrivateProfileData::create(
+                PublicProfileData::create(my_pubkey, 3, Default::default(), Default::default()),
+                vec![]
+            )
+        );
 
         std::fs::remove_file(&tmp_file)?;
 

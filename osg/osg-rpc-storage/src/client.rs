@@ -219,6 +219,10 @@ where
         Ok(links)
     }
 
+    fn private_data(&self) -> Fallible<Vec<u8>> {
+        Ok(vec![])
+    }
+
     fn set_version(&mut self, version: Version) -> Fallible<()> {
         //let version = self.version()? + 1;
         let version_rmp = rmp_serde::to_vec(&version)?;
@@ -336,12 +340,12 @@ mod test {
 
         let my_pubkey = PublicKey::from_str("PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb")?;
         let my_id = my_pubkey.key_id();
-        let my_data = ProfileData::new(&my_pubkey);
+        let my_data = PrivateProfileData::new(&my_pubkey);
         repo.set_node(my_data.clone())?;
         let me = repo.get_node(&my_id)?;
         let peer_pubkey = PublicKey::from_str("PezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z")?;
         let peer_id = peer_pubkey.key_id();
-        let peer_data = ProfileData::new(&peer_pubkey);
+        let peer_data = PrivateProfileData::new(&peer_pubkey);
         repo.set_node(peer_data.clone())?;
         let peer = repo.get_node(&peer_id)?;
 

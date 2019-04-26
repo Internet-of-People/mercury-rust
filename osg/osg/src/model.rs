@@ -26,7 +26,7 @@ pub struct Link {
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ProfileData {
+pub struct PublicProfileData {
     public_key: PublicKey,
     version: Version,
     links: Vec<Link>,
@@ -34,7 +34,7 @@ pub struct ProfileData {
     // TODO consider adding a signature of the profile data here
 }
 
-impl ProfileData {
+impl PublicProfileData {
     pub fn create(
         public_key: PublicKey,
         version: Version,
@@ -110,5 +110,50 @@ impl ProfileData {
 
     pub fn clear_attribute(&mut self, key: &AttributeId) {
         self.attributes.remove(key);
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct PrivateProfileData {
+    public_data: PublicProfileData,
+    private_data: Vec<u8>,
+    // TODO consider adding a signature of the profile data here
+}
+
+impl PrivateProfileData {
+    pub fn create(public_data: PublicProfileData, private_data: Vec<u8>) -> Self {
+        Self { public_data, private_data }
+    }
+
+    pub fn new(public_key: &PublicKey) -> Self {
+        Self { public_data: PublicProfileData::new(public_key), private_data: Default::default() }
+    }
+
+    pub fn tombstone(public_key: &PublicKey, last_version: Version) -> Self {
+        Self {
+            public_data: PublicProfileData::tombstone(public_key, last_version),
+            private_data: Default::default(),
+        }
+    }
+
+    pub fn public_data(&self) -> PublicProfileData {
+        self.public_data.clone()
+    }
+    pub fn private_data(&self) -> Vec<u8> {
+        self.private_data.clone()
+    }
+
+    pub fn mut_public_data(&mut self) -> &mut PublicProfileData {
+        &mut self.public_data
+    }
+    pub fn mut_private_data(&mut self) -> &mut Vec<u8> {
+        &mut self.private_data
+    }
+
+    pub fn id(&self) -> ProfileId {
+        self.public_data.id()
+    }
+    pub fn version(&self) -> Version {
+        self.public_data.version()
     }
 }

@@ -13,7 +13,7 @@ use crate::messages;
 use keyvault::PublicKey as KeyVaultPublicKey;
 use osg::model::*;
 use osg::profile::{Profile, ProfilePtr};
-use osg::repo::{ProfileExplorer, ProfileRepository};
+use osg::repo::{PrivateProfileRepository, ProfileExplorer, PublicProfileRepository};
 
 #[derive(Clone)]
 pub struct RpcProfileRepository {
@@ -62,6 +62,7 @@ impl RpcProfileRepository {
         Ok(nodes)
     }
 
+    // TODO this should get private_data as well
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#show-profile
     pub fn get_node(&self, id: &ProfileId) -> Fallible<ProfilePtr> {
         self.rpc().and_then(|rpc| {
@@ -78,9 +79,10 @@ impl RpcProfileRepository {
         })
     }
 
+    // TODO this should set private_data as well
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#create-profile
-    pub fn set_node(&mut self, profile: ProfileData) -> Fallible<()> {
-        match self.remove_node(&profile.public_key()) {
+    pub fn set_node(&mut self, profile: PrivateProfileData) -> Fallible<()> {
+        match self.remove_node(&profile.public_data().public_key()) {
             Ok(()) => debug!("Profile existed, removed it as part of overwriting"),
             Err(_e) => debug!("Failed to remove profile, creating it as new one"),
         };
@@ -95,10 +97,10 @@ impl RpcProfileRepository {
             let mut rpc_profile = RpcProfile::new(&profile.id(), rpc);
             // TODO consider version conflict checks here
             rpc_profile.set_version(profile.version())?;
-            rpc_profile.set_public_key(&profile.public_key())?;
-            rpc_profile.set_osg_attribute_map(profile.attributes())?;
+            rpc_profile.set_public_key(&profile.public_data().public_key())?;
+            rpc_profile.set_osg_attribute_map(profile.public_data().attributes())?;
 
-            for link in profile.links() {
+            for link in profile.public_data().links() {
                 rpc_profile.create_link(&link.peer_profile)?;
             }
             Ok(())
@@ -107,30 +109,39 @@ impl RpcProfileRepository {
     }
 }
 
+impl PublicProfileRepository for RpcProfileRepository {
+    fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
+        let res = (self as &PrivateProfileRepository).get(id).map(|prof| prof.public_data());
+        Box::new(res.into_future())
+    }
+}
+
 // TODO !!! This implementation must not be used in real async environment !!!
 //          Synchronous calls in the implementation like get_node() and set_node()
 //          use std networking and block the current thread, violating async execution.
-impl ProfileRepository for RpcProfileRepository {
+impl PrivateProfileRepository for RpcProfileRepository {
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#show-profile
-    fn get(&self, id: &ProfileId) -> AsyncFallible<ProfileData> {
-        let res = self.get_node(id).and_then(|rpc_profile| ProfileData::try_from(rpc_profile));
+    fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData> {
+        let res =
+            self.get_node(id).and_then(|rpc_profile| PrivateProfileData::try_from(rpc_profile));
         Box::new(res.into_future())
     }
 
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#create-profile
-    fn set(&mut self, profile: ProfileData) -> AsyncFallible<()> {
+    fn set(&mut self, profile: PrivateProfileData) -> AsyncFallible<()> {
         let res = self.set_node(profile);
         Box::new(res.into_future())
     }
 
     fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()> {
-        let profile_res =
-            self.get_node(&key.key_id()).and_then(|rpc_profile| ProfileData::try_from(rpc_profile));
+        let profile_res = self
+            .get_node(&key.key_id())
+            .and_then(|rpc_profile| PrivateProfileData::try_from(rpc_profile));
         let profile = match profile_res {
             Ok(profile) => profile,
             Err(e) => return Box::new(future::err(e)),
         };
-        let res = self.set(ProfileData::tombstone(key, profile.version()));
+        let res = self.set(PrivateProfileData::tombstone(key, profile.version()));
         Box::new(res)
     }
 }

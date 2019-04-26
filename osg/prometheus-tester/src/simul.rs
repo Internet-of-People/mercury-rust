@@ -11,8 +11,8 @@ use rand::{
 
 use crate::{state::State, vault::Vault};
 use keyvault::PublicKey as KeyVaultPublicKey;
-use osg::model::{ProfileData, ProfileId};
-use osg::repo::ProfileRepository;
+use osg::model::{PrivateProfileData, ProfileId};
+use osg::repo::PrivateProfileRepository;
 
 #[derive(Clone)]
 pub struct InlinkCount {
@@ -44,13 +44,13 @@ impl fmt::Display for InlinkCount {
 
 pub struct Simulation<'a> {
     state: &'a mut State,
-    repo: &'a mut ProfileRepository,
+    repo: &'a mut PrivateProfileRepository,
     inlinks: BTreeMap<usize, usize>,
     vault: Vault,
 }
 
 impl<'a> Simulation<'a> {
-    pub fn new(state: &'a mut State, repo: &'a mut ProfileRepository) -> Fallible<Self> {
+    pub fn new(state: &'a mut State, repo: &'a mut PrivateProfileRepository) -> Fallible<Self> {
         let vault = Vault::new(state.vault_seed())?;
         let mut inlinks = BTreeMap::new();
         for user in state.into_iter() {
@@ -107,7 +107,7 @@ impl<'a> Simulation<'a> {
         let idx = self.state.add_user();
         let key = self.vault.public_key(idx)?;
 
-        let profile = ProfileData::new(&key);
+        let profile = PrivateProfileData::new(&key);
         self.repo.set(profile).wait()?;
         info!("Generated profile {}: {}", idx, key.key_id());
 
@@ -154,8 +154,8 @@ impl<'a> Simulation<'a> {
     fn create_link(&mut self, id: ProfileId, idx: usize, peer: usize) -> Fallible<()> {
         let peer_id = self.vault.profile_id(peer)?;
         let mut profile = self.repo.get(&id).wait()?;
-        profile.create_link(&peer_id);
-        profile.increase_version();
+        profile.mut_public_data().create_link(&peer_id);
+        profile.mut_public_data().increase_version();
         self.repo.set(profile).wait()?;
         self.state[idx].add_link(peer);
         *self.inlinks.entry(peer).or_insert(0usize) += 1;

@@ -7,7 +7,7 @@ use multiaddr::{Multiaddr, ToMultiaddr};
 
 use crate::*;
 
-pub type Profile = osg::model::ProfileData;
+pub type Profile = osg::model::PublicProfileData;
 pub use osg::model::{AttributeId, AttributeMap, AttributeValue, ProfileId, PublicKey, Version};
 pub type PrivateKey = keyvault::multicipher::MPrivateKey;
 pub type Signature = keyvault::multicipher::MSignature;
