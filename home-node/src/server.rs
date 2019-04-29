@@ -12,6 +12,7 @@ use mercury_home_protocol::api::AsyncSink; // TODO this should normally work wit
 use mercury_home_protocol::error::*;
 use mercury_home_protocol::*;
 use mercury_storage::asynch::KeyValueStore;
+use osg::repo::PrivateProfileRepository;
 
 // TODO this should come from user configuration with a reasonable default value close to this
 const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
@@ -20,7 +21,7 @@ pub struct HomeServer {
     handle: reactor::Handle,
     validator: Rc<Validator>,
     public_profile_dht: Rc<RefCell<KeyValueStore<ProfileId, Profile>>>,
-    hosted_profile_db: Rc<RefCell<KeyValueStore<ProfileId, OwnProfile>>>,
+    hosted_profile_db: Rc<RefCell<PrivateProfileRepository>>,
     sessions: Rc<RefCell<HashMap<ProfileId, Weak<HomeSessionServer>>>>,
 }
 
@@ -29,7 +30,7 @@ impl HomeServer {
         handle: &reactor::Handle,
         validator: Rc<Validator>,
         public_dht: Rc<RefCell<KeyValueStore<ProfileId, Profile>>>,
-        private_db: Rc<RefCell<KeyValueStore<ProfileId, OwnProfile>>>,
+        private_db: Rc<RefCell<PrivateProfileRepository>>,
     ) -> Self {
         Self {
             handle: handle.clone(),
@@ -66,7 +67,7 @@ impl HomeConnectionServer {
         let session_fut = server
             .hosted_profile_db
             .borrow()
-            .get(to_profile.clone())
+            .get(&to_profile)
             .and_then(move |_profile_data| {
                 // Seperate variable needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
                 let sessions = sessions_clone.borrow();
@@ -155,7 +156,7 @@ impl Home for HomeConnectionServer {
             .server
             .hosted_profile_db
             .borrow()
-            .get(profile)
+            .get(&profile)
             .map_err(|e| e.context(ErrorKind::FailedToClaimProfile).into());
         Box::new(claim_fut)
     }
@@ -235,7 +236,7 @@ impl Home for HomeConnectionServer {
             .server
             .hosted_profile_db
             .borrow()
-            .get(own_prof.id())
+            .get(&own_prof.id())
             .then(|get_res| {
                 match get_res {
                     Ok(_stored_prof) => {
@@ -260,10 +261,7 @@ impl Home for HomeConnectionServer {
                 debug!("Saving private profile info into local storage");
                 return local_store
                     .borrow_mut()
-                    .set(
-                        own_prof_modified.id(),
-                        own_prof_modified.clone(),
-                    )
+                    .set(own_prof_modified.clone())
                     .map(|_| own_prof_modified)
                     .map_err(error_mapper);
             });
@@ -288,7 +286,7 @@ impl Home for HomeConnectionServer {
             .server
             .hosted_profile_db
             .borrow()
-            .get(profile_id.clone())
+            .get(&profile_id)
             .map({
                 let context_clone = self.context.clone();
                 let server_clone = self.server.clone();
@@ -344,7 +342,7 @@ impl Home for HomeConnectionServer {
             .server
             .hosted_profile_db
             .borrow()
-            .get(to_profile.clone())
+            .get(&to_profile)
             .map_err(|err| err.context(ErrorKind::PeerNotHostedHere).into())
             .and_then(move |profile_data| {
                 server_clone
@@ -400,7 +398,7 @@ impl Home for HomeConnectionServer {
             .server
             .hosted_profile_db
             .borrow()
-            .get(to_profile.clone())
+            .get(&to_profile)
             .map_err(|e| e.context(ErrorKind::PeerNotHostedHere).into())
             .and_then(move |profile_data| {
                 server_clone
@@ -547,7 +545,7 @@ impl HomeSession for HomeSessionServer {
             .server
             .hosted_profile_db
             .borrow()
-            .get(own_prof.id())
+            .get(&own_prof.id())
             // NOTE Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
             .and_then({
                 let distributed_store = self.server.public_profile_dht.clone();
@@ -565,7 +563,7 @@ impl HomeSession for HomeSessionServer {
                     // Update private profile info in local storage only (e.g. SQL)
                     return local_store
                         .borrow_mut()
-                        .set(own_prof.id(), own_prof);
+                        .set(own_prof);
                 }
             })
             // TODO: fix it after storage error refactorings
@@ -578,6 +576,7 @@ impl HomeSession for HomeSessionServer {
     // TODO newhome should be stored and some special redirect to new home should be sent when someone looking for the profile
     fn unregister(&self, _newhome: Option<Profile>) -> Box<Future<Item = (), Error = Error>> {
         let profile_id = self.context.peer_id().to_owned();
+        let profile_key = self.context.peer_pubkey();
 
         // TODO is it the caller's responsibility to remove this home from the persona facet's homelist
         //      or should we do it here and save the results into the distributed public db?
@@ -589,7 +588,7 @@ impl HomeSession for HomeSessionServer {
         // TODO force close/drop session connection after successful unregister().
         //      Ideally self would be consumed here, but that'd require binding to self: Box<Self> or Rc<Self> to compile within a trait.
 
-        let local_fut = self.server.hosted_profile_db.borrow_mut().clear_local(profile_id.clone());
+        let local_fut = self.server.hosted_profile_db.borrow_mut().clear(&profile_key);
         let unreg_fut = self
             .server
             .public_profile_dht

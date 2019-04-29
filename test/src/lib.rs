@@ -7,6 +7,7 @@ use mercury_home_node::server::HomeServer;
 use mercury_home_protocol::crypto::*;
 use mercury_home_protocol::*;
 use mercury_storage::asynch::imp::InMemoryStore;
+use osg::repo::InMemoryProfileRepository;
 
 #[cfg(test)]
 pub mod connect;
@@ -48,7 +49,7 @@ pub fn default_home_server(handle: &reactor::Handle) -> HomeServer {
         handle,
         Rc::new(CompositeValidator::default()),
         Rc::new(RefCell::new(InMemoryStore::new())),
-        Rc::new(RefCell::new(InMemoryStore::new())),
+        Rc::new(RefCell::new(InMemoryProfileRepository::new())),
     )
 }
 

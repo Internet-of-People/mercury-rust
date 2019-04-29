@@ -47,7 +47,8 @@ impl CliConfig {
 }
 
 pub struct Config {
-    storage_path: String,
+    //storage_path: String,
+    storage_path: PathBuf,
     signer: Rc<Signer>,
     listen_socket: SocketAddr, // TODO consider using Vec if listening on several network devices is needed
 }
@@ -56,8 +57,7 @@ impl Config {
     pub fn new() -> Self {
         let cli = CliConfig::new();
 
-        let storage_path =
-            cli.storage_path.to_str().expect("Storage path should have a default value").to_owned();
+        // let storage_path = cli.storage_path.to_str().expect("Storage path should have a default value").to_owned();
 
         // TODO support hardware wallets
         // NOTE for some test keys see https://github.com/tendermint/signatory/blob/master/src/ed25519/test_vectors.rs
@@ -78,10 +78,12 @@ impl Config {
             .next()
             .expect("Failed to parse socket address");
 
-        Self { storage_path, signer, listen_socket }
+        // Self { storage_path, signer, listen_socket }
+        Self { storage_path: cli.storage_path, signer, listen_socket }
     }
 
-    pub fn storage_path(&self) -> &str {
+    // pub fn storage_path(&self) -> &str {
+    pub fn storage_path(&self) -> &PathBuf {
         &self.storage_path
     }
     pub fn signer(&self) -> Rc<Signer> {

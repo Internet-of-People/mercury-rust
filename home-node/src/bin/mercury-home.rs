@@ -9,7 +9,8 @@ use mercury_home_node::{config::*, server::*};
 use mercury_home_protocol::{
     crypto::*, handshake, mercury_capnp::server_dispatcher::HomeDispatcherCapnProto,
 };
-use mercury_storage::asynch::{fs::FileStore, imp::InMemoryStore, KeyAdapter};
+use mercury_storage::asynch::imp::InMemoryStore;
+use osg::repo::FileProfileRepository;
 
 fn main() {
     log4rs::init_file("log4rs.yml", Default::default()).unwrap();
@@ -22,7 +23,7 @@ fn main() {
     //let distributed_storage = Box::new( Ipfs::new( "localhost", 5001, &handle1.clone() )? )
     let distributed_storage = Rc::new(RefCell::new(InMemoryStore::new()));
     let local_storage =
-        Rc::new(RefCell::new(KeyAdapter::new(FileStore::new(config.storage_path()).unwrap())));
+        Rc::new(RefCell::new(FileProfileRepository::new(config.storage_path()).unwrap()));
     let signer = config.signer();
     let validator = Rc::new(CompositeValidator::default());
     let server = Rc::new(HomeServer::new(&handle, validator, distributed_storage, local_storage));

@@ -54,11 +54,11 @@ fn run() -> Fallible<()> {
 
     let local_repo = FileProfileRepository::load(&repo_path).or_else(|_e| {
         debug!("Failed to load profile repository {:?}, creating an empty one", repo_path);
-        FileProfileRepository::create(&repo_path)
+        FileProfileRepository::new(&repo_path)
     })?;
     let base_repo = FileProfileRepository::load(&base_path).or_else(|_e| {
         debug!("Failed to load base repository {:?}, creating an empty one", base_path);
-        FileProfileRepository::create(&base_path)
+        FileProfileRepository::new(&base_path)
     })?;
     let timeout = Duration::from_secs(options.network_timeout_secs);
     let rpc_repo = RpcProfileRepository::new(&options.remote_repo_address, timeout)?;

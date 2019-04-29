@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
 
-use failure::{err_msg, format_err, Fallible};
-use futures::{future, prelude::*};
+use failure::{bail, format_err, Fallible};
+use futures::prelude::*;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 
@@ -25,7 +25,6 @@ pub trait ProfileExplorer {
 pub trait PrivateProfileRepository: PublicProfileRepository {
     fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData>;
     fn set(&mut self, profile: PrivateProfileData) -> AsyncFallible<()>;
-    // clear up links and attributes to leave an empty tombstone in place of the profile.
     fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()>;
 }
 
@@ -34,16 +33,90 @@ pub trait LocalProfileRepository: PublicProfileRepository {
     fn restore(&mut self, profile: PrivateProfileData) -> Fallible<()>;
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct InMemoryProfileRepository {
+    profiles: HashMap<ProfileId, PrivateProfileData>,
+}
+
+impl InMemoryProfileRepository {
+    pub fn new() -> Self {
+        Self { profiles: Default::default() }
+    }
+
+    fn put(&mut self, profile: PrivateProfileData) -> Fallible<()> {
+        if let Some(old_profile) = self.profiles.get(&profile.id()) {
+            if old_profile.version() > profile.version()
+                || (old_profile.version() == profile.version() && *old_profile != profile)
+            {
+                bail!("Version must increase on profile change");
+            }
+        }
+        self.profiles.insert(profile.id(), profile);
+        Ok(())
+    }
+
+    fn remove(&mut self, key: &PublicKey) -> Fallible<()> {
+        let id = key.key_id();
+        let profile =
+            self.profiles.get(&id).ok_or_else(|| format_err!("Profile not found: {}", key))?;
+        self.put(PrivateProfileData::tombstone(key, profile.version()))
+    }
+}
+
+impl Default for InMemoryProfileRepository {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl PublicProfileRepository for InMemoryProfileRepository {
+    fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
+        let res = self
+            .profiles
+            .get(id)
+            .map(|prof_ref| prof_ref.public_data())
+            .ok_or_else(|| format_err!("Profile not found: {}", id));
+        Box::new(res.into_future())
+    }
+}
+
+impl PrivateProfileRepository for InMemoryProfileRepository {
+    fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData> {
+        let res = self
+            .profiles
+            .get(id)
+            .map(|prof_ref| prof_ref.to_owned())
+            .ok_or_else(|| format_err!("Profile not found: {}", id));
+        Box::new(res.into_future())
+    }
+
+    fn set(&mut self, profile: PrivateProfileData) -> AsyncFallible<()> {
+        let res = self.put(profile);
+        Box::new(res.into_future())
+    }
+
+    fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()> {
+        let res = self.remove(key);
+        Box::new(res.into_future())
+    }
+}
+
+impl LocalProfileRepository for InMemoryProfileRepository {
+    fn restore(&mut self, profile: PrivateProfileData) -> Fallible<()> {
+        self.put(profile)
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct FileProfileRepository {
-    profiles: HashMap<ProfileId, PrivateProfileData>,
+    mem_repo: InMemoryProfileRepository,
     #[serde(skip)]
     filename: PathBuf,
 }
 
 impl FileProfileRepository {
-    pub fn create(filename: &PathBuf) -> Fallible<Self> {
-        let this = Self { profiles: Default::default(), filename: filename.to_owned() };
+    pub fn new(filename: &PathBuf) -> Fallible<Self> {
+        let this = Self { mem_repo: Default::default(), filename: filename.to_owned() };
         this.save()?;
         Ok(this)
     }
@@ -67,64 +140,33 @@ impl FileProfileRepository {
         repo.filename = filename.to_owned();
         Ok(repo)
     }
-
-    fn put(&mut self, id: ProfileId, profile: PrivateProfileData) -> Fallible<()> {
-        self.profiles.insert(id, profile);
-        self.save()?;
-        Ok(())
-    }
-
-    fn delete(&mut self, key: &PublicKey) -> Fallible<()> {
-        let id = key.key_id();
-        let profile =
-            self.profiles.get(&id).ok_or_else(|| format_err!("Profile not found: {}", key))?;
-        self.put(id, PrivateProfileData::tombstone(key, profile.version()))
-    }
 }
 
 impl PublicProfileRepository for FileProfileRepository {
     fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
-        let res = self
-            .profiles
-            .get(id)
-            .map(|prof_ref| prof_ref.public_data())
-            .ok_or_else(|| format_err!("Profile not found: {}", id));
-        Box::new(res.into_future())
+        self.mem_repo.get_public(id)
     }
 }
 
 impl PrivateProfileRepository for FileProfileRepository {
     fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData> {
-        let res = self
-            .profiles
-            .get(id)
-            .map(|prof_ref| prof_ref.to_owned())
-            .ok_or_else(|| format_err!("Profile not found: {}", id));
-        Box::new(res.into_future())
+        self.mem_repo.get(id)
     }
 
     fn set(&mut self, profile: PrivateProfileData) -> AsyncFallible<()> {
-        if let Some(old_profile) = self.profiles.get(&profile.id()) {
-            if old_profile.version() > profile.version()
-                || (old_profile.version() == profile.version() && *old_profile != profile)
-            {
-                return Box::new(future::err(err_msg("Version must increase on profile change")));
-            }
-        }
-
-        let res = self.put(profile.id(), profile);
+        let res = self.mem_repo.put(profile).and_then(|()| self.save());
         Box::new(res.into_future())
     }
 
     fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()> {
-        let res = self.delete(key);
+        let res = self.mem_repo.remove(key).and_then(|()| self.save());
         Box::new(res.into_future())
     }
 }
 
 impl LocalProfileRepository for FileProfileRepository {
     fn restore(&mut self, profile: PrivateProfileData) -> Fallible<()> {
-        self.put(profile.id(), profile)
+        self.mem_repo.put(profile)
     }
 }
 
@@ -138,7 +180,7 @@ mod test {
     #[test]
     fn test_local_repository() -> Fallible<()> {
         let tmp_file = std::env::temp_dir().join("local_repo_test.dat");
-        let mut repo = FileProfileRepository::create(&tmp_file)?;
+        let mut repo = FileProfileRepository::new(&tmp_file)?;
 
         let my_pubkey = PublicKey::from_str("PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb")?;
         //let my_id = ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?;

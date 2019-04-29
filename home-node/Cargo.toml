@@ -15,6 +15,7 @@ log = "*"
 log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }
 mercury-storage = { path="../storage" }
+osg = { path="../osg/osg" }
 multiaddr = "*"
 structopt = "*"
 tokio-core = "0.1"
