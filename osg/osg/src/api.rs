@@ -272,6 +272,8 @@ impl Api for Context {
         Ok(())
     }
 
+    // TODO this should also work if profile is not ours and we have no control over it.
+    //      Then it should consult an explorer and show all public information.
     fn show_profile(&self, profile_id: Option<ProfileId>, kind: ProfileRepositoryKind) -> ApiRes {
         // NOTE must also work with a profile that is not ours
         let profile_id = self.selected_profile_id(profile_id)?;

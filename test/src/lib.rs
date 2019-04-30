@@ -6,7 +6,6 @@ use tokio_core::reactor;
 use mercury_home_node::server::HomeServer;
 use mercury_home_protocol::crypto::*;
 use mercury_home_protocol::*;
-use mercury_storage::asynch::imp::InMemoryStore;
 use osg::repo::InMemoryProfileRepository;
 
 #[cfg(test)]
@@ -48,7 +47,7 @@ pub fn default_home_server(handle: &reactor::Handle) -> HomeServer {
     HomeServer::new(
         handle,
         Rc::new(CompositeValidator::default()),
-        Rc::new(RefCell::new(InMemoryStore::new())),
+        Rc::new(RefCell::new(InMemoryProfileRepository::new())),
         Rc::new(RefCell::new(InMemoryProfileRepository::new())),
     )
 }

@@ -11,26 +11,28 @@ use crate::model::*;
 use keyvault::PublicKey as KeyVaultPublicKey;
 
 // TODO consider authorization: should we require signatures here or leave it to a different layer?
-pub trait PublicProfileRepository {
+pub trait DistributedPublicProfileRepository {
     fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData>;
-    //    fn set(&mut self, profile: PublicProfileData) -> AsyncFallible<()>;
-    //    fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()>;
+    fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()>;
+    fn clear_public_local(&mut self, key: &PublicKey) -> AsyncFallible<()>;
 }
 
-// TODO should we merge this with PublicProfileRepository?
-pub trait ProfileExplorer {
-    fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>>;
-}
-
-pub trait PrivateProfileRepository: PublicProfileRepository {
+// TODO consider authorization: should we require signatures here or leave it to a different layer?
+pub trait PrivateProfileRepository {
     fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData>;
     fn set(&mut self, profile: PrivateProfileData) -> AsyncFallible<()>;
     fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()>;
 }
 
-pub trait LocalProfileRepository: PublicProfileRepository {
+pub trait LocalProfileRepository: PrivateProfileRepository {
     // NOTE similar to set() but without version check, must be able to revert to a previous version
     fn restore(&mut self, profile: PrivateProfileData) -> Fallible<()>;
+}
+
+// TODO should we merge this with PublicProfileRepository?
+pub trait ProfileExplorer {
+    fn get(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData>;
+    fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>>;
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -69,14 +71,24 @@ impl Default for InMemoryProfileRepository {
     }
 }
 
-impl PublicProfileRepository for InMemoryProfileRepository {
+// NOTE normally public and private repositories should not be mixed.
+//      We do it here because InMemoryProfileRepository is created for testing, not real usage.
+impl DistributedPublicProfileRepository for InMemoryProfileRepository {
     fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
-        let res = self
-            .profiles
-            .get(id)
-            .map(|prof_ref| prof_ref.public_data())
-            .ok_or_else(|| format_err!("Profile not found: {}", id));
-        Box::new(res.into_future())
+        let res =
+            (self as &PrivateProfileRepository).get(id).map(|prof_ref| prof_ref.public_data());
+        Box::new(res)
+    }
+
+    fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()> {
+        let private_profile = PrivateProfileData::new(profile, vec![]);
+        let res = (self as &mut PrivateProfileRepository).set(private_profile);
+        Box::new(res)
+    }
+
+    fn clear_public_local(&mut self, key: &PublicKey) -> AsyncFallible<()> {
+        let res = (self as &mut PrivateProfileRepository).clear(key);
+        Box::new(res)
     }
 }
 
@@ -142,9 +154,17 @@ impl FileProfileRepository {
     }
 }
 
-impl PublicProfileRepository for FileProfileRepository {
+impl DistributedPublicProfileRepository for FileProfileRepository {
     fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
         self.mem_repo.get_public(id)
+    }
+
+    fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()> {
+        self.mem_repo.set_public(profile)
+    }
+
+    fn clear_public_local(&mut self, key: &PublicKey) -> AsyncFallible<()> {
+        self.mem_repo.clear_public_local(key)
     }
 }
 

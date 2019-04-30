@@ -11,8 +11,7 @@ use tokio_core::reactor::{self, Timeout};
 use mercury_home_protocol::api::AsyncSink; // TODO this should normally work with protocol::*, why is this needed?
 use mercury_home_protocol::error::*;
 use mercury_home_protocol::*;
-use mercury_storage::asynch::KeyValueStore;
-use osg::repo::PrivateProfileRepository;
+use osg::repo::{DistributedPublicProfileRepository, PrivateProfileRepository};
 
 // TODO this should come from user configuration with a reasonable default value close to this
 const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
@@ -20,7 +19,7 @@ const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
 pub struct HomeServer {
     handle: reactor::Handle,
     validator: Rc<Validator>,
-    public_profile_dht: Rc<RefCell<KeyValueStore<ProfileId, Profile>>>,
+    public_profile_dht: Rc<RefCell<DistributedPublicProfileRepository>>,
     hosted_profile_db: Rc<RefCell<PrivateProfileRepository>>,
     sessions: Rc<RefCell<HashMap<ProfileId, Weak<HomeSessionServer>>>>,
 }
@@ -29,7 +28,7 @@ impl HomeServer {
     pub fn new(
         handle: &reactor::Handle,
         validator: Rc<Validator>,
-        public_dht: Rc<RefCell<KeyValueStore<ProfileId, Profile>>>,
+        public_dht: Rc<RefCell<DistributedPublicProfileRepository>>,
         private_db: Rc<RefCell<PrivateProfileRepository>>,
     ) -> Self {
         Self {
@@ -133,7 +132,7 @@ impl ProfileRepo for HomeConnectionServer {
             .server
             .public_profile_dht
             .borrow()
-            .get(id.to_owned())
+            .get_public(id)
             .map_err(|e| e.context(ErrorKind::DhtLookupFailed).into());
         Box::new(profile_fut)
     }
@@ -253,7 +252,7 @@ impl Home for HomeConnectionServer {
                 debug!("Saving public profile info into distributed storage");
                 return distributed_store
                     .borrow_mut()
-                    .set(pub_prof_modified.id(), pub_prof_modified)
+                    .set_public(pub_prof_modified)
                     .map_err(error_mapper_clone);
             })
             .and_then(move |_| {
@@ -554,7 +553,7 @@ impl HomeSession for HomeSessionServer {
                     // Update public profile parts in distributed storage (e.g. DHT)
                     return distributed_store
                         .borrow_mut()
-                        .set(pub_prof.id(), pub_prof);
+                        .set_public(pub_prof);
                 }
             })
             .and_then({
@@ -593,7 +592,7 @@ impl HomeSession for HomeSessionServer {
             .server
             .public_profile_dht
             .borrow_mut()
-            .clear_local(profile_id)
+            .clear_public_local(&profile_key)
             .and_then(|_| local_fut)
             .map_err(|e| e.context(ErrorKind::UnregisterFailed).into());
 

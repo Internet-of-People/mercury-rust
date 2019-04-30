@@ -9,8 +9,7 @@ use mercury_home_node::{config::*, server::*};
 use mercury_home_protocol::{
     crypto::*, handshake, mercury_capnp::server_dispatcher::HomeDispatcherCapnProto,
 };
-use mercury_storage::asynch::imp::InMemoryStore;
-use osg::repo::FileProfileRepository;
+use osg::repo::{FileProfileRepository, InMemoryProfileRepository};
 
 fn main() {
     log4rs::init_file("log4rs.yml", Default::default()).unwrap();
@@ -21,7 +20,7 @@ fn main() {
 
     // TODO use some kind of persistent storage for public distributed storage
     //let distributed_storage = Box::new( Ipfs::new( "localhost", 5001, &handle1.clone() )? )
-    let distributed_storage = Rc::new(RefCell::new(InMemoryStore::new()));
+    let distributed_storage = Rc::new(RefCell::new(InMemoryProfileRepository::new()));
     let local_storage =
         Rc::new(RefCell::new(FileProfileRepository::new(config.storage_path()).unwrap()));
     let signer = config.signer();

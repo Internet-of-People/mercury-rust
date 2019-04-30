@@ -13,7 +13,7 @@ use crate::messages;
 use keyvault::PublicKey as KeyVaultPublicKey;
 use osg::model::*;
 use osg::profile::{Profile, ProfilePtr};
-use osg::repo::{PrivateProfileRepository, ProfileExplorer, PublicProfileRepository};
+use osg::repo::{PrivateProfileRepository, ProfileExplorer};
 
 #[derive(Clone)]
 pub struct RpcProfileRepository {
@@ -109,13 +109,6 @@ impl RpcProfileRepository {
     }
 }
 
-impl PublicProfileRepository for RpcProfileRepository {
-    fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
-        let res = (self as &PrivateProfileRepository).get(id).map(|prof| prof.public_data());
-        Box::new(res.into_future())
-    }
-}
-
 // TODO !!! This implementation must not be used in real async environment !!!
 //          Synchronous calls in the implementation like get_node() and set_node()
 //          use std networking and block the current thread, violating async execution.
@@ -147,6 +140,11 @@ impl PrivateProfileRepository for RpcProfileRepository {
 }
 
 impl ProfileExplorer for RpcProfileRepository {
+    fn get(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
+        let res = (self as &PrivateProfileRepository).get(id).map(|prof| prof.public_data());
+        Box::new(res.into_future())
+    }
+
     fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>> {
         self.rpc().and_then(|rpc| {
             let params = messages::ListInEdgesParams { id: id.clone() };
