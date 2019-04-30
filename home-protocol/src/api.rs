@@ -44,29 +44,6 @@ impl PeerContext {
 pub type AsyncStream<Elem, RemoteErr> = mpsc::Receiver<std::result::Result<Elem, RemoteErr>>;
 pub type AsyncSink<Elem, RemoteErr> = mpsc::Sender<std::result::Result<Elem, RemoteErr>>;
 
-/// Potentially a whole network of nodes with internal routing and sharding
-pub trait ProfileRepo {
-    //    /// List all profiles that can be load()'ed or resolve()'d.
-    //    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-    //        HomeStream<Profile,String>;
-
-    /// Look for specified `id` and return. This might involve searching for the latest version
-    /// of the profile in the dht, but if it's the profile's home server, could come from memory, too.
-    fn load(&self, id: &ProfileId) -> AsyncResult<Profile, Error>;
-
-    //    /// Same as load(), but also contains hints for resolution, therefore it's more efficient than load(id)
-    //    ///
-    //    /// The `url` may contain
-    //    /// * ProfileID (mandatory)
-    //    /// * some profile metadata (for user experience enhancement) (big fat warning should be thrown if it does not match the latest info)
-    //    /// * ProfileID of its home server
-    //    /// * last known multiaddress(es) of its home server
-    //    fn resolve(&self, url: &str) ->
-    //        AsyncResult<Profile, Error>;
-
-    // TODO notifications on profile updates should be possible
-}
-
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct AppMessageFrame(pub Vec<u8>);
 
@@ -93,7 +70,8 @@ pub struct CallRequestDetails {
 // Interface to a single home server.
 // NOTE authentication is already done when the connection is built,
 //      authenticated profile info is available from the connection context
-pub trait Home: ProfileRepo {
+// TODO Home should be derived from DistributedPublicProfileRepository instead on the long run
+pub trait Home: ProfileExplorer {
     // NOTE because we support multihash, the id cannot be guessed from the public key
     fn claim(&self, profile: ProfileId) -> AsyncResult<OwnProfile, Error>;
 
@@ -103,7 +81,7 @@ pub trait Home: ProfileRepo {
         &self,
         own_prof: OwnProfile,
         half_proof: RelationHalfProof,
-        //        invite: Option<HomeInvitation>,
+        // invite: Option<HomeInvitation>,
     ) -> AsyncResult<OwnProfile, (OwnProfile, Error)>;
 
     /// By calling this method, any active session of the same profile is closed.

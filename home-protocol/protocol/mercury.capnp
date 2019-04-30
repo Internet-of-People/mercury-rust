@@ -19,10 +19,11 @@ using Profile = Data;
 
 interface ProfileRepo
 {
+    get @0 (profileId: ProfileId) -> (profile: Profile);
+
     # TODO what filter criteria should we have in list()?
-    list @0 () -> (profiles: List(Profile));
-    load @1 (profileId: ProfileId) -> (profile: Profile);
-    resolve @2 (profileUrl: Text) -> (profile: Profile);
+    # list @1 () -> (profiles: List(Profile));
+    # resolve @2 (profileUrl: Text) -> (profile: Profile);
 }
 
 struct RelationHalfProof

@@ -1,6 +1,5 @@
 use std::cmp::min;
 use std::io;
-use std::net::SocketAddr;
 use std::path::{Path, PathBuf};
 use std::rc::Rc;
 use std::time::Duration;
@@ -10,7 +9,7 @@ use futures::prelude::*;
 use futures::try_ready;
 //use jsonrpc_core::{Metadata, MetaIoHandler, Params, serde_json as json, types};
 //use jsonrpc_pubsub::{PubSubHandler, Session as PubSubSession, PubSubMetadata, Subscriber, SubscriptionId};
-use log::*;
+//use log::*;
 use state_machine_future::{transition, RentToOwn, StateMachineFuture};
 //use tokio_codec::{Decoder, Encoder, Framed};
 use tokio_core::{reactor, reactor::Timeout};
@@ -18,7 +17,7 @@ use tokio_io::{AsyncRead, AsyncWrite};
 use tokio_uds::UnixStream;
 
 use crate::*;
-use mercury_home_protocol::{future::StreamWithDeadline, *};
+use mercury_home_protocol::*; //{future::StreamWithDeadline, *};
 
 const NETWORK_TIMEOUT: Duration = Duration::from_secs(5);
 
@@ -129,7 +128,7 @@ impl PollPeer for Peer {
                 context.reset_backoff();
                 transition!(Connected::new(channel))
             }
-            Err(e) => {
+            Err(_e) => {
                 // TODO differentiate between timeouts and other failures, consider backoff only for timeouts
                 let interval = context.next_backoff_interval();
                 transition!(Backoff::new(interval, &context.handle))
@@ -146,8 +145,8 @@ impl PollPeer for Peer {
     }
 
     fn poll_connected<'s, 'c>(
-        connected: &'s mut RentToOwn<'s, Connected>,
-        context: &'c mut RentToOwn<'c, Context>,
+        _connected: &'s mut RentToOwn<'s, Connected>,
+        _context: &'c mut RentToOwn<'c, Context>,
     ) -> Poll<AfterConnected, ClientFsmError> {
         unimplemented!()
     }
@@ -164,8 +163,8 @@ impl DAppEndpointClient {
 impl DAppEndpoint for DAppEndpointClient {
     fn dapp_session(
         &self,
-        app: &ApplicationId,
-        authorization: Option<DAppPermission>,
+        _app: &ApplicationId,
+        _authorization: Option<DAppPermission>,
     ) -> AsyncResult<Rc<DAppSession>, Error> {
         unimplemented!()
     }
@@ -185,13 +184,13 @@ impl DAppSession for DAppSessionClient {
 
     fn contacts_with_profile(
         &self,
-        profile: &ProfileId,
-        relation_type: Option<&str>,
+        _profile: &ProfileId,
+        _relation_type: Option<&str>,
     ) -> AsyncResult<Vec<Box<Contact>>, Error> {
         unimplemented!()
     }
 
-    fn initiate_contact(&self, with_profile: &ProfileId) -> AsyncResult<(), Error> {
+    fn initiate_contact(&self, _with_profile: &ProfileId) -> AsyncResult<(), Error> {
         unimplemented!()
     }
 

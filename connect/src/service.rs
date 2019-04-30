@@ -3,7 +3,7 @@ use std::collections::{HashMap, HashSet};
 //use std::fmt::Display;
 use std::rc::Rc;
 
-use failure::Fail; // Backtrace, Context
+//use failure::Fail; // Backtrace, Context
 use futures::future;
 use futures::prelude::*;
 use log::*;
@@ -110,7 +110,7 @@ impl SignerFactory {
 
 pub struct MyProfileFactory {
     signer_factory: Rc<SignerFactory>,
-    profile_repo: Rc<SimpleProfileRepo>, // TODO use Rc<ProfileRepo> after TheButton testing
+    profile_repo: Rc<ProfileExplorer>,
     home_connector: Rc<HomeConnector>,
     handle: reactor::Handle,
     cache: Rc<RefCell<HashMap<ProfileId, Rc<MyProfile>>>>,
@@ -121,7 +121,7 @@ impl MyProfileFactory {
     //pub fn new(signer_factory: Rc<SignerFactory>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
     pub fn new(
         signer_factory: Rc<SignerFactory>,
-        profile_repo: Rc<SimpleProfileRepo>,
+        profile_repo: Rc<ProfileExplorer>,
         home_connector: Rc<HomeConnector>,
         handle: reactor::Handle,
     ) -> Self {

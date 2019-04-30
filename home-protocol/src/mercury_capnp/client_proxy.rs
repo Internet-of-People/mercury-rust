@@ -2,12 +2,14 @@ use std::convert::TryFrom;
 
 use capnp::capability::Promise;
 use capnp_rpc::pry;
-use failure::Fail;
+use failure::{Fail, Fallible};
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
 use super::*;
 use crate::mercury_capnp::{FillFrom, PromiseUtil};
+use osg::model::Link;
+use osg::repo::ProfileExplorer;
 
 pub struct HomeClientCapnProto {
     repo: mercury_capnp::profile_repo::Client,
@@ -51,16 +53,9 @@ impl HomeClientCapnProto {
     }
 }
 
-impl ProfileRepo for HomeClientCapnProto {
-    //    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-    //        HomeStream<Profile, String>
-    //    {
-    //        // TODO properly implement this
-    //        unimplemented!()
-    //    }
-
-    fn load(&self, id: &ProfileId) -> AsyncResult<Profile, Error> {
-        let mut request = self.repo.load_request();
+impl ProfileExplorer for HomeClientCapnProto {
+    fn fetch(&self, id: &ProfileId) -> AsyncFallible<Profile> {
+        let mut request = self.repo.get_request();
         request.get().set_profile_id(&id.to_bytes());
 
         let resp_fut = request
@@ -76,23 +71,10 @@ impl ProfileRepo for HomeClientCapnProto {
         Box::new(resp_fut)
     }
 
-    //    // NOTE should be more efficient than load(id) because URL is supposed to contain hints for resolution
-    //    fn resolve(&self, url: &str) -> AsyncResult<Profile, Error>
-    //    {
-    //        let mut request = self.repo.resolve_request();
-    //        request.get().set_profile_url(url);
-    //
-    //        let resp_fut = request.send().promise
-    //            .and_then( |resp|
-    //            {
-    //                let profile_capnp = pry!( pry!( resp.get() ).get_profile() );
-    //                let profile = Profile::try_from(profile_capnp);
-    //                Promise::result(profile)
-    //            } )
-    //            .map_err( |e| e.context(ErrorKind::FailedToResolveUrl).into() );
-    //
-    //        Box::new(resp_fut)
-    //    }
+    fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
+        unimplemented!()
+        // Ok( Vec::new() ) // TODO implement this properly
+    }
 }
 
 impl Home for HomeClientCapnProto {

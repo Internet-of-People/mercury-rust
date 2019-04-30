@@ -131,7 +131,7 @@ impl JsonRpcServer {
             .map(|((), _pending)| ())
             .map_err(|(done, _pending)| done);
 
-        Box::new(fut.map_err(|e| ErrorKind::ImplementationError.into()))
+        Box::new(fut.map_err(|_e| ErrorKind::ImplementationError.into())) // TODO
     }
 
     // TODO consider error handling
@@ -199,14 +199,14 @@ pub fn create_dispatcher(
 
             let resp = service
                 .dapp_session(&req.application_id, req.permissions)
-                .map_err(|e| types::Error::new(types::ErrorCode::InternalError)) // TODO
+                .map_err(|_e| types::Error::new(types::ErrorCode::InternalError)) // TODO
                 .and_then(move |dapp_endpoint| {
                     let resp = api::GetSessionResponse {
                         profile_id: dapp_endpoint.selected_profile().into(),
                     };
                     meta.set_dapp_session(dapp_endpoint);
                     serde_json::to_value(resp)
-                        .map_err(|e| types::Error::new(types::ErrorCode::InternalError))
+                        .map_err(|_e| types::Error::new(types::ErrorCode::InternalError)) // TODO
                 });
             Either::B(resp)
         }
@@ -215,7 +215,7 @@ pub fn create_dispatcher(
     let mut pubsub = PubSubHandler::<Session>::new(dispatcher);
     pubsub.add_subscription(
         "event",
-        ("subscribe_events", move |params: Params, mut meta: Session, subscriber: Subscriber| {
+        ("subscribe_events", move |_params: Params, mut meta: Session, subscriber: Subscriber| {
             // TODO set a better ID
             let sink = match subscriber
                 .assign_id(SubscriptionId::String("TODO_set_a_better_id_here".to_owned()))
@@ -234,19 +234,19 @@ pub fn create_dispatcher(
 
             let fwd_events_fut = dapp_session
                     .checkin()
-                    .map_err(|e| ()) // TODO
+                    .map_err(|_e| ()) // TODO
                     .and_then(
                         |dapp_events| {
                             dapp_events
                                 .map(|event| match event {
-                                    DAppEvent::PairingResponse(resp) => api::EventNotification {
+                                    DAppEvent::PairingResponse(_resp) => api::EventNotification {
                                         kind: "Pairing response".into(),
                                     },
-                                    DAppEvent::Call(call) => api::EventNotification {
+                                    DAppEvent::Call(_call) => api::EventNotification {
                                         kind: "Call".into(),
                                     },
-                                    //                        DAppEvent::PairingResponse(resp) => Params::Array( vec![serde_json::Value::String( "Pairing response".into() )] ),
-                                    //                        DAppEvent::Call(call) => Params::Array( vec![serde_json::Value::String( "Call".into() )] ),
+                                    // DAppEvent::PairingResponse(resp) => Params::Array( vec![serde_json::Value::String( "Pairing response".into() )] ),
+                                    // DAppEvent::Call(call) => Params::Array( vec![serde_json::Value::String( "Call".into() )] ),
                                 })
                                 .filter_map(|note| serde_json::to_value(note).ok()) // TODO log error if there's any
                                 .map(|note_json| {
@@ -254,7 +254,7 @@ pub fn create_dispatcher(
                                     map.insert("data".to_owned(), note_json);
                                     Params::Map(map)
                                 })
-                                .forward(sink.sink_map_err(|e| ()))
+                                .forward(sink.sink_map_err(|_e| ())) // TODO
                         }, // TODO
                     )
                     .map(|_| ());
@@ -266,7 +266,7 @@ pub fn create_dispatcher(
 
             handle.spawn(subscribe_fut)
         }),
-        ("unsubscribe_events", |id: SubscriptionId, mut meta: Session| {
+        ("unsubscribe_events", |_id: SubscriptionId, mut meta: Session| {
             // info!("Cancelling subscription");
             meta.take_cancel_events()
                     .ok_or({

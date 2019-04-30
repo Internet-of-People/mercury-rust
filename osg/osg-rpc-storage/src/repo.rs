@@ -140,7 +140,7 @@ impl PrivateProfileRepository for RpcProfileRepository {
 }
 
 impl ProfileExplorer for RpcProfileRepository {
-    fn get(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
+    fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
         let res = (self as &PrivateProfileRepository).get(id).map(|prof| prof.public_data());
         Box::new(res.into_future())
     }

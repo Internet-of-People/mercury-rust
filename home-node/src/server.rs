@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::{cell::RefCell, rc::Rc, rc::Weak};
 
-use failure::Fail;
+use failure::{Fail, Fallible};
 use futures::sync::{mpsc, oneshot};
 use futures::{future, stream, Future, Sink};
 use log::*;
@@ -11,7 +11,7 @@ use tokio_core::reactor::{self, Timeout};
 use mercury_home_protocol::api::AsyncSink; // TODO this should normally work with protocol::*, why is this needed?
 use mercury_home_protocol::error::*;
 use mercury_home_protocol::*;
-use osg::repo::{DistributedPublicProfileRepository, PrivateProfileRepository};
+use osg::model::Link;
 
 // TODO this should come from user configuration with a reasonable default value close to this
 const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
@@ -120,14 +120,8 @@ impl HomeConnectionServer {
     }
 }
 
-impl ProfileRepo for HomeConnectionServer {
-    //    fn list(&self, /* TODO what filter criteria should we have here? */ ) ->
-    //        HomeStream<Profile, String>
-    //    {
-    //        unimplemented!()
-    //    }
-
-    fn load(&self, id: &ProfileId) -> Box<Future<Item = Profile, Error = Error>> {
+impl ProfileExplorer for HomeConnectionServer {
+    fn fetch(&self, id: &ProfileId) -> AsyncFallible<Profile> {
         let profile_fut = self
             .server
             .public_profile_dht
@@ -137,12 +131,10 @@ impl ProfileRepo for HomeConnectionServer {
         Box::new(profile_fut)
     }
 
-    //    fn resolve(&self, _url: &str) ->
-    //        Box< Future<Item=Profile, Error=Error> >
-    //    {
-    //        // TODO parse URL and fetch profile accordingly
-    //        unimplemented!()
-    //    }
+    fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
+        unimplemented!()
+        // Ok( Vec::new() ) // TODO implement this properly
+    }
 }
 
 impl Home for HomeConnectionServer {

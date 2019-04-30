@@ -13,6 +13,7 @@ use keyvault::PublicKey as KeyVaultPublicKey;
 use mercury_connect::profile::MyProfileImpl;
 use mercury_connect::*;
 use mercury_home_protocol::*;
+use osg::repo::InMemoryProfileRepository;
 
 fn main() {
     log4rs::init_file("log4rs.yml", Default::default()).unwrap();
@@ -47,8 +48,8 @@ fn main() {
     let home_attrs = HomeFacet::new(vec![addr], vec![]).to_attributes();
     let home_profile = Profile::new(server_key, 1, vec![], home_attrs);
 
-    let profile_store = SimpleProfileRepo::default();
-    profile_store.insert(home_profile);
+    let mut profile_store = InMemoryProfileRepository::default();
+    profile_store.set_public(home_profile).wait().unwrap();
 
     let mut reactor = reactor::Core::new().unwrap();
     let home_connector = SimpleTcpHomeConnector::new(reactor.handle());

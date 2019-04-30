@@ -7,9 +7,6 @@ pub mod jsonrpc;
 pub mod sdk;
 pub mod service;
 
-pub mod simple_profile_repo;
-pub use simple_profile_repo::SimpleProfileRepo;
-
 use std::rc::Rc;
 
 use futures::prelude::*;

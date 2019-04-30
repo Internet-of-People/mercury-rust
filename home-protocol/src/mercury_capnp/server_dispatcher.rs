@@ -57,33 +57,21 @@ impl Drop for HomeDispatcherCapnProto {
 }
 
 impl mercury_capnp::profile_repo::Server for HomeDispatcherCapnProto {
-    fn load(
+    fn get(
         &mut self,
-        params: mercury_capnp::profile_repo::LoadParams,
-        mut results: mercury_capnp::profile_repo::LoadResults,
+        params: mercury_capnp::profile_repo::GetParams,
+        mut results: mercury_capnp::profile_repo::GetResults,
     ) -> Promise<(), capnp::Error> {
         let profile_id_capnp = pry!(pry!(params.get()).get_profile_id());
         let profile_id = pry!(ProfileId::from_bytes(profile_id_capnp).map_err(|e| capnp_err(e)));
         let load_fut = self
             .home
-            .load(&profile_id)
+            .fetch(&profile_id)
             .map(move |profile| results.get().set_profile(&profile_to_bytes(&profile)))
             .map_err(|e| capnp::Error::failed(format!("Failed to load profile id: {:?}", e)));
 
         Promise::from_future(load_fut)
     }
-
-    //    fn resolve(&mut self, params: profile_repo::ResolveParams,
-    //               mut results: profile_repo::ResolveResults)
-    //        -> Promise<(), capnp::Error>
-    //    {
-    //        let profile_url = pry!( pry!( params.get() ).get_profile_url() );
-    //        let res_fut = self.home.resolve(profile_url)
-    //            .map( move |profile| results.get().init_profile().fill_from(&profile) )
-    //            .map_err( | e| capnp::Error::failed( format!("Failed to resolve url: {:?}",e ) ) );
-    //
-    //        Promise::from_future(res_fut)
-    //    }
 }
 
 impl mercury_capnp::home::Server for HomeDispatcherCapnProto {

@@ -11,10 +11,23 @@ use crate::model::*;
 use keyvault::PublicKey as KeyVaultPublicKey;
 
 // TODO consider authorization: should we require signatures here or leave it to a different layer?
+/// A whole network of storage nodes, potentially with internal routing and sharding
 pub trait DistributedPublicProfileRepository {
     fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData>;
     fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()>;
     fn clear_public_local(&mut self, key: &PublicKey) -> AsyncFallible<()>;
+
+    // TODO implement efficient loading based on hints
+    // /// Same as load(), but also contains hints for resolution, therefore it's more efficient than load(id)
+    // ///
+    // /// The `url` may contain
+    // /// * ProfileID (mandatory)
+    // /// * some profile metadata (for user experience enhancement) (big fat warning should be thrown if it does not match the latest info)
+    // /// * ProfileID of its home server
+    // /// * last known multiaddress(es) of its home server
+    // fn resolve(&self, url: &str) -> AsyncResult<Profile, Error>;
+
+    // TODO notifications on profile updates should be possible
 }
 
 // TODO consider authorization: should we require signatures here or leave it to a different layer?
@@ -31,8 +44,9 @@ pub trait LocalProfileRepository: PrivateProfileRepository {
 
 // TODO should we merge this with PublicProfileRepository?
 pub trait ProfileExplorer {
-    fn get(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData>;
+    fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData>;
     fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>>;
+    // fn list(&self, /* TODO what filter criteria should we have here? */ ) -> HomeStream<Profile,String>;
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -119,6 +133,15 @@ impl LocalProfileRepository for InMemoryProfileRepository {
     }
 }
 
+impl ProfileExplorer for InMemoryProfileRepository {
+    fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
+        (self as &DistributedPublicProfileRepository).get_public(id)
+    }
+    fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
+        unimplemented!() // TODO
+    }
+}
+
 #[derive(Debug, Deserialize, Serialize)]
 pub struct FileProfileRepository {
     mem_repo: InMemoryProfileRepository,
@@ -128,9 +151,17 @@ pub struct FileProfileRepository {
 
 impl FileProfileRepository {
     pub fn new(filename: &PathBuf) -> Fallible<Self> {
+        if let Ok(this) = Self::load(filename) {
+            return Ok(this);
+        }
+
         let this = Self { mem_repo: Default::default(), filename: filename.to_owned() };
         this.save()?;
         Ok(this)
+    }
+
+    pub fn create(filename: &str) -> Fallible<Self> {
+        Self::new(&PathBuf::from(filename))
     }
 
     fn save(&self) -> Fallible<()> {
@@ -187,6 +218,15 @@ impl PrivateProfileRepository for FileProfileRepository {
 impl LocalProfileRepository for FileProfileRepository {
     fn restore(&mut self, profile: PrivateProfileData) -> Fallible<()> {
         self.mem_repo.put(profile)
+    }
+}
+
+impl ProfileExplorer for FileProfileRepository {
+    fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
+        self.mem_repo.fetch(id)
+    }
+    fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
+        unimplemented!() // TODO
     }
 }
 

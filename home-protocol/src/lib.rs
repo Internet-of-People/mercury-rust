@@ -23,5 +23,8 @@ pub use crate::primitives::*;
 pub use keyvault;
 pub use keyvault::ed25519;
 pub use osg::model::{AsyncFallible, AsyncResult};
+pub use osg::repo::{
+    DistributedPublicProfileRepository, PrivateProfileRepository, ProfileExplorer,
+};
 
 pub const CHANNEL_CAPACITY: usize = 1;

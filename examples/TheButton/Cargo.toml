@@ -14,10 +14,11 @@ futures = "0.1"
 log = "*"
 log4rs = "*"
 mercury-home-protocol = { path="../../home-protocol" }
-mercury-storage = {path="../../storage"}
-mercury-connect = {path="../../connect"}
+mercury-storage = { path="../../storage" }
+mercury-connect = { path="../../connect" }
 multiaddr = "*"
 multibase = "*"
+osg = { path="../../osg/osg" }
 tempdir = "*"
 tokio-signal = "*"
 tokio-core = "*"
