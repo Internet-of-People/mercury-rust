@@ -110,7 +110,7 @@ impl SignerFactory {
 
 pub struct MyProfileFactory {
     signer_factory: Rc<SignerFactory>,
-    profile_repo: Rc<ProfileExplorer>,
+    profile_repo: Rc<RefCell<DistributedPublicProfileRepository>>,
     home_connector: Rc<HomeConnector>,
     handle: reactor::Handle,
     cache: Rc<RefCell<HashMap<ProfileId, Rc<MyProfile>>>>,
@@ -121,7 +121,7 @@ impl MyProfileFactory {
     //pub fn new(signer_factory: Rc<SignerFactory>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
     pub fn new(
         signer_factory: Rc<SignerFactory>,
-        profile_repo: Rc<ProfileExplorer>,
+        profile_repo: Rc<RefCell<DistributedPublicProfileRepository>>,
         home_connector: Rc<HomeConnector>,
         handle: reactor::Handle,
     ) -> Self {

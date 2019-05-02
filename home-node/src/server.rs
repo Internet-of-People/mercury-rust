@@ -205,13 +205,16 @@ impl Home for HomeConnectionServer {
 
         let pub_prof = own_prof.public_data();
         let own_prof_modified = match pub_prof.as_persona() {
+            // TODO the registration request (including adding the new home and increasing version)
+            //      will have to be signed by the client on the long run,
+            //      thus cannot be done by the server here, to be migrated to the client code.
             Some(ref mut persona_facet) => {
                 // TODO this should be shorter, just adds a new home but rebuilds a lot of data structure
                 persona_facet.homes.push(home_proof);
                 let attributes = persona_facet.to_attributes();
                 let profile = Profile::new(
                     pub_prof.public_key(),
-                    pub_prof.version(),
+                    pub_prof.version() + 1,
                     pub_prof.links().to_owned(),
                     attributes,
                 );
@@ -474,6 +477,7 @@ impl HomeSessionServer {
     }
 
     fn push_event(&self, event: ProfileEvent) -> Box<Future<Item = (), Error = Error>> {
+        debug!("Session with {} got event dispatched: {:?}", self.context.peer_id(), event);
         match *self.events.borrow_mut() {
             ServerSink::Buffer(ref mut bufvec) => {
                 bufvec.push(Ok(event)); // TODO consider size constraints
@@ -495,6 +499,11 @@ impl HomeSessionServer {
         app: ApplicationId,
         call: Box<IncomingCall>,
     ) -> Box<Future<Item = (), Error = Error>> {
+        debug!(
+            "Session with {} dispatched call with relation: {:?}",
+            self.context.peer_id(),
+            call.request_details().relation
+        );
         let mut apps = self.apps.borrow_mut();
         let sink = apps.entry(app).or_insert(ServerSink::Buffer(Vec::new()));
         match *sink {

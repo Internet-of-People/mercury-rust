@@ -142,88 +142,109 @@ impl ProfileExplorer for InMemoryProfileRepository {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug)]
 pub struct FileProfileRepository {
-    mem_repo: InMemoryProfileRepository,
-    #[serde(skip)]
     filename: PathBuf,
 }
 
 impl FileProfileRepository {
+    // TODO clean up the name chaos here for new(), from, load, store, save
     pub fn new(filename: &PathBuf) -> Fallible<Self> {
-        if let Ok(this) = Self::load(filename) {
-            return Ok(this);
+        if let Err(_e) = Self::from(filename) {
+            info!("Failed to load profile repository from {:?}, initializing one there", filename);
+            Self::store(filename, InMemoryProfileRepository::default())?;
         }
 
-        let this = Self { mem_repo: Default::default(), filename: filename.to_owned() };
-        this.save()?;
-        Ok(this)
+        Ok(Self { filename: filename.to_owned() })
     }
 
-    pub fn create(filename: &str) -> Fallible<Self> {
-        Self::new(&PathBuf::from(filename))
+    fn from(filename: &PathBuf) -> Fallible<InMemoryProfileRepository> {
+        trace!("Loading profile repository from {:?}", filename);
+        let repo_file = File::open(filename)?;
+        let repo: InMemoryProfileRepository = bincode::deserialize_from(repo_file)?;
+        Ok(repo)
     }
 
-    fn save(&self) -> Fallible<()> {
-        debug!("Saving profile repository to {:?}", self.filename);
-        if let Some(repo_dir) = self.filename.parent() {
-            debug!("Recursively Creating directory {:?}", repo_dir);
+    fn store(filename: &PathBuf, mem_repo: InMemoryProfileRepository) -> Fallible<()> {
+        trace!("Saving profile repository to {:?}", filename);
+        if let Some(repo_dir) = filename.parent() {
+            // TODO should we check here first if it already exists?
+            trace!("Recursively Creating directory {:?}", repo_dir);
             std::fs::create_dir_all(repo_dir)?;
         }
 
-        let repo_file = File::create(&self.filename)?;
-        bincode::serialize_into(repo_file, self)?;
+        let repo_file = File::create(filename)?;
+        bincode::serialize_into(repo_file, &mem_repo)?;
         Ok(())
     }
 
-    pub fn load(filename: &PathBuf) -> Fallible<Self> {
-        debug!("Loading profile repository from {:?}", filename);
-        let repo_file = File::open(filename)?;
-        let mut repo: Self = bincode::deserialize_from(repo_file)?;
-        repo.filename = filename.to_owned();
-        Ok(repo)
+    fn load(&self) -> Fallible<InMemoryProfileRepository> {
+        Self::from(&self.filename)
+    }
+
+    fn save(&self, mem_repo: InMemoryProfileRepository) -> Fallible<()> {
+        Self::store(&self.filename, mem_repo)
     }
 }
 
 impl DistributedPublicProfileRepository for FileProfileRepository {
     fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
-        self.mem_repo.get_public(id)
+        let res = self.load().and_then(|mem_repo| mem_repo.get_public(id).wait());
+        Box::new(res.into_future())
     }
 
     fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()> {
-        self.mem_repo.set_public(profile)
+        let res = self.load().and_then(|mut mem_repo| {
+            mem_repo.set_public(profile).wait()?;
+            self.save(mem_repo)
+        });
+        Box::new(res.into_future())
     }
 
     fn clear_public_local(&mut self, key: &PublicKey) -> AsyncFallible<()> {
-        self.mem_repo.clear_public_local(key)
+        let res = self.load().and_then(|mut mem_repo| {
+            mem_repo.clear_public_local(key).wait()?;
+            self.save(mem_repo)
+        });
+        Box::new(res.into_future())
     }
 }
 
 impl PrivateProfileRepository for FileProfileRepository {
     fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData> {
-        self.mem_repo.get(id)
+        let res = self.load().and_then(|mem_repo| mem_repo.get(id).wait());
+        Box::new(res.into_future())
     }
 
     fn set(&mut self, profile: PrivateProfileData) -> AsyncFallible<()> {
-        let res = self.mem_repo.put(profile).and_then(|()| self.save());
+        let res = self.load().and_then(|mut mem_repo| {
+            mem_repo.set(profile).wait()?;
+            self.save(mem_repo)
+        });
         Box::new(res.into_future())
     }
 
     fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()> {
-        let res = self.mem_repo.remove(key).and_then(|()| self.save());
+        let res = self.load().and_then(|mut mem_repo| {
+            mem_repo.clear(key).wait()?;
+            self.save(mem_repo)
+        });
         Box::new(res.into_future())
     }
 }
 
 impl LocalProfileRepository for FileProfileRepository {
     fn restore(&mut self, profile: PrivateProfileData) -> Fallible<()> {
-        self.mem_repo.put(profile)
+        let mut mem_repo = self.load()?;
+        mem_repo.put(profile)?;
+        self.save(mem_repo)
     }
 }
 
 impl ProfileExplorer for FileProfileRepository {
     fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
-        self.mem_repo.fetch(id)
+        let res = self.load().and_then(move |mem_repo| mem_repo.fetch(id).wait());
+        Box::new(res.into_future())
     }
     fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
         unimplemented!() // TODO

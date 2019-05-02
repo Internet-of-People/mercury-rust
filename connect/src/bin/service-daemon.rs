@@ -55,7 +55,7 @@ pub fn init_connect_service(
     // TODO consider that client should be able to start up without being a DHT client,
     //      e.g. with having only a Home URL including hints to access Home
     let mut profile_repo =
-        FileProfileRepository::create("/tmp/mercury/connect/profile-repo").unwrap();
+        FileProfileRepository::new(&PathBuf::from("/tmp/mercury/connect/profile-repo")).unwrap();
     let repo_initialized = reactor.run(profile_repo.get_public(&my_profile_id));
     if repo_initialized.is_err() {
         debug!("Profile repository was not initialized, populate it with required entries");
@@ -64,7 +64,6 @@ pub fn init_connect_service(
     } else {
         debug!("Profile repository was initialized, continue without populating it");
     }
-    let profile_repo = Rc::new(profile_repo);
 
     let my_profiles = Rc::new(vec![my_profile_id.clone()].iter().cloned().collect::<HashSet<_>>());
     let my_own_profile = OwnProfile::new(my_profile, vec![]);
@@ -73,14 +72,14 @@ pub fn init_connect_service(
     let home_connector = Rc::new(SimpleTcpHomeConnector::new(reactor.handle()));
     let profile_client_factory = Rc::new(MyProfileFactory::new(
         signer_factory,
-        profile_repo,
+        Rc::new(RefCell::new(profile_repo)),
         home_connector,
         reactor.handle(),
     ));
 
     let ui = Rc::new(DummyUserInterface::new(my_profiles.clone()));
     let mut own_profile_store =
-        FileProfileRepository::create("/tmp/mercury/connect/my-profiles").unwrap();
+        FileProfileRepository::new(&PathBuf::from("/tmp/mercury/connect/my-profiles")).unwrap();
     reactor.run(own_profile_store.set(my_own_profile)).unwrap();
     let profile_store = Rc::new(RefCell::new(own_profile_store));
     let service =

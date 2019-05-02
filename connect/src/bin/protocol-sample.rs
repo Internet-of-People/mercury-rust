@@ -1,3 +1,4 @@
+use std::cell::RefCell;
 use std::net::SocketAddr;
 use std::rc::Rc;
 use std::time::Duration;
@@ -58,7 +59,7 @@ fn main() {
     let profile_gw = MyProfileImpl::new(
         client_own_profile.clone(),
         client_signer.clone(),
-        Rc::new(profile_store),
+        Rc::new(RefCell::new(profile_store)),
         Rc::new(home_connector),
         reactor.handle(),
     );

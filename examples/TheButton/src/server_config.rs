@@ -32,7 +32,7 @@ impl ServerConfig {
         //
         //        }?;
 
-        info!("Event loop timer: {:?}", timer);
+        // info!("Event loop timer: {:?}", timer);
         //        info!("File descriptor: {:?}", file_name);
         //        info!("Event count: {:?}", count);
 

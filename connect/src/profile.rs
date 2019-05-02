@@ -71,12 +71,12 @@ pub trait MyHomeSession {
 pub struct MyProfileImpl {
     own_profile: Rc<RefCell<OwnProfile>>,
     signer: Rc<Signer>,
-    profile_repo: Rc<ProfileExplorer>,
+    profile_repo: Rc<RefCell<DistributedPublicProfileRepository>>,
     home_connector: Rc<HomeConnector>,
     handle: reactor::Handle,
     session_cache: Rc<RefCell<HashMap<ProfileId, Rc<MyHomeSession>>>>, // {home_id -> session}
     // on_updated:     Rc< Fn(&OwnProfile) -> AsyncResult<(),Error>,
-    // TODO remove this after testing, this should be fetched from the private binary part of OwnProfile
+    // TODO remove this after testing, this should be get_publiced from the private binary part of OwnProfile
     relations: Rc<RefCell<Vec<RelationProof>>>,
 }
 
@@ -84,7 +84,7 @@ impl MyProfileImpl {
     pub fn new(
         own_profile: OwnProfile,
         signer: Rc<Signer>,
-        profile_repo: Rc<ProfileExplorer>,
+        profile_repo: Rc<RefCell<DistributedPublicProfileRepository>>,
         home_connector: Rc<HomeConnector>,
         handle: reactor::Handle,
     ) -> Self {
@@ -118,12 +118,13 @@ impl MyProfileImpl {
 
     fn connect_home2(
         home_profile_id: &ProfileId,
-        prof_repo: Rc<ProfileExplorer>,
+        prof_repo: Rc<RefCell<DistributedPublicProfileRepository>>,
         connector: Rc<HomeConnector>,
         signer: Rc<Signer>,
     ) -> AsyncResult<Rc<Home>, Error> {
         let home_conn_fut = prof_repo
-            .fetch(home_profile_id)
+            .borrow()
+            .get_public(home_profile_id)
             .inspect(move |home_profile| {
                 debug!("Finished loading details for home {}", home_profile.id())
             })
@@ -145,10 +146,11 @@ impl MyProfileImpl {
         let home_id = home_profile_id.clone();
         let my_profile_id = self.signer.profile_id().to_owned();
         let session_cache = self.session_cache.clone();
-        let login_fut = self.profile_repo.fetch(&my_profile_id)
+        let login_fut = self.profile_repo.borrow().get_public(&my_profile_id)
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
             .and_then( |profile|
             {
+                debug!("get_publiced profile details for login: {:?}", profile);
                 match profile.as_persona()
                 {
                     Some(persona) => persona.homes.iter()
@@ -206,7 +208,7 @@ impl MyProfileImpl {
 
     fn any_home_of2(
         profile: &Profile,
-        prof_repo: Rc<ProfileExplorer>,
+        prof_repo: Rc<RefCell<DistributedPublicProfileRepository>>,
         connector: Rc<HomeConnector>,
         signer: Rc<Signer>,
     ) -> AsyncResult<(RelationProof, Rc<Home>), Error> {
@@ -359,7 +361,7 @@ impl MyProfile for MyProfileImpl {
 
         let own_profile_cell = self.own_profile.clone();
         let own_profile_dataclone = self.own_profile.borrow().to_owned();
-        //let profile_repo = self.profile_repo.clone();
+        let profile_repo = self.profile_repo.clone();
         let reg_fut = self
             .connect_home(&home_id)
             .and_then(move |home| {
@@ -371,7 +373,9 @@ impl MyProfile for MyProfileImpl {
             .map(move |own_profile| {
                 own_profile_cell.replace(own_profile.clone());
                 // TODO remove this after testing
-                // profile_repo.set(own_profile.public_data());
+                //debug!("Hack: overwriting persona entry with home added: {:?}", own_profile.public_data());
+                //profile_repo.borrow_mut().set_public(own_profile.public_data())
+                //    .map_err(|e| e.context(ErrorKind::RegistrationFailed).into())
             });
         Box::new(reg_fut)
     }
@@ -425,7 +429,7 @@ impl MyProfile for MyProfileImpl {
         //     None      => self.profile_repo.get(with_profile_id),
         // };
 
-        let profile_fut = self.profile_repo.fetch(with_profile_id);
+        let profile_fut = self.profile_repo.borrow().get_public(with_profile_id);
 
         let pair_fut = profile_fut
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
@@ -466,7 +470,8 @@ impl MyProfile for MyProfileImpl {
         let proof_clone = proof.clone();
         let pair_fut = self
             .profile_repo
-            .fetch(&half_proof.signer_id)
+            .borrow()
+            .get_public(&half_proof.signer_id)
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
             .and_then({
                 let profile_repo = self.profile_repo.clone();
@@ -508,7 +513,8 @@ impl MyProfile for MyProfileImpl {
         let signer = self.signer.clone();
         let call_fut = self
             .profile_repo
-            .fetch(&peer_id)
+            .borrow()
+            .get_public(&peer_id)
             .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
             .and_then(|profile| Self::any_home_of2(&profile, profile_repo, home_connector, signer))
             .and_then(move |(_home_proof, home)| {
@@ -532,14 +538,15 @@ impl MyProfile for MyProfileImpl {
         let relations_weak = Rc::downgrade(&self.relations);
         let log_fut = self
             .profile_repo
-            .fetch(&self.signer.profile_id())
+            .borrow()
+            .get_public(&self.signer.profile_id())
             .map_err(|err| err.context(ErrorKind::LoginFailed).into())
             .and_then({
                 let profile_repo_clone = self.profile_repo.clone();
                 let home_conn_clone = self.home_connector.clone();
                 let signer_clone = self.signer.clone();
                 move |profile| {
-                    debug!("Client profile was loaded for login, connecting home");
+                    debug!("Client profile was loaded for login: {:?}", profile);
                     MyProfileImpl::any_home_of2(
                         &profile,
                         profile_repo_clone,
