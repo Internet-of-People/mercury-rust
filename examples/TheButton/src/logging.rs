@@ -13,18 +13,19 @@ pub fn start_logging(matches: &ArgMatches) {
         _ => LevelFilter::Trace,
     };
 
-    let stdout = ConsoleAppender::builder().build();
+    let stdout = ConsoleAppender::builder()
+        .encoder(Box::new(PatternEncoder::new("{l} {t}:{L} - {m}{n}")))
+        .build();
 
-    let logfile = FileAppender::builder()
-        .encoder(Box::new(PatternEncoder::new("{d} - {m}{n}")))
-        .build("log/button.log")
-        .unwrap();
+    let logfile = FileAppender::builder().build("log/button.log").unwrap();
 
     let config = Config::builder()
         .appender(Appender::builder().build("stdout", Box::new(stdout)))
         .appender(Appender::builder().build("logfile", Box::new(logfile)))
-        .logger(Logger::builder().build("tokio_core::reactor", LevelFilter::Warn))
+        .logger(Logger::builder().build("tokio_core", LevelFilter::Warn))
         .logger(Logger::builder().build("tokio_reactor", LevelFilter::Warn))
+        .logger(Logger::builder().build("tokio_threadpool", LevelFilter::Warn))
+        .logger(Logger::builder().build("mio", LevelFilter::Warn))
         .build(Root::builder().appender("stdout").appender("logfile").build(level))
         .unwrap();
 

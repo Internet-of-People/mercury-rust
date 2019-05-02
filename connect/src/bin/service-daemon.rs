@@ -18,7 +18,6 @@ use mercury_connect::*;
 use mercury_home_protocol::crypto::*;
 use mercury_home_protocol::keyvault::PublicKey as KeyVaultPublicKey;
 use mercury_home_protocol::*;
-use osg::repo::FileProfileRepository;
 
 pub fn init_connect_service(
     my_profile_privkey_file: &PathBuf,
@@ -27,7 +26,7 @@ pub fn init_connect_service(
     reactor: &mut reactor::Core,
 ) -> Result<(Rc<ConnectService>, ProfileId, ProfileId), Error> {
     use mercury_connect::service::{DummyUserInterface, MyProfileFactory, SignerFactory};
-    use mercury_storage::asynch::{fs::FileStore, KeyAdapter, KeyValueStore}; //, imp::InMemoryStore};
+    use osg::repo::{FileProfileRepository, PrivateProfileRepository};
 
     debug!("Initializing service instance");
 
@@ -81,8 +80,8 @@ pub fn init_connect_service(
 
     let ui = Rc::new(DummyUserInterface::new(my_profiles.clone()));
     let mut own_profile_store =
-        KeyAdapter::new(FileStore::new("/tmp/mercury/connect/my-profiles").unwrap());
-    reactor.run(own_profile_store.set(my_profile_id.clone(), my_own_profile)).unwrap();
+        FileProfileRepository::create("/tmp/mercury/connect/my-profiles").unwrap();
+    reactor.run(own_profile_store.set(my_own_profile)).unwrap();
     let profile_store = Rc::new(RefCell::new(own_profile_store));
     let service =
         Rc::new(ConnectService::new(ui, my_profiles, profile_store, profile_client_factory)); //, &reactor.handle() ) );

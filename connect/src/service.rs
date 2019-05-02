@@ -162,7 +162,7 @@ pub struct AdminSessionImpl {
     //    accessman:  Rc<AccessManager>,
     ui: Rc<UserInterface>,
     my_profile_ids: Rc<HashSet<ProfileId>>,
-    profile_store: Rc<RefCell<KeyValueStore<ProfileId, OwnProfile>>>,
+    profile_store: Rc<RefCell<PrivateProfileRepository>>,
     profile_factory: Rc<MyProfileFactory>,
     //    handle:         reactor::Handle,
 }
@@ -171,7 +171,7 @@ impl AdminSessionImpl {
     pub fn new(
         ui: Rc<UserInterface>,
         my_profile_ids: Rc<HashSet<ProfileId>>,
-        profile_store: Rc<RefCell<KeyValueStore<ProfileId, OwnProfile>>>,
+        profile_store: Rc<RefCell<PrivateProfileRepository>>,
         profile_factory: Rc<MyProfileFactory>,
     ) -> Rc<AdminSession> {
         let this = Self { ui, profile_store, my_profile_ids, profile_factory }; //, handle };
@@ -191,7 +191,7 @@ impl AdminSession for AdminSessionImpl {
                 let prof_factory = prof_factory.clone();
                 store
                     .borrow()
-                    .get(prof_id.to_owned())
+                    .get(prof_id)
                     .map_err(|e| e.context(ErrorKind::FailedToLoadProfile).into())
                     .and_then(move |own_profile| prof_factory.create(own_profile))
             })
@@ -205,7 +205,7 @@ impl AdminSession for AdminSessionImpl {
         let fut = self
             .profile_store
             .borrow()
-            .get(id.to_owned())
+            .get(&id)
             .map_err(|e| e.context(ErrorKind::FailedToLoadProfile).into())
             .and_then(move |own_profile| profile_factory.create(own_profile));
         Box::new(fut)
@@ -238,7 +238,7 @@ pub struct ConnectService {
     //    accessman:      Rc<AccessManager>,
     ui: Rc<UserInterface>,
     my_profile_ids: Rc<HashSet<ProfileId>>,
-    profile_store: Rc<RefCell<KeyValueStore<ProfileId, OwnProfile>>>,
+    profile_store: Rc<RefCell<PrivateProfileRepository>>,
     profile_factory: Rc<MyProfileFactory>,
     //    handle:         reactor::Handle,
 }
@@ -247,7 +247,7 @@ impl ConnectService {
     pub fn new(
         ui: Rc<UserInterface>,
         my_profile_ids: Rc<HashSet<ProfileId>>,
-        profile_store: Rc<RefCell<KeyValueStore<ProfileId, OwnProfile>>>,
+        profile_store: Rc<RefCell<PrivateProfileRepository>>,
         profile_factory: Rc<MyProfileFactory>,
     ) -> Self {
         Self { ui, my_profile_ids, profile_store, profile_factory }
@@ -283,7 +283,7 @@ impl DAppEndpoint for ConnectService {
             .and_then(move |profile_id| {
                 let store = profile_store.borrow();
                 store
-                    .get(profile_id)
+                    .get(&profile_id)
                     .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
             })
             .and_then(move |own_profile| profile_factory.create(own_profile))

@@ -8,7 +8,6 @@ use multiaddr::ToMultiaddr;
 
 use super::*;
 use mercury_home_protocol::keyvault::PublicKey as KeyVaultPublicKey;
-use osg::repo::FileProfileRepository;
 
 pub fn init_connect_service(
     my_private_profilekey_file: &str,
@@ -17,7 +16,7 @@ pub fn init_connect_service(
     reactor: &mut reactor::Core,
 ) -> Result<(Rc<ConnectService>, ProfileId, ProfileId), Error> {
     use mercury_connect::service::{DummyUserInterface, MyProfileFactory, SignerFactory};
-    use mercury_storage::asynch::{imp::InMemoryStore, KeyValueStore};
+    use osg::repo::{FileProfileRepository, InMemoryProfileRepository, PrivateProfileRepository};
 
     debug!("Initializing service instance");
 
@@ -46,7 +45,6 @@ pub fn init_connect_service(
     // TODO consider that client should be able to start up without being a DHT client,
     //      e.g. with having only a Home URL including hints to access Home
     let mut profile_repo = FileProfileRepository::create("/tmp/mercury/thebutton-storage").unwrap();
-    //    let profile_repo = SimpleProfileRepo::default();
     let repo_initialized = reactor.run(profile_repo.get_public(&my_profile_id));
     if repo_initialized.is_err() {
         debug!("Profile repository was not initialized, populate it with required entries");
@@ -70,8 +68,10 @@ pub fn init_connect_service(
     ));
 
     let ui = Rc::new(DummyUserInterface::new(my_profiles.clone()));
-    let mut own_profile_store = InMemoryStore::new();
-    reactor.run(own_profile_store.set(my_profile_id.clone(), my_own_profile)).unwrap();
+    let mut own_profile_store = InMemoryProfileRepository::new();
+    // let mut own_profile_store =
+    //    FileProfileRepository::create("/tmp/mercury/connect/profile-repo").unwrap();
+    reactor.run(own_profile_store.set(my_own_profile)).unwrap();
     let profile_store = Rc::new(RefCell::new(own_profile_store));
     let service = Rc::new(ConnectService::new(ui, my_profiles, profile_store, gateways)); //, &reactor.handle() ) );
 
