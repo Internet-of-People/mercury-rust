@@ -27,7 +27,9 @@ fn main() {
         ed25519::EdPrivateKey::from_bytes(client_private_key_bytes).unwrap();
     let client_private_key = PrivateKey::from(client_private_key_ed);
     let client_signer = Rc::new(crypto::PrivateKeySigner::new(client_private_key).unwrap());
-    let client_own_profile = OwnProfile::empty(&client_signer.public_key());
+    let client_attrs = PersonaFacet::new(vec![], vec![]).to_attributes();
+    let client_profile = Profile::new(client_signer.public_key(), 1, vec![], client_attrs);
+    let client_own_profile = OwnProfile::new(client_profile, vec![]);
 
     // server details has to be taken from the command line
     // we need 3 pieces of information
