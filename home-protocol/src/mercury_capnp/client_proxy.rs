@@ -223,6 +223,7 @@ impl mercury_capnp::profile_event_listener::Server for ProfileEventDispatcherCap
     ) -> Promise<(), capnp::Error> {
         let event_capnp = pry!(pry!(params.get()).get_event());
         let event = pry!(ProfileEvent::try_from(event_capnp));
+        trace!("Capnp client received event: {:?}", event);
         let recv_fut = self
             .sender
             .clone()

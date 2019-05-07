@@ -2,8 +2,6 @@
 //      that will not be part of this program. Instead, it will run in a separated,
 //      protected background service and communicate with dApps through IPC.
 //      However, until it's properly implemented, dApps have to contain and instantiate it.
-use std::path::PathBuf;
-
 use log::*;
 
 use super::*;
@@ -15,8 +13,12 @@ pub fn init_connect_service(
     _home_addr_str: &str,
     reactor: &mut reactor::Core,
 ) -> Result<(Rc<ConnectService>, ProfileId, ProfileId), Error> {
+    use std::net::SocketAddr;
+    use std::time::Duration;
+
     use mercury_connect::service::{DummyUserInterface, MyProfileFactory, SignerFactory};
-    use osg::repo::{FileProfileRepository, InMemoryProfileRepository, PrivateProfileRepository};
+    use osg::repo::{InMemoryProfileRepository, PrivateProfileRepository};
+    use osg_rpc_storage::RpcProfileRepository;
 
     debug!("Initializing service instance");
 
@@ -42,11 +44,9 @@ pub fn init_connect_service(
 
     // TODO consider that client should be able to start up without being a DHT client,
     //      e.g. with having only a Home URL including hints to access Home
-    //let mut profile_repo = FileProfileRepository::create("/tmp/mercury/thebutton-storage").unwrap();
-    let mut profile_repo = FileProfileRepository::new(&PathBuf::from(
-        "/tmp/mercury/home/tmp-distributed-public-profiles",
-    ))
-    .unwrap();
+    let storage_addr: SocketAddr = "127.0.0.1:6161".parse().unwrap();
+    let mut profile_repo =
+        RpcProfileRepository::new(&storage_addr, Duration::from_secs(5)).unwrap();
     let repo_initialized = reactor.run(profile_repo.get_public(&my_profile_id));
     if repo_initialized.is_err() {
         debug!("Profile repository was not initialized, populate it with required entries");

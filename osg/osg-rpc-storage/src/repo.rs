@@ -13,7 +13,7 @@ use crate::messages;
 use keyvault::PublicKey as KeyVaultPublicKey;
 use osg::model::*;
 use osg::profile::{Profile, ProfilePtr};
-use osg::repo::{PrivateProfileRepository, ProfileExplorer};
+use osg::repo::{DistributedPublicProfileRepository, PrivateProfileRepository, ProfileExplorer};
 
 #[derive(Clone)]
 pub struct RpcProfileRepository {
@@ -156,5 +156,21 @@ impl ProfileExplorer for RpcProfileRepository {
             let followers = reply.into_iter().map(|peer_profile| Link { peer_profile }).collect();
             Ok(followers)
         })
+    }
+}
+
+impl DistributedPublicProfileRepository for RpcProfileRepository {
+    fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
+        let fut = (self as &PrivateProfileRepository).get(id).map(|prof| prof.public_data());
+        Box::new(fut)
+    }
+
+    fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()> {
+        let priv_profile = PrivateProfileData::new(profile, vec![]);
+        (self as &mut PrivateProfileRepository).set(priv_profile)
+    }
+
+    fn clear_public_local(&mut self, key: &PublicKey) -> AsyncFallible<()> {
+        (self as &mut PrivateProfileRepository).clear(key)
     }
 }

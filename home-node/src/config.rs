@@ -19,15 +19,22 @@ struct CliConfig {
     )]
     private_key_file: PathBuf,
 
-    // TODO default value is only for testing, make this platform-dependent
     #[structopt(
-        long = "storage",
+        long = "private-storage",
         default_value = "/tmp/mercury/home/hosted-profiles",
         parse(from_os_str),
         help = "Directory path to store hosted profiles in",
         raw(value_name = r#""path/to/dir""#)
     )]
-    storage_path: PathBuf,
+    private_storage_path: PathBuf,
+
+    #[structopt(
+        long = "distributed-storage",
+        default_value = "127.0.0.1:6161",
+        help = "Network address of public profile storage",
+        raw(value_name = r#""IP:PORT""#)
+    )]
+    distributed_storage_address: String,
 
     #[structopt(
         long = "tcp",
@@ -48,7 +55,8 @@ impl CliConfig {
 
 pub struct Config {
     //storage_path: String,
-    storage_path: PathBuf,
+    private_storage_path: PathBuf,
+    distributed_storage_address: SocketAddr,
     signer: Rc<Signer>,
     listen_socket: SocketAddr, // TODO consider using Vec if listening on several network devices is needed
 }
@@ -76,15 +84,30 @@ impl Config {
             .to_socket_addrs()
             .unwrap()
             .next()
-            .expect("Failed to parse socket address");
+            .expect("Failed to parse socket address for private storage");
+
+        let distributed_storage_address = cli
+            .distributed_storage_address
+            .to_socket_addrs()
+            .unwrap()
+            .next()
+            .expect("Failed to parse socket address for distributed storage");
 
         // Self { storage_path, signer, listen_socket }
-        Self { storage_path: cli.storage_path, signer, listen_socket }
+        Self {
+            private_storage_path: cli.private_storage_path,
+            distributed_storage_address,
+            signer,
+            listen_socket,
+        }
     }
 
     // pub fn storage_path(&self) -> &str {
-    pub fn storage_path(&self) -> &PathBuf {
-        &self.storage_path
+    pub fn private_storage_path(&self) -> &PathBuf {
+        &self.private_storage_path
+    }
+    pub fn distributed_storage_address(&self) -> &SocketAddr {
+        &self.distributed_storage_address
     }
     pub fn signer(&self) -> Rc<Signer> {
         self.signer.clone()

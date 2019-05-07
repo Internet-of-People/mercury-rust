@@ -61,29 +61,28 @@ impl Client {
         dapp_session: Rc<DAppSession>,
     ) -> AsyncResult<Box<Contact>, Error> {
         let callee_profile_id = self.cfg.callee_profile_id.clone();
-        let contact_fut = dapp_session
-            .contacts_with_profile(&callee_profile_id, None)
-            .map(|relations| (dapp_session, relations))
-            .and_then({
-                let peer_id = self.cfg.callee_profile_id.clone();
-                let client_id = self.appctx.client_id.clone();
-                let handle = self.appctx.handle.clone();
-                move |(dapp_session, mut relations)| {
-                    let init_rel_fut = dapp_session.initiate_contact(&peer_id);
-                    match relations.pop() {
-                        Some(relation) => Box::new(Ok(relation).into_future()) as AsyncResult<_, _>,
-                        None => {
-                            let rel_fut = dapp_session
-                                .checkin()
-                                .and_then(|events| init_rel_fut.map(|()| events))
-                                .and_then(|events| {
-                                    Self::wait_for_pairing_response(events, client_id, handle)
-                                });
-                            Box::new(rel_fut)
-                        }
+        let contact_fut = dapp_session.contacts_with_profile(&callee_profile_id, None).and_then({
+            let peer_id = self.cfg.callee_profile_id.clone();
+            let client_id = self.appctx.client_id.clone();
+            let handle = self.appctx.handle.clone();
+            move |mut relations| {
+                let init_rel_fut = dapp_session.initiate_contact(&peer_id);
+                match relations.pop() {
+                    Some(relation) => Box::new(Ok(relation).into_future()) as AsyncResult<_, _>,
+                    None => {
+                        debug!("No signed relation to server is available, initiate pairing");
+                        let rel_fut = dapp_session
+                            .checkin()
+                            .and_then(|events| init_rel_fut.map(|()| events))
+                            .and_then(|events| {
+                                debug!("Pairing request sent, start waiting for response");
+                                Self::wait_for_pairing_response(events, client_id, handle)
+                            });
+                        Box::new(rel_fut)
                     }
                 }
-            });
+            }
+        });
         Box::new(contact_fut)
     }
 }

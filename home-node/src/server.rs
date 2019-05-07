@@ -458,7 +458,7 @@ enum ServerSink<T, E> {
 
 pub struct HomeSessionServer {
     // TODO consider using Weak<Ptrs> instead of Rc<Ptrs> if a closed Home connection cannot
-    //      drop all related session automatically
+    //      drop all related sessions automatically
     context: Rc<PeerContext>,
     server: Rc<HomeServer>,
     events: RefCell<ServerSink<ProfileEvent, String>>,
@@ -480,17 +480,19 @@ impl HomeSessionServer {
         debug!("Session with {} got event dispatched: {:?}", self.context.peer_id(), event);
         match *self.events.borrow_mut() {
             ServerSink::Buffer(ref mut bufvec) => {
+                debug!("No event channel is available on the client side, buffering event");
                 bufvec.push(Ok(event)); // TODO consider size constraints
                 Box::new(future::ok(()))
             }
-            ServerSink::Sender(ref mut sender) => Box::new(
-                sender
-                    .clone()
+            ServerSink::Sender(ref mut sender) => {
+                debug!("Event channel for active client was found, sending event there");
+                let fut = sender.clone()
                     .send(Ok(event))
                     .map(|_sender| ())
                     // TODO if call dispatch fails we probably should replace the sender with a buffer
-                    .map_err(|e| ErrorKind::FailedToSend.into()),
-            ),
+                    .map_err(|e| ErrorKind::FailedToSend.into());
+                Box::new(fut)
+            }
         }
     }
 
@@ -657,7 +659,7 @@ impl HomeSession for HomeSessionServer {
         receiver
     }
 
-    // TODO remove this after testing
+    // TODO consider removing this after testing
     fn ping(&self, txt: &str) -> Box<Future<Item = String, Error = Error>> {
         debug!("Ping received `{}`, sending it back", txt);
         Box::new(future::ok(txt.to_owned()))

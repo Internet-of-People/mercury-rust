@@ -115,6 +115,6 @@ interface HomeSession
     events @2 (eventListener: ProfileEventListener);
     checkinApp @3 (app: ApplicationId, callListener: CallListener);
 
-    # TODO remove after testing
+    # TODO consider removing this after testing
     ping @4 (txt : Text) -> (pong : Text);
 }
