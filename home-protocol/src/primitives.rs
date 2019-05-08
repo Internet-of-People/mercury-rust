@@ -9,9 +9,9 @@ use crate::*;
 
 pub type Profile = osg::model::PublicProfileData;
 pub type OwnProfile = osg::model::PrivateProfileData;
-pub use osg::model::{AttributeId, AttributeMap, AttributeValue, ProfileId, PublicKey, Version};
-pub type PrivateKey = keyvault::multicipher::MPrivateKey;
-pub type Signature = keyvault::multicipher::MSignature;
+pub use osg::model::{
+    AttributeId, AttributeMap, AttributeValue, PrivateKey, ProfileId, PublicKey, Signature, Version,
+};
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ApplicationId(pub String);

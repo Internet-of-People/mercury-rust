@@ -361,7 +361,7 @@ impl MyProfile for MyProfileImpl {
 
         let own_profile_cell = self.own_profile.clone();
         let own_profile_dataclone = self.own_profile.borrow().to_owned();
-        let profile_repo = self.profile_repo.clone();
+        //let profile_repo = self.profile_repo.clone();
         let reg_fut = self
             .connect_home(&home_id)
             .and_then(move |home| {

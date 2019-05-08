@@ -7,6 +7,8 @@ use keyvault::PublicKey as KeyVaultPublicKey;
 
 pub type ProfileId = keyvault::multicipher::MKeyId;
 pub type PublicKey = keyvault::multicipher::MPublicKey;
+pub type PrivateKey = keyvault::multicipher::MPrivateKey;
+pub type Signature = keyvault::multicipher::MSignature;
 pub type Version = u64; // monotonically increasing, e.g. normal version, unix datetime or blockheight
 pub type AttributeId = String;
 pub type AttributeValue = String;

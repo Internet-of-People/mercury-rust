@@ -30,6 +30,18 @@ impl MercuryProfiles {
     }
 }
 
+pub struct MercurySecrets {
+    mercury_xsk: EdExtPrivateKey,
+}
+
+impl MercurySecrets {
+    pub fn private_key(&self, idx: i32) -> Fallible<PrivateKey> {
+        let profile_xsk = self.mercury_xsk.derive_hardened_child(idx)?;
+        let key = profile_xsk.as_private_key();
+        Ok(key.into())
+    }
+}
+
 pub trait ProfileVault {
     fn list(&self) -> Fallible<Vec<ProfileId>>;
     fn create_key(&mut self) -> Fallible<PublicKey>;
@@ -90,6 +102,16 @@ impl HdProfileVault {
         }
         Ok(v)
     }
+
+    fn mercury_xsk(&self) -> Fallible<EdExtPrivateKey> {
+        let master = Ed25519::master(&self.seed);
+        master.derive_hardened_child(BIP43_PURPOSE_MERCURY)
+    }
+
+    // TODO this should be exposed in a safer way, at least protected by some password
+    pub fn secrets(&self) -> Fallible<MercurySecrets> {
+        Ok(MercurySecrets { mercury_xsk: self.mercury_xsk()? })
+    }
 }
 
 impl ProfileVault for HdProfileVault {
@@ -98,9 +120,7 @@ impl ProfileVault for HdProfileVault {
     }
 
     fn profiles(&self) -> Fallible<MercuryProfiles> {
-        let master = Ed25519::master(&self.seed);
-        let mercury_xsk = master.derive_hardened_child(BIP43_PURPOSE_MERCURY)?;
-        Ok(MercuryProfiles { mercury_xsk })
+        Ok(MercuryProfiles { mercury_xsk: self.mercury_xsk()? })
     }
 
     fn list(&self) -> Fallible<Vec<ProfileId>> {

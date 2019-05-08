@@ -1,4 +1,3 @@
-use std::fs;
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::rc::Rc;
@@ -7,17 +6,19 @@ use log::*;
 use structopt::StructOpt;
 
 use mercury_home_protocol::*;
+use osg::vault::HdProfileVault;
 
 #[derive(Debug, StructOpt)]
+#[structopt(
+    name = "mercury-home",
+    about = "Mercury Home Node daemon",
+    raw(setting = "structopt::clap::AppSettings::ColoredHelp")
+)]
 struct CliConfig {
-    #[structopt(
-        long = "server-key",
-        default_value = "../etc/homenode.id",
-        parse(from_os_str),
-        raw(value_name = r#""FILE""#),
-        help = "Private key file used to prove server identity. Currently only ed25519 keys are supported in raw binary format"
-    )]
-    private_key_file: PathBuf,
+    #[structopt(long = "keyvault-dir", raw(value_name = r#""DIR""#), parse(from_os_str))]
+    /// Configuration directory to pick vault from.
+    /// Default: OS-specific app_cfg_dir/prometheus
+    pub keyvault_dir: Option<PathBuf>,
 
     #[structopt(
         long = "private-storage",
@@ -65,16 +66,21 @@ impl Config {
     pub fn new() -> Self {
         let cli = CliConfig::new();
 
-        // let storage_path = cli.storage_path.to_str().expect("Storage path should have a default value").to_owned();
-
-        // TODO support hardware wallets
         // NOTE for some test keys see https://github.com/tendermint/signatory/blob/master/src/ed25519/test_vectors.rs
-        let bytes = fs::read(cli.private_key_file).unwrap();
-        // TODO consider loading flexible string multicipher key instead of fixed binary ed25519
-        let edpk = ed25519::EdPrivateKey::from_bytes(bytes).unwrap();
-        let signer = Rc::new(
-            crypto::PrivateKeySigner::new(PrivateKey::from(edpk)).expect("Invalid private key"),
-        );
+        //let bytes = fs::read(cli.private_key_file).unwrap();
+        //let edpk = ed25519::EdPrivateKey::from_bytes(bytes).unwrap();
+        //let signer = Rc::new(
+        //    crypto::PrivateKeySigner::new(PrivateKey::from(edpk)).expect("Invalid private key"),
+        //);
+
+        let vault_path =
+            osg::paths::vault_path(cli.keyvault_dir).expect("Failed to get keyvault path");
+        let keyvault = HdProfileVault::load(&vault_path).expect("Failed to load profile vault");
+        let private_keys = keyvault.secrets().expect("failed to get list of owned keys");
+        // TODO make the key selectable (explicit option or active keyvault default) instead of hardwired first one
+        let private_key = private_keys.private_key(0).expect("Failed to get first key");
+        let signer =
+            Rc::new(crypto::PrivateKeySigner::new(private_key).expect("Failed to create signer"));
 
         info!("homenode public key: {}", signer.public_key());
         info!("homenode profile id: {}", signer.profile_id());

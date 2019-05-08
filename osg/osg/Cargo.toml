@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 bincode = "*"
+dirs = "*"
 failure = "*"
 futures = "0.1"
 log = "*"
