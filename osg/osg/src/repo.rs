@@ -151,7 +151,7 @@ impl FileProfileRepository {
     // TODO clean up the name chaos here for new(), from, load, store, save
     pub fn new(filename: &PathBuf) -> Fallible<Self> {
         if let Err(_e) = Self::from(filename) {
-            info!("Failed to load profile repository from {:?}, initializing one there", filename);
+            debug!("Failed to load profile repository from {:?}, initializing one there", filename);
             Self::store(filename, InMemoryProfileRepository::default())?;
         }
 

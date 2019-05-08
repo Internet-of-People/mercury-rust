@@ -159,6 +159,7 @@ impl Seed {
         Ok(Self { bytes })
     }
 
+    // TODO this should be changed to something like Entropy::unlock(password) -> Seed
     /// Returns the bytes of the seed
     pub fn as_bytes(&self) -> &[u8] {
         self.bytes.as_slice()
@@ -181,6 +182,7 @@ pub trait KeyDerivationCrypto: AsymmetricCrypto {
     type ExtendedPrivateKey: ExtendedPrivateKey<Self>;
     type ExtendedPublicKey: ExtendedPublicKey<Self>;
 
+    // TODO a password argument should be added here
     fn master(seed: &Seed) -> Self::ExtendedPrivateKey;
 }
 
