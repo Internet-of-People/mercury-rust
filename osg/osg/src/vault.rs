@@ -75,7 +75,7 @@ impl HdProfileVault {
         Self { seed, next_idx: Default::default(), active_idx: Option::None }
     }
 
-    fn index_of(&self, id: &ProfileId) -> Option<usize> {
+    pub fn index_of(&self, id: &ProfileId) -> Option<usize> {
         self.list().ok().and_then(|v| v.iter().position(|candidate_id| candidate_id == id))
     }
 

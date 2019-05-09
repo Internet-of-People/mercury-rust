@@ -2,11 +2,12 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::rc::Rc;
 
+use failure::bail;
 use log::*;
 use structopt::StructOpt;
 
 use mercury_home_protocol::*;
-use osg::vault::HdProfileVault;
+use osg::vault::{HdProfileVault, ProfileVault};
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -16,33 +17,33 @@ use osg::vault::HdProfileVault;
 )]
 struct CliConfig {
     #[structopt(long = "keyvault-dir", raw(value_name = r#""DIR""#), parse(from_os_str))]
-    /// Configuration directory to pick vault from.
+    /// Configuration directory to load keyvault from.
     /// Default: OS-specific app_cfg_dir/prometheus
     pub keyvault_dir: Option<PathBuf>,
+
+    #[structopt(long = "profileid", raw(value_name = r#""ID""#))]
+    /// Key ID within keyvault to be used for authentication by this node.
+    pub profile_id: Option<ProfileId>,
 
     #[structopt(
         long = "private-storage",
         default_value = "/tmp/mercury/home/hosted-profiles",
         parse(from_os_str),
-        help = "Directory path to store hosted profiles in",
-        raw(value_name = r#""path/to/dir""#)
+        raw(value_name = r#""PATH""#)
     )]
+    /// Directory path to store hosted profiles in
     private_storage_path: PathBuf,
 
     #[structopt(
         long = "distributed-storage",
         default_value = "127.0.0.1:6161",
-        help = "Network address of public profile storage",
         raw(value_name = r#""IP:PORT""#)
     )]
+    /// Network address of public profile storage
     distributed_storage_address: String,
 
-    #[structopt(
-        long = "tcp",
-        default_value = "0.0.0.0:2077",
-        raw(value_name = r#""IP:Port""#),
-        help = "Listen on this socket to serve TCP clients"
-    )]
+    #[structopt(long = "tcp", default_value = "0.0.0.0:2077", raw(value_name = r#""IP:Port""#))]
+    /// Listen on this socket to serve TCP clients
     socket_addr: String,
 }
 
@@ -66,24 +67,26 @@ impl Config {
     pub fn new() -> Self {
         let cli = CliConfig::new();
 
-        // NOTE for some test keys see https://github.com/tendermint/signatory/blob/master/src/ed25519/test_vectors.rs
-        //let bytes = fs::read(cli.private_key_file).unwrap();
-        //let edpk = ed25519::EdPrivateKey::from_bytes(bytes).unwrap();
-        //let signer = Rc::new(
-        //    crypto::PrivateKeySigner::new(PrivateKey::from(edpk)).expect("Invalid private key"),
-        //);
-
         let vault_path =
             osg::paths::vault_path(cli.keyvault_dir).expect("Failed to get keyvault path");
-        let keyvault = HdProfileVault::load(&vault_path).expect("Failed to load profile vault");
-        let private_keys = keyvault.secrets().expect("failed to get list of owned keys");
-        // TODO make the key selectable (explicit option or active keyvault default) instead of hardwired first one
-        let private_key = private_keys.private_key(0).expect("Failed to get first key");
+        let vault = HdProfileVault::load(&vault_path).expect(&format!(
+            "Profile vault is required but failed to load from {}",
+            vault_path.to_string_lossy()
+        ));
+        let private_keys = vault.secrets().expect("failed to get list of owned keys");
+
+        let profile_id = cli.profile_id.or_else(|| vault.get_active().expect("Failed to get active profile") )
+            .expect("Profile id is needed for authenticating the node, but neither command line argument is specified, nor active profile is set in vault");
+        let key_idx = vault
+            .index_of(&profile_id)
+            .expect(&format!("Specified id is not found in vault: {}", profile_id));
+        let private_key =
+            private_keys.private_key(key_idx as i32).expect("Failed to get first key");
         let signer =
             Rc::new(crypto::PrivateKeySigner::new(private_key).expect("Failed to create signer"));
 
-        info!("homenode public key: {}", signer.public_key());
         info!("homenode profile id: {}", signer.profile_id());
+        info!("homenode public key: {}", signer.public_key());
 
         let listen_socket = cli
             .socket_addr

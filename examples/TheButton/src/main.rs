@@ -53,14 +53,14 @@ pub struct AppContext {
 impl AppContext {
     pub fn new(
         priv_key: &str,
-        node_id: &str,
+        node_pubkey: &str,
         node_addr: &str,
         reactor: &mut reactor::Core,
     ) -> Result<Self, Error> {
         // TODO when we'll have a standalone service with proper IPC/RPC interface,
         //      this must be changed into a simple connect() call instead of building a service instance
         let (service, client_id, home_id) =
-            init_connect_service(priv_key, node_id, node_addr, reactor)?;
+            init_connect_service(priv_key, node_pubkey, node_addr, reactor)?;
         Ok(Self {
             service,
             client_id,
@@ -97,7 +97,7 @@ fn main() -> Result<(), Error> {
     // Constructing application context from command line args
     let appcx = AppContext::new(
         matches.value_of(cli::CLI_PRIVATE_KEY_FILE).unwrap(),
-        matches.value_of(cli::CLI_HOME_NODE_KEY_FILE).unwrap(),
+        matches.value_of(cli::CLI_HOME_NODE_PUBLIC_KEY).unwrap(),
         matches.value_of(cli::CLI_SERVER_ADDRESS).unwrap(),
         &mut reactor,
     )?;

@@ -9,7 +9,7 @@ use mercury_home_protocol::keyvault::PublicKey as KeyVaultPublicKey;
 
 pub fn init_connect_service(
     my_private_profilekey_file: &str,
-    home_id_str: &str,
+    home_pubkey_str: &str,
     _home_addr_str: &str,
     reactor: &mut reactor::Core,
 ) -> Result<(Rc<ConnectService>, ProfileId, ProfileId), Error> {
@@ -22,11 +22,14 @@ pub fn init_connect_service(
 
     debug!("Initializing service instance");
 
-    let home_pubkey_bytes =
-        std::fs::read(home_id_str).map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
-    let home_pubkey_ed = ed25519::EdPublicKey::from_bytes(home_pubkey_bytes)
-        .map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
-    let home_pubkey = PublicKey::from(home_pubkey_ed);
+    //    let home_pubkey_bytes =
+    //        std::fs::read(home_id_str).map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
+    //    let home_pubkey_ed = ed25519::EdPublicKey::from_bytes(home_pubkey_bytes)
+    //        .map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
+    //    let home_pubkey = PublicKey::from(home_pubkey_ed);
+    let home_pubkey = home_pubkey_str
+        .parse::<PublicKey>()
+        .map_err(|e| Error::from(e.context(ErrorKind::FailedToLoadProfile)))?;
     let home_id = home_pubkey.key_id();
 
     let my_private_key_bytes = std::fs::read(my_private_profilekey_file)

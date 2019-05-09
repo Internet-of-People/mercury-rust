@@ -3,7 +3,7 @@ use clap::{App, AppSettings, Arg, SubCommand};
 pub const CLI_VERSION: &str = "version";
 pub const CLI_VERBOSE: &str = "verbose";
 pub const CLI_PRIVATE_KEY_FILE: &str = "private-key-file";
-pub const CLI_HOME_NODE_KEY_FILE: &str = "home-node-key-file";
+pub const CLI_HOME_NODE_PUBLIC_KEY: &str = "home-node-pubkey";
 pub const CLI_SERVER_ADDRESS: &str = "server-addr";
 pub const CLI_SERVER: &str = "server";
 pub const CLI_EVENT_TIMER: &str = "event-timer";
@@ -43,11 +43,11 @@ pub fn cli<'a, 'b>() -> App<'a, 'b> {
                 .value_name("KEY"),
         )
         .arg(
-            Arg::with_name(CLI_HOME_NODE_KEY_FILE)
-                .long(CLI_HOME_NODE_KEY_FILE)
+            Arg::with_name(CLI_HOME_NODE_PUBLIC_KEY)
+                .long(CLI_HOME_NODE_PUBLIC_KEY)
                 .takes_value(true)
-                .help(" public key of the home node of the profile used (binary, ed25519)")
-                .default_value("../../etc/homenode.id.pub")
+                .required(true)
+                .help("Public key (multicipher) of the home node to be used by this dApp")
                 .value_name("KEY"),
         )
         .arg(
