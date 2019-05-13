@@ -14,8 +14,8 @@ futures = "0.1"
 log = "*"
 log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }
-osg = { path="../osg/osg" }
-osg-rpc-storage = { path="../osg/osg-rpc-storage" }
+osg = { path="../osg" }
+osg-rpc-storage = { path="../osg-rpc-storage" }
 multiaddr = "*"
 structopt = "*"
 tokio-core = "0.1"

@@ -18,12 +18,12 @@ capnp = "*"
 capnp-rpc = "*"
 failure= "*"
 futures = "0.1"
-keyvault = { path="../osg/keyvault" }
+keyvault = { path="../keyvault" }
 log = "*"
 multiaddr = "*"
 multibase = "*"
 multihash = "*"
-osg = { path="../osg/osg" }
+osg = { path="../osg" }
 serde = "*"
 serde_derive = "*"
 serde_json = "*"

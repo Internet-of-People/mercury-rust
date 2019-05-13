@@ -18,7 +18,7 @@ log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }
 mercury-storage = { path="../storage" }
 multiaddr = "*"
-osg = { path="../osg/osg" }
+osg = { path="../osg" }
 serde = "*"
 serde_derive = "*"
 serde_json = "*"

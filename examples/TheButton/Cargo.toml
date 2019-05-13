@@ -17,8 +17,8 @@ mercury-home-protocol = { path="../../home-protocol" }
 mercury-connect = { path="../../connect" }
 multiaddr = "*"
 multibase = "*"
-osg = { path="../../osg/osg" }
-osg-rpc-storage = { path="../../osg/osg-rpc-storage" }
+osg = { path="../../osg" }
+osg-rpc-storage = { path="../../osg-rpc-storage" }
 tempdir = "*"
 tokio-signal = "*"
 tokio-core = "*"

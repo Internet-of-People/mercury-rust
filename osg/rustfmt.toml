@@ -1,9 +1,0 @@
-# --- Overwritten values
-edition = "2018"
-use_small_heuristics = "Max"
-use_field_init_shorthand = true
-use_try_shorthand = true
-
-# --- Default values
-# max_width = 100
-# tab_spaces = 4

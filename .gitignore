@@ -1,5 +1,11 @@
-.idea
-log
-target
-Cargo.lock
+**/.idea
+**/Cargo.lock
 **/filetest/
+**/log
+**/target/
+debian/prometheus
+debian/prometheus.substvars
+debian/prometheus.*.debhelper
+debian/prometheus.debhelper.log
+debian/files
+debian/.debhelper
