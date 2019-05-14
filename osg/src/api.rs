@@ -29,45 +29,61 @@ impl FromStr for ProfileRepositoryKind {
     }
 }
 
-pub type ApiRes = Fallible<()>;
 pub trait Api {
-    fn restore_vault(&mut self, phrase: String) -> ApiRes;
-    fn restore_all_profiles(&mut self) -> ApiRes;
-    fn list_profiles(&self) -> ApiRes;
-    fn set_active_profile(&mut self, my_profile_id: ProfileId) -> ApiRes;
+    fn restore_vault(&mut self, phrase: String) -> Fallible<()>;
+    fn restore_all_profiles(&mut self) -> Fallible<()>;
 
-    fn create_profile(&mut self) -> ApiRes;
-    fn show_profile(&self, profile_id: Option<ProfileId>, kind: ProfileRepositoryKind) -> ApiRes;
+    fn get_profile(
+        &self,
+        id: Option<ProfileId>,
+        repo_kind: ProfileRepositoryKind,
+    ) -> Fallible<PrivateProfileData>;
+    fn list_profiles(&self) -> Fallible<Vec<ProfileId>>;
 
-    fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes;
-    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>, force: bool) -> ApiRes;
-    fn restore_profile(&mut self, my_profile_id: Option<ProfileId>, force: bool) -> ApiRes;
+    fn create_profile(&mut self) -> Fallible<ProfileId>;
+    fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()>;
+    fn get_active_profile(&self) -> Fallible<Option<ProfileId>>;
 
-    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> ApiRes;
+    fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> Fallible<PrivateProfileData>;
+    fn publish_profile(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        force: bool,
+    ) -> Fallible<ProfileId>;
+    fn restore_profile(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        force: bool,
+    ) -> Fallible<PrivateProfileData>;
 
+    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>>;
     fn create_link(
         &mut self,
         my_profile_id: Option<ProfileId>,
-        peer_profile_id: ProfileId,
-    ) -> ApiRes;
+        peer_profile_id: &ProfileId,
+    ) -> Fallible<Link>;
     fn remove_link(
         &mut self,
         my_profile_id: Option<ProfileId>,
-        peer_profile_id: ProfileId,
-    ) -> ApiRes;
+        peer_profile_id: &ProfileId,
+    ) -> Fallible<()>;
     fn set_attribute(
         &mut self,
         my_profile_id: Option<ProfileId>,
-        key: AttributeId,
-        value: AttributeValue,
-    ) -> ApiRes;
-    fn clear_attribute(&mut self, my_profile_id: Option<ProfileId>, key: AttributeId) -> ApiRes;
+        key: &AttributeId,
+        value: &AttributeValue,
+    ) -> Fallible<()>;
+    fn clear_attribute(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        key: &AttributeId,
+    ) -> Fallible<()>;
 }
 
 pub struct Context {
     vault_path: PathBuf,
     vault: Option<Box<ProfileVault>>,
-    local_repo: FileProfileRepository, // NOTE match arms of show_profile() conflicts with Box<LocalProfileRepository>
+    local_repo: FileProfileRepository, // NOTE match arms of get_profile() conflicts with Box<LocalProfileRepository>
     base_repo: Box<PrivateProfileRepository>,
     remote_repo: Box<PrivateProfileRepository>,
     explorer: Box<ProfileExplorer>,
@@ -139,9 +155,9 @@ before trying to restore another vault."#,
         let profile_id_opt = my_profile_option.or_else(|| self.vault().get_active().ok()?);
         let profile_id = match profile_id_opt {
             Some(profile_id) => profile_id,
-            None => bail!(
-                "Command option my_profile_id is unspecified and no active default profile was found"
-            ),
+            None => {
+                bail!("Command option my_profile_id is unspecified and no active default profile was found")
+            }
         };
         info!("Your active profile is {}", profile_id);
         Ok(profile_id)
@@ -166,7 +182,7 @@ before trying to restore another vault."#,
         Ok(profile)
     }
 
-    fn pull_base_profile(&mut self, profile_id: &ProfileId) -> ApiRes {
+    fn pull_base_profile(&mut self, profile_id: &ProfileId) -> Fallible<()> {
         debug!("Fetching remote version of profile {} to base cache", profile_id);
         let remote_profile = self.remote_repo.get(&profile_id).wait()?;
         self.base_repo.set(remote_profile).wait()
@@ -177,7 +193,7 @@ before trying to restore another vault."#,
     //    none | ok   | ok (but server impl error)
     //    some | err  | err if local.ver > base.ver
     // (local)
-    fn ensure_no_local_changes(&self, profile_id: &ProfileId) -> ApiRes {
+    fn ensure_no_local_changes(&self, profile_id: &ProfileId) -> Fallible<()> {
         let base_profile_res = self.base_repo.get(&profile_id).wait();
         let local_profile_res = self.local_repo.get(&profile_id).wait();
 
@@ -202,7 +218,7 @@ before trying to restore another vault."#,
     //    none | ok   | ok (but server impl error?)
     //    some | err  | err if remote.ver > base.ver
     // (remote)
-    fn ensure_no_remote_changes(&self, profile_id: &ProfileId) -> ApiRes {
+    fn ensure_no_remote_changes(&self, profile_id: &ProfileId) -> Fallible<()> {
         let remote_profile_res = self.remote_repo.get(&profile_id).wait();
         let base_profile_res = self.base_repo.get(&profile_id).wait();
 
@@ -221,7 +237,11 @@ before trying to restore another vault."#,
         Ok(())
     }
 
-    fn restore_one_profile(&mut self, profile_id: &ProfileId, force: bool) -> ApiRes {
+    fn restore_one_profile(
+        &mut self,
+        profile_id: &ProfileId,
+        force: bool,
+    ) -> Fallible<PrivateProfileData> {
         if force {
             debug!("Applying remote profile version, overwriting any local changes if present");
         } else {
@@ -230,45 +250,32 @@ before trying to restore another vault."#,
         }
 
         self.pull_base_profile(profile_id)?;
-        self.revert_local_profile_to_base(profile_id)?;
-        Ok(())
+        let profile = self.revert_local_profile_to_base(profile_id)?;
+        Ok(profile)
     }
 }
 
 impl Api for Context {
-    fn list_profiles(&self) -> ApiRes {
-        let profile_ids = self.vault().list()?;
-        info!("You have {} profiles", profile_ids.len());
-        let active_profile_opt = self.vault().get_active()?;
-        for (i, profile_id) in profile_ids.iter().enumerate() {
-            let status = match active_profile_opt {
-                Some(ref active_profile) => {
-                    if active_profile == profile_id {
-                        " (active)"
-                    } else {
-                        ""
-                    }
-                }
-                None => "",
-            };
-            info!("  {}: {}{}", i, profile_id, status);
-        }
+    fn list_profiles(&self) -> Fallible<Vec<ProfileId>> {
+        self.vault().list()
+    }
+
+    fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()> {
+        self.mut_vault().set_active(my_profile_id)?;
         Ok(())
     }
 
-    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> ApiRes {
-        let profile = self.selected_profile(my_profile_id)?;
-        let followers = self.explorer.followers(&profile.id()).wait()?;
-        info!("You have {} followers", followers.len());
-        for (idx, follower) in followers.iter().enumerate() {
-            info!("  {}: {:?}", idx, follower);
-        }
-        Ok(())
+    fn get_active_profile(&self) -> Fallible<Option<ProfileId>> {
+        self.vault().get_active()
     }
 
     // TODO this should also work if profile is not ours and we have no control over it.
     //      Then it should consult an explorer and show all public information.
-    fn show_profile(&self, profile_id: Option<ProfileId>, kind: ProfileRepositoryKind) -> ApiRes {
+    fn get_profile(
+        &self,
+        profile_id: Option<ProfileId>,
+        kind: ProfileRepositoryKind,
+    ) -> Fallible<PrivateProfileData> {
         // NOTE must also work with a profile that is not ours
         let profile_id = self.selected_profile_id(profile_id)?;
         use ProfileRepositoryKind::*;
@@ -278,39 +285,27 @@ impl Api for Context {
             Remote => self.remote_repo.as_ref(),
         };
         let profile = repo.get(&profile_id).wait()?;
-        let public_profile = profile.public_data();
-        let links = public_profile.links();
-        let attributes = public_profile.attributes();
-
-        info!("Details of profile id {}", profile_id);
-        info!("Profile version: {}", public_profile.version());
-        info!("  {} attributes:", attributes.len());
-        for (i, attribute) in attributes.iter().enumerate() {
-            info!("    {}: {:?}", i, attribute);
-        }
-        info!("  {} subscriptions:", links.len());
-        for (i, peer_id) in links.iter().enumerate() {
-            info!("    {}: {:?}", i, peer_id);
-        }
-        Ok(())
+        Ok(profile)
     }
 
-    fn create_profile(&mut self) -> ApiRes {
+    fn create_profile(&mut self) -> Fallible<ProfileId> {
         let new_profile_key = self.mut_vault().create_key()?;
         let empty_profile = PrivateProfileData::empty(&new_profile_key);
         self.local_repo.set(empty_profile).wait()?;
-        info!("Created and activated profile with id {}", new_profile_key.key_id());
-        Ok(())
+        Ok(new_profile_key.key_id())
     }
 
-    fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> ApiRes {
+    fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> Fallible<PrivateProfileData> {
         let profile_id = self.selected_profile(my_profile_id)?.id();
         let profile = self.revert_local_profile_to_base(&profile_id)?;
-        info!("Reverted profile {} to last known remote version {}", profile_id, profile.version());
-        Ok(())
+        Ok(profile)
     }
 
-    fn publish_profile(&mut self, my_profile_id: Option<ProfileId>, force: bool) -> ApiRes {
+    fn publish_profile(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        force: bool,
+    ) -> Fallible<ProfileId> {
         let mut profile = self.selected_profile(my_profile_id)?;
         let profile_id = profile.id().to_owned();
 
@@ -328,79 +323,82 @@ impl Api for Context {
         }
 
         self.remote_repo.set(profile).wait()?;
-        info!("Published profile {} to remote repository", profile_id);
-
-        self.pull_base_profile(&profile_id)
+        self.pull_base_profile(&profile_id)?;
+        Ok(profile_id)
     }
 
-    fn restore_profile(&mut self, my_profile_id: Option<ProfileId>, force: bool) -> ApiRes {
+    fn restore_profile(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        force: bool,
+    ) -> Fallible<PrivateProfileData> {
         let profile_id = self.selected_profile_id(my_profile_id)?;
-        self.restore_one_profile(&profile_id, force)?;
+        let profile = self.restore_one_profile(&profile_id, force)?;
         info!("Successfully restored profile {}", profile_id);
-        Ok(())
+        Ok(profile)
+    }
+
+    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>> {
+        let profile = self.selected_profile(my_profile_id)?;
+        let followers = self.explorer.followers(&profile.id()).wait()?;
+        Ok(followers)
     }
 
     fn create_link(
         &mut self,
         my_profile_id: Option<ProfileId>,
-        peer_profile_id: ProfileId,
-    ) -> ApiRes {
+        peer_profile_id: &ProfileId,
+    ) -> Fallible<Link> {
         let mut profile = self.selected_profile(my_profile_id)?;
-        let link = profile.mut_public_data().create_link(&peer_profile_id);
+        let link = profile.mut_public_data().create_link(peer_profile_id);
         profile.mut_public_data().increase_version();
         self.local_repo.set(profile).wait()?;
         debug!("Created link: {:?}", link);
-        info!("Created link to peer profile {}", peer_profile_id);
-        Ok(())
+        Ok(link)
     }
 
     fn remove_link(
         &mut self,
         my_profile_id: Option<ProfileId>,
-        peer_profile_id: ProfileId,
-    ) -> ApiRes {
+        peer_profile_id: &ProfileId,
+    ) -> Fallible<()> {
         let mut profile = self.selected_profile(my_profile_id)?;
         profile.mut_public_data().remove_link(&peer_profile_id);
         profile.mut_public_data().increase_version();
         self.local_repo.set(profile).wait()?;
-        info!("Removed link from profile {}", peer_profile_id);
-        Ok(())
-    }
-
-    fn set_active_profile(&mut self, my_profile_id: ProfileId) -> ApiRes {
-        self.mut_vault().set_active(&my_profile_id)?;
-        info!("Active profile was set to {}", my_profile_id);
         Ok(())
     }
 
     fn set_attribute(
         &mut self,
         my_profile_id: Option<ProfileId>,
-        key: AttributeId,
-        value: AttributeValue,
-    ) -> ApiRes {
+        key: &AttributeId,
+        value: &AttributeValue,
+    ) -> Fallible<()> {
         let mut profile = self.selected_profile(my_profile_id)?;
-        info!("Setting attribute {} to {}", key, value);
-        profile.mut_public_data().set_attribute(key, value);
+        profile.mut_public_data().set_attribute(key.to_owned(), value.to_owned());
         profile.mut_public_data().increase_version();
         self.local_repo.set(profile).wait()
     }
 
-    fn clear_attribute(&mut self, my_profile_id: Option<ProfileId>, key: AttributeId) -> ApiRes {
+    fn clear_attribute(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        key: &AttributeId,
+    ) -> Fallible<()> {
         let mut profile = self.selected_profile(my_profile_id)?;
-        profile.mut_public_data().clear_attribute(&key);
+        profile.mut_public_data().clear_attribute(key);
         profile.mut_public_data().increase_version();
         self.local_repo.set(profile).wait()?;
-        info!("Cleared attribute: {}", key);
         Ok(())
     }
 
-    fn restore_vault(&mut self, phrase: String) -> ApiRes {
+    fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
         self.restore_vault(phrase)?;
         self.restore_all_profiles()
     }
 
-    fn restore_all_profiles(&mut self) -> ApiRes {
+    fn restore_all_profiles(&mut self) -> Fallible<()> {
         let profiles = self.vault().profiles()?;
         let len = self.vault().len();
 

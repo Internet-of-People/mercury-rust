@@ -8,8 +8,9 @@ use structopt::StructOpt;
 use osg::api::{self, *};
 use osg::model::*;
 
+pub type CmdRes = Fallible<()>;
 pub trait Command {
-    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes;
+    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes;
 }
 
 #[derive(Debug, StructOpt)]
@@ -107,7 +108,7 @@ impl CommandVerb {
 }
 
 impl Command for CommandVerb {
-    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         use CommandVerb::*;
         let sub: Box<Command> = match *self {
             Generate(sub) => Box::new(sub),
@@ -141,12 +142,36 @@ pub enum ListCommand {
 }
 
 impl Command for ListCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         use ListCommand::*;
         match *self {
-            Profiles => api.list_profiles(),
-            IncomingLinks { my_profile_id } => api.list_incoming_links(my_profile_id),
-        }
+            Profiles => {
+                let profile_ids = api.list_profiles()?;
+                info!("You have {} profiles", profile_ids.len());
+                let active_profile_opt = api.get_active_profile()?;
+                for (i, profile_id) in profile_ids.iter().enumerate() {
+                    let status = match active_profile_opt {
+                        Some(ref active_profile) => {
+                            if active_profile == profile_id {
+                                " (active)"
+                            } else {
+                                ""
+                            }
+                        }
+                        None => "",
+                    };
+                    info!("  {}: {}{}", i, profile_id, status);
+                }
+            }
+            IncomingLinks { my_profile_id } => {
+                let followers = api.list_incoming_links(my_profile_id)?;
+                info!("You have {} followers", followers.len());
+                for (idx, follower) in followers.iter().enumerate() {
+                    info!("  {}: {:?}", idx, follower);
+                }
+            }
+        };
+        Ok(())
     }
 }
 
@@ -167,9 +192,26 @@ pub enum ShowCommand {
 }
 
 impl Command for ShowCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         match *self {
-            ShowCommand::Profile { profile_id, source } => api.show_profile(profile_id, source),
+            ShowCommand::Profile { profile_id, source } => {
+                let profile = api.get_profile(profile_id, source)?;
+                let public_profile = profile.public_data();
+                let links = public_profile.links();
+                let attributes = public_profile.attributes();
+
+                info!("Details of profile id {}", public_profile.id());
+                info!("Profile version: {}", public_profile.version());
+                info!("  {} attributes:", attributes.len());
+                for (i, attribute) in attributes.iter().enumerate() {
+                    info!("    {}: {:?}", i, attribute);
+                }
+                info!("  {} subscriptions:", links.len());
+                for (i, peer_id) in links.iter().enumerate() {
+                    info!("    {}: {:?}", i, peer_id);
+                }
+                Ok(())
+            }
         }
     }
 }
@@ -195,14 +237,19 @@ pub enum CreateCommand {
 }
 
 impl Command for CreateCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         use CreateCommand::*;
         match *self {
-            Profile => api.create_profile(),
-            Link { my_profile_id, peer_profile_id } => {
-                api.create_link(my_profile_id, peer_profile_id)
+            Profile => {
+                let profile_id = api.create_profile()?;
+                info!("Created and activated profile with id {}", profile_id);
             }
-        }
+            Link { my_profile_id, peer_profile_id } => {
+                api.create_link(my_profile_id, &peer_profile_id)?;
+                info!("Created link to peer profile {}", peer_profile_id);
+            }
+        };
+        Ok(())
     }
 }
 
@@ -222,12 +269,14 @@ pub enum RemoveCommand {
 }
 
 impl Command for RemoveCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         match *self {
             RemoveCommand::Link { my_profile_id, peer_profile_id } => {
-                api.remove_link(my_profile_id, peer_profile_id)
+                api.remove_link(my_profile_id, &peer_profile_id)?;
+                info!("Removed link from profile {}", peer_profile_id);
             }
-        }
+        };
+        Ok(())
     }
 }
 
@@ -261,12 +310,19 @@ pub enum SetCommand {
 }
 
 impl Command for SetCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         use SetCommand::*;
         match *self {
-            ActiveProfile { my_profile_id } => api.set_active_profile(my_profile_id),
-            Attribute { my_profile_id, key, value } => api.set_attribute(my_profile_id, key, value),
-        }
+            ActiveProfile { my_profile_id } => {
+                api.set_active_profile(&my_profile_id)?;
+                info!("Active profile was set to {}", my_profile_id);
+            }
+            Attribute { my_profile_id, key, value } => {
+                api.set_attribute(my_profile_id, &key, &value)?;
+                info!("Setting attribute {} to {}", key, value);
+            }
+        };
+        Ok(())
     }
 }
 
@@ -286,12 +342,14 @@ pub enum ClearCommand {
 }
 
 impl Command for ClearCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         match *self {
             ClearCommand::Attribute { my_profile_id, key } => {
-                api.clear_attribute(my_profile_id, key)
+                api.clear_attribute(my_profile_id, &key)?;
+                info!("Cleared attribute: {}", key);
             }
-        }
+        };
+        Ok(())
     }
 }
 
@@ -303,7 +361,7 @@ pub enum GenerateCommand {
 }
 
 impl Command for GenerateCommand {
-    fn execute(self: Box<Self>, _api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, _api: &mut Api) -> CmdRes {
         match *self {
             GenerateCommand::Vault => {
                 api::generate_vault();
@@ -338,7 +396,7 @@ pub enum RestoreCommand {
 }
 
 impl Command for RestoreCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         use RestoreCommand::*;
         match *self {
             Vault { demo } => {
@@ -347,11 +405,16 @@ impl Command for RestoreCommand {
                 } else {
                     read_phrase()?
                 };
-                api.restore_vault(phrase)
+                api.restore_vault(phrase)?;
             }
-            Profiles => api.restore_all_profiles(),
-            Profile { my_profile_id, force } => api.restore_profile(my_profile_id, force),
-        }
+            Profiles => {
+                api.restore_all_profiles()?;
+            }
+            Profile { my_profile_id, force } => {
+                api.restore_profile(my_profile_id, force)?;
+            }
+        };
+        Ok(())
     }
 }
 
@@ -409,12 +472,14 @@ pub enum PublishCommand {
 }
 
 impl Command for PublishCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         match *self {
             PublishCommand::Profile { my_profile_id, force } => {
-                api.publish_profile(my_profile_id, force)
+                let profile_id = api.publish_profile(my_profile_id, force)?;
+                info!("Published profile {} to remote repository", profile_id);
             }
-        }
+        };
+        Ok(())
     }
 }
 
@@ -430,9 +495,17 @@ pub enum RevertCommand {
 }
 
 impl Command for RevertCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
+    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         match *self {
-            RevertCommand::Profile { my_profile_id } => api.revert_profile(my_profile_id),
-        }
+            RevertCommand::Profile { my_profile_id } => {
+                let profile = api.revert_profile(my_profile_id)?;
+                info!(
+                    "Reverted profile {} to last known remote version {}",
+                    profile.id(),
+                    profile.version()
+                );
+            }
+        };
+        Ok(())
     }
 }
