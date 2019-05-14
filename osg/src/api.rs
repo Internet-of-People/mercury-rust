@@ -264,7 +264,7 @@ impl Api for Context {
 
     fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> ApiRes {
         let profile = self.selected_profile(my_profile_id)?;
-        let followers = self.explorer.followers(&profile.id())?;
+        let followers = self.explorer.followers(&profile.id()).wait()?;
         info!("You have {} followers", followers.len());
         for (idx, follower) in followers.iter().enumerate() {
             info!("  {}: {:?}", idx, follower);

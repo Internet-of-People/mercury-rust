@@ -107,6 +107,19 @@ impl RpcProfileRepository {
         })?;
         Ok(())
     }
+
+    pub fn get_followers(&self, id: &ProfileId) -> Fallible<Vec<Link>> {
+        self.rpc().and_then(|rpc| {
+            let params = messages::ListInEdgesParams { id: id.clone() };
+            let response = rpc.borrow_mut().send_request("list_inedges", params)?;
+            let reply_val = response
+                .reply
+                .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
+            let reply: messages::ListInEdgesReply = rmpv::ext::from_value(reply_val)?;
+            let followers = reply.into_iter().map(|peer_profile| Link { peer_profile }).collect();
+            Ok(followers)
+        })
+    }
 }
 
 // TODO !!! This implementation must not be used in real async environment !!!
@@ -145,17 +158,9 @@ impl ProfileExplorer for RpcProfileRepository {
         Box::new(res.into_future())
     }
 
-    fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>> {
-        self.rpc().and_then(|rpc| {
-            let params = messages::ListInEdgesParams { id: id.clone() };
-            let response = rpc.borrow_mut().send_request("list_inedges", params)?;
-            let reply_val = response
-                .reply
-                .ok_or_else(|| err_msg("Server returned no reply content for query"))?;
-            let reply: messages::ListInEdgesReply = rmpv::ext::from_value(reply_val)?;
-            let followers = reply.into_iter().map(|peer_profile| Link { peer_profile }).collect();
-            Ok(followers)
-        })
+    fn followers(&self, id: &ProfileId) -> AsyncFallible<Vec<Link>> {
+        let res = self.get_followers(id);
+        Box::new(res.into_future())
     }
 }
 

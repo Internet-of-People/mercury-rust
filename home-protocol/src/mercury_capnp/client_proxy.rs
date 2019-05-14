@@ -2,7 +2,7 @@ use std::convert::TryFrom;
 
 use capnp::capability::Promise;
 use capnp_rpc::pry;
-use failure::{Fail, Fallible};
+use failure::Fail;
 use tokio_core::net::TcpStream;
 use tokio_core::reactor;
 
@@ -71,7 +71,7 @@ impl ProfileExplorer for HomeClientCapnProto {
         Box::new(resp_fut)
     }
 
-    fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
+    fn followers(&self, _id: &ProfileId) -> AsyncFallible<Vec<Link>> {
         unimplemented!()
         // Ok( Vec::new() ) // TODO implement this properly
     }

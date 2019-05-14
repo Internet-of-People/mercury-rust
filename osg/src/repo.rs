@@ -42,11 +42,10 @@ pub trait LocalProfileRepository: PrivateProfileRepository {
     fn restore(&mut self, profile: PrivateProfileData) -> Fallible<()>;
 }
 
-// TODO should we merge this with PublicProfileRepository?
 pub trait ProfileExplorer {
     fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData>;
-    fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>>;
-    // fn list(&self, /* TODO what filter criteria should we have here? */ ) -> HomeStream<Profile,String>;
+    fn followers(&self, id: &ProfileId) -> AsyncFallible<Vec<Link>>;
+    // fn list(&self, /* TODO what filter criteria should we have here? */ ) -> AsyncFallible<Profile>;
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -137,7 +136,7 @@ impl ProfileExplorer for InMemoryProfileRepository {
     fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
         (self as &DistributedPublicProfileRepository).get_public(id)
     }
-    fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
+    fn followers(&self, _id: &ProfileId) -> AsyncFallible<Vec<Link>> {
         unimplemented!() // TODO
     }
 }
@@ -246,7 +245,7 @@ impl ProfileExplorer for FileProfileRepository {
         let res = self.load().and_then(move |mem_repo| mem_repo.fetch(id).wait());
         Box::new(res.into_future())
     }
-    fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
+    fn followers(&self, _id: &ProfileId) -> AsyncFallible<Vec<Link>> {
         unimplemented!() // TODO
     }
 }

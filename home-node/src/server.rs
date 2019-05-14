@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use std::time::Duration;
 use std::{cell::RefCell, rc::Rc, rc::Weak};
 
-use failure::{Fail, Fallible};
+use failure::Fail;
 use futures::sync::{mpsc, oneshot};
 use futures::{future, stream, Future, Sink};
 use log::*;
@@ -131,7 +131,7 @@ impl ProfileExplorer for HomeConnectionServer {
         Box::new(profile_fut)
     }
 
-    fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
+    fn followers(&self, _id: &ProfileId) -> AsyncFallible<Vec<Link>> {
         unimplemented!()
         // Ok( Vec::new() ) // TODO implement this properly
     }

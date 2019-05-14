@@ -50,7 +50,7 @@ pub trait ProfileVault {
     fn get_active(&self) -> Fallible<Option<ProfileId>>;
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
 
-    // TODO these probably should not be on this interface on the long run.
+    // TODO these probably should not be here on the long run, list() is enough in most cases.
     //      Used only for restoring all profiles of a vault with gap detection.
     fn profiles(&self) -> Fallible<MercuryProfiles>;
     fn len(&self) -> usize;

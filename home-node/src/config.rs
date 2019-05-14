@@ -2,7 +2,6 @@ use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use failure::bail;
 use log::*;
 use structopt::StructOpt;
 

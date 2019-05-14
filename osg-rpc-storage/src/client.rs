@@ -325,7 +325,6 @@ where
 mod test {
     use super::*;
     use crate::repo::RpcProfileRepository;
-    use osg::repo::ProfileExplorer; //, ProfileRepository};
     use std::str::FromStr;
     use std::time::Duration;
 
@@ -353,10 +352,10 @@ mod test {
         // NOTE current set() implementation adds node then sets empty osg attribute
         assert_eq!(me.borrow().version()?, 1);
         assert_eq!(me.borrow().links()?.len(), 0);
-        assert_eq!(repo.followers(&my_id)?.len(), 0);
+        assert_eq!(repo.get_followers(&my_id)?.len(), 0);
         assert_eq!(peer.borrow().version()?, 1);
         assert_eq!(peer.borrow().links()?.len(), 0);
-        assert_eq!(repo.followers(&peer_id)?.len(), 0);
+        assert_eq!(repo.get_followers(&peer_id)?.len(), 0);
 
         let link = me.borrow_mut().create_link(&peer_id)?;
         assert_eq!(link.peer_profile, peer_id);
@@ -364,19 +363,19 @@ mod test {
         assert_eq!(me.borrow().version()?, 1);
         assert_eq!(me.borrow().links()?.len(), 1);
         assert_eq!(me.borrow().links()?[0].peer_profile, peer_id);
-        assert_eq!(repo.followers(&my_id)?.len(), 0);
+        assert_eq!(repo.get_followers(&my_id)?.len(), 0);
         assert_eq!(peer.borrow().version()?, 1);
         assert_eq!(peer.borrow().links()?.len(), 0);
-        assert_eq!(repo.followers(&peer_id)?[0].peer_profile, my_id);
+        assert_eq!(repo.get_followers(&peer_id)?[0].peer_profile, my_id);
 
         me.borrow_mut().remove_link(&peer_id)?;
         assert_eq!(repo.list_nodes()?.len(), 2);
         assert_eq!(me.borrow().version()?, 1);
         assert_eq!(me.borrow().links()?.len(), 0);
-        assert_eq!(repo.followers(&my_id)?.len(), 0);
+        assert_eq!(repo.get_followers(&my_id)?.len(), 0);
         assert_eq!(peer.borrow().version()?, 1);
         assert_eq!(peer.borrow().links()?.len(), 0);
-        assert_eq!(repo.followers(&peer_id)?.len(), 0);
+        assert_eq!(repo.get_followers(&peer_id)?.len(), 0);
 
         let attr_id = "1 2 3".to_owned();
         let attr_val = "one two three".to_owned();
