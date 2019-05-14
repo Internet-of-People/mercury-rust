@@ -31,7 +31,7 @@ impl FromStr for ProfileRepositoryKind {
 
 pub type ApiRes = Fallible<()>;
 pub trait Api {
-    fn restore_vault(&mut self, demo: bool) -> ApiRes;
+    fn restore_vault(&mut self, phrase: String) -> ApiRes;
     fn restore_all_profiles(&mut self) -> ApiRes;
     fn list_profiles(&self) -> ApiRes;
     fn set_active_profile(&mut self, my_profile_id: ProfileId) -> ApiRes;
@@ -105,7 +105,7 @@ impl Context {
         self.vault.take()
     }
 
-    fn restore_vault(&mut self, demo: bool) -> Fallible<()> {
+    fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
         let old_vault_op = self.take_vault();
         ensure!(
             old_vault_op.is_none(),
@@ -114,12 +114,6 @@ Please delete {}
 before trying to restore another vault."#,
             self.vault_path.to_string_lossy()
         );
-
-        let phrase = if demo {
-            "include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already".to_owned()
-        } else {
-            read_phrase()?
-        };
 
         let seed_res = keyvault::Seed::from_bip39(&phrase);
         let seed = match seed_res {
@@ -401,8 +395,8 @@ impl Api for Context {
         Ok(())
     }
 
-    fn restore_vault(&mut self, demo: bool) -> ApiRes {
-        self.restore_vault(demo)?;
+    fn restore_vault(&mut self, phrase: String) -> ApiRes {
+        self.restore_vault(phrase)?;
         self.restore_all_profiles()
     }
 
@@ -450,42 +444,4 @@ pub fn generate_vault() {
 and run the 'restore vault' command of this application first!"#
     );
     words.enumerate().for_each(|(i, word)| info!("    {:2}: {}", i + 1, word));
-}
-
-fn read_phrase() -> Fallible<String> {
-    use std::io::BufRead;
-    use std::io::Write;
-
-    let stdin = std::io::stdin();
-    let stdout = std::io::stdout();
-    let mut stdin_lock = stdin.lock();
-    let mut stdout_lock = stdout.lock();
-    stdout_lock.write_fmt(format_args!(
-        "Please type the words you backed up one-by-one pressing enter after each:\n"
-    ))?;
-
-    let mut words = Vec::with_capacity(24);
-    for i in 1..=24 {
-        loop {
-            let mut buffer = String::with_capacity(10);
-            stdout_lock.write_fmt(format_args!("  {:2}> ", i))?; // no newline at the end for this prompt!
-            stdout_lock.flush()?; // without this, nothing is written on the console
-            stdin_lock.read_line(&mut buffer)?;
-            buffer = buffer.trim().to_owned();
-            if keyvault::Seed::check_word(&buffer) {
-                words.push(buffer);
-                break;
-            } else {
-                stdout_lock.write_fmt(format_args!(
-                    "{} is not in the dictionary, please retry entering it\n",
-                    buffer
-                ))?;
-            }
-        }
-    }
-    let phrase = words.join(" ");
-
-    debug!("You entered: {}", phrase);
-
-    Ok(phrase)
 }

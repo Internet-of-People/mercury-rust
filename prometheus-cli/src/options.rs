@@ -1,6 +1,8 @@
 use std::net::SocketAddr;
 use std::path::PathBuf;
 
+use failure::Fallible;
+use log::*;
 use structopt::StructOpt;
 
 use osg::api::{self, *};
@@ -339,11 +341,56 @@ impl Command for RestoreCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> ApiRes {
         use RestoreCommand::*;
         match *self {
-            Vault { demo } => api.restore_vault(demo),
+            Vault { demo } => {
+                let phrase = if demo {
+                    "include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already".to_owned()
+                } else {
+                    read_phrase()?
+                };
+                api.restore_vault(phrase)
+            }
             Profiles => api.restore_all_profiles(),
             Profile { my_profile_id, force } => api.restore_profile(my_profile_id, force),
         }
     }
+}
+
+fn read_phrase() -> Fallible<String> {
+    use std::io::BufRead;
+    use std::io::Write;
+
+    let stdin = std::io::stdin();
+    let stdout = std::io::stdout();
+    let mut stdin_lock = stdin.lock();
+    let mut stdout_lock = stdout.lock();
+    stdout_lock.write_fmt(format_args!(
+        "Please type the words you backed up one-by-one pressing enter after each:\n"
+    ))?;
+
+    let mut words = Vec::with_capacity(24);
+    for i in 1..=24 {
+        loop {
+            let mut buffer = String::with_capacity(10);
+            stdout_lock.write_fmt(format_args!("  {:2}> ", i))?; // no newline at the end for this prompt!
+            stdout_lock.flush()?; // without this, nothing is written on the console
+            stdin_lock.read_line(&mut buffer)?;
+            buffer = buffer.trim().to_owned();
+            if keyvault::Seed::check_word(&buffer) {
+                words.push(buffer);
+                break;
+            } else {
+                stdout_lock.write_fmt(format_args!(
+                    "{} is not in the dictionary, please retry entering it\n",
+                    buffer
+                ))?;
+            }
+        }
+    }
+    let phrase = words.join(" ");
+
+    debug!("You entered: {}", phrase);
+
+    Ok(phrase)
 }
 
 #[derive(Debug, StructOpt)]
