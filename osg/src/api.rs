@@ -31,7 +31,7 @@ impl FromStr for ProfileRepositoryKind {
 
 pub trait Api {
     fn restore_vault(&mut self, phrase: String) -> Fallible<()>;
-    fn restore_all_profiles(&mut self) -> Fallible<()>;
+    fn restore_all_profiles(&mut self) -> Fallible<(u32, u32)>;
 
     fn get_profile(
         &self,
@@ -334,7 +334,6 @@ impl Api for Context {
     ) -> Fallible<PrivateProfileData> {
         let profile_id = self.selected_profile_id(my_profile_id)?;
         let profile = self.restore_one_profile(&profile_id, force)?;
-        info!("Successfully restored profile {}", profile_id);
         Ok(profile)
     }
 
@@ -394,11 +393,10 @@ impl Api for Context {
     }
 
     fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
-        self.restore_vault(phrase)?;
-        self.restore_all_profiles()
+        self.restore_vault(phrase)
     }
 
-    fn restore_all_profiles(&mut self) -> Fallible<()> {
+    fn restore_all_profiles(&mut self) -> Fallible<(u32, u32)> {
         let profiles = self.vault().profiles()?;
         let len = self.vault().len();
 
@@ -429,8 +427,7 @@ impl Api for Context {
             restore_count += 1;
         }
 
-        info!("Tried {} profiles, successfully restored {}", try_count, restore_count);
-        Ok(())
+        Ok((try_count, restore_count))
     }
 }
 
