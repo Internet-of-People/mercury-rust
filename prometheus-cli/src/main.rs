@@ -11,6 +11,7 @@ use osg::vault::*;
 use osg_rpc_storage::RpcProfileRepository;
 
 mod options;
+mod seed;
 
 fn main() {
     match run() {
@@ -33,7 +34,7 @@ fn run() -> Fallible<()> {
     let vault_exists = vault_path.exists();
     if command.needs_vault() && !vault_exists {
         error!("Profile vault is required but not found at {}", vault_path.to_string_lossy());
-        generate_vault();
+        seed::show_generated_phrase();
         bail!("First you need a profile vault initialized to run {:?}", command);
     }
 

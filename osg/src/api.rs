@@ -430,13 +430,3 @@ impl Api for Context {
         Ok((try_count, restore_count))
     }
 }
-
-pub fn generate_vault() {
-    let new_bip39_phrase = keyvault::Seed::generate_bip39();
-    let words = new_bip39_phrase.split(' ');
-    warn!(
-        r#"Make sure you back these words up somewhere safe
-and run the 'restore vault' command of this application first!"#
-    );
-    words.enumerate().for_each(|(i, word)| info!("    {:2}: {}", i + 1, word));
-}
