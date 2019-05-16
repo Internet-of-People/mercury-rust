@@ -124,6 +124,4 @@ Directories/crates of the project are
  - `forgetfulfuse` contains experiments with a filesystem that is readable only temporarily,
    planned to be used for protecting sensitive data, e.g. your keys 
 
-Copyright © 2017-2019
-Libertaria Ventures LLP, UK
-Decentralized Society Foundation, PA
+Copyright © 2017-2019, Decentralized Society Foundation, PA
