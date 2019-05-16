@@ -59,9 +59,6 @@ impl PublicProfileData {
         }
     }
 
-    // TODO these operations are basically the same as of trait Profile
-    //      (created towards the concepts of RpcProfile) but cannot fail.
-    //      We should either kill trait Profile or fit it like this.
     pub fn id(&self) -> ProfileId {
         self.public_key.key_id()
     }

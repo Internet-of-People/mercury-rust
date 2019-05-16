@@ -1,14 +1,14 @@
 use std::cell::RefCell;
-use std::convert::TryFrom;
 use std::rc::Rc;
 
 use failure::Fallible;
-//use serde_derive::{Deserialize, Serialize};
 
-use crate::model::*;
+use osg::model::*;
 
 pub type ProfilePtr = Rc<RefCell<Profile>>;
 
+// TODO these operations are basically the same as of struct PublicProfileData
+//      but can fail. We should somehow merge them together if this storage impl is kept.
 pub trait Profile {
     fn id(&self) -> ProfileId;
     fn public_key(&self) -> Fallible<PublicKey>;
@@ -25,22 +25,15 @@ pub trait Profile {
     fn set_attribute(&mut self, key: &AttributeId, value: &AttributeValue) -> Fallible<()>;
     fn clear_attribute(&mut self, key: &AttributeId) -> Fallible<()>;
 
-    //fn sign(&self, data: &[u8]) -> Signature;
-    //fn get_signer(&self) -> Arc<Signer>;
-}
-
-impl TryFrom<ProfilePtr> for PrivateProfileData {
-    type Error = failure::Error;
-    fn try_from(value: ProfilePtr) -> Result<Self, Self::Error> {
-        let profile = value.borrow();
+    fn to_data(&self) -> Fallible<PrivateProfileData> {
         Ok(PrivateProfileData::new(
             PublicProfileData::new(
-                profile.public_key()?,
-                profile.version()?,
-                profile.links()?,
-                profile.attributes()?,
+                self.public_key()?,
+                self.version()?,
+                self.links()?,
+                self.attributes()?,
             ),
-            profile.private_data()?,
+            self.private_data()?,
         ))
     }
 }

@@ -1,5 +1,4 @@
 use std::cell::RefCell;
-use std::convert::TryFrom;
 use std::net::{SocketAddr, TcpStream};
 use std::rc::Rc;
 use std::time::Duration;
@@ -10,9 +9,9 @@ use log::*;
 
 use crate::client::{FallibleExtension, MsgPackRpc, RpcProfile, RpcPtr};
 use crate::messages;
+use crate::profile::{Profile, ProfilePtr};
 use keyvault::PublicKey as KeyVaultPublicKey;
 use osg::model::*;
-use osg::profile::{Profile, ProfilePtr};
 use osg::repo::{DistributedPublicProfileRepository, PrivateProfileRepository, ProfileExplorer};
 
 #[derive(Clone)]
@@ -128,8 +127,7 @@ impl RpcProfileRepository {
 impl PrivateProfileRepository for RpcProfileRepository {
     /// https://gitlab.libertaria.community/iop-stack/communication/morpheus-storage-daemon/wikis/Morpheus-storage-protocol#show-profile
     fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData> {
-        let res =
-            self.get_node(id).and_then(|rpc_profile| PrivateProfileData::try_from(rpc_profile));
+        let res = self.get_node(id).and_then(|rpc_profile| rpc_profile.borrow().to_data());
         Box::new(res.into_future())
     }
 
@@ -140,9 +138,8 @@ impl PrivateProfileRepository for RpcProfileRepository {
     }
 
     fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()> {
-        let profile_res = self
-            .get_node(&key.key_id())
-            .and_then(|rpc_profile| PrivateProfileData::try_from(rpc_profile));
+        let profile_res =
+            self.get_node(&key.key_id()).and_then(|rpc_profile| rpc_profile.borrow().to_data());
         let profile = match profile_res {
             Ok(profile) => profile,
             Err(e) => return Box::new(future::err(e)),

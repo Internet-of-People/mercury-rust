@@ -7,9 +7,8 @@ use failure::{bail, err_msg, Fail, Fallible};
 use log::*;
 
 use crate::messages::*;
-use keyvault::PublicKey as KeyVaultPublicKey;
+use crate::profile::Profile;
 use osg::model::*;
-use osg::profile::Profile;
 
 const MORPHEUS_HANDLER: &str = "osg";
 const RESPONSE_CODE_OK: u8 = 0;
@@ -190,7 +189,6 @@ where
     W: 'static + Write,
 {
     fn id(&self) -> ProfileId {
-        //self.public_key.key_id()
         self.id.clone()
     }
 
@@ -323,10 +321,12 @@ where
 
 #[cfg(test)]
 mod test {
-    use super::*;
-    use crate::repo::RpcProfileRepository;
     use std::str::FromStr;
     use std::time::Duration;
+
+    use super::*;
+    use crate::repo::RpcProfileRepository;
+    use keyvault::PublicKey as KeyVaultPublicKey;
 
     #[test]
     #[ignore]
