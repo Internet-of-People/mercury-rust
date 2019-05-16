@@ -16,9 +16,6 @@ impl PeerContext {
     pub fn new(my_signer: Rc<Signer>, peer_pubkey: PublicKey) -> Self {
         Self { my_signer, peer_pubkey }
     }
-    //pub fn new_from_profile(my_signer: Rc<Signer>, peer: &Profile) -> Self {
-    //    Self::new(my_signer, peer.public_key.clone(), peer.id.clone())
-    //}
 
     pub fn my_signer(&self) -> &Signer {
         &*self.my_signer

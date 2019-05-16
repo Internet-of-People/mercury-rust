@@ -5,12 +5,9 @@ mod init_hack;
 pub mod logging;
 pub mod server;
 pub mod server_config;
-// pub mod application;
-// pub mod signal_handling;
 
 use std::cell::RefCell;
 use std::collections::HashSet;
-//use std::net::SocketAddr;
 use std::rc::Rc;
 
 use clap::ArgMatches;

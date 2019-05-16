@@ -55,7 +55,6 @@ impl CliConfig {
 }
 
 pub struct Config {
-    //storage_path: String,
     private_storage_path: PathBuf,
     distributed_storage_address: SocketAddr,
     signer: Rc<Signer>,
@@ -101,7 +100,6 @@ impl Config {
             .next()
             .expect("Failed to parse socket address for distributed storage");
 
-        // Self { storage_path, signer, listen_socket }
         Self {
             private_storage_path: cli.private_storage_path,
             distributed_storage_address,
@@ -110,7 +108,6 @@ impl Config {
         }
     }
 
-    // pub fn storage_path(&self) -> &str {
     pub fn private_storage_path(&self) -> &PathBuf {
         &self.private_storage_path
     }

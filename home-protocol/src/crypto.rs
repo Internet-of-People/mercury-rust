@@ -155,29 +155,6 @@ impl SignatureValidator for PublicKeyValidator {
     }
 }
 
-// TODO remove these if not needed
-//impl<'a> From<ed25519_dalek::SecretKey> for PrivateKey {
-//    fn from(secret_key: ed25519_dalek::SecretKey) -> Self {
-//        PrivateKey(secret_key.to_bytes().to_vec())
-//    }
-//}
-//
-//impl<'a> From<ed25519_dalek::PublicKey> for PublicKey {
-//    fn from(public_key: ed25519_dalek::PublicKey) -> Self {
-//        PublicKey(public_key.to_bytes().to_vec())
-//    }
-//}
-//
-//impl<'a> From<&'a PublicKey> for ProfileId {
-//    fn from(public_key: &'a PublicKey) -> Self {
-//        let hash = multihash::encode(multihash::Hash::Keccak256, public_key.0.as_slice());
-//        match hash {
-//            Ok(hash) => ProfileId(hash),
-//            Err(e) => panic!("TODO: This should never happen. Error: {}", e),
-//        }
-//    }
-//}
-
 #[derive(Default)]
 pub struct CompositeValidator {
     profile_validator: Box<ProfileValidator>,

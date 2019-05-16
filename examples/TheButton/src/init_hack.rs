@@ -22,11 +22,6 @@ pub fn init_connect_service(
 
     debug!("Initializing service instance");
 
-    //    let home_pubkey_bytes =
-    //        std::fs::read(home_id_str).map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
-    //    let home_pubkey_ed = ed25519::EdPublicKey::from_bytes(home_pubkey_bytes)
-    //        .map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
-    //    let home_pubkey = PublicKey::from(home_pubkey_ed);
     let home_pubkey = home_pubkey_str
         .parse::<PublicKey>()
         .map_err(|e| Error::from(e.context(ErrorKind::FailedToLoadProfile)))?;
@@ -53,15 +48,6 @@ pub fn init_connect_service(
     let repo_initialized = reactor.run(profile_repo.get_public(&my_profile_id));
     if repo_initialized.is_err() {
         debug!("Profile repository was not initialized, populate it with required entries");
-
-        //use multiaddr::ToMultiaddr;
-        //let home_addr: SocketAddr =
-        //    home_addr_str.parse().map_err(|_e| Error::from(ErrorKind::LookupFailed))?;
-        //let home_multiaddr = home_addr.to_multiaddr().expect("Failed to parse server address");
-        //let home_attrs = HomeFacet::new(vec![home_multiaddr], vec![]).to_attributes();
-        //let home_profile = Profile::new(home_pubkey, 1, vec![], home_attrs);
-        //reactor.run(profile_repo.set_public(home_profile)).unwrap();
-
         reactor.run(profile_repo.set_public(my_profile.clone())).unwrap();
     } else {
         debug!("Profile repository was initialized, continue without populating it");

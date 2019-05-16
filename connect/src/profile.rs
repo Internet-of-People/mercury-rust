@@ -99,14 +99,6 @@ impl MyProfileImpl {
         }
     }
 
-    //    pub fn new<F>(own_profile: OwnProfile, signer: Rc<Signer>, profile_repo: Rc<ProfileRepo>,
-    //                  home_connector: Rc<HomeConnector>, handle: reactor::Handle,
-    //                  on_updated: F) -> Self
-    //    where F: 'static + Fn(&OwnProfile) -> AsyncResult<(), Error>
-    //        { Self{ own_profile : Rc::new( RefCell::new(own_profile) ),
-    //                signer, profile_repo, home_connector, handle, on_updated: Rc::new(on_updated),
-    //                relations: Default::default(), session_cache: Default::default() } }
-
     pub fn connect_home(&self, home_profile_id: &ProfileId) -> AsyncResult<Rc<Home>, Error> {
         Self::connect_home2(
             home_profile_id,
@@ -304,7 +296,6 @@ impl MyProfileImpl {
 }
 
 impl MyProfile for MyProfileImpl {
-    //fn own_profile(&self) -> &OwnProfile { &self.own_profile.borrow() }
     fn signer(&self) -> &Signer {
         &*self.signer
     }

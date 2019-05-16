@@ -30,12 +30,6 @@ pub trait FillFrom<T> {
     fn fill_from(self, source: &T);
 }
 
-//impl<'a> From<&'a PublicKey> for &'a [u8] {
-//    fn from(public_key: &'a PublicKey) -> Self {
-//        public_key.0.as_ref()
-//    }
-//}
-
 impl<'a> From<&'a [u8]> for AppMessageFrame {
     fn from(src: &'a [u8]) -> Self {
         AppMessageFrame(src.to_owned())
@@ -64,60 +58,6 @@ fn capnp_err(err: failure::Error) -> capnp::Error {
     capnp::Error::failed(err.to_string())
 }
 
-//impl<'a> TryFrom<profile::Reader<'a>> for Profile {
-//    type Error = capnp::Error;
-//
-//    fn try_from(src: profile::Reader) -> Result<Self, Self::Error> {
-//        let profile_id = ProfileId::from_bytes(src.get_id()?).map_err(|e| capnp_err(e))?;
-//        let public_key = PublicKey::from_bytes(src.get_public_key()?).map_err(|e| capnp_err(e))?;
-//
-//        let facet_res = match src.get_facet().which() {
-//            Ok(profile::facet::Which::Persona(r)) => {
-//                if let Some(proof_reader) = r.get_homes()?.iter().next() {
-//                    // only 0 or 1 home is supported in the current impl
-//                    let home_relation = RelationProof::try_from(proof_reader)?;
-//                    Ok(ProfileFacet::Persona(PersonaFacet {
-//                        homes: vec![home_relation],
-//                        data: vec![],
-//                    }))
-//                } else {
-//                    Ok(ProfileFacet::Persona(PersonaFacet { homes: vec![], data: vec![] }))
-//                }
-//            }
-//            // TODO finish this implementation to be able to send HomeProfiles, too
-//            // Ok(profile::facet::Which::Home(r)) => {
-//            //     let addrs = r.get_addresses()?.iter().map(|addr| Multiaddr::from(addr?));
-//            //     Ok(ProfileFacet::Home(HomeFacet{addrs, data: vec![]}))
-//            // },
-//            _ => Err("Unimplemented"),
-//        };
-//
-//        match facet_res {
-//            Ok(facet) => Ok(Profile::new(&profile_id, &public_key, &facet)),
-//            Err(e) => Err(capnp::Error::failed(e.to_owned())),
-//        }
-//    }
-//}
-//
-//impl<'a> FillFrom<Profile> for profile::Builder<'a> {
-//    fn fill_from(mut self, src: &Profile) {
-//        self.set_id(&src.id.to_bytes());
-//        self.set_public_key(&src.public_key.to_bytes());
-//        match src.facet {
-//            ProfileFacet::Persona(ref facet) => {
-//                let persona_builder = self.init_facet().init_persona();
-//                let mut homes = persona_builder.init_homes(facet.homes.len() as u32);
-//                for (i, home) in facet.homes.iter().enumerate() {
-//                    homes.reborrow().get(i as u32).fill_from(&home);
-//                }
-//            }
-//            _ => {
-//                panic!("Unimplemented"); // TODO implement home and application facets
-//            }
-//        }
-//    }
-//}
-
 fn bytes_to_profile(src: &[u8]) -> Result<Profile, capnp::Error> {
     serde_json::from_slice(&src).map_err(|e| capnp::Error::failed(e.to_string()))
 }
@@ -144,26 +84,6 @@ impl<'a> FillFrom<OwnProfile> for own_profile::Builder<'a> {
         self.set_profile(&profile_to_bytes(&src.public_data()));
     }
 }
-
-//impl<'a> TryFrom<home_invitation::Reader<'a>> for HomeInvitation {
-//    type Error = capnp::Error;
-//
-//    fn try_from(_src: home_invitation::Reader) -> Result<Self, Self::Error> {
-//        // TODO
-//        Ok(HomeInvitation::new(
-//            &ProfileId("TODO".as_bytes().to_owned()),
-//            &"TODO",
-//            &Signature("TODO".as_bytes().to_owned()),
-//        ))
-//    }
-//}
-//
-//impl<'a> FillFrom<HomeInvitation> for home_invitation::Builder<'a> {
-//    // fn fill_from(mut self, src: &HomeInvitation)
-//    fn fill_from(self, _src: &HomeInvitation) {
-//        // TODO
-//    }
-//}
 
 impl<'a> TryFrom<relation_half_proof::Reader<'a>> for RelationHalfProof {
     type Error = capnp::Error;
@@ -336,33 +256,4 @@ pub fn fwd_appmsg(to_callee: app_message_listener::Client, handle: reactor::Hand
 }
 
 #[cfg(test)]
-mod tests {
-    //use super::*;
-    //use crate::mercury_capnp::FillFrom;
-    //use capnp::serialize;
-
-    #[test]
-    fn relation_half_proof_encoding() {
-        //let relation_half_proof = RelationHalfProof {
-        //    relation_type: String::from("friend"),
-        //    signer_id: ProfileId(Vec::from("me")),
-        //    peer_id: ProfileId(Vec::from("you")),
-        //    signature: Signature(Vec::from("i signed")),
-        //};
-        //let mut message = capnp::message::Builder::new_default();
-        //{
-        //    let builder = message.init_root::<mercury_capnp::relation_half_proof::Builder>();
-        //    builder.fill_from(&relation_half_proof);
-        //}
-        //let mut buffer = vec![];
-        //serialize::write_message(&mut buffer, &message).unwrap();
-        //// -- 8< --
-        //let message_reader =
-        //    serialize::read_message(&mut &buffer[..], capnp::message::ReaderOptions::new())
-        //        .unwrap();
-        //let obj_reader =
-        //    message_reader.get_root::<mercury_capnp::relation_half_proof::Reader>().unwrap();
-        //let recoded = RelationHalfProof::try_from(obj_reader).unwrap();
-        //assert_eq!(recoded, relation_half_proof);
-    }
-}
+mod tests {}

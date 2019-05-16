@@ -26,6 +26,7 @@ interface ProfileRepo
     # resolve @2 (profileUrl: Text) -> (profile: Profile);
 }
 
+# TODO maybe we could optimize pairing data by omitting most fields, signature and sender profile_id is mandatory
 struct RelationHalfProof
 {
     relationType    @0 : Text;
@@ -93,7 +94,6 @@ struct ProfileEvent
 {
     union
     {
-        # TODO maybe we could optimize pairing data by omitting most fields, signature and sender profile_id is mandatory
         unknown         @0 : Data;
         pairingRequest  @1 : RelationHalfProof;
         pairingResponse @2 : RelationProof;
@@ -115,6 +115,6 @@ interface HomeSession
     events @2 (eventListener: ProfileEventListener);
     checkinApp @3 (app: ApplicationId, callListener: CallListener);
 
-    # TODO consider removing this after testing
+    # TODO consider removing this, used mostly for testing
     ping @4 (txt : Text) -> (pong : Text);
 }

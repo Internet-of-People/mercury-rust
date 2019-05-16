@@ -144,57 +144,8 @@ fn test_serialization_concept() {
     let envelope_bytes =
         rmp_serde::encode::to_vec_named(&original_envelope).expect("Failed to serialize envelope");
 
-    //    use std::io::Cursor;
-    //    let mut read_cursor = Cursor::new(&envelope_bytes);
     let read_envelope: Envelope =
         rmp_serde::decode::from_slice(&envelope_bytes).expect("Failed to parse envelope");
     assert_eq!(read_envelope, original_envelope);
-    // debug!("envelope: {:?}", read_envelope);
+    // println!("envelope: {:?}", read_envelope);
 }
-
-//fn value_serialization_experiment()
-//{
-//    use std::io::Cursor;
-//    let mut buffer = vec![0u8; 64];
-//    let mut write_cursor = Cursor::new(&mut buffer);
-//
-//    use rmpv::Value;
-//    let mut fields = Vec::new();
-//    fields.push( (Value::String( rmpv::Utf8String::from("egy") ), Value::Integer( rmpv::Integer::from(1) ) ) );
-//    let write_val = Value::Map( fields.clone() );
-//    rmpv::encode::write_value(&mut write_cursor, &write_val).unwrap();
-//
-//    let mut read_cursor = Cursor::new(&buffer);
-//    let read_val = rmpv::decode::read_value(&mut read_cursor).unwrap();
-//    assert_eq!(read_val, write_val);
-//    match read_val {
-//        Value::Map(map) => { assert_eq!(map, fields) },
-//        _ => { assert!(false) }
-//    }
-//}
-//
-//
-//fn manual_messagepack_parsing_experiment()
-//{
-//    use std::io::Cursor;
-//    let mut buffer = vec![0u8; 64];
-//    let mut cursor = Cursor::new(&mut buffer);
-//
-//    use rmp::decode;
-//    fn read_str<R: std::io::Read>(mut r: R) -> Option<String>
-//    {
-//        let str_length = decode::read_str_len(&mut r).ok()?;
-//        let mut content = Vec::new();
-//        content.resize(str_length as usize, 0);
-//        decode::read_str(&mut r, &mut content).ok()?;
-//        Some( String::from_utf8(content).ok()? )
-//    }
-//
-//    let map_length = decode::read_map_len(&mut cursor).unwrap();
-//    let name = read_str(&mut cursor).unwrap();
-//    match name.as_ref() {
-//        "target" => { let target = read_str(&mut cursor).unwrap(); },
-//        "payload" => { let val = rmpv::decode::read_value(&mut cursor); },
-//        _ => {}
-//    }
-//}
