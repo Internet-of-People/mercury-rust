@@ -1,10 +1,11 @@
 # Mercury
 
-Mercury is a distributed network built on a revolutionary person-to-person protocol 
-and identity model aiming maximal privacy.
-Our goal is to make the Internet ours again by true decentralised secure communication,
-social networking and enabling peer-to-peer business and apps with no middlemen,
-even on your phone.
+Mercury
+ - is a decentralized, open and secure communication infrastructure.
+ - has an identity model that guarantees ownership of your data, privacy, security
+ - has a networking model that allows secure connectivity of end user devices without central services.
+ - avoids lockin to service providers or applications.
+ - aims to provide open social networking without middlemen.
 
 ## Why?
 
@@ -13,25 +14,22 @@ but your phone and PC don't have that anymore, only servers in data centers.
 You're closed behind ISPs and home routers (e.g. NAT) so you need intermediaries to communicate.
 Those intermediaries tie you by heavy vendor lockin: you can't change service provider
 (consider email, storage, etc) without sacrificing your old identity and data.
-Even worse, the biggest of them make a living from taxing your payments,
-constantly spying on you for selling your data and usually hinder or censor you
-for their advantage or political orders, already much further than just targeted ads. 
-Just as an appetizer, some Asian countries require a mandatory digital identifier
-for every payment you make and monitor all of your online activity.
-Using this collected data, they plan to automatically punish or reward their citizens
-based on arbitrary loyalty measures, essentially building the Thought Police.
+The biggest of them make a living from taxing all of your payments in their stores,
+constantly spying on you for selling your data and targeted ads and
+usually hinder or censor you for their advantage or political regulations. 
 
-Mercury aims to bring balance by protecting you from all of this.
-Your identity is a cryptographic key owned by you and noone else.
-Data storage and communication is organized around this identity which you can keep
+Mercury aims to protect you from all of this.
+Your identity is built on cryptographic keys owned by you alone. These keys are disposable,
+so you can split your digital footprint into as many unrelated profiles as needed,
+e.g. for work, family and hobby.
+Data storage and communication is organized around such profiles which you can keep
 even changing service provider or applications.
-Your data is encrypted until you decide to share it with a specific peer or publicize it.
-Furthermore, you can have several unconnected identities, e.g. for work, family and hobby.
-The network is truly distributed and built on encrypted peer to peer communication
-so you're safe. You can add your own node to the network under your control and trust.
-
+Your data is encrypted until you decide to share a part of it with a specific peer or the general public.
+The network is truly distributed and built on encrypted peer to peer communication so you're safe.
+You can add your full node to the network under your own control and
+use your end device as a light client of a node you trust.
 In the end you can get rid of intermediaries or middleman and directly connect persons,
-business with clients or even machines, returning from oligopoly to true competition.
+business with clients or even machines.
 
 
 ### Comparison
@@ -40,17 +38,23 @@ Mercury is somewhat similar to a cellular mobile network, it provides features s
 SMS, calls, data connections, push notifications, etc, but
  - built as an overlay network on top of any transport layer
    (currently Tcp but could use Tor, I2P, mesh, etc)
- - your own "cell tower" can join or leave the network any time
- - selecting a "provider" is the only trustful part of the system
- - uses cryptographic keys instead of phone numbers for p2p encrypted communication,
-   cell/provider and applications use the same kind of identity
+ - your own "cell tower" node can join or leave the network any time
+ - selecting a "provider/cell" is the only trustful part of the system and can be changed any time
+ - uses cryptographic keys instead of phone numbers to connect peer to peer,
+   nodes and applications use the same kind of identity
  - user data and calls are encrypted, you cannot be spied on or be cheated with contact identity
  - you're free to keep your identity and contacts moving to another provider or application
  - supports you having different unrelated identities (family, professional, dating, etc) within the system
- - you can restore your identities from a "cold wallet" after lost/broken device
+ - you can restore all your profiles from a "cold HD wallet" after lost/broken device
  - the network is extremely resilient, dies only with the last cell
  - built to support any kind of decentralized/distributed application on top 
 
+Mercury's identity, data and relations model has the same vision as
+[W3C Distributed IDs](https://w3c-ccg.github.io/did-spec) and
+[W3C Verifiable credentials/claims](https://w3c.github.io/vc-data-model/)
+but is radically simpler without carrying excess burdens of legacy support.
+Mercury's storage layer is built on the same content-hashable network principles as
+[Sidetree](https://github.com/decentralized-identity/sidetree/blob/master/docs/protocol.md). 
 
 ## Project status
 
@@ -65,31 +69,30 @@ We'd like to have feedback to learn problems in the earliest phases,
 priorities of missing features and your requirements we haven't thought of yet.
 
 We think to have an initial functional implementation of the architecture.
-We're currently merging in the KeyVault and Open Social Graph codebase
+We're currently working on the Open Social Graph details
 while drafting our SDK API for distributed applications.
 There are still a lot of important components to be added,
-existing ones might be changed or redesigned,
-documentation is still lacking nearly everywhere.
+existing ones might be changed or redesigned and
+documentation is still lacking.
 
-Experimental features present:
- - Storage plugin interfaces (considering potentially distributed storages) 
+Experimental features already available:
+ - "Cold HD wallet" support: restore all of your profiles and related data from a single seed phrase
+ - Initial Open Social Graph features
+ - Storage plugin interfaces (considering potentially distributed storages)
  - Protocol for communication between Home node and clients
  - Home node binaries
  - Client library
-
-Merging in:
- - KeyVault: HD Secret key generation with seeds (Bip32, Bip39, etc)
- - Open Social Graph features
+ - Sample dApp
 
 Rough edges of the existing server and client are
  - documentation
  - profile metadata structure and protection levels
 
 Missing important parts are
- - dApp SDK, including
+ - Finished dApp SDK, including
    - native GUI plugins interfaces for profile, home and contact management
    - hiding all possible tech details to be convenient
- - Diffie-Hellman key exchange and encryption, maybe with TLS
+ - Diffie-Hellman key exchange, encryption data and communication
  - hole punching support (Stun, Upnp, NatPmp, etc)
  - DHT integration (IPFS with custom IPNS, Kademlia or others)
  - profile search on distributed storage
@@ -100,19 +103,27 @@ Missing important parts are
 ## Code structure
 
 Directories/crates of the project are
- - `home-protocol` is where you should start looking to understand the architecture.
-   It contains the basic definition of basic data structures, interfaces
-   and network protocols plus some common utility code.
-   Your starting point is maybe `protocol/mercury.capnp` describing a simple
-   network protocol with Cap'n'Proto while `mercury-capnp/mod.rs` contains
-   client and server implementations for Rust. 
- - `home-node` implements a server for the protocol.
- - `connect` implements a client library.
- - `test` contain integration tests to check if our server and client implementation
-   work together as expected.
+ - `keyvault` provides hierarchical deterministic key generation for
+   multiple different cipher suites and unified serialization of
+   cryptographic components (public and secret keys, ids, signatures, etc).
+ - `osg` defines the basic profile data model and interfaces for the Open Social graph.
+ - `prometheus-cli` implements a command line tool as the simplest user interface
+   to manage your profiles and relations in the Social Graph 
+ - `home-protocol` contains the basics for network communication, defining
+   services provided by home nodes operating the network and how clients can use these services.
+   File `protocol/mercury.capnp` describes a simple network protocol with Cap'n'Proto
+   while `mercury-capnp/mod.rs` contains client and server implementations for Rust. 
+ - `home-node` implements the server side by providing the services of the protocol to clients.
+ - `connect` implements the client side of the protocol. This includes an admin API to manage your
+   profiles an dApp SDK providing common building blocks to create distributed applications.
+   It also contains work towards a service daemon serving these APIs via JsonRpc.
+ - `examples/TheButton` is a sample distributed application built on the dApp SDK  
+ - `test` and `prometheus-test` contain integration tests between different crates.
  - `storage` contains experimentation on a generic storage layer using hash-based "indexing"
    that could use IPFS, BitTorrent, StoreJ, etc as a simple plugin.
+ - `forgetfulfuse` contains experiments with a filesystem that is readable only temporarily,
+   planned to be used for protecting sensitive data, e.g. your keys 
 
-Copyright © 2017-2019  
-Libertaria Ventures LLP, UK  
+Copyright © 2017-2019
+Libertaria Ventures LLP, UK
 Decentralized Society Foundation, PA
