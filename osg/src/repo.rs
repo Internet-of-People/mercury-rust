@@ -72,9 +72,12 @@ impl InMemoryProfileRepository {
 
     fn remove(&mut self, key: &PublicKey) -> Fallible<()> {
         let id = key.key_id();
-        let profile =
-            self.profiles.get(&id).ok_or_else(|| format_err!("Profile not found: {}", key))?;
-        self.put(PrivateProfileData::tombstone(key, profile.version()))
+        let profile_version = self
+            .profiles
+            .get(&id)
+            .ok_or_else(|| format_err!("Profile not found: {}", key))?
+            .version();
+        self.put(PrivateProfileData::tombstone(key, profile_version))
     }
 }
 

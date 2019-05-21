@@ -28,7 +28,7 @@ impl PeerContext {
     }
 
     pub fn validate(&self, validator: &Validator) -> Result<(), Error> {
-        validator.validate_profile(&self.peer_pubkey(), &self.peer_id()).and_then(|valid| {
+        validator.validate_profile_auth(&self.peer_pubkey(), &self.peer_id()).and_then(|valid| {
             if valid {
                 Ok(())
             } else {

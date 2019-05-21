@@ -1,21 +1,22 @@
 use std::collections::HashMap;
+use std::time::SystemTime;
 
 use futures::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
-use keyvault::PublicKey as KeyVaultPublicKey;
+pub type AsyncResult<T, E> = Box<Future<Item = T, Error = E>>;
+pub type AsyncFallible<T> = Box<Future<Item = T, Error = failure::Error>>;
 
-pub type ProfileId = keyvault::multicipher::MKeyId;
+pub type KeyId = keyvault::multicipher::MKeyId;
 pub type PublicKey = keyvault::multicipher::MPublicKey;
 pub type PrivateKey = keyvault::multicipher::MPrivateKey;
 pub type Signature = keyvault::multicipher::MSignature;
+
+pub type ProfileId = KeyId; // a.k.a DID
 pub type Version = u64; // monotonically increasing, e.g. normal version, unix datetime or blockheight
 pub type AttributeId = String;
 pub type AttributeValue = String;
 pub type AttributeMap = HashMap<AttributeId, AttributeValue>;
-
-pub type AsyncResult<T, E> = Box<Future<Item = T, Error = E>>;
-pub type AsyncFallible<T> = Box<Future<Item = T, Error = failure::Error>>;
 
 // TODO generalize links (i.e. edges) between two profiles into verifiable claims,
 //      i.e. signed hyperedges in the graph with any number of referenced profiles
@@ -60,6 +61,7 @@ impl PublicProfileData {
     }
 
     pub fn id(&self) -> ProfileId {
+        use keyvault::PublicKey as KeyVaultPublicKey;
         self.public_key.key_id()
     }
 
@@ -152,5 +154,89 @@ impl PrivateProfileData {
     }
     pub fn public_key(&self) -> PublicKey {
         self.public_data.public_key()
+    }
+}
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum Grant {
+    Impersonate,
+    Restore,
+    Modify,
+    Support,
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfileGrant {
+    key_id: KeyId,
+    grant: Grant,
+}
+
+impl ProfileGrant {
+    pub fn new(key_id: KeyId, grant: Grant) -> Self {
+        Self { key_id, grant }
+    }
+}
+
+// a.k.a DID Document
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfileAuthData {
+    id: ProfileId,
+    timestamp: SystemTime, // TODO is this an absolute timestamp or can this be relaxed?
+    grants: Vec<ProfileGrant>,
+    services: Vec<String>, // TODO what storage pointers type to use here? Ideally would be multistorage link.
+}
+
+impl ProfileAuthData {
+    pub fn implicit(key_id: &KeyId) -> Self {
+        let id = key_id.to_owned();
+        Self {
+            id: id.clone(),
+            timestamp: SystemTime::now(),
+            grants: vec![ProfileGrant { key_id: id, grant: Grant::Impersonate }],
+            services: vec![],
+        }
+    }
+
+    pub fn keys_with_grant(&self, grant: Grant) -> Vec<KeyId> {
+        self.grants
+            .iter()
+            .filter_map(|pg| if pg.grant == grant { Some(pg.key_id.to_owned()) } else { None })
+            .collect()
+    }
+
+    pub fn grants_of_key(&self, key_id: &KeyId) -> Vec<Grant> {
+        self.grants
+            .iter()
+            .filter_map(|pg| if pg.key_id == *key_id { Some(pg.grant) } else { None })
+            .collect()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum Predecessor {
+    TimeStamp(SystemTime), // TODO is this an absolute timestamp or can this be relaxed?
+    Transaction(TransactionId),
+    Block { height: u64, hash: Vec<u8> },
+}
+
+pub type TransactionId = Vec<u8>;
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ProfileAuthOperation {
+    Grant(ProfileGrant),
+    Revoke(ProfileGrant),
+    Remove(ProfileId),
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ProfileTransaction {
+    // new_state: ProfileAuthData, // NOTE it's harder to validate state diffs than to add explicit operations
+    operations: Vec<ProfileAuthOperation>,
+    succeeds: Vec<Predecessor>,
+}
+
+impl ProfileTransaction {
+    pub fn new(operations: &[ProfileAuthOperation], succeeds: &[Predecessor]) -> Self {
+        Self { operations: operations.to_owned(), succeeds: succeeds.to_owned() }
     }
 }

@@ -10,15 +10,15 @@ pub trait Signer {
     fn sign(&self, data: &[u8]) -> Signature;
 }
 
-pub trait ProfileValidator {
-    fn validate_profile(
+pub trait ProfileIdValidator {
+    fn validate_profile_auth(
         &self,
         public_key: &PublicKey,
         profile_id: &ProfileId,
     ) -> Result<bool, Error>;
 }
 
-impl Default for Box<ProfileValidator> {
+impl Default for Box<ProfileIdValidator> {
     fn default() -> Self {
         Box::new(MultiHashProfileValidator::default())
     }
@@ -29,6 +29,7 @@ pub trait SignatureValidator {
     fn validate_signature(
         &self,
         public_key: &PublicKey,
+        // TODO add here: profile_auth: ProfileAuthData,
         data: &[u8],
         signature: &Signature,
     ) -> Result<bool, Error>;
@@ -40,7 +41,7 @@ impl Default for Box<SignatureValidator> {
     }
 }
 
-pub trait Validator: ProfileValidator + SignatureValidator {
+pub trait Validator: ProfileIdValidator + SignatureValidator {
     fn validate_half_proof(
         &self,
         half_proof: &RelationHalfProof,
@@ -104,8 +105,8 @@ impl Default for MultiHashProfileValidator {
     }
 }
 
-impl ProfileValidator for MultiHashProfileValidator {
-    fn validate_profile(
+impl ProfileIdValidator for MultiHashProfileValidator {
+    fn validate_profile_auth(
         &self,
         public_key: &PublicKey,
         profile_id: &ProfileId,
@@ -157,26 +158,26 @@ impl SignatureValidator for PublicKeyValidator {
 
 #[derive(Default)]
 pub struct CompositeValidator {
-    profile_validator: Box<ProfileValidator>,
+    profile_validator: Box<ProfileIdValidator>,
     signature_validator: Box<SignatureValidator>,
 }
 
 impl CompositeValidator {
     pub fn compose(
-        profile_validator: Box<ProfileValidator>,
+        profile_validator: Box<ProfileIdValidator>,
         signature_validator: Box<SignatureValidator>,
     ) -> Self {
         Self { profile_validator, signature_validator }
     }
 }
 
-impl ProfileValidator for CompositeValidator {
-    fn validate_profile(
+impl ProfileIdValidator for CompositeValidator {
+    fn validate_profile_auth(
         &self,
         public_key: &PublicKey,
         profile_id: &ProfileId,
     ) -> Result<bool, Error> {
-        self.profile_validator.validate_profile(public_key, profile_id)
+        self.profile_validator.validate_profile_auth(public_key, profile_id)
     }
 }
 
