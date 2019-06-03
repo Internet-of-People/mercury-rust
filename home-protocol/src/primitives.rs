@@ -7,11 +7,12 @@ use multiaddr::{Multiaddr, ToMultiaddr};
 
 use crate::*;
 
-pub type Profile = osg::model::PublicProfileData;
-pub type OwnProfile = osg::model::PrivateProfileData;
 pub use osg::model::{
     AttributeId, AttributeMap, AttributeValue, PrivateKey, ProfileId, PublicKey, Signature, Version,
 };
+pub type Profile = osg::model::PublicProfileData;
+pub type OwnProfile = osg::model::PrivateProfileData;
+pub type ProfileAuthVersion = osg::model::JournalState;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ApplicationId(pub String);

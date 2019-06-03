@@ -12,7 +12,9 @@ pub type PublicKey = keyvault::multicipher::MPublicKey;
 pub type PrivateKey = keyvault::multicipher::MPrivateKey;
 pub type Signature = keyvault::multicipher::MSignature;
 
-pub type ProfileId = KeyId; // a.k.a DID
+// NOTE a.k.a DID
+pub type ProfileId = KeyId;
+// TODO this overlaps with JournalState, maybe they could be merged
 pub type Version = u64; // monotonically increasing, e.g. normal version, unix datetime or blockheight
 pub type AttributeId = String;
 pub type AttributeValue = String;
@@ -197,6 +199,10 @@ impl ProfileAuthData {
         }
     }
 
+    pub fn apply(&mut self, ops: &[ProfileAuthOperation]) {
+        unimplemented!()
+    }
+
     pub fn keys_with_grant(&self, grant: Grant) -> Vec<KeyId> {
         self.grants
             .iter()
@@ -212,14 +218,14 @@ impl ProfileAuthData {
     }
 }
 
+pub type TransactionId = Vec<u8>;
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum Predecessor {
+pub enum JournalState {
     TimeStamp(SystemTime), // TODO is this an absolute timestamp or can this be relaxed?
     Transaction(TransactionId),
     Block { height: u64, hash: Vec<u8> },
 }
-
-pub type TransactionId = Vec<u8>;
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum ProfileAuthOperation {
@@ -232,11 +238,19 @@ pub enum ProfileAuthOperation {
 pub struct ProfileTransaction {
     // new_state: ProfileAuthData, // NOTE it's harder to validate state diffs than to add explicit operations
     operations: Vec<ProfileAuthOperation>,
-    succeeds: Vec<Predecessor>,
+    succeeds_predecessors: Vec<JournalState>,
 }
 
 impl ProfileTransaction {
-    pub fn new(operations: &[ProfileAuthOperation], succeeds: &[Predecessor]) -> Self {
-        Self { operations: operations.to_owned(), succeeds: succeeds.to_owned() }
+    pub fn new(ops: &[ProfileAuthOperation], succeeds_predecessors: &[JournalState]) -> Self {
+        Self { operations: ops.to_owned(), succeeds_predecessors: succeeds_predecessors.to_owned() }
+    }
+
+    pub fn ops(&self) -> &[ProfileAuthOperation] {
+        &self.operations
+    }
+
+    pub fn predecessors(&self) -> &[JournalState] {
+        &self.succeeds_predecessors
     }
 }

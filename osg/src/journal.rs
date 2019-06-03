@@ -6,8 +6,15 @@ use serde_derive::{Deserialize, Serialize};
 use crate::model::*;
 
 pub trait ProfileAuthJournal {
-    fn get(&self, id: &ProfileId) -> AsyncFallible<ProfileAuthData>;
-    fn get_ops(&self, id: &ProfileId) -> AsyncFallible<Vec<ProfileTransaction>>;
+    fn last_state(&self) -> AsyncFallible<JournalState>;
+    fn transactions(
+        &self,
+        id: &ProfileId,
+        until_state: Option<JournalState>,
+    ) -> AsyncFallible<Vec<ProfileTransaction>>;
+
+    fn get(&self, id: &ProfileId, state: Option<JournalState>) -> AsyncFallible<ProfileAuthData>;
+
     // TODO do we need an explicit Grant here or will it be handled in within the implementation?
     fn update(&self, operations: &[ProfileAuthOperation]) -> AsyncFallible<ProfileTransaction>;
     fn remove(&self, id: &ProfileId) -> AsyncFallible<ProfileTransaction>;
@@ -20,12 +27,30 @@ pub struct InMemoryProfileAuthJournal {
 
 // TODO do something better than just compile
 impl ProfileAuthJournal for InMemoryProfileAuthJournal {
-    fn get(&self, id: &ProfileId) -> AsyncFallible<ProfileAuthData> {
-        Box::new(Ok(ProfileAuthData::implicit(id)).into_future())
+    fn last_state(&self) -> AsyncFallible<JournalState> {
+        Box::new(Ok(JournalState::Transaction(vec![])).into_future())
     }
 
-    fn get_ops(&self, id: &ProfileId) -> AsyncFallible<Vec<ProfileTransaction>> {
+    fn transactions(
+        &self,
+        id: &ProfileId,
+        until_state: Option<JournalState>,
+    ) -> AsyncFallible<Vec<ProfileTransaction>> {
         Box::new(Ok(vec![]).into_future())
+    }
+
+    fn get(&self, id: &ProfileId, state: Option<JournalState>) -> AsyncFallible<ProfileAuthData> {
+        let mut auth = ProfileAuthData::implicit(id);
+        let fut = self.transactions(id, state).map(move |transactions| {
+            let ops: Vec<_> = transactions
+                .iter()
+                .flat_map(|transaction| transaction.ops().iter().cloned())
+                .collect();
+            auth.apply(&ops);
+            auth
+        });
+
+        Box::new(fut)
     }
 
     fn update(&self, operations: &[ProfileAuthOperation]) -> AsyncFallible<ProfileTransaction> {
