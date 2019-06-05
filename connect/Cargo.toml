@@ -9,6 +9,7 @@ edition = "2018"
 
 [dependencies]
 clap = {version = "*", features = ["yaml"]}
+did = { path="../did" }
 failure = "*"
 futures = "0.1"
 jsonrpc-core = { git = "https://github.com/Internet-of-People/jsonrpc" }
@@ -18,7 +19,6 @@ log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }
 mercury-storage = { path="../storage" }
 multiaddr = "*"
-osg = { path="../osg" }
 serde = "*"
 serde_derive = "*"
 serde_json = "*"

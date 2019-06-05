@@ -1,11 +1,11 @@
 [workspace]
 members = [
     "connect",
+    "did",
     "home-protocol",
     "home-node",
     "forgetfulfuse",
     "keyvault",
-    "osg",
     "osg-rpc-storage",
     "prometheus-cli",
     "prometheus-tester",

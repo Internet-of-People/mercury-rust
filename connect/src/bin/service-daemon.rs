@@ -25,7 +25,7 @@ pub fn init_connect_service(
     home_addr_str: &str,
     reactor: &mut reactor::Core,
 ) -> Result<(Rc<ConnectService>, ProfileId, ProfileId), Error> {
-    use osg::repo::FileProfileRepository;
+    use did::repo::FileProfileRepository;
 
     debug!("Initializing service instance");
 

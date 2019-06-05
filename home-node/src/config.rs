@@ -5,8 +5,8 @@ use std::rc::Rc;
 use log::*;
 use structopt::StructOpt;
 
+use did::vault::{HdProfileVault, ProfileVault};
 use mercury_home_protocol::*;
-use osg::vault::{HdProfileVault, ProfileVault};
 
 #[derive(Debug, StructOpt)]
 #[structopt(
@@ -66,7 +66,7 @@ impl Config {
         let cli = CliConfig::new();
 
         let vault_path =
-            osg::paths::vault_path(cli.keyvault_dir).expect("Failed to get keyvault path");
+            did::paths::vault_path(cli.keyvault_dir).expect("Failed to get keyvault path");
         let vault = HdProfileVault::load(&vault_path).expect(&format!(
             "Profile vault is required but failed to load from {}",
             vault_path.to_string_lossy()

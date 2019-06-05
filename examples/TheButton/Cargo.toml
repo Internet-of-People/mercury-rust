@@ -9,6 +9,7 @@ edition = "2018"
 
 [dependencies]
 clap = "*"
+did = { path="../../did" }
 failure = "*"
 futures = "0.1"
 log = "*"
@@ -17,7 +18,6 @@ mercury-home-protocol = { path="../../home-protocol" }
 mercury-connect = { path="../../connect" }
 multiaddr = "*"
 multibase = "*"
-osg = { path="../../osg" }
 osg-rpc-storage = { path="../../osg-rpc-storage" }
 tempdir = "*"
 tokio-signal = "*"

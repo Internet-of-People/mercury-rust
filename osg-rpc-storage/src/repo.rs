@@ -10,9 +10,9 @@ use log::*;
 use crate::client::{FallibleExtension, MsgPackRpc, RpcProfile, RpcPtr};
 use crate::messages;
 use crate::profile::{Profile, ProfilePtr};
+use did::model::*;
+use did::repo::{DistributedPublicProfileRepository, PrivateProfileRepository, ProfileExplorer};
 use keyvault::PublicKey as KeyVaultPublicKey;
-use osg::model::*;
-use osg::repo::{DistributedPublicProfileRepository, PrivateProfileRepository, ProfileExplorer};
 
 #[derive(Clone)]
 pub struct RpcProfileRepository {

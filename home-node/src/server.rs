@@ -8,10 +8,10 @@ use futures::{future, stream, Future, Sink};
 use log::*;
 use tokio_core::reactor::{self, Timeout};
 
+use did::model::Link;
 use mercury_home_protocol::api::AsyncSink; // TODO this should normally work with protocol::*, why is this needed?
 use mercury_home_protocol::error::*;
 use mercury_home_protocol::*;
-use osg::model::Link;
 
 // TODO this should come from user configuration with a reasonable default value close to this
 const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);

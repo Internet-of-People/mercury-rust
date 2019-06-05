@@ -1,5 +1,4 @@
 [package]
-# TODO decide on naming. It seems this crate will be the home for the protocol and common utils. Suggestion: mercury-common.
 name = "mercury-home-protocol"
 version = "0.1.0"
 authors = ["IoP Ventures LLC <info@iop-ventures.com>", "Rache Bartmoss <bartmoss@tutanota.com>"]
@@ -16,6 +15,7 @@ bincode = "*"
 bytes = "*"
 capnp = "*"
 capnp-rpc = "*"
+did = { path="../did" }
 failure= "*"
 futures = "0.1"
 keyvault = { path="../keyvault" }
@@ -23,7 +23,6 @@ log = "*"
 multiaddr = "*"
 multibase = "*"
 multihash = "*"
-osg = { path="../osg" }
 serde = "*"
 serde_derive = "*"
 serde_json = "*"

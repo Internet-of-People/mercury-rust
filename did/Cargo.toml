@@ -1,5 +1,5 @@
 [package]
-name = "osg"
+name = "did"
 version = "0.1.0"
 authors = ["IoP Ventures LLC <info@iop-ventures.com>", "Rache Bartmoss <bartmoss@tutanota.com>"]
 edition = "2018"

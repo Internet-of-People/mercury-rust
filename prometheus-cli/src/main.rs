@@ -5,9 +5,9 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::options::{Command, Options};
-use osg::api::*;
-use osg::repo::*;
-use osg::vault::*;
+use did::api::*;
+use did::repo::*;
+use did::vault::*;
 use osg_rpc_storage::RpcProfileRepository;
 
 mod options;
@@ -27,9 +27,9 @@ fn run() -> Fallible<()> {
     let command = options.command;
     debug!("Got command {:?}", command);
 
-    let vault_path = osg::paths::vault_path(options.config_dir.clone())?;
-    let repo_path = osg::paths::profile_repo_path(options.config_dir.clone())?;
-    let base_path = osg::paths::base_repo_path(options.config_dir.clone())?;
+    let vault_path = did::paths::vault_path(options.config_dir.clone())?;
+    let repo_path = did::paths::profile_repo_path(options.config_dir.clone())?;
+    let base_path = did::paths::base_repo_path(options.config_dir.clone())?;
 
     let vault_exists = vault_path.exists();
     if command.needs_vault() && !vault_exists {

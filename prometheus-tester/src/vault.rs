@@ -1,11 +1,11 @@
 use failure::Fallible;
 
+use did::model::{ProfileId, PublicKey};
 use keyvault::{
     ed25519::{Ed25519, EdExtPrivateKey},
     ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PublicKey as KeyVaultPublicKey,
     Seed, BIP43_PURPOSE_MERCURY,
 };
-use osg::model::{ProfileId, PublicKey};
 
 pub struct Vault {
     mercury_xsk: EdExtPrivateKey,

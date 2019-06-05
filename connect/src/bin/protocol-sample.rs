@@ -10,11 +10,11 @@ use log::*;
 use multiaddr::ToMultiaddr;
 use tokio_core::reactor;
 
+use did::repo::InMemoryProfileRepository;
 use keyvault::PublicKey as KeyVaultPublicKey;
 use mercury_connect::profile::MyProfileImpl;
 use mercury_connect::*;
 use mercury_home_protocol::*;
-use osg::repo::InMemoryProfileRepository;
 
 fn main() {
     log4rs::init_file("log4rs.yml", Default::default()).unwrap();

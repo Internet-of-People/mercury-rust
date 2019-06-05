@@ -5,12 +5,12 @@ authors = ["IoP Ventures LLC <info@iop-ventures.com>", "Rache Bartmoss <bartmoss
 edition = "2018"
 
 [dependencies]
+did = { path="../did" }
 failure = "*"
 keyvault = { path="../keyvault" }
 log = "*"
 log4rs = "*"
 osg-rpc-storage = { path="../osg-rpc-storage" }
-osg = { path="../osg" }
 serde = "*"
 serde_derive = "*"
 serde_json = "*"

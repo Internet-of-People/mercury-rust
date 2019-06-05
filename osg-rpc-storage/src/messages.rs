@@ -1,7 +1,7 @@
 use failure::Fallible;
 use serde_derive::{Deserialize, Serialize};
 
-use osg::model::*;
+use did::model::*;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub(crate) struct Envelope {

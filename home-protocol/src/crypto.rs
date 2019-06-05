@@ -1,6 +1,6 @@
 use crate::*;
+use did::model::PrivateKey;
 use keyvault::{PrivateKey as KeyVaultPrivateKey, PublicKey as KeyVaultPublicKey};
-use osg::model::PrivateKey;
 
 /// Something that can sign data, but cannot give out the private key.
 /// Usually implemented using a private key internally, but also enables hardware wallets.

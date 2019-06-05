@@ -9,12 +9,12 @@ edition = "2018"
 
 [dependencies]
 bincode = "*"
+did = { path="../did" }
 failure = "*"
 futures = "0.1"
 log = "*"
 log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }
-osg = { path="../osg" }
 osg-rpc-storage = { path="../osg-rpc-storage" }
 multiaddr = "*"
 structopt = "*"

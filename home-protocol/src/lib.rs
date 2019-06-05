@@ -20,11 +20,11 @@ pub use crate::api::*;
 pub use crate::crypto::{Signer, Validator};
 pub(crate) use crate::error::*;
 pub use crate::primitives::*;
-pub use keyvault;
-pub use keyvault::ed25519;
-pub use osg::model::{AsyncFallible, AsyncResult};
-pub use osg::repo::{
+pub use did::model::{AsyncFallible, AsyncResult};
+pub use did::repo::{
     DistributedPublicProfileRepository, PrivateProfileRepository, ProfileExplorer,
 };
+pub use keyvault;
+pub use keyvault::ed25519;
 
 pub const CHANNEL_CAPACITY: usize = 1;

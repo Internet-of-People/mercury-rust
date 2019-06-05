@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 use failure::Fallible;
 
-use osg::model::*;
+use did::model::*;
 
 pub type ProfilePtr = Rc<RefCell<Profile>>;
 

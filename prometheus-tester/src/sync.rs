@@ -2,9 +2,9 @@ use failure::Fallible;
 use futures::prelude::*;
 use log::*;
 
+use did::model::{PrivateProfileData, ProfileId};
+use did::repo::PrivateProfileRepository;
 use keyvault::PublicKey as KeyVaultPublicKey;
-use osg::model::{PrivateProfileData, ProfileId};
-use osg::repo::PrivateProfileRepository;
 
 use crate::{state::State, vault::Vault};
 
