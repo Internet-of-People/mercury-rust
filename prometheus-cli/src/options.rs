@@ -6,7 +6,7 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::seed::{read_phrase, show_generated_phrase};
-use did::api::*;
+use claims::api::*;
 use did::model::*;
 
 pub type CmdRes = Fallible<()>;

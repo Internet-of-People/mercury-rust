@@ -5,7 +5,7 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::options::{Command, Options};
-use did::api::*;
+use claims::api::*;
 use did::repo::*;
 use did::vault::*;
 use osg_rpc_storage::RpcProfileRepository;

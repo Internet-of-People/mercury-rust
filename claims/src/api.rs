@@ -6,8 +6,8 @@ use futures::prelude::*;
 use log::*;
 
 use crate::model::*;
-use crate::repo::*;
-use crate::vault::{self, ProfileVault};
+use did::repo::*;
+use did::vault::{self, ProfileVault};
 use keyvault::PublicKey as KeyVaultPublicKey;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]

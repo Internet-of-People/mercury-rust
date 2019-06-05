@@ -1,18 +1,17 @@
 [package]
-name = "prometheus-cli"
+name = "claims"
 version = "0.1.0"
 authors = ["IoP Ventures LLC <info@iop-ventures.com>", "Rache Bartmoss <bartmoss@tutanota.com>"]
 edition = "2018"
 
 [dependencies]
-claims = { path="../claims" }
+bincode = "*"
 did = { path="../did" }
+dirs = "*"
 failure = "*"
-keyvault = { path="../keyvault" }
+futures = "0.1"
 log = "*"
-log4rs = "*"
-osg-rpc-storage = { path="../osg-rpc-storage" }
+keyvault = { path="../keyvault" }
 serde = "*"
 serde_derive = "*"
 serde_json = "*"
-structopt = "*"

@@ -12,7 +12,6 @@ pub use did::model::{
 };
 pub type Profile = did::model::PublicProfileData;
 pub type OwnProfile = did::model::PrivateProfileData;
-pub type ProfileAuthVersion = did::model::JournalState;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ApplicationId(pub String);
