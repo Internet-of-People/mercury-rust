@@ -1,4 +1,3 @@
-use ed25519_dalek as ed;
 use failure::Fallible;
 
 use super::*;
@@ -10,6 +9,11 @@ pub struct EdExtPrivateKey {
 }
 
 impl EdExtPrivateKey {
+    /// Borrows the chain code of the extended private key
+    pub fn chain_code(&self) -> &ChainCode {
+        &self.chain_code
+    }
+
     pub(crate) fn cook_new<F: Fn(&mut HmacSha512) -> ()>(salt: &[u8], recipe: F) -> Self {
         // This unwrap would only panic if the digest algorithm had some inconsistent
         // generic parameters, but the SHA512 we use is consistent with itself
@@ -20,17 +24,13 @@ impl EdExtPrivateKey {
         let hash_arr = hasher.result().code();
         let hash_bytes = hash_arr.as_slice();
 
-        let sk_bytes = &hash_bytes[..ed::SECRET_KEY_LENGTH];
-        let cc_bytes = &hash_bytes[ed::SECRET_KEY_LENGTH..];
+        let sk_bytes = &hash_bytes[..PRIVATE_KEY_SIZE];
+        let cc_bytes = &hash_bytes[PRIVATE_KEY_SIZE..];
 
         let chain_code = ChainCode::from_bytes(cc_bytes).unwrap();
         let sk = EdPrivateKey::from_bytes(sk_bytes).unwrap();
 
         Self { chain_code, sk }
-    }
-    /// Borrows the chain code of the extended private key
-    pub fn chain_code(&self) -> &ChainCode {
-        &self.chain_code
     }
 }
 

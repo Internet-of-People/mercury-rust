@@ -9,8 +9,10 @@ extern crate failure;
 
 pub mod bip32;
 mod bip39;
+mod cc;
 pub mod ed25519;
 pub mod multicipher;
+pub mod secp256k1;
 #[cfg(test)]
 mod tests;
 
@@ -18,6 +20,7 @@ use failure::{bail, Fallible};
 use serde::{Deserialize, Serialize};
 
 pub use crate::bip39::Bip39ErrorKind;
+pub use hmac::Mac;
 
 /// A public key (also called shared key or pk in some literature) is that part of an asymmetric keypair
 /// which can be used to verify the authenticity of the sender of a message or to encrypt a message that
@@ -111,8 +114,8 @@ impl Seed {
     ///
     /// # Example
     ///
-    /// ```edition2018
-    /// # use crate::Seed;
+    /// ```
+    /// # use keyvault::Seed;
     /// let phrase = "plastic attend shadow hill conduct whip staff shoe achieve repair museum improve below inform youth alpha above limb paddle derive spoil offer hospital advance";
     /// let seed_expected = "86f07ba8b38f3de2080912569a07b21ca4ae2275bc305a14ff928c7dc5407f32a1a3a26d4e2c4d9d5e434209c1db3578d94402cf313f3546344d0e4661c9f8d9";
     /// let seed_res = Seed::from_bip39(phrase);
@@ -131,8 +134,8 @@ impl Seed {
     ///
     /// # Example
     ///
-    /// ```edition2018
-    /// # use crate::Seed;
+    /// ```
+    /// # use keyvault::Seed;
     /// assert!(Seed::check_word("abandon"));
     /// assert!(!Seed::check_word("Abandon"));
     /// assert!(!Seed::check_word("avalon"));
@@ -145,8 +148,8 @@ impl Seed {
     ///
     /// # Example
     ///
-    /// ```edition2018
-    /// # use crate::Seed;
+    /// ```
+    /// # use keyvault::Seed;
     /// let bytes = "86f07ba8b38f3de2080912569a07b21ca4ae2275bc305a14ff928c7dc5407f32a1a3a26d4e2c4d9d5e434209c1db3578d94402cf313f3546344d0e4661c9f8d9";
     /// let seed_res = Seed::from_bytes(hex::decode(bytes).unwrap().as_slice());
     /// assert!(seed_res.is_ok());
@@ -165,6 +168,8 @@ impl Seed {
         self.bytes.as_slice()
     }
 }
+
+pub type HmacSha512 = hmac::Hmac<sha2::Sha512>;
 
 pub trait ExtendedPrivateKey<C: KeyDerivationCrypto + ?Sized> {
     fn derive_normal_child(&self, idx: i32) -> Fallible<C::ExtendedPrivateKey>;

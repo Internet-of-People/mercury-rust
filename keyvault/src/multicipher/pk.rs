@@ -57,8 +57,7 @@ impl Serialize for MPublicKey {
     {
         let (discriminator, bytes) = visit!(to_bytes_tuple(self));
 
-        let erased =
-            ErasedBytes { discriminator: discriminator.as_bytes()[0], value: bytes.to_vec() };
+        let erased = ErasedBytes { discriminator: discriminator.as_bytes()[0], value: bytes };
         erased.serialize(serializer)
     }
 }
@@ -122,7 +121,7 @@ impl Eq for MPublicKey {}
 impl From<&MPublicKey> for String {
     fn from(src: &MPublicKey) -> Self {
         let (discriminator, bytes) = visit!(to_bytes_tuple(src));
-        let mut output = multibase::encode(multibase::Base58btc, &bytes[..]);
+        let mut output = multibase::encode(multibase::Base58btc, &bytes);
         output.insert_str(0, discriminator);
         output.insert(0, 'P');
         output
@@ -165,8 +164,8 @@ impl std::str::FromStr for MPublicKey {
     }
 }
 
-impl From<ed25519::EdPublicKey> for MPublicKey {
-    fn from(src: ed25519::EdPublicKey) -> Self {
+impl From<EdPublicKey> for MPublicKey {
+    fn from(src: EdPublicKey) -> Self {
         erase!(e, MPublicKey, src)
     }
 }
@@ -185,13 +184,13 @@ impl MPublicKey {
 #[cfg(test)]
 mod test {
     mod parse_key_id {
-        use crate::ed25519;
+        use crate::ed25519::EdPublicKey;
         use crate::multicipher::MPublicKey;
 
         #[allow(dead_code)]
         fn case(input: &str, pk_hex: &str) {
             let pk_bytes = hex::decode(pk_hex).unwrap();
-            let pk1 = ed25519::EdPublicKey::from_bytes(&pk_bytes).unwrap();
+            let pk1 = EdPublicKey::from_bytes(&pk_bytes).unwrap();
             let erased_pk1 = MPublicKey::from(pk1);
             assert_eq!(erased_pk1.to_string(), input);
 

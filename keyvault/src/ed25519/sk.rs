@@ -2,6 +2,11 @@ use ed25519_dalek as ed;
 
 use super::*;
 
+/// The size of the private key in the format used by [`to_bytes`]
+///
+/// [`to_bytes`]: #method.to_bytes
+pub const PRIVATE_KEY_SIZE: usize = ed::SECRET_KEY_LENGTH;
+
 /// Implementation of Ed25519::PrivateKey
 pub struct EdPrivateKey(ed::Keypair);
 
@@ -9,8 +14,10 @@ impl EdPrivateKey {
     /// The private key serialized in a format that can be fed to [`from_bytes`]
     ///
     /// [`from_bytes`]: #method.from_bytes
-    pub fn to_bytes(&self) -> [u8; ed::SECRET_KEY_LENGTH] {
-        self.0.secret.to_bytes()
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut res = Vec::with_capacity(PRIVATE_KEY_SIZE);
+        res.extend_from_slice(self.0.secret.as_bytes());
+        res
     }
 
     /// Creates a public key from a byte slice possibly returned by the [`to_bytes`] method.

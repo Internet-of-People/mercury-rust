@@ -23,7 +23,7 @@ impl Serialize for MKeyId {
         S: Serializer,
     {
         let (discriminator, bytes) = visit!(to_bytes_tuple(self));
-        let mut out = bytes.to_vec();
+        let mut out = bytes;
         out.insert(0, discriminator.as_bytes()[0]);
         serde_bytes::serialize(out.as_slice(), serializer)
     }
@@ -118,7 +118,7 @@ impl Hash for MKeyId {
 impl From<&MKeyId> for String {
     fn from(src: &MKeyId) -> Self {
         let (discriminator, bytes) = visit!(to_bytes_tuple(src));
-        let mut output = multibase::encode(multibase::Base58btc, &bytes[..]);
+        let mut output = multibase::encode(multibase::Base58btc, &bytes);
         output.insert_str(0, discriminator);
         output.insert(0, 'I');
         output
@@ -161,8 +161,8 @@ impl std::str::FromStr for MKeyId {
     }
 }
 
-impl From<ed25519::KeyId> for MKeyId {
-    fn from(src: ed25519::KeyId) -> Self {
+impl From<EdKeyId> for MKeyId {
+    fn from(src: EdKeyId) -> Self {
         erase!(e, MKeyId, src)
     }
 }
@@ -181,13 +181,13 @@ impl MKeyId {
 #[cfg(test)]
 mod test {
     mod parse_key_id {
-        use crate::ed25519;
+        use crate::ed25519::EdKeyId;
         use crate::multicipher::MKeyId;
 
         #[allow(dead_code)]
         fn case(input: &str, key_id_hex: &str) {
             let key_id_bytes = hex::decode(key_id_hex).unwrap();
-            let id1 = ed25519::KeyId::from_bytes(&key_id_bytes).unwrap();
+            let id1 = EdKeyId::from_bytes(&key_id_bytes).unwrap();
             let erased_id1 = MKeyId::from(id1);
             assert_eq!(erased_id1.to_string(), input);
 

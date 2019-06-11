@@ -1,7 +1,5 @@
-use blake2::{
-    digest::{Input, VariableOutput},
-    VarBlake2b,
-};
+use blake2::VarBlake2b;
+use digest::{Input, VariableOutput};
 
 use super::*;
 
@@ -19,17 +17,15 @@ pub const KEY_ID_SIZE: usize = 16 + VERSION_SIZE;
 pub const KEY_ID_VERSION1: u8 = b'\x01';
 
 /// Implementation of Ed25519::KeyId
-#[derive(Clone, Eq, Hash, PartialEq, PartialOrd)]
-pub struct KeyId(Vec<u8>);
+#[derive(Clone, Eq, Hash, PartialEq, PartialOrd, Ord)]
+pub struct EdKeyId(Vec<u8>);
 
-impl KeyId {
+impl EdKeyId {
     /// The key id serialized in a format that can be fed to [`from_bytes`]
     ///
     /// [`from_bytes`]: #method.from_bytes
-    pub fn to_bytes(&self) -> [u8; KEY_ID_SIZE] {
-        let mut res = [0; KEY_ID_SIZE];
-        res.copy_from_slice(&self.0);
-        res
+    pub fn to_bytes(&self) -> Vec<u8> {
+        self.0.clone()
     }
 
     /// Creates a key id from a byte slice possibly returned by the [`to_bytes`] method.
@@ -51,13 +47,13 @@ impl KeyId {
     }
 }
 
-impl From<&EdPublicKey> for KeyId {
-    fn from(pk: &EdPublicKey) -> KeyId {
+impl From<&EdPublicKey> for EdKeyId {
+    fn from(pk: &EdPublicKey) -> EdKeyId {
         let mut hasher = VarBlake2b::new_keyed(KEY_ID_SALT, KEY_ID_SIZE - VERSION_SIZE);
         hasher.input(pk.to_bytes());
         let mut hash = Vec::with_capacity(KEY_ID_SIZE);
         hash.push(KEY_ID_VERSION1);
         hasher.variable_result(|h| hash.extend_from_slice(h));
-        KeyId(hash)
+        EdKeyId(hash)
     }
 }

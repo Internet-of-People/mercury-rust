@@ -24,7 +24,7 @@ macro_rules! e {
         CipherSuite::Ed25519
     };
     (id) => {
-        ed25519::KeyId
+        EdKeyId
     };
     (pk) => {
         EdPublicKey
@@ -42,7 +42,7 @@ macro_rules! f {
         CipherSuite::TotallyNotEd25519
     };
     (id) => {
-        ed25519::KeyId
+        EdKeyId
     };
     (pk) => {
         EdPublicKey
@@ -52,6 +52,24 @@ macro_rules! f {
     };
     (sig) => {
         EdSignature
+    };
+}
+
+macro_rules! s {
+    (variant) => {
+        CipherSuite::Secp256k1
+    };
+    (id) => {
+        SecpKeyId
+    };
+    (pk) => {
+        SecpPublicKey
+    };
+    (sk) => {
+        SecpPrivateKey
+    };
+    (sig) => {
+        SecpSignature
     };
 }
 
@@ -108,6 +126,7 @@ macro_rules! visit {
         match $self_.suite {
             e!(variant) => visit!(@case e $callback $self_ [ $($args),* ]),
             f!(variant) => visit!(@case f $callback $self_ [ $($args),* ]),
+            s!(variant) => visit!(@case s $callback $self_ [ $($args),* ]),
         }
     };
     (@case $suite:ident $callback:ident $self_:tt [ ]) => {
@@ -129,7 +148,8 @@ use std::hash::Hasher;
 
 use serde::{Deserialize, Serialize};
 
-use crate::ed25519::{self, EdPrivateKey, EdPublicKey, EdSignature};
+use crate::ed25519::{EdKeyId, EdPrivateKey, EdPublicKey, EdSignature};
+use crate::secp256k1::{SecpKeyId, SecpPrivateKey, SecpPublicKey, SecpSignature};
 use crate::{AsymmetricCrypto, PrivateKey, PublicKey};
 
 pub use id::MKeyId;
@@ -151,6 +171,10 @@ pub enum CipherSuite {
     ///
     /// [`Ed25519`]: #variant.Ed25519
     TotallyNotEd25519,
+    /// The object tagged with this variant belongs to the [`secp256k1`] module
+    ///
+    /// [`secp256k1`]: ../secp256k1/index.html
+    Secp256k1,
 }
 
 /// See the [module-level description](index.html).

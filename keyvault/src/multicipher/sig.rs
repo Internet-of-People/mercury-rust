@@ -23,8 +23,7 @@ impl Serialize for MSignature {
     {
         let (discriminator, bytes) = visit!(to_bytes_tuple(self));
 
-        let erased =
-            ErasedBytes { discriminator: discriminator.as_bytes()[0], value: bytes.to_vec() };
+        let erased = ErasedBytes { discriminator: discriminator.as_bytes()[0], value: bytes };
         erased.serialize(serializer)
     }
 }
@@ -88,7 +87,7 @@ impl Eq for MSignature {}
 impl From<&MSignature> for String {
     fn from(src: &MSignature) -> Self {
         let (discriminator, bytes) = visit!(to_bytes_tuple(src));
-        let mut output = multibase::encode(multibase::Base58btc, &bytes[..]);
+        let mut output = multibase::encode(multibase::Base58btc, &bytes);
         output.insert_str(0, discriminator);
         output.insert(0, 'S');
         output
@@ -131,8 +130,8 @@ impl std::str::FromStr for MSignature {
     }
 }
 
-impl From<ed25519::EdSignature> for MSignature {
-    fn from(src: ed25519::EdSignature) -> Self {
+impl From<EdSignature> for MSignature {
+    fn from(src: EdSignature) -> Self {
         erase!(e, MSignature, src)
     }
 }
@@ -151,13 +150,13 @@ impl MSignature {
 #[cfg(test)]
 mod test {
     mod parse_signature {
-        use crate::ed25519;
+        use crate::ed25519::EdSignature;
         use crate::multicipher::MSignature;
 
         #[allow(dead_code)]
         fn case(input: &str, sig_hex: &str) {
             let sig_bytes = hex::decode(sig_hex.replace(' ', "")).unwrap();
-            let sig1 = ed25519::EdSignature::from_bytes(&sig_bytes).unwrap();
+            let sig1 = EdSignature::from_bytes(&sig_bytes).unwrap();
             let erased_sig1 = MSignature::from(sig1);
             assert_eq!(erased_sig1.to_string(), input);
 

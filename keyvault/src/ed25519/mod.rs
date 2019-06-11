@@ -2,7 +2,6 @@
 //! Ed25519-based implementations in other projects that are incompatible with SLIP-0010, so make sure
 //! this is the right derivation method for your use-case.
 
-mod cc;
 mod ext_sk;
 mod id;
 mod pk;
@@ -20,13 +19,13 @@ pub struct Ed25519 {}
 
 pub use cc::{ChainCode, CHAIN_CODE_SIZE};
 pub use ext_sk::EdExtPrivateKey;
-pub use id::{KeyId, KEY_ID_SALT, KEY_ID_SIZE, KEY_ID_VERSION1};
-pub use pk::EdPublicKey;
-pub use sig::EdSignature;
-pub use sk::EdPrivateKey;
+pub use id::{EdKeyId, KEY_ID_SALT, KEY_ID_SIZE, KEY_ID_VERSION1};
+pub use pk::{EdPublicKey, PUBLIC_KEY_SIZE};
+pub use sig::{EdSignature, SIGNATURE_SIZE, SIGNATURE_VERSION1};
+pub use sk::{EdPrivateKey, PRIVATE_KEY_SIZE};
 
 impl AsymmetricCrypto for Ed25519 {
-    type KeyId = KeyId;
+    type KeyId = EdKeyId;
     type PublicKey = EdPublicKey;
     type PrivateKey = EdPrivateKey;
     type Signature = EdSignature;
@@ -51,8 +50,6 @@ pub const VERSION_SIZE: usize = 1;
 /// SLIP-0010 defines keyed hashing for master key derivation. This does domain separation
 /// for different cryptographic algorithms. This is the standard key for Ed25519
 pub const SLIP10_SEED_HASH_SALT: &[u8] = b"ed25519 seed";
-
-type HmacSha512 = hmac::Hmac<sha2::Sha512>;
 
 #[cfg(test)]
 mod tests {

@@ -1,7 +1,12 @@
 use ed25519_dalek as ed;
 
-use super::{Ed25519, EdSignature, KeyId};
+use super::{Ed25519, EdKeyId, EdSignature};
 use crate::*;
+
+/// The size of the public key in the compressed format used by [`to_bytes`]
+///
+/// [`to_bytes`]: #method.to_bytes
+pub const PUBLIC_KEY_SIZE: usize = ed::PUBLIC_KEY_LENGTH;
 
 /// Implementation of Ed25519::PublicKey
 #[derive(Copy, Clone, Eq, PartialEq)]
@@ -11,8 +16,10 @@ impl EdPublicKey {
     /// The public key serialized in a format that can be fed to [`from_bytes`]
     ///
     /// [`from_bytes`]: #method.from_bytes
-    pub fn to_bytes(&self) -> [u8; ed::PUBLIC_KEY_LENGTH] {
-        self.0.to_bytes()
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut res = Vec::with_capacity(PUBLIC_KEY_SIZE);
+        res.extend_from_slice(self.0.as_bytes());
+        res
     }
 
     /// Creates a public key from a byte slice possibly returned by the [`to_bytes`] method.
@@ -34,8 +41,8 @@ impl From<ed::PublicKey> for EdPublicKey {
 }
 
 impl PublicKey<Ed25519> for EdPublicKey {
-    fn key_id(&self) -> KeyId {
-        KeyId::from(self)
+    fn key_id(&self) -> EdKeyId {
+        EdKeyId::from(self)
     }
     /// We should never assume that there is only 1 public key that can verify a given
     /// signature. Actually, there are 8 public keys.

@@ -31,8 +31,8 @@ impl PrivateKey<MultiCipher> for MPrivateKey {
     }
 }
 
-impl From<ed25519::EdPrivateKey> for MPrivateKey {
-    fn from(src: ed25519::EdPrivateKey) -> Self {
+impl From<EdPrivateKey> for MPrivateKey {
+    fn from(src: EdPrivateKey) -> Self {
         erase!(e, MPrivateKey, src)
     }
 }

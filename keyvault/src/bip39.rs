@@ -1,6 +1,7 @@
 use bip39::{Language, Mnemonic, MnemonicType, Seed};
 use failure::Fallible;
 
+/// Re-exported error type used by `tiny-bip39` to allow downcasting `failure` error results.
 pub use bip39::ErrorKind as Bip39ErrorKind;
 
 /// #Panics
