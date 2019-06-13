@@ -8,6 +8,7 @@ members = [
     "forgetfulfuse",
     "keyvault",
     "osg-rpc-storage",
+    "prometheusd",
     "prometheus-cli",
     "prometheus-tester",
     "storage",
