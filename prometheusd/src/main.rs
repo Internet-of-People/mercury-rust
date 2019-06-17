@@ -8,15 +8,15 @@ fn generate_bip39_phrase() -> impl Responder {
 
 fn validate_bip39_phrase(phrase: web::Path<String>) -> impl Responder {
     match Seed::from_bip39(&phrase as &str) {
-        Ok(_seed) => HttpResponse::Accepted().body("Valid"),
-        Err(e) => HttpResponse::NotAcceptable().body(format!("Invalid: {}", e)),
+        Ok(_seed) => HttpResponse::Accepted().body(""),
+        Err(e) => HttpResponse::NotAcceptable().body(format!("{}", e)),
     }
 }
 
 fn validate_bip39_word(word: web::Path<String>) -> impl Responder {
     let is_valid = Seed::check_word(&word);
-    let mut resp = if is_valid { HttpResponse::Accepted() } else { HttpResponse::NotAcceptable() };
-    resp.body(is_valid.to_string())
+    let result = if is_valid { HttpResponse::Accepted() } else { HttpResponse::NotAcceptable() };
+    result
 }
 
 fn run_daemon(listen_on: &str) -> std::io::Result<()> {
@@ -36,7 +36,9 @@ fn run_daemon(listen_on: &str) -> std::io::Result<()> {
 }
 
 fn main() {
-    match std::thread::spawn(|| run_daemon("127.0.0.1:8080")).join() {
+    let address = "127.0.0.1:8080";
+    println!("Listening on {}", address);
+    match std::thread::spawn(move || run_daemon(address)).join() {
         Err(e) => println!("Daemon thread failed with error: {:?}", e),
         Ok(Err(e)) => println!("Web server failed with error: {:?}", e),
         Ok(Ok(())) => println!("Gracefully shut down"),
