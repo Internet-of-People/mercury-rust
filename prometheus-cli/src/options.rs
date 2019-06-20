@@ -287,7 +287,6 @@ pub enum SetCommand {
     /// Show profile
     ActiveProfile {
         // TODO is activation by profile NUMBER needed or is this enough?
-        //      If enough, should be a mandatory positional parameter instead of a named one.
         #[structopt()]
         /// Profile id to be activated
         my_profile_id: ProfileId,

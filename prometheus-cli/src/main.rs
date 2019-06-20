@@ -72,7 +72,7 @@ fn run() -> Fallible<()> {
 fn init_logger(options: &Options) -> Fallible<()> {
     if log4rs::init_file(&options.logger_config, Default::default()).is_err() {
         println!(
-            "Failed to initialize loggers from config file {:?}, use default config",
+            "Failed to initialize loggers from {:?}, using default config",
             options.logger_config
         );
 
@@ -84,7 +84,7 @@ fn init_logger(options: &Options) -> Fallible<()> {
             ConsoleAppender::builder().encoder(Box::new(PatternEncoder::new("{m}{n}"))).build();
         let config = Config::builder()
             .appender(Appender::builder().build("stdout", Box::new(stdout)))
-            .build(Root::builder().appender("stdout").build(LevelFilter::Info))?;
+            .build(Root::builder().appender("stdout").build(log::LevelFilter::Info))?;
 
         log4rs::init_config(config)?;
     };
