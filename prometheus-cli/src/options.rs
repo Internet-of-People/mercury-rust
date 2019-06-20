@@ -16,7 +16,7 @@ pub trait Command {
 
 #[derive(Debug, StructOpt)]
 #[structopt(
-    name = "prometheus",
+    name = "prometheus-cli",
     about = "Command line interface for Prometheus",
     raw(setting = "structopt::clap::AppSettings::ColoredHelp")
 )]

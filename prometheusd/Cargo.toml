@@ -6,5 +6,8 @@ edition = "2018"
 
 [dependencies]
 actix-web = "*"
+failure = "*"
 keyvault = { path="../keyvault" }
+log = "*"
+log4rs = "*"
 structopt = "*"
