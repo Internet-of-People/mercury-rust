@@ -73,12 +73,16 @@ fn run_daemon(options: Options) -> Fallible<()> {
             )
             .register_data(daemon_state.clone())
             .service(
-                web::scope("/vault")
+                web::scope("/bip39")
                     .service(web::resource("/generate_phrase").to(generate_bip39_phrase))
                     .service(web::resource("/validate_phrase/{phrase}").to(validate_bip39_phrase))
                     .service(web::resource("/validate_word/{word}").to(validate_bip39_word)),
             )
-            .service(web::resource("/test_state").to(test_state))
+            .service(
+                web::scope("/did")
+                    .service(web::resource("/create").to(create_did))
+                    .service(web::resource("/list").to(list_did)),
+            )
             .default_service(web::to(|| HttpResponse::NotFound()))
     })
     .bind(&options.listen_on)?
@@ -110,13 +114,15 @@ fn init_logger(options: &Options) -> Fallible<()> {
 }
 
 fn generate_bip39_phrase() -> impl Responder {
+    // TODO should this use JSON instead?
     Seed::generate_bip39()
 }
 
 fn validate_bip39_phrase(phrase: web::Path<String>) -> impl Responder {
     match Seed::from_bip39(&phrase as &str) {
         Ok(_seed) => HttpResponse::Accepted().body(""),
-        Err(e) => HttpResponse::NotAcceptable().body(format!("{}", e)),
+        // TODO should this use JSON instead?
+        Err(e) => HttpResponse::NotAcceptable().body(e.to_string()),
     }
 }
 
@@ -126,11 +132,11 @@ fn validate_bip39_word(word: web::Path<String>) -> impl Responder {
     result
 }
 
-fn test_state(state: web::Data<Mutex<Context>>) -> impl Responder {
-    match test_state_impl(state) {
+fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
+    match create_profile_impl(state) {
         Ok(did) => {
             debug!("Created profile {}", did);
-            HttpResponse::Ok().body(did.to_string())
+            HttpResponse::Ok().json(did.to_string())
         }
         Err(e) => {
             error!("Failed to create profile: {}", e);
@@ -139,9 +145,28 @@ fn test_state(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn test_state_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileId> {
+fn create_profile_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileId> {
     let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
     let did = state.create_profile()?;
     state.vault().save(state.vault_path())?;
     Ok(did)
+}
+
+fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
+    match list_profiles_impl(state) {
+        Ok(dids) => {
+            debug!("Listing {} profiles", dids.len());
+            let did_strs = dids.iter().map(|did| did.to_string()).collect::<Vec<_>>();
+            HttpResponse::Ok().json(did_strs)
+        }
+        Err(e) => {
+            error!("Failed to list profiles: {}", e);
+            HttpResponse::InternalServerError().body("")
+        }
+    }
+}
+
+fn list_profiles_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileId>> {
+    let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    state.list_profiles()
 }
