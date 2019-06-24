@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::net::{SocketAddr, TcpStream};
 use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use failure::{err_msg, Fallible};
@@ -18,12 +19,12 @@ use keyvault::PublicKey as KeyVaultPublicKey;
 pub struct RpcProfileRepository {
     address: SocketAddr,
     network_timeout: Duration,
-    rpc: RefCell<Option<RpcPtr<TcpStream, TcpStream>>>,
+    rpc: Arc<Mutex<Option<RpcPtr<TcpStream, TcpStream>>>>,
 }
 
 impl RpcProfileRepository {
     pub fn new(address: &SocketAddr, network_timeout: Duration) -> Fallible<Self> {
-        Ok(Self { address: *address, network_timeout, rpc: RefCell::new(Option::None) })
+        Ok(Self { address: *address, network_timeout, rpc: Arc::new(Mutex::new(Option::None)) })
     }
 
     pub fn connect(
@@ -43,18 +44,28 @@ impl RpcProfileRepository {
     fn rpc(&self) -> Fallible<RpcPtr<TcpStream, TcpStream>> {
         // TODO is really a lazy singleton init needed here? It makes types and
         //      everything much more complex, would be simpler in constructor
-        if self.rpc.borrow().is_none() {
+        let mut opt_guard =
+            self.rpc.lock().map_err(|_e| err_msg("Failed to lock cached stream object"))?;
+        if (*opt_guard).is_none() {
             let rpc = Self::connect(&self.address, self.network_timeout)?;
-            *self.rpc.borrow_mut() = Option::Some(Rc::new(RefCell::new(rpc)));
+            *opt_guard = Option::Some(Arc::new(Mutex::new(rpc)));
         }
 
-        Ok(self.rpc.borrow().clone().unwrap())
+        Ok((*opt_guard).clone().unwrap())
+    }
+
+    fn execute_on_stream<F, R>(&self, fun: F) -> Fallible<R>
+    where
+        F: FnOnce(&mut MsgPackRpc<TcpStream, TcpStream>) -> Fallible<R>,
+    {
+        let rpc_guard = self.rpc()?;
+        let mut stream_guard = rpc_guard.lock().map_err(|_e| err_msg("Failed to lock stream"))?;
+        fun(&mut *stream_guard)
     }
 
     pub fn list_nodes(&self) -> Fallible<Vec<ProfileId>> {
         let params = messages::ListNodesParams {};
-        let rpc = self.rpc()?;
-        let response = rpc.borrow_mut().send_request("list_nodes", params)?;
+        let response = self.execute_on_stream(|tcp| tcp.send_request("list_nodes", params))?;
         let node_vals =
             response.reply.ok_or_else(|| err_msg("Server returned no reply content for query"))?;
         let nodes = rmpv::ext::from_value(node_vals)?;
@@ -71,11 +82,9 @@ impl RpcProfileRepository {
     }
 
     pub fn remove_node(&self, key: &PublicKey) -> Fallible<()> {
-        self.rpc().and_then(|rpc| {
-            let params = messages::RemoveNodeParams { id: key.key_id() };
-            rpc.borrow_mut().send_request("remove_node", params)?;
-            Ok(())
-        })
+        let params = messages::RemoveNodeParams { id: key.key_id() };
+        self.execute_on_stream(|tcp| tcp.send_request("remove_node", params))?;
+        Ok(())
     }
 
     // TODO this should set private_data as well
@@ -86,13 +95,12 @@ impl RpcProfileRepository {
             Err(_e) => debug!("Failed to remove profile, creating it as new one"),
         };
 
-        self.rpc().and_then(|rpc| {
-            let request = messages::AddNodeParams { id: profile.id() };
-            rpc.borrow_mut()
-                .send_request("add_node", request)
-                .map(|_r| ())
-                .key_not_existed_or_else(|| Ok(()))?;
+        let request = messages::AddNodeParams { id: profile.id() };
+        self.execute_on_stream(|tcp| {
+            tcp.send_request("add_node", request).map(|_r| ()).key_not_existed_or_else(|| Ok(()))
+        })?;
 
+        self.rpc().and_then(|rpc| {
             let mut rpc_profile = RpcProfile::new(&profile.id(), rpc);
             // TODO consider version conflict checks here
             rpc_profile.set_version(profile.version())?;
@@ -108,9 +116,9 @@ impl RpcProfileRepository {
     }
 
     pub fn get_followers(&self, id: &ProfileId) -> Fallible<Vec<Link>> {
-        self.rpc().and_then(|rpc| {
+        self.execute_on_stream(|tcp| {
             let params = messages::ListInEdgesParams { id: id.clone() };
-            let response = rpc.borrow_mut().send_request("list_inedges", params)?;
+            let response = tcp.send_request("list_inedges", params)?;
             let reply_val = response
                 .reply
                 .ok_or_else(|| err_msg("Server returned no reply content for query"))?;

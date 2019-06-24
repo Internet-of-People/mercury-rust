@@ -82,11 +82,11 @@ pub trait Api {
 
 pub struct Context {
     vault_path: PathBuf,
-    vault: Option<Box<ProfileVault>>,
+    vault: Option<Box<ProfileVault + Send>>,
     local_repo: FileProfileRepository, // NOTE match arms of get_profile() conflicts with Box<LocalProfileRepository>
-    base_repo: Box<PrivateProfileRepository>,
-    remote_repo: Box<PrivateProfileRepository>,
-    explorer: Box<ProfileExplorer>,
+    base_repo: Box<PrivateProfileRepository + Send>,
+    remote_repo: Box<PrivateProfileRepository + Send>,
+    explorer: Box<ProfileExplorer + Send>,
 }
 
 // TODO !!! The current implementation assumes that though the ProfileRepository
@@ -95,11 +95,11 @@ pub struct Context {
 impl Context {
     pub fn new(
         vault_path: PathBuf,
-        vault: Option<Box<ProfileVault>>,
+        vault: Option<Box<ProfileVault + Send>>,
         local_repo: FileProfileRepository,
-        base_repo: Box<PrivateProfileRepository>,
-        remote_repo: Box<PrivateProfileRepository>,
-        explorer: Box<ProfileExplorer>,
+        base_repo: Box<PrivateProfileRepository + Send>,
+        remote_repo: Box<PrivateProfileRepository + Send>,
+        explorer: Box<ProfileExplorer + Send>,
     ) -> Self {
         Self { vault_path, vault, local_repo, base_repo, remote_repo, explorer }
     }
@@ -117,7 +117,7 @@ impl Context {
         self.vault.as_mut().unwrap().as_mut()
     }
 
-    pub fn take_vault(&mut self) -> Option<Box<ProfileVault>> {
+    pub fn take_vault(&mut self) -> Option<Box<ProfileVault + Send>> {
         self.vault.take()
     }
 

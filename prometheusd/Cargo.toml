@@ -6,8 +6,11 @@ edition = "2018"
 
 [dependencies]
 actix-web = "*"
+claims = { path="../claims" }
+did = { path="../did" }
 failure = "*"
 keyvault = { path="../keyvault" }
 log = "*"
 log4rs = "*"
+osg-rpc-storage = { path="../osg-rpc-storage" }
 structopt = "*"

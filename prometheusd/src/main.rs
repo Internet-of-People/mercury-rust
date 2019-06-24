@@ -1,6 +1,7 @@
 mod options;
 
 use std::sync::Mutex;
+use std::time::Duration;
 
 use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use failure::Fallible;
@@ -8,7 +9,11 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::options::Options;
+use claims::api::*;
+use did::repo::*;
+use did::vault::*;
 use keyvault::Seed;
+use osg_rpc_storage::RpcProfileRepository;
 
 fn main() -> Fallible<()> {
     let options = Options::from_args();
@@ -24,8 +29,35 @@ fn main() -> Fallible<()> {
     Ok(())
 }
 
-fn run_daemon(options: Options) -> std::io::Result<()> {
-    let daemon_state = web::Data::new(Mutex::new(MyState::new()));
+fn run_daemon(options: Options) -> Fallible<()> {
+    let vault_path = did::paths::vault_path(options.config_dir.clone())?;
+    let repo_path = did::paths::profile_repo_path(options.config_dir.clone())?;
+    let base_path = did::paths::base_repo_path(options.config_dir.clone())?;
+
+    let vault_exists = vault_path.exists();
+    let mut vault: Option<Box<ProfileVault + Send>> = None;
+    if vault_exists {
+        info!("Found profile vault, loading {}", vault_path.to_string_lossy());
+        vault = Some(Box::new(HdProfileVault::load(&vault_path)?))
+    } else {
+        debug!("No profile vault found");
+    }
+
+    let local_repo = FileProfileRepository::new(&repo_path)?;
+    let base_repo = FileProfileRepository::new(&base_path)?;
+    let timeout = Duration::from_secs(options.network_timeout_secs);
+    let rpc_repo = RpcProfileRepository::new(&options.remote_repo_address, timeout)?;
+
+    let ctx = Context::new(
+        vault_path.clone(),
+        vault,
+        local_repo,
+        Box::new(base_repo),
+        Box::new(rpc_repo.clone()),
+        Box::new(rpc_repo),
+    );
+
+    let daemon_state = web::Data::new(Mutex::new(ctx));
 
     HttpServer::new(move || {
         App::new()
@@ -40,7 +72,9 @@ fn run_daemon(options: Options) -> std::io::Result<()> {
             .default_service(web::to(|| HttpResponse::NotFound()))
     })
     .bind(&options.listen_on)?
-    .run()
+    .run()?;
+
+    Ok(())
 }
 
 fn init_logger(options: &Options) -> Fallible<()> {
@@ -82,19 +116,20 @@ fn validate_bip39_word(word: web::Path<String>) -> impl Responder {
     result
 }
 
-// TODO to be replaced with the Prometheus command Context
-struct MyState {
-    counter: u32,
-}
+fn test_state(state: web::Data<Mutex<Context>>) -> impl Responder {
+    let mut state = match state.lock() {
+        Ok(state) => state,
+        Err(e) => {
+            error!("Failed to lock state: {}", e);
+            return HttpResponse::InternalServerError().body("");
+        }
+    };
 
-impl MyState {
-    fn new() -> Self {
-        Self { counter: 0 }
+    match state.create_profile() {
+        Ok(did) => HttpResponse::Ok().body(did.to_string()),
+        Err(e) => {
+            error!("Failed to create profile: {}", e);
+            HttpResponse::InternalServerError().body("")
+        }
     }
-}
-
-fn test_state(state: web::Data<Mutex<MyState>>) -> impl Responder {
-    let mut state = state.lock().unwrap();
-    state.counter += 1;
-    format!("{}", state.counter)
 }

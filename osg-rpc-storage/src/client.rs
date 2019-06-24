@@ -1,6 +1,5 @@
-use std::cell::RefCell;
 use std::io::prelude::*;
-use std::rc::Rc;
+use std::sync::{Arc, Mutex};
 
 use enum_repr::EnumRepr;
 use failure::{bail, err_msg, Fail, Fallible};
@@ -69,7 +68,7 @@ impl<T> FallibleExtension<T> for Fallible<T> {
     }
 }
 
-pub type RpcPtr<R, W> = Rc<RefCell<MsgPackRpc<R, W>>>;
+pub type RpcPtr<R, W> = Arc<Mutex<MsgPackRpc<R, W>>>;
 
 pub struct RpcProfile<R, W> {
     id: ProfileId,
@@ -89,7 +88,9 @@ where
     where
         T: serde::Serialize + std::fmt::Debug,
     {
-        self.rpc.borrow_mut().send_request(method, params)
+        let mut rpc = self.rpc.lock().map_err(|_e| err_msg("Failed to lock stream"))?;
+        let res = rpc.send_request(method, params)?;
+        Ok(res)
     }
 
     pub fn get_node_attribute(&self, key: AttributeId) -> Fallible<Vec<u8>> {

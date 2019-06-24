@@ -38,7 +38,7 @@ fn run() -> Fallible<()> {
         bail!("First you need a profile vault initialized to run {:?}", command);
     }
 
-    let mut vault: Option<Box<ProfileVault>> = None;
+    let mut vault: Option<Box<ProfileVault + Send>> = None;
     if vault_exists {
         info!("Found profile vault, loading {}", vault_path.to_string_lossy());
         vault = Some(Box::new(HdProfileVault::load(&vault_path)?))
