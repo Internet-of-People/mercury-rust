@@ -107,18 +107,22 @@ impl Context {
     // TODO there should be no version of vault getters that panic
     /// # Panic
     /// If there is no vault given to `new`
-    fn vault(&self) -> &ProfileVault {
+    pub fn vault(&self) -> &ProfileVault {
         self.vault.as_ref().unwrap().as_ref()
     }
 
     /// # Panic
     /// If there is no vault given to `new`
-    fn mut_vault(&mut self) -> &mut ProfileVault {
+    pub fn mut_vault(&mut self) -> &mut ProfileVault {
         self.vault.as_mut().unwrap().as_mut()
     }
 
     pub fn take_vault(&mut self) -> Option<Box<ProfileVault + Send>> {
         self.vault.take()
+    }
+
+    pub fn vault_path(&self) -> &PathBuf {
+        &self.vault_path
     }
 
     fn restore_vault(&mut self, phrase: String) -> Fallible<()> {

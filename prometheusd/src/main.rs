@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use actix_cors::Cors;
-use actix_web::{http, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{web, App, HttpResponse, HttpServer, Responder};
 use failure::{err_msg, Fallible};
 use log::*;
 use structopt::StructOpt;
@@ -67,8 +67,8 @@ fn run_daemon(options: Options) -> Fallible<()> {
                 Cors::new()
                     .allowed_origin("*")
                     .allowed_methods(vec!["GET", "POST"])
-//                    .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
-//                    .allowed_header(http::header::CONTENT_TYPE)
+//                    .allowed_headers(vec![actix_web::http::header::AUTHORIZATION, http::header::ACCEPT])
+//                    .allowed_header(actix_web::http::header::CONTENT_TYPE)
                     .max_age(3600),
             )
             .register_data(daemon_state.clone())
@@ -142,6 +142,6 @@ fn test_state(state: web::Data<Mutex<Context>>) -> impl Responder {
 fn test_state_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileId> {
     let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
     let did = state.create_profile()?;
-    //state.vault().save();
+    state.vault().save(state.vault_path())?;
     Ok(did)
 }
