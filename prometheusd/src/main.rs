@@ -3,13 +3,15 @@ mod options;
 use std::sync::Mutex;
 use std::time::Duration;
 
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
-use failure::Fallible;
+use actix_cors::Cors;
+use actix_web::{http, web, App, HttpResponse, HttpServer, Responder};
+use failure::{err_msg, Fallible};
 use log::*;
 use structopt::StructOpt;
 
 use crate::options::Options;
 use claims::api::*;
+use did::model::ProfileId;
 use did::repo::*;
 use did::vault::*;
 use keyvault::Seed;
@@ -61,6 +63,14 @@ fn run_daemon(options: Options) -> Fallible<()> {
 
     HttpServer::new(move || {
         App::new()
+            .wrap(
+                Cors::new()
+                    .allowed_origin("*")
+                    .allowed_methods(vec!["GET", "POST"])
+//                    .allowed_headers(vec![http::header::AUTHORIZATION, http::header::ACCEPT])
+//                    .allowed_header(http::header::CONTENT_TYPE)
+                    .max_age(3600),
+            )
             .register_data(daemon_state.clone())
             .service(
                 web::scope("/vault")
@@ -117,19 +127,21 @@ fn validate_bip39_word(word: web::Path<String>) -> impl Responder {
 }
 
 fn test_state(state: web::Data<Mutex<Context>>) -> impl Responder {
-    let mut state = match state.lock() {
-        Ok(state) => state,
-        Err(e) => {
-            error!("Failed to lock state: {}", e);
-            return HttpResponse::InternalServerError().body("");
+    match test_state_impl(state) {
+        Ok(did) => {
+            debug!("Created profile {}", did);
+            HttpResponse::Ok().body(did.to_string())
         }
-    };
-
-    match state.create_profile() {
-        Ok(did) => HttpResponse::Ok().body(did.to_string()),
         Err(e) => {
             error!("Failed to create profile: {}", e);
             HttpResponse::InternalServerError().body("")
         }
     }
+}
+
+fn test_state_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileId> {
+    let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    let did = state.create_profile()?;
+    //state.vault().save();
+    Ok(did)
 }

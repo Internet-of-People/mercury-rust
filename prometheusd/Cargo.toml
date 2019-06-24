@@ -5,6 +5,7 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 edition = "2018"
 
 [dependencies]
+actix-cors = "*"
 actix-web = "*"
 claims = { path="../claims" }
 did = { path="../did" }
