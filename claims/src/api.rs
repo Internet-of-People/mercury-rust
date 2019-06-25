@@ -125,7 +125,7 @@ impl Context {
         Ok(())
     }
 
-    fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
+    fn restore_vault_impl(&mut self, phrase: String) -> Fallible<()> {
         ensure!(
             self.vault.is_none(),
             r#"You already have an active vault.
@@ -396,7 +396,7 @@ impl Api for Context {
     }
 
     fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
-        self.restore_vault(phrase)
+        self.restore_vault_impl(phrase)
     }
 
     fn restore_all_profiles(&mut self) -> Fallible<(u32, u32)> {

@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use actix_cors::Cors;
-use actix_web::{http::header, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{http::header, middleware, web, App, HttpResponse, HttpServer, Responder};
 use failure::{err_msg, Fallible};
 use log::*;
 use structopt::StructOpt;
@@ -42,7 +42,7 @@ fn run_daemon(options: Options) -> Fallible<()> {
         info!("Found profile vault, loading {}", vault_path.to_string_lossy());
         vault = Some(Box::new(HdProfileVault::load(&vault_path)?))
     } else {
-        debug!("No profile vault found");
+        info!("No profile vault found, it'll need initialization");
     }
 
     let local_repo = FileProfileRepository::new(&repo_path)?;
@@ -64,6 +64,7 @@ fn run_daemon(options: Options) -> Fallible<()> {
     HttpServer::new(move || {
         App::new()
             .data(web::JsonConfig::default().limit(65536))
+            .wrap(middleware::Logger::default())
             .wrap(
                 Cors::new()
                     .allowed_origin("*")
@@ -85,11 +86,13 @@ fn run_daemon(options: Options) -> Fallible<()> {
                     ),
             )
             .service(
-                web::scope("/vault").service(
-                    web::resource("/dids")
-                        .route(web::get().to(list_did))
-                        .route(web::post().to(create_did)),
-                ),
+                web::scope("/vault")
+                    .service(web::resource("").route(web::post().to(init_vault)))
+                    .service(
+                        web::resource("/dids")
+                            .route(web::get().to(list_did))
+                            .route(web::post().to(create_did)),
+                    ),
             )
             .default_service(web::to(|| HttpResponse::NotFound()))
     })
@@ -138,6 +141,30 @@ fn validate_bip39_word(word: web::Json<String>) -> impl Responder {
     HttpResponse::Ok().json(is_valid)
 }
 
+// TODO this Fallible -> Responder mapping + logging should be somehow less manual
+fn init_vault(state: web::Data<Mutex<Context>>, words: web::Json<Vec<String>>) -> impl Responder {
+    match init_vault_impl(state, words) {
+        Ok(()) => {
+            debug!("Initialized vault");
+            HttpResponse::Ok().body("")
+        }
+        Err(e) => {
+            error!("Failed to initialize vault: {}", e);
+            HttpResponse::InternalServerError().body("")
+        }
+    }
+}
+
+fn init_vault_impl(
+    state: web::Data<Mutex<Context>>,
+    words: web::Json<Vec<String>>,
+) -> Fallible<()> {
+    // TODO state locking also should not be manual in each function
+    let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    let phrase = words.join(" ");
+    state.restore_vault(phrase)
+}
+
 fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     match list_profiles_impl(state) {
         Ok(dids) => {
@@ -154,6 +181,10 @@ fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
 
 fn list_profiles_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileId>> {
     let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    // TODO this currently panics if vault is uninitialized and stops the Arbiter thread
+    //      but not the whole server.
+    //      1. Context must not panic in normal circumstances
+    //      2. Server should not be in an inconsistent half-stopped state after a panic
     state.list_profiles()
 }
 

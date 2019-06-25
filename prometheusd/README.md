@@ -65,7 +65,17 @@ Response:
 
 ## Vault initialization
 
-TODO
+Initialize a keyvault with a whole seed phrase (i.e. BIP39 word list) as returned by [/bip39/new](#/bip39/new).
+
+Request
+* Endpoint: POST `/vault
+* Parameters: -
+* Headers: -
+* Content: json array of word strings
+
+Response:
+* Status: 200
+* Content: -
 
 
 
