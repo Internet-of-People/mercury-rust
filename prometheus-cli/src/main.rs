@@ -62,10 +62,7 @@ fn run() -> Fallible<()> {
     let command = Box::new(command);
     command.execute(&mut ctx)?;
 
-    let vault_opt = ctx.take_vault();
-    if let Some(vault) = vault_opt {
-        vault.save(&vault_path)?;
-    }
+    ctx.save_vault()?;
     Ok(())
 }
 

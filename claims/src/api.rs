@@ -117,18 +117,17 @@ impl Context {
         self.vault.as_mut().unwrap().as_mut()
     }
 
-    pub fn take_vault(&mut self) -> Option<Box<ProfileVault + Send>> {
-        self.vault.take()
-    }
-
-    pub fn vault_path(&self) -> &PathBuf {
-        &self.vault_path
+    pub fn save_vault(&mut self) -> Fallible<()> {
+        if let Some(ref mut vault) = self.vault {
+            let vault_path = self.vault_path.clone();
+            vault.save(&vault_path)?;
+        }
+        Ok(())
     }
 
     fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
-        let old_vault_op = self.take_vault();
         ensure!(
-            old_vault_op.is_none(),
+            self.vault.is_none(),
             r#"You already have an active vault.
 Please delete {}
 before trying to restore another vault."#,
