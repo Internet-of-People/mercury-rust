@@ -4,7 +4,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use actix_cors::Cors;
-use actix_web::{web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{http::header, web, App, HttpResponse, HttpServer, Responder};
 use failure::{err_msg, Fallible};
 use log::*;
 use structopt::StructOpt;
@@ -63,25 +63,33 @@ fn run_daemon(options: Options) -> Fallible<()> {
 
     HttpServer::new(move || {
         App::new()
+            .data(web::JsonConfig::default().limit(65536))
             .wrap(
                 Cors::new()
                     .allowed_origin("*")
                     .allowed_methods(vec!["GET", "POST"])
-//                    .allowed_headers(vec![actix_web::http::header::AUTHORIZATION, http::header::ACCEPT])
-//                    .allowed_header(actix_web::http::header::CONTENT_TYPE)
+                    .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT])
+                    .allowed_header(header::CONTENT_TYPE)
                     .max_age(3600),
             )
             .register_data(daemon_state.clone())
             .service(
                 web::scope("/bip39")
-                    .service(web::resource("/generate_phrase").to(generate_bip39_phrase))
-                    .service(web::resource("/validate_phrase/{phrase}").to(validate_bip39_phrase))
-                    .service(web::resource("/validate_word/{word}").to(validate_bip39_word)),
+                    .service(web::resource("").route(web::post().to(generate_bip39_phrase)))
+                    .service(
+                        web::resource("/validate_phrase")
+                            .route(web::post().to(validate_bip39_phrase)),
+                    )
+                    .service(
+                        web::resource("/validate_word").route(web::post().to(validate_bip39_word)),
+                    ),
             )
             .service(
-                web::scope("/did")
-                    .service(web::resource("/create").to(create_did))
-                    .service(web::resource("/list").to(list_did)),
+                web::scope("/vault").service(
+                    web::resource("/dids")
+                        .route(web::get().to(list_did))
+                        .route(web::post().to(create_did)),
+                ),
             )
             .default_service(web::to(|| HttpResponse::NotFound()))
     })
@@ -114,22 +122,39 @@ fn init_logger(options: &Options) -> Fallible<()> {
 }
 
 fn generate_bip39_phrase() -> impl Responder {
-    // TODO should this use JSON instead?
-    Seed::generate_bip39()
+    let phrase_str = Seed::generate_bip39();
+    let words = phrase_str.split_whitespace().collect::<Vec<_>>();
+    HttpResponse::Ok().json(words)
 }
 
-fn validate_bip39_phrase(phrase: web::Path<String>) -> impl Responder {
-    match Seed::from_bip39(&phrase as &str) {
-        Ok(_seed) => HttpResponse::Accepted().body(""),
-        // TODO should this use JSON instead?
-        Err(e) => HttpResponse::NotAcceptable().body(e.to_string()),
+fn validate_bip39_phrase(words: web::Json<Vec<String>>) -> impl Responder {
+    let phrase = words.join(" ");
+    let is_valid = Seed::from_bip39(&phrase).is_ok();
+    HttpResponse::Ok().json(is_valid)
+}
+
+fn validate_bip39_word(word: web::Json<String>) -> impl Responder {
+    let is_valid = Seed::check_word(&word);
+    HttpResponse::Ok().json(is_valid)
+}
+
+fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
+    match list_profiles_impl(state) {
+        Ok(dids) => {
+            debug!("Listing {} profiles", dids.len());
+            let did_strs = dids.iter().map(|did| did.to_string()).collect::<Vec<_>>();
+            HttpResponse::Ok().json(did_strs)
+        }
+        Err(e) => {
+            error!("Failed to list profiles: {}", e);
+            HttpResponse::InternalServerError().body("")
+        }
     }
 }
 
-fn validate_bip39_word(word: web::Path<String>) -> impl Responder {
-    let is_valid = Seed::check_word(&word);
-    let result = if is_valid { HttpResponse::Accepted() } else { HttpResponse::NotAcceptable() };
-    result
+fn list_profiles_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileId>> {
+    let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    state.list_profiles()
 }
 
 fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
@@ -150,23 +175,4 @@ fn create_profile_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileId> 
     let did = state.create_profile()?;
     state.save_vault()?;
     Ok(did)
-}
-
-fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
-    match list_profiles_impl(state) {
-        Ok(dids) => {
-            debug!("Listing {} profiles", dids.len());
-            let did_strs = dids.iter().map(|did| did.to_string()).collect::<Vec<_>>();
-            HttpResponse::Ok().json(did_strs)
-        }
-        Err(e) => {
-            error!("Failed to list profiles: {}", e);
-            HttpResponse::InternalServerError().body("")
-        }
-    }
-}
-
-fn list_profiles_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileId>> {
-    let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
-    state.list_profiles()
 }
