@@ -169,6 +169,7 @@ impl Seed {
     }
 }
 
+/// The hashing algorithm used for deriving child keys in SLIP-0010
 pub type HmacSha512 = hmac::Hmac<sha2::Sha512>;
 
 pub trait ExtendedPrivateKey<C: KeyDerivationCrypto + ?Sized> {

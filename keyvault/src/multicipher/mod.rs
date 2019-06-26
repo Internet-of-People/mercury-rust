@@ -77,7 +77,9 @@ macro_rules! erased_type {
     ($(#[$meta:meta])* $v:vis struct $type:ident {}) => {
         $(#[$meta])*
         $v struct $type {
+            #[allow(dead_code)]
             pub(super) suite: CipherSuite,
+            #[allow(dead_code)]
             pub(super) erased: Box<Any + Send>,
         }
     };

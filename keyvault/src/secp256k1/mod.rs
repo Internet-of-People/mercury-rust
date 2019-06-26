@@ -50,9 +50,6 @@ const CHECKSUM_LEN: usize = 4;
 /// ecosystem on several places. Addresses, wallet-import-format, extended public and private
 /// key serialization formats. So this transformation is pulled up here as a free function.
 pub fn to_base58check<D: AsRef<[u8]>>(data: D) -> String {
-    use digest::{FixedOutput, Input};
-    use sha2::Sha256;
-
     let data = data.as_ref();
     let mut inner_hasher = Sha256::default();
     inner_hasher.input(data);
@@ -71,9 +68,6 @@ pub fn to_base58check<D: AsRef<[u8]>>(data: D) -> String {
 /// Decoding string with BASE58 into binary data and verify if the 4-byte checksum at the end
 /// matches the rest of the data. Only the decoded data without checksum will be returned.
 pub fn from_base58check<S: AsRef<str>>(s: S) -> Fallible<Vec<u8>> {
-    use digest::{FixedOutput, Input};
-    use sha2::Sha256;
-
     let checked_data = base_x::decode(multibase::Base58btc.alphabet(), s.as_ref())?;
     let (data, actual_checksum) = checked_data.split_at(checked_data.len() - CHECKSUM_LEN);
 
@@ -95,9 +89,6 @@ pub struct Secp256k1 {}
 
 impl Secp256k1 {
     fn hash_message<D: AsRef<[u8]>>(data: D) -> secp::Message {
-        use digest::FixedOutput;
-        use sha2::Sha256;
-
         let mut hasher = Sha256::default();
         digest::Input::input(&mut hasher, data.as_ref());
         let mut hash = [0u8; secp::util::MESSAGE_SIZE];
