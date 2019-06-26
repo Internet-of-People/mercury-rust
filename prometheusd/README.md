@@ -74,7 +74,7 @@ Request
 * Content: json array of word strings
 
 Response:
-* Status: 200
+* Status: 200 or 400 (wrong phrase)
 * Content: -
 
 
@@ -92,7 +92,7 @@ Request
 * Content: -
 
 Response:
-* Status: 200
+* Status: 200 or 409 (uninitialized vault)
 * Content: array of profile objects found, e.g. `["IezbeWGSY2dqcUBqT8K7R14xr","Iez25N5WZ1Q6TQpgpyYgiu9gTX"]`
 
 TODO content should be something like
@@ -120,7 +120,7 @@ Request
 * Content: -
 
 Response:
-* Status: 200
+* Status: 200 or 409 (uninitialized vault)
 * Content: the newly created DID multihash, e.g. `"Iez25N5WZ1Q6TQpgpyYgiu9gTX"`
 
 

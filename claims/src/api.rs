@@ -89,9 +89,13 @@ pub struct Context {
     explorer: Box<ProfileExplorer + Send>,
 }
 
+const ERR_MSG_VAULT_UNINITIALIZED: &str = "Vault is uninitialized, `restore vault` first";
+
 // TODO !!! The current implementation assumes that though the ProfileRepository
 //      shows an asynchronous interface, in reality all results are ready without waiting.
-//      For real asynchronous repositories this implementation has to be changed.
+//      For real asynchronous repositories this implementation has to be changed,
+//      likely by changing the API itself to be async, or maybe somehow making sure that
+//      the wait() calls below run on a different thread and don't block the running reactor tasks.
 impl Context {
     pub fn new(
         vault_path: PathBuf,
@@ -104,17 +108,18 @@ impl Context {
         Self { vault_path, vault, local_repo, base_repo, remote_repo, explorer }
     }
 
-    // TODO there should be no version of vault getters that panic
-    /// # Panic
-    /// If there is no vault given to `new`
-    pub fn vault(&self) -> &ProfileVault {
-        self.vault.as_ref().unwrap().as_ref()
+    fn vault(&self) -> Fallible<&ProfileVault> {
+        self.vault
+            .as_ref()
+            .map(|v| v.as_ref() as &ProfileVault)
+            .ok_or_else(|| err_msg(ERR_MSG_VAULT_UNINITIALIZED))
     }
 
-    /// # Panic
-    /// If there is no vault given to `new`
-    pub fn mut_vault(&mut self) -> &mut ProfileVault {
-        self.vault.as_mut().unwrap().as_mut()
+    fn mut_vault(&mut self) -> Fallible<&mut ProfileVault> {
+        self.vault
+            .as_mut()
+            .map(|v| v.as_mut() as &mut ProfileVault)
+            .ok_or_else(|| err_msg(ERR_MSG_VAULT_UNINITIALIZED))
     }
 
     pub fn save_vault(&mut self) -> Fallible<()> {
@@ -155,12 +160,10 @@ before trying to restore another vault."#,
     // NOTE needed besides selected_profile() because some operations do not require a profile
     //      to be present in local profile repository, operation still has to work
     fn selected_profile_id(&self, my_profile_option: Option<ProfileId>) -> Fallible<ProfileId> {
-        let profile_id_opt = my_profile_option.or_else(|| self.vault().get_active().ok()?);
+        let profile_id_opt = my_profile_option.or_else(|| self.vault().ok()?.get_active().ok()?);
         let profile_id = match profile_id_opt {
             Some(profile_id) => profile_id,
-            None => {
-                bail!("Command option my_profile_id is unspecified and no active default profile was found")
-            }
+            None => bail!("ProfileId is unspecified and no active default profile was found"),
         };
         info!("Your active profile is {}", profile_id);
         Ok(profile_id)
@@ -179,7 +182,7 @@ before trying to restore another vault."#,
         &mut self,
         profile_id: &ProfileId,
     ) -> Fallible<PrivateProfileData> {
-        self.mut_vault().restore_id(&profile_id)?;
+        self.mut_vault()?.restore_id(&profile_id)?;
         let profile = self.base_repo.get(&profile_id).wait()?;
         self.local_repo.restore(profile.clone())?;
         Ok(profile)
@@ -260,16 +263,16 @@ before trying to restore another vault."#,
 
 impl Api for Context {
     fn list_profiles(&self) -> Fallible<Vec<ProfileId>> {
-        self.vault().list()
+        self.vault()?.list()
     }
 
     fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()> {
-        self.mut_vault().set_active(my_profile_id)?;
+        self.mut_vault()?.set_active(my_profile_id)?;
         Ok(())
     }
 
     fn get_active_profile(&self) -> Fallible<Option<ProfileId>> {
-        self.vault().get_active()
+        self.vault()?.get_active()
     }
 
     // TODO this should also work if profile is not ours and we have no control over it.
@@ -292,7 +295,7 @@ impl Api for Context {
     }
 
     fn create_profile(&mut self) -> Fallible<ProfileId> {
-        let new_profile_key = self.mut_vault().create_key()?;
+        let new_profile_key = self.mut_vault()?.create_key()?;
         let empty_profile = PrivateProfileData::empty(&new_profile_key);
         self.local_repo.set(empty_profile).wait()?;
         Ok(new_profile_key.key_id())
@@ -400,8 +403,8 @@ impl Api for Context {
     }
 
     fn restore_all_profiles(&mut self) -> Fallible<(u32, u32)> {
-        let profiles = self.vault().profiles()?;
-        let len = self.vault().len();
+        let profiles = self.vault()?.profiles()?;
+        let len = self.vault()?.len();
 
         let mut try_count = 0;
         let mut restore_count = 0;

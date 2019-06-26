@@ -150,7 +150,7 @@ fn init_vault(state: web::Data<Mutex<Context>>, words: web::Json<Vec<String>>) -
         }
         Err(e) => {
             error!("Failed to initialize vault: {}", e);
-            HttpResponse::InternalServerError().body("")
+            HttpResponse::BadRequest().body(e.to_string())
         }
     }
 }
@@ -174,7 +174,7 @@ fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
         }
         Err(e) => {
             error!("Failed to list profiles: {}", e);
-            HttpResponse::InternalServerError().body("")
+            HttpResponse::Conflict().body(e.to_string())
         }
     }
 }
@@ -196,7 +196,7 @@ fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
         }
         Err(e) => {
             error!("Failed to create profile: {}", e);
-            HttpResponse::InternalServerError().body("")
+            HttpResponse::Conflict().body(e.to_string())
         }
     }
 }
