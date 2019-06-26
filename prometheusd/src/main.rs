@@ -7,6 +7,7 @@ use actix_cors::Cors;
 use actix_web::{http::header, middleware, web, App, HttpResponse, HttpServer, Responder};
 use failure::{err_msg, Fallible};
 use log::*;
+use serde_derive::{Deserialize, Serialize};
 use structopt::StructOpt;
 
 use crate::options::Options;
@@ -61,6 +62,9 @@ fn run_daemon(options: Options) -> Fallible<()> {
 
     let daemon_state = web::Data::new(Mutex::new(ctx));
 
+    // TODO The current implementation is not known to ever panic. However,
+    //      if it was then the Arbiter thread would stop but not the whole server.
+    //      The server should not be in an inconsistent half-stopped state after any panic.
     HttpServer::new(move || {
         App::new()
             .data(web::JsonConfig::default().limit(65536))
@@ -96,6 +100,7 @@ fn run_daemon(options: Options) -> Fallible<()> {
             )
             .default_service(web::to(|| HttpResponse::NotFound()))
     })
+    .workers(1) // default is a thread on each CPU core, but we're serving on localhost only
     .bind(&options.listen_on)?
     .run()?;
 
@@ -162,15 +167,23 @@ fn init_vault_impl(
     // TODO state locking also should not be manual in each function
     let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
     let phrase = words.join(" ");
-    state.restore_vault(phrase)
+    state.restore_vault(phrase)?;
+    state.save_vault()
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+struct ProfileEntry {
+    id: String,
+    alias: String,
+    avatar: Vec<u8>,
+    state: String,
 }
 
 fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     match list_profiles_impl(state) {
         Ok(dids) => {
             debug!("Listing {} profiles", dids.len());
-            let did_strs = dids.iter().map(|did| did.to_string()).collect::<Vec<_>>();
-            HttpResponse::Ok().json(did_strs)
+            HttpResponse::Ok().json(dids)
         }
         Err(e) => {
             error!("Failed to list profiles: {}", e);
@@ -179,13 +192,19 @@ fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn list_profiles_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileId>> {
+fn list_profiles_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileEntry>> {
     let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
-    // TODO this currently panics if vault is uninitialized and stops the Arbiter thread
-    //      but not the whole server.
-    //      1. Context must not panic in normal circumstances
-    //      2. Server should not be in an inconsistent half-stopped state after a panic
-    state.list_profiles()
+    state.list_profiles().map(|ids| {
+        ids.iter()
+            .enumerate()
+            .map(|(idx, profile_id)| ProfileEntry {
+                id: profile_id.to_string(),
+                alias: format!("TODO {}. profile", idx),
+                avatar: vec![],
+                state: "TODO".to_owned(),
+            })
+            .collect::<Vec<_>>()
+    })
 }
 
 fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {

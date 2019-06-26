@@ -93,18 +93,16 @@ Request
 
 Response:
 * Status: 200 or 409 (uninitialized vault)
-* Content: array of profile objects found, e.g. `["IezbeWGSY2dqcUBqT8K7R14xr","Iez25N5WZ1Q6TQpgpyYgiu9gTX"]`
-
-TODO content should be something like
+* Content: array of profile objects found, e.g.
 ```json
 [
   {
-	"id": "multihash string",
-	"alias": "string",
-	"avatar": "TODO",
-	"status": "TODO",
+    "id":"Iez24XMd3BfPn5LAJdGdvZp87n",
+    "alias":"TODO 0. profile",
+    "avatar":[],
+    "state":"TODO",
   },
-  { ... }
+  {...}
 ]
 ```
 

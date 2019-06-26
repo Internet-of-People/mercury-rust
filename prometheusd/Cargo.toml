@@ -14,4 +14,6 @@ keyvault = { path="../keyvault" }
 log = "*"
 log4rs = "*"
 osg-rpc-storage = { path="../osg-rpc-storage" }
+serde = "*"
+serde_derive = "*"
 structopt = "*"
