@@ -7,7 +7,7 @@ use log::*;
 
 use crate::model::*;
 use did::repo::*;
-use did::vault::{self, ProfileVault};
+use did::vault::{self, ProfileAlias, ProfileVault};
 use keyvault::PublicKey as KeyVaultPublicKey;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
@@ -29,6 +29,7 @@ impl FromStr for ProfileRepositoryKind {
     }
 }
 
+// TODO expose alias and sync state of profile here
 pub trait Api {
     fn restore_vault(&mut self, phrase: String) -> Fallible<()>;
     fn restore_all_profiles(&mut self) -> Fallible<(u32, u32)>;
@@ -40,7 +41,7 @@ pub trait Api {
     ) -> Fallible<PrivateProfileData>;
     fn list_profiles(&self) -> Fallible<Vec<ProfileId>>;
 
-    fn create_profile(&mut self) -> Fallible<ProfileId>;
+    fn create_profile(&mut self, alias: ProfileAlias) -> Fallible<ProfileId>;
     fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()>;
     fn get_active_profile(&self) -> Fallible<Option<ProfileId>>;
 
@@ -294,8 +295,8 @@ impl Api for Context {
         Ok(profile)
     }
 
-    fn create_profile(&mut self) -> Fallible<ProfileId> {
-        let new_profile_key = self.mut_vault()?.create_key()?;
+    fn create_profile(&mut self, alias: ProfileAlias) -> Fallible<ProfileId> {
+        let new_profile_key = self.mut_vault()?.create_key(alias)?;
         let empty_profile = PrivateProfileData::empty(&new_profile_key);
         self.local_repo.set(empty_profile).wait()?;
         Ok(new_profile_key.key_id())

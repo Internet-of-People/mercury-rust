@@ -1,7 +1,7 @@
 use std::fs::File;
 use std::path::PathBuf;
 
-use failure::{bail, ensure, Fallible};
+use failure::{bail, ensure, err_msg, Fallible};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 
@@ -42,10 +42,16 @@ impl MercurySecrets {
     }
 }
 
+pub type ProfileAlias = String;
+
 pub trait ProfileVault {
     fn list(&self) -> Fallible<Vec<ProfileId>>;
-    fn create_key(&mut self) -> Fallible<PublicKey>;
+    fn create_key(&mut self, alias: ProfileAlias) -> Fallible<PublicKey>;
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()>;
+
+    fn alias_by_id(&self, id: &ProfileId) -> Fallible<ProfileAlias>;
+    fn id_by_alias(&self, alias: &ProfileAlias) -> Fallible<ProfileId>;
+    fn set_alias(&mut self, id: ProfileId, alias: ProfileAlias) -> Fallible<()>;
 
     fn get_active(&self) -> Fallible<Option<ProfileId>>;
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
@@ -56,7 +62,7 @@ pub trait ProfileVault {
     fn len(&self) -> usize;
 
     // TODO this should not be on this interface on the long run.
-    //      Used for saving vault state when CLI finished.
+    //      Used for saving vault state on a change.
     fn save(&self, filename: &PathBuf) -> Fallible<()>;
 }
 
@@ -67,30 +73,41 @@ pub struct HdProfileVault {
     pub seed: Seed,
     pub next_idx: i32,
     pub active_idx: Option<i32>,
+    pub aliases: Vec<String>,
 }
 
 impl HdProfileVault {
     pub fn create(seed: Seed) -> Self {
         info!("Initializing new vault");
-        Self { seed, next_idx: Default::default(), active_idx: Option::None }
-    }
-
-    pub fn index_of(&self, id: &ProfileId) -> Option<usize> {
-        self.list().ok().and_then(|v| v.iter().position(|candidate_id| candidate_id == id))
+        Self { seed, next_idx: Default::default(), active_idx: Option::None, aliases: vec![] }
     }
 
     pub fn load(filename: &PathBuf) -> Fallible<Self> {
         trace!("Loading profile vault from {:?}", filename);
         let vault_file = File::open(filename)?;
-        //let vault: Self = serde_json::from_reader(&vault_file)?;
-        let vault: Self = bincode::deserialize_from(vault_file)?;
+        let vault: Self = serde_json::from_reader(&vault_file)?;
+        //let vault: Self = bincode::deserialize_from(vault_file)?;
         ensure!(vault.next_idx >= 0, "next_idx cannot be negative");
         if let Some(active) = vault.active_idx {
             ensure!(active >= 0, "active_idx cannot be negative");
             ensure!(active < vault.next_idx, "active_idx cannot exceed last profile index");
         }
+        ensure!(vault.next_idx as usize == vault.aliases.len(), "an alias must exist for each id");
+
+        use std::{collections::HashSet, iter::FromIterator};
+        let unique_aliases: HashSet<String> = HashSet::from_iter(vault.aliases.iter().cloned());
+        ensure!(vault.aliases.len() == unique_aliases.len(), "all aliases must be unique");
 
         Ok(vault)
+    }
+
+    // TODO this should not be exposed, it's more like an implementation detail
+    pub fn index_of_id(&self, id: &ProfileId) -> Option<usize> {
+        self.list().ok().and_then(|v| v.iter().position(|candidate_id| candidate_id == id))
+    }
+
+    fn index_of_alias(&self, alias: &ProfileAlias) -> Option<usize> {
+        self.aliases.iter().position(|a| a == alias)
     }
 
     fn list_range(&self, range: std::ops::Range<i32>) -> Fallible<Vec<ProfileId>> {
@@ -127,16 +144,19 @@ impl ProfileVault for HdProfileVault {
         self.list_range(0..self.next_idx)
     }
 
-    fn create_key(&mut self) -> Fallible<PublicKey> {
+    fn create_key(&mut self, alias: ProfileAlias) -> Fallible<PublicKey> {
+        ensure!(!self.aliases.contains(&alias), "the specified alias must be unique");
+        ensure!(self.aliases.len() == self.next_idx as usize, "an alias must exist for each id");
         let key = self.profiles()?.public_key(self.next_idx)?;
         self.active_idx = Option::Some(self.next_idx);
+        self.aliases.push(alias);
         self.next_idx += 1;
         debug!("Setting active profile to {}", key.key_id());
         Ok(key)
     }
 
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()> {
-        if self.index_of(id).is_some() {
+        if self.index_of_id(id).is_some() {
             trace!("Profile id {} is already present in the vault", id);
             return Ok(());
         }
@@ -160,6 +180,31 @@ impl ProfileVault for HdProfileVault {
         bail!("{} is not owned by this seed", id);
     }
 
+    fn alias_by_id(&self, id: &ProfileId) -> Fallible<ProfileAlias> {
+        let idx = self.index_of_id(id).ok_or_else(|| err_msg("id is not found in vault"))?;
+        self.aliases
+            .get(idx)
+            .map(|v| v.to_owned())
+            .ok_or_else(|| err_msg("Implementation error: alias not found for generated id"))
+    }
+
+    fn id_by_alias(&self, alias: &ProfileAlias) -> Fallible<ProfileId> {
+        let idx =
+            self.index_of_alias(alias).ok_or_else(|| err_msg("alias is not found in vault"))?;
+        self.list()?
+            .get(idx)
+            .map(|v| v.to_owned())
+            .ok_or_else(|| err_msg("Implementation error: id not found for existing alias"))
+    }
+
+    fn set_alias(&mut self, id: ProfileId, alias: ProfileAlias) -> Fallible<()> {
+        let idx = self.index_of_id(&id).ok_or_else(|| err_msg("id is not found in vault"))?;
+        self.aliases
+            .get_mut(idx)
+            .map(|a| *a = alias)
+            .ok_or_else(|| err_msg("Implementation error: alias not found for generated id"))
+    }
+
     fn get_active(&self) -> Fallible<Option<ProfileId>> {
         if let Some(idx) = self.active_idx {
             Ok(Option::Some(self.profiles()?.id(idx)?))
@@ -169,7 +214,7 @@ impl ProfileVault for HdProfileVault {
     }
 
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()> {
-        if let Some(idx) = self.index_of(id) {
+        if let Some(idx) = self.index_of_id(id) {
             self.active_idx = Option::Some(idx as i32);
             Ok(())
         } else {
@@ -185,8 +230,8 @@ impl ProfileVault for HdProfileVault {
         }
 
         let vault_file = File::create(filename)?;
-        //serde_json::to_writer_pretty(&vault_file, self)?;
-        bincode::serialize_into(vault_file, self)?;
+        serde_json::to_writer_pretty(&vault_file, self)?;
+        //bincode::serialize_into(vault_file, self)?;
         Ok(())
     }
 }

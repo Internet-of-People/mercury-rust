@@ -222,7 +222,8 @@ fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
 
 fn create_profile_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileId> {
     let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
-    let did = state.create_profile()?;
+    let alias = state.list_profiles()?.len().to_string();
+    let did = state.create_profile(alias)?;
     state.save_vault()?;
     Ok(did)
 }

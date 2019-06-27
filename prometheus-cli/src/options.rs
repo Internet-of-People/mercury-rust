@@ -219,9 +219,14 @@ impl Command for ShowCommand {
 
 #[derive(Debug, StructOpt)]
 pub enum CreateCommand {
+    // TODO how to specify to keep current or new profile should be active/default
     #[structopt(name = "profile")]
     /// Create profile
-    Profile, // TODO how to specify to keep current or new profile should be active/default
+    Profile {
+        #[structopt()]
+        /// Human-readable name of the new profile for easier identification
+        name: Option<String>,
+    },
 
     #[structopt(name = "link")]
     /// Create link, i.e. follow/subscribe to a remote profile
@@ -241,8 +246,10 @@ impl Command for CreateCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         use CreateCommand::*;
         match *self {
-            Profile => {
-                let profile_id = api.create_profile()?;
+            Profile { name } => {
+                let profiles = api.list_profiles()?;
+                let alias = name.unwrap_or_else(|| profiles.len().to_string());
+                let profile_id = api.create_profile(alias)?;
                 info!("Created and activated profile with id {}", profile_id);
             }
             Link { my_profile_id, peer_profile_id } => {

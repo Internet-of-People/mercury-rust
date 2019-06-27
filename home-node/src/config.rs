@@ -76,10 +76,11 @@ impl Config {
         let profile_id = cli.profile_id.or_else(|| vault.get_active().expect("Failed to get active profile") )
             .expect("Profile id is needed for authenticating the node, but neither command line argument is specified, nor active profile is set in vault");
         let key_idx = vault
-            .index_of(&profile_id)
+            // TODO should use an operation publicly available on ProfileVault, not of a specific implementation
+            .index_of_id(&profile_id)
             .expect(&format!("Specified id is not found in vault: {}", profile_id));
         let private_key =
-            private_keys.private_key(key_idx as i32).expect("Failed to get first key");
+            private_keys.private_key(key_idx as i32).expect("Failed to get private key");
         let signer =
             Rc::new(crypto::PrivateKeySigner::new(private_key).expect("Failed to create signer"));
 
