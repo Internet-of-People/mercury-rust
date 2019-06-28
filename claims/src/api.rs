@@ -42,6 +42,11 @@ pub trait Api {
     fn list_profiles(&self) -> Fallible<Vec<(ProfileAlias, ProfileId)>>;
 
     fn create_profile(&mut self, alias: ProfileAlias) -> Fallible<ProfileId>;
+    fn rename_profile(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        alias: ProfileAlias,
+    ) -> Fallible<()>;
     fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()>;
     fn get_active_profile(&self) -> Fallible<Option<ProfileId>>;
 
@@ -300,6 +305,15 @@ impl Api for Context {
         let empty_profile = PrivateProfileData::empty(&new_profile_key);
         self.local_repo.set(empty_profile).wait()?;
         Ok(new_profile_key.key_id())
+    }
+
+    fn rename_profile(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        alias: ProfileAlias,
+    ) -> Fallible<()> {
+        let profile_id = self.selected_profile(my_profile_id)?.id();
+        self.mut_vault()?.set_alias(profile_id, alias)
     }
 
     fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> Fallible<PrivateProfileData> {

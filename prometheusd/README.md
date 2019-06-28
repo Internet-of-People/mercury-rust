@@ -97,12 +97,17 @@ Response:
 ```json
 [
   {
-    "id":"Iez24XMd3BfPn5LAJdGdvZp87n",
-    "alias":"TODO 0. profile",
+    "id":"IezbeWGSY2dqcUBqT8K7R14xr",
+    "alias":"Mr Anderson",
     "avatar":[],
     "state":"TODO",
   },
-  {...}
+  {
+    "id":"Iez25N5WZ1Q6TQpgpyYgiu9gTX",
+    "alias":"Neo",
+    "avatar":[],
+    "state":"TODO",  
+  }
 ]
 ```
 
@@ -120,6 +125,23 @@ Request
 Response:
 * Status: 200 or 409 (uninitialized vault)
 * Content: the newly created DID multihash, e.g. `"Iez25N5WZ1Q6TQpgpyYgiu9gTX"`
+
+### Rename profile
+
+Specify a new alias for an already existing profile.
+
+TODO: should this use PUT instead to be more REST conformant? 
+
+Request
+* Endpoint: POST `/vault/dids/{did}/alias`
+* Parameters: `did` is the identifier of an existing profile
+* Headers: -
+* Content: new alias as string, e.g. "Family"
+
+Response:
+* Status: 200 or 409 (uninitialized vault)
+* Content: -
+
 
 
 ## Claims

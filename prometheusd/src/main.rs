@@ -96,7 +96,8 @@ fn run_daemon(options: Options) -> Fallible<()> {
                         web::resource("/dids")
                             .route(web::get().to(list_did))
                             .route(web::post().to(create_did)),
-                    ),
+                    )
+                    .service(web::resource("/dids/{did}/alias").route(web::post().to(rename_did))),
             )
             .default_service(web::to(|| HttpResponse::NotFound()))
     })
@@ -180,7 +181,7 @@ struct ProfileEntry {
 }
 
 fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
-    match list_profiles_impl(state) {
+    match list_dids_impl(state) {
         Ok(dids) => {
             debug!("Listing {} profiles", dids.len());
             HttpResponse::Ok().json(dids)
@@ -192,7 +193,7 @@ fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn list_profiles_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileEntry>> {
+fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileEntry>> {
     let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
     state.list_profiles().map(|ids| {
         ids.iter()
@@ -207,7 +208,7 @@ fn list_profiles_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileE
 }
 
 fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
-    match create_profile_impl(state) {
+    match create_dids_impl(state) {
         Ok(did) => {
             debug!("Created profile {}", did);
             HttpResponse::Ok().json(did.to_string())
@@ -219,10 +220,41 @@ fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn create_profile_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileId> {
+fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileId> {
     let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
     let alias = state.list_profiles()?.len().to_string();
     let did = state.create_profile(alias)?;
     state.save_vault()?;
     Ok(did)
+}
+
+fn rename_did(
+    state: web::Data<Mutex<Context>>,
+    did: web::Path<String>,
+    //did: web::Path<ProfileId>,
+    name: web::Json<ProfileAlias>,
+) -> impl Responder {
+    match rename_did_impl(state, did.clone(), name.clone()) {
+        Ok(()) => {
+            debug!("Renamed profile {} to {}", did, name);
+            HttpResponse::Ok().body("")
+        }
+        Err(e) => {
+            error!("Failed to rename profile: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+fn rename_did_impl(
+    state: web::Data<Mutex<Context>>,
+    did_str: String,
+    //did: ProfileId,
+    name: ProfileAlias,
+) -> Fallible<()> {
+    let did = did_str.parse()?;
+    let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    state.rename_profile(Some(did), name)?;
+    state.save_vault()?;
+    Ok(())
 }
