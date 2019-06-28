@@ -39,7 +39,7 @@ pub trait Api {
         id: Option<ProfileId>,
         repo_kind: ProfileRepositoryKind,
     ) -> Fallible<PrivateProfileData>;
-    fn list_profiles(&self) -> Fallible<Vec<ProfileId>>;
+    fn list_profiles(&self) -> Fallible<Vec<(ProfileAlias, ProfileId)>>;
 
     fn create_profile(&mut self, alias: ProfileAlias) -> Fallible<ProfileId>;
     fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()>;
@@ -263,7 +263,7 @@ before trying to restore another vault."#,
 }
 
 impl Api for Context {
-    fn list_profiles(&self) -> Fallible<Vec<ProfileId>> {
+    fn list_profiles(&self) -> Fallible<Vec<(ProfileAlias, ProfileId)>> {
         self.vault()?.list()
     }
 

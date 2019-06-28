@@ -45,7 +45,7 @@ impl MercurySecrets {
 pub type ProfileAlias = String;
 
 pub trait ProfileVault {
-    fn list(&self) -> Fallible<Vec<ProfileId>>;
+    fn list(&self) -> Fallible<Vec<(ProfileAlias, ProfileId)>>;
     fn create_key(&mut self, alias: ProfileAlias) -> Fallible<PublicKey>;
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()>;
 
@@ -103,19 +103,26 @@ impl HdProfileVault {
 
     // TODO this should not be exposed, it's more like an implementation detail
     pub fn index_of_id(&self, id: &ProfileId) -> Option<usize> {
-        self.list().ok().and_then(|v| v.iter().position(|candidate_id| candidate_id == id))
+        let profiles = self.profiles().ok()?;
+        for idx in 0..self.next_idx {
+            if profiles.id(idx).ok()? == *id {
+                return Some(idx as usize);
+            }
+        }
+        None
     }
 
-    fn index_of_alias(&self, alias: &ProfileAlias) -> Option<usize> {
-        self.aliases.iter().position(|a| a == alias)
-    }
+    //    fn index_of_alias(&self, alias: &ProfileAlias) -> Option<usize> {
+    //        self.list().ok().and_then(|v| v.iter().position(|pair| pair.0 == *alias))
+    //    }
 
-    fn list_range(&self, range: std::ops::Range<i32>) -> Fallible<Vec<ProfileId>> {
+    fn list_range(&self, range: std::ops::Range<i32>) -> Fallible<Vec<(ProfileAlias, ProfileId)>> {
         let profiles = self.profiles()?;
         let mut v = Vec::with_capacity(range.len());
         for idx in range {
             let profile_id = profiles.id(idx)?;
-            v.push(profile_id);
+            let alias = self.alias_by_id(&profile_id)?;
+            v.push((alias, profile_id));
         }
         Ok(v)
     }
@@ -140,7 +147,7 @@ impl ProfileVault for HdProfileVault {
         Ok(MercuryProfiles { mercury_xsk: self.mercury_xsk()? })
     }
 
-    fn list(&self) -> Fallible<Vec<ProfileId>> {
+    fn list(&self) -> Fallible<Vec<(ProfileAlias, ProfileId)>> {
         self.list_range(0..self.next_idx)
     }
 
@@ -189,12 +196,12 @@ impl ProfileVault for HdProfileVault {
     }
 
     fn id_by_alias(&self, alias: &ProfileAlias) -> Fallible<ProfileId> {
-        let idx =
-            self.index_of_alias(alias).ok_or_else(|| err_msg("alias is not found in vault"))?;
-        self.list()?
-            .get(idx)
-            .map(|v| v.to_owned())
-            .ok_or_else(|| err_msg("Implementation error: id not found for existing alias"))
+        let profiles = self.list()?;
+        profiles
+            .iter()
+            .filter_map(|pair| if pair.0 == *alias { Some(pair.1.clone()) } else { None })
+            .nth(0)
+            .ok_or_else(|| err_msg("alias is not found in vault"))
     }
 
     fn set_alias(&mut self, id: ProfileId, alias: ProfileAlias) -> Fallible<()> {

@@ -196,10 +196,9 @@ fn list_profiles_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileE
     let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
     state.list_profiles().map(|ids| {
         ids.iter()
-            .enumerate()
-            .map(|(idx, profile_id)| ProfileEntry {
+            .map(|(alias, profile_id)| ProfileEntry {
                 id: profile_id.to_string(),
-                alias: format!("TODO {}. profile", idx),
+                alias: alias.to_owned(),
                 avatar: vec![],
                 state: "TODO".to_owned(),
             })

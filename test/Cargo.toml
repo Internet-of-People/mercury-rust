@@ -20,7 +20,7 @@ mercury-connect = { path="../connect" }
 mercury-home-node = { path="../home-node" }
 multiaddr = "*"
 multihash = "*"
-rand = "*"
+rand = "0.6"
 sha2 = "*"
 tokio-core = "0.1"
 tokio-io = "*"

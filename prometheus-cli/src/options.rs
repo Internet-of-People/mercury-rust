@@ -147,10 +147,10 @@ impl Command for ListCommand {
         use ListCommand::*;
         match *self {
             Profiles => {
-                let profile_ids = api.list_profiles()?;
-                info!("You have {} profiles", profile_ids.len());
+                let profiles = api.list_profiles()?;
+                info!("You have {} profiles", profiles.len());
                 let active_profile_opt = api.get_active_profile()?;
-                for (i, profile_id) in profile_ids.iter().enumerate() {
+                for (alias, profile_id) in profiles.iter() {
                     let status = match active_profile_opt {
                         Some(ref active_profile) => {
                             if active_profile == profile_id {
@@ -161,7 +161,7 @@ impl Command for ListCommand {
                         }
                         None => "",
                     };
-                    info!("  {}: {}{}", i, profile_id, status);
+                    info!("  {}: {}{}", alias, profile_id, status);
                 }
             }
             IncomingLinks { my_profile_id } => {
