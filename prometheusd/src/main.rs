@@ -12,7 +12,6 @@ use structopt::StructOpt;
 
 use crate::options::Options;
 use claims::api::*;
-use did::model::ProfileId;
 use did::repo::*;
 use did::vault::*;
 use keyvault::Seed;
@@ -209,9 +208,9 @@ fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileEntry
 
 fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     match create_dids_impl(state) {
-        Ok(did) => {
-            debug!("Created profile {}", did);
-            HttpResponse::Ok().json(did.to_string())
+        Ok(entry) => {
+            debug!("Created profile {} with alias {}", entry.id, entry.alias);
+            HttpResponse::Ok().json(entry)
         }
         Err(e) => {
             error!("Failed to create profile: {}", e);
@@ -220,12 +219,15 @@ fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileId> {
+fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileEntry> {
     let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
-    let alias = state.list_profiles()?.len().to_string();
-    let did = state.create_profile(alias)?;
+    //let alias = state.list_profiles()?.len().to_string();
+    // TODO this might provide worse performance than keeping a generator instance in the state,
+    //      but that is probably not significant in practice
+    let alias = names::Generator::default().next().unwrap_or("FAILING FAILURE".to_owned());
+    let did = state.create_profile(alias.clone())?;
     state.save_vault()?;
-    Ok(did)
+    Ok(ProfileEntry { id: did.to_string(), alias, avatar: vec![], state: "TODO".to_owned() })
 }
 
 fn rename_did(

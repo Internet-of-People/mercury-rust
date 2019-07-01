@@ -13,6 +13,7 @@ failure = "*"
 keyvault = { path="../keyvault" }
 log = "*"
 log4rs = "*"
+names = "*"
 osg-rpc-storage = { path="../osg-rpc-storage" }
 serde = "*"
 serde_derive = "*"

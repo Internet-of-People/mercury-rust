@@ -29,7 +29,7 @@ impl FromStr for ProfileRepositoryKind {
     }
 }
 
-// TODO expose alias and sync state of profile here
+// TODO expose sync state of profile here
 pub trait Api {
     fn restore_vault(&mut self, phrase: String) -> Fallible<()>;
     fn restore_all_profiles(&mut self) -> Fallible<(u32, u32)>;

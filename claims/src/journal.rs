@@ -33,8 +33,8 @@ impl ProfileAuthJournal for InMemoryProfileAuthJournal {
 
     fn transactions(
         &self,
-        id: &ProfileId,
-        until_state: Option<JournalState>,
+        _id: &ProfileId,
+        _until_state: Option<JournalState>,
     ) -> AsyncFallible<Vec<ProfileTransaction>> {
         Box::new(Ok(vec![]).into_future())
     }

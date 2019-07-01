@@ -124,7 +124,15 @@ Request
 
 Response:
 * Status: 200 or 409 (uninitialized vault)
-* Content: the newly created DID multihash, e.g. `"Iez25N5WZ1Q6TQpgpyYgiu9gTX"`
+* Content: details of the newly created DID object, e.g.
+```json
+{
+  "id":"IezbeWGSY2dqcUBqT8K7R14xr",
+  "alias":"disco-deer",
+  "avatar":[],
+  "state":"TODO",
+}
+```
 
 ### Rename profile
 

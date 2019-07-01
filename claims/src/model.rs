@@ -44,7 +44,7 @@ impl ProfileAuthData {
         }
     }
 
-    pub fn apply(&mut self, ops: &[ProfileAuthOperation]) {
+    pub fn apply(&mut self, _ops: &[ProfileAuthOperation]) {
         unimplemented!()
     }
 
