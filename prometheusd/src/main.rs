@@ -175,6 +175,7 @@ fn init_vault_impl(
 struct ProfileEntry {
     id: String,
     alias: String,
+    #[serde(with = "serde_bytes")]
     avatar: Vec<u8>,
     state: String,
 }
@@ -221,13 +222,23 @@ fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
 
 fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileEntry> {
     let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+
     //let alias = state.list_profiles()?.len().to_string();
-    // TODO this might provide worse performance than keeping a generator instance in the state,
-    //      but that is probably not significant in practice
+    // TODO this name generation is not deterministic (found no proper lib), is that required?
+    // TODO instantiating generators here might provide worse performance than keeping
+    //      a generator instance in the state, but that is probably not significant in practice
     let alias = names::Generator::default().next().unwrap_or("FAILING FAILURE".to_owned());
     let did = state.create_profile(alias.clone())?;
+
+    let mut avatar_png = Vec::new();
+    blockies::Ethereum::default()
+        .create_icon(&mut avatar_png, &did.to_bytes())
+        .map_err(|e| err_msg(format!("Failed to generate default profile icon: {:?}", e)))?;
+    //std::fs::write(format!("/tmp/{}.png", alias), &avatar_png)?;
+    // TODO save generated default avatar picture for new profile
+
     state.save_vault()?;
-    Ok(ProfileEntry { id: did.to_string(), alias, avatar: vec![], state: "TODO".to_owned() })
+    Ok(ProfileEntry { id: did.to_string(), alias, avatar: avatar_png, state: "TODO".to_owned() })
 }
 
 fn rename_did(
