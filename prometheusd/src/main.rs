@@ -4,9 +4,10 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use actix_cors::Cors;
-use actix_web::{http::header, middleware, web, App, HttpResponse, HttpServer, Responder};
+use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 use failure::{err_msg, Fallible};
 use log::*;
+use serde::Serializer;
 use serde_derive::{Deserialize, Serialize};
 use structopt::StructOpt;
 
@@ -25,7 +26,7 @@ fn main() -> Fallible<()> {
     match std::thread::spawn(move || run_daemon(options)).join() {
         Err(e) => info!("Daemon thread failed with error: {:?}", e),
         Ok(Err(e)) => info!("Web server failed with error: {:?}", e),
-        Ok(Ok(())) => info!("Gracefully shut down"),
+        Ok(Ok(())) => info!("Graceful shut down"),
     };
 
     Ok(())
@@ -68,14 +69,7 @@ fn run_daemon(options: Options) -> Fallible<()> {
         App::new()
             .data(web::JsonConfig::default().limit(65536))
             .wrap(middleware::Logger::default())
-            .wrap(
-                Cors::new()
-                    .allowed_origin("*")
-                    .allowed_methods(vec!["GET", "POST"])
-                    .allowed_headers(vec![header::AUTHORIZATION, header::ACCEPT])
-                    .allowed_header(header::CONTENT_TYPE)
-                    .max_age(3600),
-            )
+            .wrap(Cors::default())
             .register_data(daemon_state.clone())
             .service(
                 web::scope("/bip39")
@@ -96,7 +90,7 @@ fn run_daemon(options: Options) -> Fallible<()> {
                             .route(web::get().to(list_did))
                             .route(web::post().to(create_did)),
                     )
-                    .service(web::resource("/dids/{did}/alias").route(web::post().to(rename_did))),
+                    .service(web::resource("/dids/{did}/alias").route(web::put().to(rename_did))),
             )
             .default_service(web::to(|| HttpResponse::NotFound()))
     })
@@ -151,7 +145,7 @@ fn init_vault(state: web::Data<Mutex<Context>>, words: web::Json<Vec<String>>) -
     match init_vault_impl(state, words) {
         Ok(()) => {
             debug!("Initialized vault");
-            HttpResponse::Ok().body("")
+            HttpResponse::Created().body("")
         }
         Err(e) => {
             error!("Failed to initialize vault: {}", e);
@@ -175,10 +169,18 @@ fn init_vault_impl(
 struct ProfileEntry {
     id: String,
     alias: String,
-    #[serde(with = "serde_bytes")]
+    #[serde(serialize_with = "serialize_avatar")]
     avatar: Vec<u8>,
     state: String,
 }
+
+pub fn serialize_avatar<S: Serializer>(avatar: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error> {
+    // About the format used here, see https://en.wikipedia.org/wiki/Data_URI_scheme
+    let data_uri = format!("data:image/png;base64,{}", base64::encode(avatar));
+    serializer.serialize_str(&data_uri)
+}
+
+//fn deserialize_avatar<'de, D>(D) -> Result<T, D::Error> where D: Deserializer<'de>
 
 fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     match list_dids_impl(state) {
@@ -211,7 +213,7 @@ fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     match create_dids_impl(state) {
         Ok(entry) => {
             debug!("Created profile {} with alias {}", entry.id, entry.alias);
-            HttpResponse::Ok().json(entry)
+            HttpResponse::Created().json(entry)
         }
         Err(e) => {
             error!("Failed to create profile: {}", e);
@@ -224,7 +226,7 @@ fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileEntry> 
     let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
 
     //let alias = state.list_profiles()?.len().to_string();
-    // TODO this name generation is not deterministic (found no proper lib), is that required?
+    // TODO this name generation is not deterministic, but should be (found no proper lib)
     // TODO instantiating generators here might provide worse performance than keeping
     //      a generator instance in the state, but that is probably not significant in practice
     let alias = names::Generator::default().next().unwrap_or("FAILING FAILURE".to_owned());

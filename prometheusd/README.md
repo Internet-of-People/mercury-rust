@@ -14,7 +14,7 @@ TODO
 ## BIP39 seed phrases
 
 
-### <a name="/bip39/new"/> Generate seed phrase
+### <a name="/bip39"/> Generate seed phrase
 
 Generate random entropy for a new keyvault, i.e. a new BIP39 "cold wallet" for the user.  
 
@@ -47,7 +47,7 @@ Response:
 
 ### Validate seed phrase
 
-Validate a whole seed phrase (i.e. BIP39 word list) as returned by [/bip39/new](#/bip39/new).
+Validate a whole seed phrase (i.e. BIP39 word list) as returned by [/bip39](#/bip39).
 
 TODO Should we also return an error code or text describing the reason why validation failed?  
 
@@ -65,16 +65,16 @@ Response:
 
 ## Vault initialization
 
-Initialize a keyvault with a whole seed phrase (i.e. BIP39 word list) as returned by [/bip39/new](#/bip39/new).
+Initialize a keyvault with a whole seed phrase (i.e. BIP39 word list) as returned by [/bip39](#/bip39).
 
 Request
-* Endpoint: POST `/vault
+* Endpoint: POST `/vault`
 * Parameters: -
 * Headers: -
 * Content: json array of word strings
 
 Response:
-* Status: 200 or 400 (wrong phrase)
+* Status: 201 or 400 (wrong phrase)
 * Content: -
 
 
@@ -99,13 +99,13 @@ Response:
   {
     "id":"IezbeWGSY2dqcUBqT8K7R14xr",
     "alias":"Mr Anderson",
-    "avatar":[],
+    "avatar":"data:image/png;base64,iVBOR...",
     "state":"TODO",
   },
   {
     "id":"Iez25N5WZ1Q6TQpgpyYgiu9gTX",
     "alias":"Neo",
-    "avatar":[],
+    "avatar":"data:image/png;base64,iVBOR",
     "state":"TODO",  
   }
 ]
@@ -123,13 +123,13 @@ Request
 * Content: -
 
 Response:
-* Status: 200 or 409 (uninitialized vault)
+* Status: 201 or 409 (uninitialized vault)
 * Content: details of the newly created DID object, e.g.
 ```json
 {
   "id":"IezbeWGSY2dqcUBqT8K7R14xr",
   "alias":"disco-deer",
-  "avatar":[],
+  "avatar":"data:image/png;base64,iVBOR",
   "state":"TODO",
 }
 ```
@@ -141,7 +141,7 @@ Specify a new alias for an already existing profile.
 TODO: should this use PUT instead to be more REST conformant? 
 
 Request
-* Endpoint: POST `/vault/dids/{did}/alias`
+* Endpoint: PUT `/vault/dids/{did}/alias`
 * Parameters: `did` is the identifier of an existing profile
 * Headers: -
 * Content: new alias as string, e.g. "Family"

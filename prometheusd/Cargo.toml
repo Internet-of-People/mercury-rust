@@ -7,6 +7,7 @@ edition = "2018"
 [dependencies]
 actix-cors = "*"
 actix-web = "*"
+base64 = "*"
 blockies = "*"
 claims = { path="../claims" }
 did = { path="../did" }
@@ -17,6 +18,5 @@ log4rs = "*"
 names = "*"
 osg-rpc-storage = { path="../osg-rpc-storage" }
 serde = "*"
-serde_bytes = "*"
 serde_derive = "*"
 structopt = "*"
