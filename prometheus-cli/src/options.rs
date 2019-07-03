@@ -150,10 +150,10 @@ impl Command for ListCommand {
                 let profiles = api.list_profiles()?;
                 info!("You have {} profiles", profiles.len());
                 let active_profile_opt = api.get_active_profile()?;
-                for (alias, profile_id) in profiles.iter() {
+                for profile_record in profiles.iter() {
                     let status = match active_profile_opt {
                         Some(ref active_profile) => {
-                            if active_profile == profile_id {
+                            if *active_profile == profile_record.id() {
                                 " (active)"
                             } else {
                                 ""
@@ -161,7 +161,7 @@ impl Command for ListCommand {
                         }
                         None => "",
                     };
-                    info!("  {}: {}{}", alias, profile_id, status);
+                    info!("  {}: {}{}", profile_record.alias(), profile_record.id(), status);
                 }
             }
             IncomingLinks { my_profile_id } => {

@@ -12,13 +12,13 @@ use keyvault::{
     Seed, BIP43_PURPOSE_MERCURY,
 };
 
-// TODO this should work with MPrivateKey to support any key type,
-//      and thus key derivation should be exported to the keyvault::PrivateKey trait
-pub struct MercuryProfiles {
+// TODO exposing public and private keys below should work with MPrivateKey to support
+//      any key type, and thus key derivation should be exported to the keyvault::PrivateKey
+pub struct HdKeys {
     mercury_xsk: EdExtPrivateKey,
 }
 
-impl MercuryProfiles {
+impl HdKeys {
     pub fn public_key(&self, idx: i32) -> Fallible<PublicKey> {
         let profile_xsk = self.mercury_xsk.derive_hardened_child(idx)?;
         let key = profile_xsk.neuter().as_public_key();
@@ -30,11 +30,11 @@ impl MercuryProfiles {
     }
 }
 
-pub struct MercurySecrets {
+pub struct HdSecrets {
     mercury_xsk: EdExtPrivateKey,
 }
 
-impl MercurySecrets {
+impl HdSecrets {
     pub fn private_key(&self, idx: i32) -> Fallible<PrivateKey> {
         let profile_xsk = self.mercury_xsk.derive_hardened_child(idx)?;
         let key = profile_xsk.as_private_key();
@@ -43,22 +43,49 @@ impl MercurySecrets {
 }
 
 pub type ProfileAlias = String;
+pub type ProfileMetadata = Vec<u8>;
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub struct ProfileRecord {
+    id: ProfileId,
+    alias: ProfileAlias,
+    metadata: ProfileMetadata,
+    // TODO these might be needed as well soon
+    // pub bip32: String,
+    // pub pubkey: PublicKey,
+}
+
+impl ProfileRecord {
+    pub fn id(&self) -> ProfileId {
+        self.id.to_owned()
+    }
+    pub fn alias(&self) -> ProfileAlias {
+        self.alias.to_owned()
+    }
+    pub fn metadata(&self) -> ProfileMetadata {
+        self.metadata.to_owned()
+    }
+}
 
 pub trait ProfileVault {
-    fn list(&self) -> Fallible<Vec<(ProfileAlias, ProfileId)>>;
     fn create_key(&mut self, alias: ProfileAlias) -> Fallible<PublicKey>;
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()>;
+
+    fn get_active(&self) -> Fallible<Option<ProfileId>>;
+    fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
 
     fn alias_by_id(&self, id: &ProfileId) -> Fallible<ProfileAlias>;
     fn id_by_alias(&self, alias: &ProfileAlias) -> Fallible<ProfileId>;
     fn set_alias(&mut self, id: ProfileId, alias: ProfileAlias) -> Fallible<()>;
 
-    fn get_active(&self) -> Fallible<Option<ProfileId>>;
-    fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
+    fn metadata_by_id(&self, id: &ProfileId) -> Fallible<ProfileMetadata>;
+    fn set_metadata(&mut self, id: ProfileId, data: ProfileMetadata) -> Fallible<()>;
+
+    fn profiles(&self) -> Fallible<Vec<ProfileRecord>>;
 
     // TODO these probably should not be here on the long run, list() is enough in most cases.
     //      Used only for restoring all profiles of a vault with gap detection.
-    fn profiles(&self) -> Fallible<MercuryProfiles>;
+    fn keys(&self) -> Fallible<HdKeys>;
     fn len(&self) -> usize;
 
     // TODO this should not be on this interface on the long run.
@@ -70,16 +97,16 @@ pub const GAP: usize = 20;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct HdProfileVault {
-    pub seed: Seed,
-    pub next_idx: i32,
-    pub active_idx: Option<i32>,
-    pub aliases: Vec<String>,
+    seed: Seed,
+    next_idx: i32,
+    active_idx: Option<i32>,
+    profiles: Vec<ProfileRecord>,
 }
 
 impl HdProfileVault {
     pub fn create(seed: Seed) -> Self {
         info!("Initializing new vault");
-        Self { seed, next_idx: Default::default(), active_idx: Option::None, aliases: vec![] }
+        Self { seed, next_idx: Default::default(), active_idx: Option::None, profiles: vec![] }
     }
 
     pub fn load(filename: &PathBuf) -> Fallible<Self> {
@@ -92,18 +119,19 @@ impl HdProfileVault {
             ensure!(active >= 0, "active_idx cannot be negative");
             ensure!(active < vault.next_idx, "active_idx cannot exceed last profile index");
         }
-        ensure!(vault.next_idx as usize == vault.aliases.len(), "an alias must exist for each id");
+        ensure!(vault.next_idx as usize == vault.profiles.len(), "a record must exist for each id");
 
         use std::{collections::HashSet, iter::FromIterator};
-        let unique_aliases: HashSet<String> = HashSet::from_iter(vault.aliases.iter().cloned());
-        ensure!(vault.aliases.len() == unique_aliases.len(), "all aliases must be unique");
+        let unique_aliases: HashSet<String> =
+            HashSet::from_iter(vault.profiles.iter().map(|rec| rec.alias.to_owned()));
+        ensure!(vault.profiles.len() == unique_aliases.len(), "all aliases must be unique");
 
         Ok(vault)
     }
 
     // TODO this should not be exposed, it's more like an implementation detail
     pub fn index_of_id(&self, id: &ProfileId) -> Option<usize> {
-        let profiles = self.profiles().ok()?;
+        let profiles = self.keys().ok()?;
         for idx in 0..self.next_idx {
             if profiles.id(idx).ok()? == *id {
                 return Some(idx as usize);
@@ -116,15 +144,20 @@ impl HdProfileVault {
     //        self.list().ok().and_then(|v| v.iter().position(|pair| pair.0 == *alias))
     //    }
 
-    fn list_range(&self, range: std::ops::Range<i32>) -> Fallible<Vec<(ProfileAlias, ProfileId)>> {
-        let profiles = self.profiles()?;
-        let mut v = Vec::with_capacity(range.len());
-        for idx in range {
-            let profile_id = profiles.id(idx)?;
-            let alias = self.alias_by_id(&profile_id)?;
-            v.push((alias, profile_id));
-        }
-        Ok(v)
+    fn profile_by_id(&self, id: &ProfileId) -> Fallible<&ProfileRecord> {
+        self.profiles
+            .iter()
+            .filter_map(|rec| if rec.id == *id { Some(rec) } else { None })
+            .nth(0)
+            .ok_or_else(|| err_msg("profile is not found in vault"))
+    }
+
+    fn mut_profile_by_id(&mut self, id: &ProfileId) -> Fallible<&mut ProfileRecord> {
+        self.profiles
+            .iter_mut()
+            .filter_map(|rec| if rec.id == *id { Some(rec) } else { None })
+            .nth(0)
+            .ok_or_else(|| err_msg("profile is not found in vault"))
     }
 
     fn mercury_xsk(&self) -> Fallible<EdExtPrivateKey> {
@@ -133,32 +166,23 @@ impl HdProfileVault {
     }
 
     // TODO this should be exposed in a safer way, at least protected by some password
-    pub fn secrets(&self) -> Fallible<MercurySecrets> {
-        Ok(MercurySecrets { mercury_xsk: self.mercury_xsk()? })
+    pub fn secrets(&self) -> Fallible<HdSecrets> {
+        Ok(HdSecrets { mercury_xsk: self.mercury_xsk()? })
     }
 }
 
 impl ProfileVault for HdProfileVault {
-    fn len(&self) -> usize {
-        self.next_idx as usize
-    }
-
-    fn profiles(&self) -> Fallible<MercuryProfiles> {
-        Ok(MercuryProfiles { mercury_xsk: self.mercury_xsk()? })
-    }
-
-    fn list(&self) -> Fallible<Vec<(ProfileAlias, ProfileId)>> {
-        self.list_range(0..self.next_idx)
-    }
-
     fn create_key(&mut self, alias: ProfileAlias) -> Fallible<PublicKey> {
-        ensure!(!self.aliases.contains(&alias), "the specified alias must be unique");
-        ensure!(self.aliases.len() == self.next_idx as usize, "an alias must exist for each id");
-        let key = self.profiles()?.public_key(self.next_idx)?;
+        ensure!(self.id_by_alias(&alias).is_err(), "the specified alias must be unique");
+        ensure!(self.profiles.len() == self.next_idx as usize, "a record must exist for each id");
+
+        let key = self.keys()?.public_key(self.next_idx)?;
+        self.profiles.push(ProfileRecord { id: key.key_id(), alias, metadata: vec![] });
+
+        debug!("Active profile was set to {}", key.key_id());
         self.active_idx = Option::Some(self.next_idx);
-        self.aliases.push(alias);
         self.next_idx += 1;
-        debug!("Setting active profile to {}", key.key_id());
+
         Ok(key)
     }
 
@@ -175,9 +199,9 @@ impl ProfileVault for HdProfileVault {
             GAP
         );
 
-        let profiles = self.profiles()?;
+        let keys = self.keys()?;
         for idx in self.next_idx..self.next_idx + GAP as i32 {
-            if *id == profiles.id(idx)? {
+            if *id == keys.id(idx)? {
                 trace!("Profile id {} is found at key index {}", id, idx);
                 self.next_idx = idx + 1;
                 return Ok(());
@@ -187,34 +211,9 @@ impl ProfileVault for HdProfileVault {
         bail!("{} is not owned by this seed", id);
     }
 
-    fn alias_by_id(&self, id: &ProfileId) -> Fallible<ProfileAlias> {
-        let idx = self.index_of_id(id).ok_or_else(|| err_msg("id is not found in vault"))?;
-        self.aliases
-            .get(idx)
-            .map(|v| v.to_owned())
-            .ok_or_else(|| err_msg("Implementation error: alias not found for generated id"))
-    }
-
-    fn id_by_alias(&self, alias: &ProfileAlias) -> Fallible<ProfileId> {
-        let profiles = self.list()?;
-        profiles
-            .iter()
-            .filter_map(|pair| if pair.0 == *alias { Some(pair.1.clone()) } else { None })
-            .nth(0)
-            .ok_or_else(|| err_msg("alias is not found in vault"))
-    }
-
-    fn set_alias(&mut self, id: ProfileId, alias: ProfileAlias) -> Fallible<()> {
-        let idx = self.index_of_id(&id).ok_or_else(|| err_msg("id is not found in vault"))?;
-        self.aliases
-            .get_mut(idx)
-            .map(|a| *a = alias)
-            .ok_or_else(|| err_msg("Implementation error: alias not found for generated id"))
-    }
-
     fn get_active(&self) -> Fallible<Option<ProfileId>> {
         if let Some(idx) = self.active_idx {
-            Ok(Option::Some(self.profiles()?.id(idx)?))
+            Ok(Option::Some(self.keys()?.id(idx)?))
         } else {
             Ok(Option::None)
         }
@@ -227,6 +226,46 @@ impl ProfileVault for HdProfileVault {
         } else {
             bail!("Profile Id '{}' not found", id)
         }
+    }
+
+    fn alias_by_id(&self, id: &ProfileId) -> Fallible<ProfileAlias> {
+        Ok(self.profile_by_id(id)?.alias.to_owned())
+    }
+
+    fn id_by_alias(&self, alias: &ProfileAlias) -> Fallible<ProfileId> {
+        // TODO this currently scans all records which might turn out to be too slow.
+        //      In such a case, we should use a dedicated index (i.e. Map<alias,id>) here
+        self.profiles
+            .iter()
+            .filter_map(|rec| if rec.alias == *alias { Some(rec.id.to_owned()) } else { None })
+            .nth(0)
+            .ok_or_else(|| err_msg("alias is not found in vault"))
+    }
+
+    fn set_alias(&mut self, id: ProfileId, alias: ProfileAlias) -> Fallible<()> {
+        self.mut_profile_by_id(&id)?.alias = alias;
+        Ok(())
+    }
+
+    fn metadata_by_id(&self, id: &ProfileId) -> Fallible<ProfileMetadata> {
+        Ok(self.profile_by_id(&id)?.metadata.to_owned())
+    }
+
+    fn set_metadata(&mut self, id: ProfileId, data: ProfileMetadata) -> Fallible<()> {
+        self.mut_profile_by_id(&id)?.metadata = data;
+        Ok(())
+    }
+
+    fn profiles(&self) -> Fallible<Vec<ProfileRecord>> {
+        Ok(self.profiles.clone())
+    }
+
+    fn len(&self) -> usize {
+        self.next_idx as usize
+    }
+
+    fn keys(&self) -> Fallible<HdKeys> {
+        Ok(HdKeys { mercury_xsk: self.mercury_xsk()? })
     }
 
     fn save(&self, filename: &PathBuf) -> Fallible<()> {

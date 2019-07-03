@@ -197,12 +197,12 @@ fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
 
 fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileEntry>> {
     let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
-    state.list_profiles().map(|ids| {
-        ids.iter()
-            .map(|(alias, profile_id)| ProfileEntry {
-                id: profile_id.to_string(),
-                alias: alias.to_owned(),
-                avatar: vec![],
+    state.list_profiles().map(|recs| {
+        recs.iter()
+            .map(|rec| ProfileEntry {
+                id: rec.id().to_string(),
+                alias: rec.alias(),
+                avatar: rec.metadata(),
                 state: "TODO".to_owned(),
             })
             .collect::<Vec<_>>()
@@ -237,7 +237,7 @@ fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileEntry> 
         .create_icon(&mut avatar_png, &did.to_bytes())
         .map_err(|e| err_msg(format!("Failed to generate default profile icon: {:?}", e)))?;
     //std::fs::write(format!("/tmp/{}.png", alias), &avatar_png)?;
-    // TODO save generated default avatar picture for new profile
+    state.set_profile_metadata(Some(did.clone()), avatar_png.clone())?;
 
     state.save_vault()?;
     Ok(ProfileEntry { id: did.to_string(), alias, avatar: avatar_png, state: "TODO".to_owned() })
