@@ -77,7 +77,8 @@ pub fn run_daemon(options: Options) -> Fallible<()> {
                             .route(web::post().to(create_did)),
                     )
                     .service(web::resource("/dids/{did}").route(web::get().to(get_did)))
-                    .service(web::resource("/dids/{did}/alias").route(web::put().to(rename_did))),
+                    .service(web::resource("/dids/{did}/alias").route(web::put().to(rename_did)))
+                    .service(web::resource("/dids/{did}/avatar").route(web::put().to(set_avatar))),
             )
             .default_service(web::to(HttpResponse::NotFound))
     })
@@ -153,21 +154,21 @@ fn init_vault_impl(
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-struct ProfileEntry {
+struct VaultEntry {
     id: String,
     alias: String,
-    #[serde(serialize_with = "serialize_avatar")]
+    #[serde(serialize_with = "serialize_avatar")] //, deserialize_with = "deserialize_avatar")]
     avatar: Vec<u8>,
     state: String,
 }
 
-impl From<&ProfileVaultRecord> for ProfileEntry {
+impl From<&ProfileVaultRecord> for VaultEntry {
     fn from(src: &ProfileVaultRecord) -> Self {
-        ProfileEntry {
+        VaultEntry {
             id: src.id().to_string(),
             alias: src.alias(),
             avatar: src.metadata(),
-            state: "TODO".to_owned(),
+            state: "TODO".to_owned(), // TODO this will probably need another query to context
         }
     }
 }
@@ -178,7 +179,20 @@ pub fn serialize_avatar<S: Serializer>(avatar: &[u8], serializer: S) -> Result<S
     serializer.serialize_str(&data_uri)
 }
 
-//fn deserialize_avatar<'de, D>(D) -> Result<T, D::Error> where D: Deserializer<'de>
+//pub fn deserialize_avatar<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
+//    use serde::{de, Deserialize};
+//    let data_uri = String::deserialize(deserializer)?;
+//
+//    // TODO do we need support for more encodings than just base64 here?
+//    let re = regex::Regex::new(r"(?x)data:image/(?P<format>\w+);base64,(?P<data>.*)")
+//        .map_err(de::Error::custom)?;
+//    let captures = re
+//        .captures(&data_uri)
+//        .ok_or_else(|| de::Error::custom("Provided image is not in DataURI format"))?;
+//    let (avatar_format, encoded_avatar) = (&captures["format"], &captures["data"]);
+//    let avatar = base64::decode(encoded_avatar).map_err(de::Error::custom)?;
+//    Ok(avatar)
+//}
 
 fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     match list_dids_impl(state) {
@@ -193,11 +207,11 @@ fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileEntry>> {
+fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<VaultEntry>> {
     let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
     state
         .list_vault_records()
-        .map(|recs| recs.iter().map(|rec| ProfileEntry::from(rec)).collect::<Vec<_>>())
+        .map(|recs| recs.iter().map(|rec| VaultEntry::from(rec)).collect::<Vec<_>>())
 }
 
 fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
@@ -213,7 +227,7 @@ fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileEntry> {
+fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<VaultEntry> {
     let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
 
     //let alias = state.list_profiles()?.len().to_string();
@@ -231,7 +245,7 @@ fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileEntry> 
     state.set_profile_metadata(Some(did.clone()), avatar_png.clone())?;
 
     state.save_vault()?;
-    Ok(ProfileEntry { id: did.to_string(), alias, avatar: avatar_png, state: "TODO".to_owned() })
+    Ok(VaultEntry { id: did.to_string(), alias, avatar: avatar_png, state: "TODO".to_owned() })
 }
 
 fn get_did(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Responder {
@@ -247,11 +261,11 @@ fn get_did(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Res
     }
 }
 
-fn get_did_impl(state: web::Data<Mutex<Context>>, did_str: String) -> Fallible<ProfileEntry> {
+fn get_did_impl(state: web::Data<Mutex<Context>>, did_str: String) -> Fallible<VaultEntry> {
     let did = did_str.parse()?;
     let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
     let rec = state.get_vault_record(Some(did))?;
-    Ok(ProfileEntry::from(&rec))
+    Ok(VaultEntry::from(&rec))
 }
 
 fn rename_did(
@@ -281,6 +295,52 @@ fn rename_did_impl(
     let did = did_str.parse()?;
     let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
     state.rename_profile(Some(did), name)?;
+    state.save_vault()?;
+    Ok(())
+}
+
+fn set_avatar(
+    state: web::Data<Mutex<Context>>,
+    did: web::Path<String>,
+    avatar: web::Json<DataUri>,
+) -> impl Responder {
+    match set_avatar_impl(state, did.clone(), avatar.clone()) {
+        Ok(()) => {
+            debug!("Set profile {} avatar", did);
+            HttpResponse::Ok().body("")
+        }
+        Err(e) => {
+            error!("Failed to set avatar: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+type DataUri = String;
+type ImageFormat = String;
+type ImageBlob = Vec<u8>;
+
+// TODO do we need support for more encodings than just base64 here?
+pub fn parse_avatar(data_uri: &str) -> Fallible<(ImageFormat, ImageBlob)> {
+    let re = regex::Regex::new(r"(?x)data:image/(?P<format>\w+);base64,(?P<data>.*)")?;
+    let captures = re
+        .captures(&data_uri)
+        .ok_or_else(|| err_msg("Provided image is not in DataURI format, see https://en.wikipedia.org/wiki/Data_URI_scheme"))?;
+    let (format, encoded_avatar) = (&captures["format"], &captures["data"]);
+    let avatar = base64::decode(encoded_avatar)?;
+    Ok((format.to_owned(), avatar))
+}
+
+fn set_avatar_impl(
+    state: web::Data<Mutex<Context>>,
+    did_str: String,
+    avatar_datauri: DataUri,
+) -> Fallible<()> {
+    let did = did_str.parse()?;
+    // TODO we should also save format with the binary image
+    let (format, avatar_binary) = parse_avatar(&avatar_datauri)?;
+    let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    state.set_profile_metadata(Some(did), avatar_binary)?;
     state.save_vault()?;
     Ok(())
 }

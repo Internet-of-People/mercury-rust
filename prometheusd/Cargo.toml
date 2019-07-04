@@ -17,6 +17,7 @@ log = "*"
 log4rs = "*"
 names = "*"
 osg-rpc-storage = { path="../osg-rpc-storage" }
+regex = "*"
 serde = "*"
 serde_derive = "*"
 structopt = "*"
