@@ -81,7 +81,7 @@ fn init_logger(options: &Options) -> Fallible<()> {
             ConsoleAppender::builder().encoder(Box::new(PatternEncoder::new("{m}{n}"))).build();
         let config = Config::builder()
             .appender(Appender::builder().build("stdout", Box::new(stdout)))
-            .build(Root::builder().appender("stdout").build(log::LevelFilter::Info))?;
+            .build(Root::builder().appender("stdout").build(LevelFilter::Info))?;
 
         log4rs::init_config(config)?;
     };

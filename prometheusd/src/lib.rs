@@ -78,7 +78,7 @@ pub fn run_daemon(options: Options) -> Fallible<()> {
                     )
                     .service(web::resource("/dids/{did}/alias").route(web::put().to(rename_did))),
             )
-            .default_service(web::to(|| HttpResponse::NotFound()))
+            .default_service(web::to(HttpResponse::NotFound))
     })
     .workers(1) // default is a thread on each CPU core, but we're serving on localhost only
     .bind(&options.listen_on)?
@@ -102,7 +102,7 @@ pub fn init_logger(options: &Options) -> Fallible<()> {
             ConsoleAppender::builder().encoder(Box::new(PatternEncoder::new("{m}{n}"))).build();
         let config = Config::builder()
             .appender(Appender::builder().build("stdout", Box::new(stdout)))
-            .build(Root::builder().appender("stdout").build(log::LevelFilter::Info))?;
+            .build(Root::builder().appender("stdout").build(LevelFilter::Info))?;
 
         log4rs::init_config(config)?;
     };
@@ -160,7 +160,7 @@ struct ProfileEntry {
     state: String,
 }
 
-pub fn serialize_avatar<S: Serializer>(avatar: &Vec<u8>, serializer: S) -> Result<S::Ok, S::Error> {
+pub fn serialize_avatar<S: Serializer>(avatar: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
     // About the format used here, see https://en.wikipedia.org/wiki/Data_URI_scheme
     let data_uri = format!("data:image/png;base64,{}", base64::encode(avatar));
     serializer.serialize_str(&data_uri)
