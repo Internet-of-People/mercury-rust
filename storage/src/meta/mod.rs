@@ -4,7 +4,7 @@ use serde_derive::{Deserialize, Serialize};
 
 pub trait Attribute {
     fn name(&self) -> &str;
-    fn value<'a>(&'a self) -> AttributeValue<'a>;
+    fn value(&self) -> AttributeValue<'_>;
 }
 
 // TODO this currently cannot easily be made PartialEq because of refs/boxes.
@@ -39,7 +39,7 @@ pub fn iter_first_attrval_by_path<'a, 'p>(
     iter: Box<'a + Iterator<Item = &'a Attribute>>,
     path: &'p [&'p str],
 ) -> Option<AttributeValue<'a>> {
-    if path.len() == 0 {
+    if path.is_empty() {
         return None;
     }
 
@@ -48,12 +48,10 @@ pub fn iter_first_attrval_by_path<'a, 'p>(
         return first_attrval;
     }
 
-    if let None = first_attrval {
-        return None;
-    }
-    match first_attrval.unwrap() {
-        AttributeValue::Object(attrs) => iter_first_attrval_by_path(attrs, &path[1..]),
-        _ => None,
+    if let Some(AttributeValue::Object(attrs)) = first_attrval {
+        iter_first_attrval_by_path(attrs, &path[1..])
+    } else {
+        None
     }
 }
 
@@ -77,7 +75,7 @@ pub mod tests {
     }
 
     impl MetaAttrVal {
-        fn to_attr_val<'a>(&'a self) -> AttributeValue<'a> {
+        fn to_attr_val(&self) -> AttributeValue<'_> {
             match *self {
                 MetaAttrVal::BOOL(v) => AttributeValue::Boolean(v),
                 MetaAttrVal::INT(v) => AttributeValue::Integer(v),
@@ -114,7 +112,7 @@ pub mod tests {
             &self.name
         }
 
-        fn value<'a>(&'a self) -> AttributeValue<'a> {
+        fn value(&self) -> AttributeValue<'_> {
             self.value.to_attr_val()
         }
     }
@@ -147,7 +145,7 @@ pub mod tests {
     fn test_metadata() {
         let spoon = "There is no Rust";
         let answer = 42;
-        let pi = 3.141_592_653_589_79;
+        let pi = std::f64::consts::PI;
 
         let linkhash = "Far/far/away/in/another/storage/network".to_owned();
         let famous = vec![
