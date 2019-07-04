@@ -147,7 +147,7 @@ impl Command for ListCommand {
         use ListCommand::*;
         match *self {
             Profiles => {
-                let profiles = api.list_profiles()?;
+                let profiles = api.list_vault_records()?;
                 info!("You have {} profiles", profiles.len());
                 let active_profile_opt = api.get_active_profile()?;
                 for profile_record in profiles.iter() {
@@ -196,7 +196,7 @@ impl Command for ShowCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         match *self {
             ShowCommand::Profile { profile_id, source } => {
-                let profile = api.get_profile(profile_id, source)?;
+                let profile = api.get_profile_data(profile_id, source)?;
                 let public_profile = profile.public_data();
                 let links = public_profile.links();
                 let attributes = public_profile.attributes();
@@ -247,7 +247,7 @@ impl Command for CreateCommand {
         use CreateCommand::*;
         match *self {
             Profile { name } => {
-                let profiles = api.list_profiles()?;
+                let profiles = api.list_vault_records()?;
                 let alias = name.unwrap_or_else(|| profiles.len().to_string());
                 let profile_id = api.create_profile(alias)?;
                 info!("Created and activated profile with id {}", profile_id);

@@ -111,6 +111,28 @@ Response:
 ]
 ```
 
+### Load a single profile
+
+Query details of a single profile that is already generated and present in the vault.
+
+Request
+* Endpoint: GET `/vault/dids/{did}`
+* Parameters: - 
+* Headers: -
+* Content: -
+
+Response:
+* Status: 200 or 409 (uninitialized vault)
+* Content: the profile object found, e.g.
+```json
+{
+  "id":"IezbeWGSY2dqcUBqT8K7R14xr",
+  "alias":"Mr Anderson",
+  "avatar":"data:image/png;base64,iVBOR...",
+  "state":"TODO",
+}
+```
+
 
 ### Create new profile
 

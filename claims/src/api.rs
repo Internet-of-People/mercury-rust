@@ -7,7 +7,7 @@ use log::*;
 
 use crate::model::*;
 use did::repo::*;
-use did::vault::{self, ProfileAlias, ProfileMetadata, ProfileRecord, ProfileVault};
+use did::vault::{self, ProfileAlias, ProfileMetadata, ProfileVault, ProfileVaultRecord};
 use keyvault::PublicKey as KeyVaultPublicKey;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
@@ -37,13 +37,9 @@ pub trait Api {
     fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()>;
     fn get_active_profile(&self) -> Fallible<Option<ProfileId>>;
 
+    fn list_vault_records(&self) -> Fallible<Vec<ProfileVaultRecord>>;
     fn create_profile(&mut self, alias: ProfileAlias) -> Fallible<ProfileId>;
-    fn get_profile(
-        &self,
-        id: Option<ProfileId>,
-        repo_kind: ProfileRepositoryKind,
-    ) -> Fallible<PrivateProfileData>;
-    fn list_profiles(&self) -> Fallible<Vec<ProfileRecord>>;
+    fn get_vault_record(&self, id: Option<ProfileId>) -> Fallible<ProfileVaultRecord>;
 
     fn rename_profile(
         &mut self,
@@ -56,6 +52,12 @@ pub trait Api {
         my_profile_id: Option<ProfileId>,
         data: ProfileMetadata,
     ) -> Fallible<()>;
+
+    fn get_profile_data(
+        &self,
+        id: Option<ProfileId>,
+        repo_kind: ProfileRepositoryKind,
+    ) -> Fallible<PrivateProfileData>;
 
     fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> Fallible<PrivateProfileData>;
     fn publish_profile(
@@ -275,8 +277,42 @@ before trying to restore another vault."#,
 }
 
 impl Api for Context {
-    fn list_profiles(&self) -> Fallible<Vec<ProfileRecord>> {
-        self.vault()?.profiles()
+    fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
+        self.restore_vault_impl(phrase)
+    }
+
+    fn restore_all_profiles(&mut self) -> Fallible<(u32, u32)> {
+        let keys = self.vault()?.keys()?;
+        let len = self.vault()?.len();
+
+        let mut try_count = 0;
+        let mut restore_count = 0;
+        for idx in 0..len {
+            try_count += 1;
+            let profile_id = keys.id(idx as i32)?;
+            if let Err(e) = self.restore_one_profile(&profile_id, false) {
+                info!("  No related data found for profile {}: {}", profile_id, e);
+                continue;
+            }
+            restore_count += 1;
+        }
+        debug!("  After the known profiles, we try to look for unknown ones.");
+        let mut idx = len;
+        let mut end = len + vault::GAP;
+        while idx < end {
+            try_count += 1;
+            let profile_id = keys.id(idx as i32)?;
+            if let Err(e) = self.restore_one_profile(&profile_id, true) {
+                debug!("  Profile {} was tried, but not found: {}", profile_id, e);
+                idx += 1;
+                continue;
+            }
+            end = idx + vault::GAP;
+            idx += 1;
+            restore_count += 1;
+        }
+
+        Ok((try_count, restore_count))
     }
 
     fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()> {
@@ -288,6 +324,10 @@ impl Api for Context {
         self.vault()?.get_active()
     }
 
+    fn list_vault_records(&self) -> Fallible<Vec<ProfileVaultRecord>> {
+        self.vault()?.profiles()
+    }
+
     fn create_profile(&mut self, alias: ProfileAlias) -> Fallible<ProfileId> {
         let new_profile_key = self.mut_vault()?.create_key(alias)?;
         let empty_profile = PrivateProfileData::empty(&new_profile_key);
@@ -295,23 +335,9 @@ impl Api for Context {
         Ok(new_profile_key.key_id())
     }
 
-    // TODO this should also work if profile is not ours and we have no control over it.
-    //      Then it should consult an explorer and show all public information.
-    fn get_profile(
-        &self,
-        profile_id: Option<ProfileId>,
-        kind: ProfileRepositoryKind,
-    ) -> Fallible<PrivateProfileData> {
-        // NOTE must also work with a profile that is not ours
-        let profile_id = self.selected_profile_id(profile_id)?;
-        use ProfileRepositoryKind::*;
-        let repo = match kind {
-            Local => &self.local_repo,
-            Base => self.base_repo.as_ref(),
-            Remote => self.remote_repo.as_ref(),
-        };
-        let profile = repo.get(&profile_id).wait()?;
-        Ok(profile)
+    fn get_vault_record(&self, my_profile_id: Option<ProfileId>) -> Fallible<ProfileVaultRecord> {
+        let profile_id = self.selected_profile(my_profile_id)?.id();
+        self.vault()?.profile(&profile_id)
     }
 
     fn rename_profile(
@@ -330,6 +356,25 @@ impl Api for Context {
     ) -> Fallible<()> {
         let profile_id = self.selected_profile(my_profile_id)?.id();
         self.mut_vault()?.set_metadata(profile_id, data)
+    }
+
+    // TODO this should also work if profile is not ours and we have no control over it.
+    //      Then it should consult an explorer and show all public information.
+    fn get_profile_data(
+        &self,
+        profile_id: Option<ProfileId>,
+        kind: ProfileRepositoryKind,
+    ) -> Fallible<PrivateProfileData> {
+        // NOTE must also work with a profile that is not ours
+        let profile_id = self.selected_profile_id(profile_id)?;
+        use ProfileRepositoryKind::*;
+        let repo = match kind {
+            Local => &self.local_repo,
+            Base => self.base_repo.as_ref(),
+            Remote => self.remote_repo.as_ref(),
+        };
+        let profile = repo.get(&profile_id).wait()?;
+        Ok(profile)
     }
 
     fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> Fallible<PrivateProfileData> {
@@ -427,43 +472,5 @@ impl Api for Context {
         profile.mut_public_data().increase_version();
         self.local_repo.set(profile).wait()?;
         Ok(())
-    }
-
-    fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
-        self.restore_vault_impl(phrase)
-    }
-
-    fn restore_all_profiles(&mut self) -> Fallible<(u32, u32)> {
-        let keys = self.vault()?.keys()?;
-        let len = self.vault()?.len();
-
-        let mut try_count = 0;
-        let mut restore_count = 0;
-        for idx in 0..len {
-            try_count += 1;
-            let profile_id = keys.id(idx as i32)?;
-            if let Err(e) = self.restore_one_profile(&profile_id, false) {
-                info!("  No related data found for profile {}: {}", profile_id, e);
-                continue;
-            }
-            restore_count += 1;
-        }
-        debug!("  After the known profiles, we try to look for unknown ones.");
-        let mut idx = len;
-        let mut end = len + vault::GAP;
-        while idx < end {
-            try_count += 1;
-            let profile_id = keys.id(idx as i32)?;
-            if let Err(e) = self.restore_one_profile(&profile_id, true) {
-                debug!("  Profile {} was tried, but not found: {}", profile_id, e);
-                idx += 1;
-                continue;
-            }
-            end = idx + vault::GAP;
-            idx += 1;
-            restore_count += 1;
-        }
-
-        Ok((try_count, restore_count))
     }
 }

@@ -46,7 +46,7 @@ pub type ProfileAlias = String;
 pub type ProfileMetadata = Vec<u8>;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct ProfileRecord {
+pub struct ProfileVaultRecord {
     id: ProfileId,
     alias: ProfileAlias,
     metadata: ProfileMetadata,
@@ -55,7 +55,7 @@ pub struct ProfileRecord {
     // pub pubkey: PublicKey,
 }
 
-impl ProfileRecord {
+impl ProfileVaultRecord {
     pub fn id(&self) -> ProfileId {
         self.id.to_owned()
     }
@@ -74,6 +74,8 @@ pub trait ProfileVault {
     fn get_active(&self) -> Fallible<Option<ProfileId>>;
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
 
+    // TODO reconsider this API: either alias_by_id() and metadata_by_id() or profile()
+    //      is redundant and should be removed
     fn alias_by_id(&self, id: &ProfileId) -> Fallible<ProfileAlias>;
     fn id_by_alias(&self, alias: &ProfileAlias) -> Fallible<ProfileId>;
     fn set_alias(&mut self, id: ProfileId, alias: ProfileAlias) -> Fallible<()>;
@@ -81,7 +83,8 @@ pub trait ProfileVault {
     fn metadata_by_id(&self, id: &ProfileId) -> Fallible<ProfileMetadata>;
     fn set_metadata(&mut self, id: ProfileId, data: ProfileMetadata) -> Fallible<()>;
 
-    fn profiles(&self) -> Fallible<Vec<ProfileRecord>>;
+    fn profiles(&self) -> Fallible<Vec<ProfileVaultRecord>>;
+    fn profile(&self, id: &ProfileId) -> Fallible<ProfileVaultRecord>;
 
     // TODO these probably should not be here on the long run, list() is enough in most cases.
     //      Used only for restoring all profiles of a vault with gap detection.
@@ -100,7 +103,7 @@ pub struct HdProfileVault {
     seed: Seed,
     next_idx: i32,
     active_idx: Option<i32>,
-    profiles: Vec<ProfileRecord>,
+    profiles: Vec<ProfileVaultRecord>,
 }
 
 impl HdProfileVault {
@@ -144,7 +147,7 @@ impl HdProfileVault {
     //        self.list().ok().and_then(|v| v.iter().position(|pair| pair.0 == *alias))
     //    }
 
-    fn profile_by_id(&self, id: &ProfileId) -> Fallible<&ProfileRecord> {
+    fn profile_by_id(&self, id: &ProfileId) -> Fallible<&ProfileVaultRecord> {
         self.profiles
             .iter()
             .filter_map(|rec| if rec.id == *id { Some(rec) } else { None })
@@ -152,7 +155,7 @@ impl HdProfileVault {
             .ok_or_else(|| err_msg("profile is not found in vault"))
     }
 
-    fn mut_profile_by_id(&mut self, id: &ProfileId) -> Fallible<&mut ProfileRecord> {
+    fn mut_profile_by_id(&mut self, id: &ProfileId) -> Fallible<&mut ProfileVaultRecord> {
         self.profiles
             .iter_mut()
             .filter_map(|rec| if rec.id == *id { Some(rec) } else { None })
@@ -177,7 +180,7 @@ impl ProfileVault for HdProfileVault {
         ensure!(self.profiles.len() == self.next_idx as usize, "a record must exist for each id");
 
         let key = self.keys()?.public_key(self.next_idx)?;
-        self.profiles.push(ProfileRecord { id: key.key_id(), alias, metadata: vec![] });
+        self.profiles.push(ProfileVaultRecord { id: key.key_id(), alias, metadata: vec![] });
 
         debug!("Active profile was set to {}", key.key_id());
         self.active_idx = Option::Some(self.next_idx);
@@ -248,7 +251,7 @@ impl ProfileVault for HdProfileVault {
     }
 
     fn metadata_by_id(&self, id: &ProfileId) -> Fallible<ProfileMetadata> {
-        Ok(self.profile_by_id(&id)?.metadata.to_owned())
+        Ok(self.profile_by_id(id)?.metadata.to_owned())
     }
 
     fn set_metadata(&mut self, id: ProfileId, data: ProfileMetadata) -> Fallible<()> {
@@ -256,8 +259,12 @@ impl ProfileVault for HdProfileVault {
         Ok(())
     }
 
-    fn profiles(&self) -> Fallible<Vec<ProfileRecord>> {
+    fn profiles(&self) -> Fallible<Vec<ProfileVaultRecord>> {
         Ok(self.profiles.clone())
+    }
+
+    fn profile(&self, id: &ProfileId) -> Fallible<ProfileVaultRecord> {
+        Ok(self.profile_by_id(id)?.to_owned())
     }
 
     fn len(&self) -> usize {

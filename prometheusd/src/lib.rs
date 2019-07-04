@@ -76,6 +76,7 @@ pub fn run_daemon(options: Options) -> Fallible<()> {
                             .route(web::get().to(list_did))
                             .route(web::post().to(create_did)),
                     )
+                    .service(web::resource("/dids/{did}").route(web::get().to(get_did)))
                     .service(web::resource("/dids/{did}/alias").route(web::put().to(rename_did))),
             )
             .default_service(web::to(HttpResponse::NotFound))
@@ -160,6 +161,17 @@ struct ProfileEntry {
     state: String,
 }
 
+impl From<&ProfileVaultRecord> for ProfileEntry {
+    fn from(src: &ProfileVaultRecord) -> Self {
+        ProfileEntry {
+            id: src.id().to_string(),
+            alias: src.alias(),
+            avatar: src.metadata(),
+            state: "TODO".to_owned(),
+        }
+    }
+}
+
 pub fn serialize_avatar<S: Serializer>(avatar: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
     // About the format used here, see https://en.wikipedia.org/wiki/Data_URI_scheme
     let data_uri = format!("data:image/png;base64,{}", base64::encode(avatar));
@@ -183,16 +195,9 @@ fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
 
 fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ProfileEntry>> {
     let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
-    state.list_profiles().map(|recs| {
-        recs.iter()
-            .map(|rec| ProfileEntry {
-                id: rec.id().to_string(),
-                alias: rec.alias(),
-                avatar: rec.metadata(),
-                state: "TODO".to_owned(),
-            })
-            .collect::<Vec<_>>()
-    })
+    state
+        .list_vault_records()
+        .map(|recs| recs.iter().map(|rec| ProfileEntry::from(rec)).collect::<Vec<_>>())
 }
 
 fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
@@ -227,6 +232,26 @@ fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<ProfileEntry> 
 
     state.save_vault()?;
     Ok(ProfileEntry { id: did.to_string(), alias, avatar: avatar_png, state: "TODO".to_owned() })
+}
+
+fn get_did(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Responder {
+    match get_did_impl(state, did.clone()) {
+        Ok(entry) => {
+            debug!("Fetched info for profile {}", did);
+            HttpResponse::Ok().json(entry)
+        }
+        Err(e) => {
+            error!("Failed to create profile: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+fn get_did_impl(state: web::Data<Mutex<Context>>, did_str: String) -> Fallible<ProfileEntry> {
+    let did = did_str.parse()?;
+    let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    let rec = state.get_vault_record(Some(did))?;
+    Ok(ProfileEntry::from(&rec))
 }
 
 fn rename_did(
