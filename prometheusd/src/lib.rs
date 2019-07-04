@@ -9,30 +9,16 @@ use failure::{err_msg, Fallible};
 use log::*;
 use serde::Serializer;
 use serde_derive::{Deserialize, Serialize};
-use structopt::StructOpt;
+pub use structopt::StructOpt;
 
-use crate::options::Options;
+pub use crate::options::Options;
 use claims::api::*;
 use did::repo::*;
 use did::vault::*;
 use keyvault::Seed;
 use osg_rpc_storage::RpcProfileRepository;
 
-fn main() -> Fallible<()> {
-    let options = Options::from_args();
-    init_logger(&options)?;
-
-    // NOTE HTTP server already handles signals internally unless the no_signals option is set.
-    match std::thread::spawn(move || run_daemon(options)).join() {
-        Err(e) => info!("Daemon thread failed with error: {:?}", e),
-        Ok(Err(e)) => info!("Web server failed with error: {:?}", e),
-        Ok(Ok(())) => info!("Graceful shut down"),
-    };
-
-    Ok(())
-}
-
-fn run_daemon(options: Options) -> Fallible<()> {
+pub fn run_daemon(options: Options) -> Fallible<()> {
     let vault_path = did::paths::vault_path(options.config_dir.clone())?;
     let repo_path = did::paths::profile_repo_path(options.config_dir.clone())?;
     let base_path = did::paths::base_repo_path(options.config_dir.clone())?;
@@ -101,7 +87,7 @@ fn run_daemon(options: Options) -> Fallible<()> {
     Ok(())
 }
 
-fn init_logger(options: &Options) -> Fallible<()> {
+pub fn init_logger(options: &Options) -> Fallible<()> {
     if log4rs::init_file(&options.logger_config, Default::default()).is_err() {
         println!(
             "Failed to initialize loggers from {:?}, using default config",
