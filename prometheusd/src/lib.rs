@@ -61,11 +61,11 @@ pub fn run_daemon(options: Options) -> Fallible<()> {
                 web::scope("/bip39")
                     .service(web::resource("").route(web::post().to(generate_bip39_phrase)))
                     .service(
-                        web::resource("/validate_phrase")
+                        web::resource("/validate-phrase")
                             .route(web::post().to(validate_bip39_phrase)),
                     )
                     .service(
-                        web::resource("/validate_word").route(web::post().to(validate_bip39_word)),
+                        web::resource("/validate-word").route(web::post().to(validate_bip39_word)),
                     ),
             )
             .service(

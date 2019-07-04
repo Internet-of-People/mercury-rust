@@ -35,7 +35,7 @@ Validate a single word of keyvault entropy against the BIP39 word list.
 Only the English dictionary is currently supported.
 
 Request
-* Endpoint: POST `/bip39/validate_word`
+* Endpoint: POST `/bip39/validate-word`
 * Parameters: - 
 * Headers: -
 * Content: string containing a single seed word, i.e. a single item of the word array
@@ -52,7 +52,7 @@ Validate a whole seed phrase (i.e. BIP39 word list) as returned by [/bip39](#/bi
 TODO Should we also return an error code or text describing the reason why validation failed?  
 
 Request
-* Endpoint: POST `/bip39/validate_phrase`
+* Endpoint: POST `/bip39/validate-phrase`
 * Parameters: -
 * Headers: -
 * Content: json array of word strings
