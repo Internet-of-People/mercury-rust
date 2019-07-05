@@ -5,13 +5,16 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 edition = "2018"
 
 [dependencies]
+actix-rt = "*"
 actix-cors = "*"
+actix-server = "*"
 actix-web = "*"
 base64 = "*"
 blockies = "*"
 claims = { path="../claims" }
 did = { path="../did" }
 failure = "*"
+futures = "*"
 keyvault = { path="../keyvault" }
 log = "*"
 log4rs = "*"
@@ -21,3 +24,4 @@ regex = "*"
 serde = "*"
 serde_derive = "*"
 structopt = "*"
+tokio = "*"

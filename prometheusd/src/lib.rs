@@ -4,6 +4,7 @@ use std::sync::Mutex;
 use std::time::Duration;
 
 use actix_cors::Cors;
+use actix_server::Server;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
 use failure::{err_msg, Fallible};
 use log::*;
@@ -17,8 +18,50 @@ use did::repo::*;
 use did::vault::*;
 use keyvault::Seed;
 use osg_rpc_storage::RpcProfileRepository;
+use tokio::runtime::current_thread;
 
-pub fn run_daemon(options: Options) -> Fallible<()> {
+pub struct Daemon {
+    rt: current_thread::Runtime,
+    server: actix_server::Server,
+    join_handle: std::thread::JoinHandle<Fallible<()>>,
+}
+
+impl Daemon {
+    pub fn start(options: Options) -> Fallible<Self> {
+        let (tx, rx) = futures::sync::oneshot::channel();
+
+        let mut rt = current_thread::Runtime::new()?;
+        let join_handle =
+            std::thread::Builder::new().name("actix-system".to_owned()).spawn(move || {
+                let runner = actix_rt::System::builder().name("http-server").build();
+                let server = start_daemon(options)?;
+                tx.send(server).map_err(|_tx| err_msg("Could not initialize runtime"))?;
+
+                runner.run().map_err(|e| e.into())
+            })?;
+        let server = rt.block_on(rx)?;
+
+        Ok(Self { rt, server, join_handle })
+    }
+
+    pub fn stop(&mut self) -> Fallible<()> {
+        trace!("before stop");
+        self.rt
+            .block_on(self.server.stop(true))
+            .map_err(|()| err_msg("Could not stop server gracefully"))?;
+        trace!("after stop");
+        Ok(())
+    }
+
+    pub fn join(self) -> Fallible<()> {
+        trace!("before join");
+        self.join_handle.join().map_err(|_e| err_msg("Thread panicked")).and_then(|r| r)?;
+        trace!("after join");
+        Ok(())
+    }
+}
+
+fn start_daemon(options: Options) -> Fallible<Server> {
     let vault_path = did::paths::vault_path(options.config_dir.clone())?;
     let repo_path = did::paths::profile_repo_path(options.config_dir.clone())?;
     let base_path = did::paths::base_repo_path(options.config_dir.clone())?;
@@ -51,7 +94,7 @@ pub fn run_daemon(options: Options) -> Fallible<()> {
     // TODO The current implementation is not known to ever panic. However,
     //      if it was then the Arbiter thread would stop but not the whole server.
     //      The server should not be in an inconsistent half-stopped state after any panic.
-    HttpServer::new(move || {
+    let server = HttpServer::new(move || {
         App::new()
             .data(web::JsonConfig::default().limit(65536))
             .wrap(middleware::Logger::default())
@@ -83,10 +126,11 @@ pub fn run_daemon(options: Options) -> Fallible<()> {
             .default_service(web::to(HttpResponse::NotFound))
     })
     .workers(1) // default is a thread on each CPU core, but we're serving on localhost only
+    .system_exit()
     .bind(&options.listen_on)?
-    .run()?;
+    .start();
 
-    Ok(())
+    Ok(server)
 }
 
 pub fn init_logger(options: &Options) -> Fallible<()> {
@@ -234,7 +278,7 @@ fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<VaultEntry> {
     // TODO this name generation is not deterministic, but should be (found no proper lib)
     // TODO instantiating generators here might provide worse performance than keeping
     //      a generator instance in the state, but that is probably not significant in practice
-    let alias = names::Generator::default().next().unwrap_or("FAILING FAILURE".to_owned());
+    let alias = names::Generator::default().next().unwrap_or_else(|| "FAILING FAILURE".to_owned());
     let did = state.create_profile(alias.clone())?;
 
     let mut avatar_png = Vec::new();
