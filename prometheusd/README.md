@@ -159,14 +159,29 @@ Response:
 ### Rename profile
 
 Specify a new alias for an already existing profile.
-
-TODO: should this use PUT instead to be more REST conformant? 
+TODO should we join name and avatar updates into a single update operation as standard REST usually does?
 
 Request
 * Endpoint: PUT `/vault/dids/{did}/alias`
 * Parameters: `did` is the identifier of an existing profile
 * Headers: -
-* Content: new alias as string, e.g. "Family"
+* Content: new alias as string, e.g. `"Family"`
+
+Response:
+* Status: 200 or 409 (uninitialized vault)
+* Content: -
+
+
+### Change avatar picture
+
+Update the avatar picture for an already existing profile.
+**NOTE that currently only png images and base64 encoding is supported**.
+
+Request
+* Endpoint: PUT `/vault/dids/{did}/avatar`
+* Parameters: `did` is the identifier of an existing profile
+* Headers: -
+* Content: DataURI format of image as string, e.g. `"data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAIAAAACAAgMAAAC+UIlYAAAACVBMVEUJPcyM05NCbJvv7ERhAAAAcElEQVR4nO2UwQ2AMAwDw5AwJCxJjshSHmxgn2TaOvdEOc6qIldnc3eeTgQ/gQvnRl2E6VyEzgcPStj3CIOLwAMoWBrAMlEfYXARKBkSlbqTCBMXgY9gALuLMDgJDPTjAJ2WSIQ5XQQGPP5gFsFKeAHj8TBgukmquAAAAABJRU5ErkJggg=="`
 
 Response:
 * Status: 200 or 409 (uninitialized vault)
