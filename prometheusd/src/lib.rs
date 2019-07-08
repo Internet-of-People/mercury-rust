@@ -115,13 +115,20 @@ fn start_daemon(options: Options) -> Fallible<Server> {
                 web::scope("/vault")
                     .service(web::resource("").route(web::post().to(init_vault)))
                     .service(
-                        web::resource("/dids")
+                        web::scope("/dids")
+                        .service(web::resource("")
                             .route(web::get().to(list_did))
-                            .route(web::post().to(create_did)),
+                            .route(web::post().to(create_did))
+                        )
+                        .service(web::resource("/{did}").route(web::get().to(get_did)))
+                        .service(web::resource("/{did}/alias").route(web::put().to(rename_did)))
+                        .service(web::resource("/{did}/avatar").route(web::put().to(set_avatar))),
                     )
-                    .service(web::resource("/dids/{did}").route(web::get().to(get_did)))
-                    .service(web::resource("/dids/{did}/alias").route(web::put().to(rename_did)))
-                    .service(web::resource("/dids/{did}/avatar").route(web::put().to(set_avatar))),
+                    .service(
+                        web::scope("/claims")
+                        .service(web::resource("").route(web::to(HttpResponse::NotFound)))
+                        .service(web::resource("/schemas").route(web::get().to(list_schemas)))
+                    )
             )
             .default_service(web::to(HttpResponse::NotFound))
     })
@@ -253,9 +260,7 @@ fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
 
 fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<VaultEntry>> {
     let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
-    state
-        .list_vault_records()
-        .map(|recs| recs.iter().map(|rec| VaultEntry::from(rec)).collect::<Vec<_>>())
+    state.list_vault_records().map(|recs| recs.iter().map(VaultEntry::from).collect::<Vec<_>>())
 }
 
 fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
@@ -387,4 +392,46 @@ fn set_avatar_impl(
     state.set_profile_metadata(Some(did), avatar_binary)?;
     state.save_vault()?;
     Ok(())
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+struct ClaimSchema {
+    id: String,
+    schema: String,
+}
+
+impl ClaimSchema {
+    fn new(id: impl ToString, schema: impl ToString) -> Self {
+        Self { id: id.to_string(), schema: schema.to_string() }
+    }
+}
+
+fn list_schemas(state: web::Data<Mutex<Context>>) -> impl Responder {
+    match list_schemas_impl(state) {
+        Ok(list) => {
+            debug!("Fetched list of claim schemas");
+            HttpResponse::Ok().json(list)
+        }
+        Err(e) => {
+            error!("Failed to fetch list of claim schemas: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+fn list_schemas_impl(_state: web::Data<Mutex<Context>>) -> Fallible<Vec<ClaimSchema>> {
+    Ok(vec![ClaimSchema::new(
+        "AgeOver",
+        r#"{
+            "$id": "https://iop.global/claims/schemas/age-over.json",
+            "type": "object",
+            "properties": {
+                "age": {
+                    "type": "number",
+                    "minimum": 0,
+                    "maximum": 255
+                }
+            }
+        }"#,
+    )])
 }
