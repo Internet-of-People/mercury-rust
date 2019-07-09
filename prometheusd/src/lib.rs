@@ -1,5 +1,6 @@
 mod options;
 
+use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -127,9 +128,9 @@ fn start_daemon(options: Options) -> Fallible<Server> {
                     .service(
                         web::scope("/claims")
                         .service(web::resource("").route(web::to(HttpResponse::NotFound)))
-                        .service(web::resource("/schemas").route(web::get().to(list_schemas)))
                     )
             )
+            .service(web::resource("/claim-schemas").route(web::get().to(list_schemas)))
             .default_service(web::to(HttpResponse::NotFound))
     })
     .workers(1) // default is a thread on each CPU core, but we're serving on localhost only
@@ -396,13 +397,25 @@ fn set_avatar_impl(
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 struct ClaimSchema {
-    id: String,
-    schema: String,
+    name: String,
+    author: String,
+    version: u64,
+    contents: String,
 }
 
 impl ClaimSchema {
-    fn new(id: impl ToString, schema: impl ToString) -> Self {
-        Self { id: id.to_string(), schema: schema.to_string() }
+    fn new(
+        name: impl ToString,
+        author: impl ToString,
+        version: u64,
+        contents: impl ToString,
+    ) -> Self {
+        Self {
+            name: name.to_string(),
+            author: author.to_string(),
+            version,
+            contents: contents.to_string(),
+        }
     }
 }
 
@@ -421,15 +434,15 @@ fn list_schemas(state: web::Data<Mutex<Context>>) -> impl Responder {
 
 fn list_schemas_impl(_state: web::Data<Mutex<Context>>) -> Fallible<Vec<ClaimSchema>> {
     Ok(vec![ClaimSchema::new(
-        "AgeOver",
+        "age-over",
+        "iop",
+        0,
         r#"{
-            "$id": "https://iop.global/claims/schemas/age-over.json",
+            "$id": "/claim-schemas/McL9746fWtE9EXV5/0",
             "type": "object",
             "properties": {
                 "age": {
-                    "type": "number",
-                    "minimum": 0,
-                    "maximum": 255
+                    "type": "number"
                 }
             }
         }"#,

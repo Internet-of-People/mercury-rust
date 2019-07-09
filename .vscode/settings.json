@@ -1,0 +1,11 @@
+{
+    "markdown.extension.toc.levels": "2..6",
+    "markdown.extension.toc.githubCompatibility": true,
+    "markdownlint.config": {
+        "default": true,
+        "no-inline-html": false
+    },
+    "markdownlint.ignore": [
+        "LICENSE.md"
+    ]
+}
