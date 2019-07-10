@@ -1,6 +1,6 @@
 # REST API for `prometheusd`
 
-Daemon `prometheusd` accepts incoming REST client connections on `127.0.0.1:8080` by default.
+Daemon `prometheusd` accepts incoming REST-like client connections on `127.0.0.1:8080` by default.
 This can be overridden using configuration option `--listen IP:PORT`.
 
 ## Table of contents <!-- omit in toc -->
@@ -24,6 +24,7 @@ This can be overridden using configuration option `--listen IP:PORT`.
   - [Create new version of a given schema (not implemented)](#Create-new-version-of-a-given-schema-not-implemented)
   - [Get latest version of a given schema](#Get-latest-version-of-a-given-schema)
   - [Get given version of a given schema](#Get-given-version-of-a-given-schema)
+
 
 ## Authentication and/or authorization
 
@@ -162,9 +163,6 @@ Response:
 
 List all profiles that are already generated and present in the vault.
 
-TODO Consolidate with `POST /claim-schemas` so either this gives 303 to the created object or that
-also includes the details of the created object.
-
 Request:
 
 - Endpoint: POST `/vault/dids`
@@ -246,7 +244,21 @@ Response:
 - Content: List of schema identifiers, e.g.
 
 ```json
-["/claim-schemas/McL9746fWtE9EXV5", "/claim-schemas/sU7TNXQjhcUWLw3c", "/claim-schemas/cagtn4rDCHUyqigF"]
+
+[{
+    "id": "McL9746fWtE9EXV5",
+    "alias": "age-over"
+    "content": {
+        "type": "object",
+        "properties": {
+            "age": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 255
+            }
+        }  
+    }
+}]
 ```
 
 ### Create new schema (not implemented)
@@ -262,27 +274,25 @@ Request:
 
 ```json
 {
-  name: "age-over",
-  author: "iop",
-  contents: {
-      "type": "object",
-      "properties": {
-          "age": {
-              "type": "number",
-              "minimum": 0,
-              "maximum": 255
-          }
-      }
-  }
+    "alias": "age-over"
+    "content": {
+        "type": "object",
+        "properties": {
+            "age": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 255
+            }
+        }  
+    }
 }
 ```
 
 Response:
 
-- Status: 303 or 403 (unauthorized)
-- Headers
-  - Location: Link to the created object, e.g. `Location: /claim-schemas/McL9746fWtE9EXV5/0`
-- Content: Empty
+- Status: 201 or 403 (unauthorized)
+- Headers -
+- Content
 
 ### Create new version of a given schema (not implemented)
 
