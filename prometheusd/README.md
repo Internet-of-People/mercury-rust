@@ -123,7 +123,7 @@ Response:
   {
     "id":"Iez25N5WZ1Q6TQpgpyYgiu9gTX",
     "alias":"Neo",
-    "avatar":"data:image/png;base64,iVBOR",
+    "avatar":"data:image/png;base64,iVBOR...",
     "state":"TODO",
   }
 ]
@@ -216,9 +216,57 @@ Response:
 
 ## Claims
 
+### List claims of a profile
+
+List all claims that have a specified profile as their subject.
+
+Request:
+
+- Endpoint: GET `/vault/dids/{did}/claims`
+- Parameters: -
+- Headers: -
+- Content: -
+
+Response:
+
+- Status: 200 or 409 (uninitialized vault)
+- Content: array of claim objects found for the specified profile, e.g.
+
+```json
+{
+  "id": "<multihash_of_claim_instance>",
+  "schema": "<DID_of_claim_schema>",
+  "content": {
+    // Completely schema-dependent structure here
+  },
+  "proof": [ "TODO" ],
+  "presentation": [ "TODO" ]
+}
+```
+
+### Create a claim
+
 TODO
 
-- Endpoint: GET `/vault/claims/...`
+### Request witness signature for a claim
+
+TODO
+
+### Create a presentation for a claim
+
+TODO
+
+### Load a single claim
+
+TODO
+
+### Update a claim
+
+TODO what happens with related presentations?
+
+### Delete a claim
+
+TODO probably all related presentations must be deleted as well?
 
 ## Claim schemas
 

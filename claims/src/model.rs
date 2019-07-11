@@ -4,6 +4,40 @@ use serde_derive::{Deserialize, Serialize};
 
 pub use did::model::*;
 
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct Claim {
+    id: String,     // TODO multihash?
+    schema: String, // TODO multihash?
+    content: serde_json::Value,
+    proof: Vec<ClaimProof>,
+    presentation: Vec<ClaimPresentation>,
+}
+
+impl Claim {
+    pub fn new(id: &str, schema: &str, content: serde_json::Value) -> Self {
+        Self {
+            id: id.to_owned(),
+            schema: schema.to_owned(),
+            content,
+            proof: vec![],
+            presentation: vec![],
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub struct ClaimProof {
+    claim_id: String,
+    witness: String,   // TODO DID
+    signature: String, // TODO multicrypto signature
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ClaimPresentation {
+    // TODO: shared_with_subject, usable_for_purpose, expires_at, etc
+    journal: Vec<String>, // TODO links to multihash stored on ledger
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum Grant {
     Impersonate,
@@ -44,10 +78,6 @@ impl ProfileAuthData {
         }
     }
 
-    pub fn apply(&mut self, _ops: &[ProfileAuthOperation]) {
-        unimplemented!()
-    }
-
     pub fn keys_with_grant(&self, grant: Grant) -> Vec<KeyId> {
         self.grants
             .iter()
@@ -60,43 +90,6 @@ impl ProfileAuthData {
             .iter()
             .filter_map(|pg| if pg.key_id == *key_id { Some(pg.grant) } else { None })
             .collect()
-    }
-}
-
-pub type TransactionId = Vec<u8>;
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum JournalState {
-    TimeStamp(SystemTime), // TODO is this an absolute timestamp or can this be relaxed?
-    Transaction(TransactionId),
-    Block { height: u64, hash: Vec<u8> },
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub enum ProfileAuthOperation {
-    Grant(ProfileGrant),
-    Revoke(ProfileGrant),
-    Remove(ProfileId),
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct ProfileTransaction {
-    // new_state: ProfileAuthData, // NOTE it's harder to validate state diffs than to add explicit operations
-    operations: Vec<ProfileAuthOperation>,
-    succeeds_predecessors: Vec<JournalState>,
-}
-
-impl ProfileTransaction {
-    pub fn new(ops: &[ProfileAuthOperation], succeeds_predecessors: &[JournalState]) -> Self {
-        Self { operations: ops.to_owned(), succeeds_predecessors: succeeds_predecessors.to_owned() }
-    }
-
-    pub fn ops(&self) -> &[ProfileAuthOperation] {
-        &self.operations
-    }
-
-    pub fn predecessors(&self) -> &[JournalState] {
-        &self.succeeds_predecessors
     }
 }
 

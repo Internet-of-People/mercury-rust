@@ -48,6 +48,7 @@ pub trait Api {
         alias: ProfileAlias,
     ) -> Fallible<()>;
 
+    fn get_profile_metadata(&self, my_profile_id: Option<ProfileId>) -> Fallible<ProfileMetadata>;
     fn set_profile_metadata(
         &mut self,
         my_profile_id: Option<ProfileId>,
@@ -352,6 +353,11 @@ impl Api for Context {
     ) -> Fallible<()> {
         let profile_id = self.selected_profile(my_profile_id)?.id();
         self.mut_vault()?.set_alias(profile_id, alias)
+    }
+
+    fn get_profile_metadata(&self, my_profile_id: Option<ProfileId>) -> Fallible<ProfileMetadata> {
+        let profile_id = self.selected_profile(my_profile_id)?.id();
+        self.vault()?.metadata_by_id(&profile_id)
     }
 
     fn set_profile_metadata(

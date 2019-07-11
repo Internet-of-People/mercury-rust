@@ -43,7 +43,7 @@ impl HdSecrets {
 }
 
 pub type ProfileAlias = String;
-pub type ProfileMetadata = Vec<u8>;
+pub type ProfileMetadata = String;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ProfileVaultRecord {
@@ -180,7 +180,7 @@ impl ProfileVault for HdProfileVault {
         ensure!(self.profiles.len() == self.next_idx as usize, "a record must exist for each id");
 
         let key = self.keys()?.public_key(self.next_idx)?;
-        self.profiles.push(ProfileVaultRecord { id: key.key_id(), alias, metadata: vec![] });
+        self.profiles.push(ProfileVaultRecord { id: key.key_id(), alias, metadata: "".to_owned() });
 
         debug!("Active profile was set to {}", key.key_id());
         self.active_idx = Option::Some(self.next_idx);

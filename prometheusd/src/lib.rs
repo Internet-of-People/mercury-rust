@@ -1,6 +1,7 @@
 mod options;
 
-use std::sync::Mutex;
+use std::convert::TryInto;
+use std::sync::{Mutex, MutexGuard};
 use std::time::Duration;
 
 use actix_cors::Cors;
@@ -14,11 +15,12 @@ pub use structopt::StructOpt;
 use tokio::runtime::current_thread;
 
 pub use crate::options::Options;
-use claims::api::*;
+use claims::{api::*, model::*};
 use did::repo::*;
 use did::vault::*;
 use keyvault::Seed;
 use osg_rpc_storage::RpcProfileRepository;
+use std::convert::TryFrom;
 
 pub struct Daemon {
     rt: current_thread::Runtime,
@@ -98,7 +100,7 @@ fn start_daemon(options: Options) -> Fallible<Server> {
     //      The server should not be in an inconsistent half-stopped state after any panic.
     let server = HttpServer::new(move || {
         App::new()
-            .data(web::JsonConfig::default().limit(65536))
+            .data(web::JsonConfig::default().limit(16_777_216))
             .wrap(middleware::Logger::default())
             .wrap(Cors::default())
             .register_data(daemon_state.clone())
@@ -124,11 +126,8 @@ fn start_daemon(options: Options) -> Fallible<Server> {
                         )
                         .service(web::resource("/{did}").route(web::get().to(get_did)))
                         .service(web::resource("/{did}/alias").route(web::put().to(rename_did)))
-                        .service(web::resource("/{did}/avatar").route(web::put().to(set_avatar))),
-                    )
-                    .service(
-                        web::scope("/claims")
-                        .service(web::resource("").route(web::to(HttpResponse::NotFound)))
+                        .service(web::resource("/{did}/avatar").route(web::put().to(set_avatar)))
+                        .service(web::resource("/{did}/claims").route(web::get().to(list_claims))),
                     )
             )
             .service(web::resource("/claim-schemas").route(web::get().to(list_schemas)))
@@ -181,6 +180,10 @@ fn validate_bip39_word(word: web::Json<String>) -> impl Responder {
     HttpResponse::Ok().json(is_valid)
 }
 
+fn lock_state(state: &web::Data<Mutex<Context>>) -> Fallible<MutexGuard<Context>> {
+    state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))
+}
+
 // TODO this Fallible -> Responder mapping + logging should be somehow less manual
 fn init_vault(state: web::Data<Mutex<Context>>, words: web::Json<Vec<String>>) -> impl Responder {
     match init_vault_impl(state, words) {
@@ -199,11 +202,16 @@ fn init_vault_impl(
     state: web::Data<Mutex<Context>>,
     words: web::Json<Vec<String>>,
 ) -> Fallible<()> {
-    // TODO state locking also should not be manual in each function
-    let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    let mut state = lock_state(&state)?;
     let phrase = words.join(" ");
     state.restore_vault(phrase)?;
     state.save_vault()
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub struct Image {
+    format: ImageFormat,
+    blob: ImageBlob,
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
@@ -211,24 +219,27 @@ struct VaultEntry {
     id: String,
     alias: String,
     #[serde(serialize_with = "serialize_avatar")] //, deserialize_with = "deserialize_avatar")]
-    avatar: Vec<u8>,
+    avatar: Image,
     state: String,
 }
 
-impl From<&ProfileVaultRecord> for VaultEntry {
-    fn from(src: &ProfileVaultRecord) -> Self {
-        VaultEntry {
+impl TryFrom<&ProfileVaultRecord> for VaultEntry {
+    type Error = failure::Error;
+    fn try_from(src: &ProfileVaultRecord) -> Fallible<Self> {
+        let metadata: ProfileMetadata = src.metadata().as_str().try_into()?;
+        Ok(VaultEntry {
             id: src.id().to_string(),
             alias: src.alias(),
-            avatar: src.metadata(),
+            avatar: Image { format: metadata.image_format, blob: metadata.image_blob },
             state: "TODO".to_owned(), // TODO this will probably need another query to context
-        }
+        })
     }
 }
 
-pub fn serialize_avatar<S: Serializer>(avatar: &[u8], serializer: S) -> Result<S::Ok, S::Error> {
+// TODO serialize stored image format with the blob, do not hardwire 'png'
+pub fn serialize_avatar<S: Serializer>(avatar: &Image, serializer: S) -> Result<S::Ok, S::Error> {
     // About the format used here, see https://en.wikipedia.org/wiki/Data_URI_scheme
-    let data_uri = format!("data:image/png;base64,{}", base64::encode(avatar));
+    let data_uri = format!("data:image/{};base64,{}", avatar.format, base64::encode(&avatar.blob));
     serializer.serialize_str(&data_uri)
 }
 
@@ -261,8 +272,11 @@ fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
 }
 
 fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<VaultEntry>> {
-    let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
-    state.list_vault_records().map(|recs| recs.iter().map(VaultEntry::from).collect::<Vec<_>>())
+    let state = lock_state(&state)?;
+    let recs = state.list_vault_records()?;
+    // TODO we should also log errors here if any occurs during the conversion
+    let entries = recs.iter().filter_map(|rec| VaultEntry::try_from(rec).ok()).collect::<Vec<_>>();
+    Ok(entries)
 }
 
 fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
@@ -279,7 +293,7 @@ fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
 }
 
 fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<VaultEntry> {
-    let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    let mut state = lock_state(&state)?;
 
     //let alias = state.list_profiles()?.len().to_string();
     // TODO this name generation is not deterministic, but should be (found no proper lib)
@@ -293,10 +307,19 @@ fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<VaultEntry> {
         .create_icon(&mut avatar_png, &did.to_bytes())
         .map_err(|e| err_msg(format!("Failed to generate default profile icon: {:?}", e)))?;
     //std::fs::write(format!("/tmp/{}.png", alias), &avatar_png)?;
-    state.set_profile_metadata(Some(did.clone()), avatar_png.clone())?;
+
+    let mut metadata = ProfileMetadata::default();
+    metadata.image_blob = avatar_png;
+    metadata.image_format = "png".to_owned();
+    state.set_profile_metadata(Some(did.clone()), metadata.clone().try_into()?)?;
 
     state.save_vault()?;
-    Ok(VaultEntry { id: did.to_string(), alias, avatar: avatar_png, state: "TODO".to_owned() })
+    Ok(VaultEntry {
+        id: did.to_string(),
+        alias,
+        avatar: Image { format: metadata.image_format, blob: metadata.image_blob },
+        state: "TODO".to_owned(),
+    })
 }
 
 fn get_did(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Responder {
@@ -314,9 +337,9 @@ fn get_did(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Res
 
 fn get_did_impl(state: web::Data<Mutex<Context>>, did_str: String) -> Fallible<VaultEntry> {
     let did = did_str.parse()?;
-    let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    let state = lock_state(&state)?;
     let rec = state.get_vault_record(Some(did))?;
-    Ok(VaultEntry::from(&rec))
+    VaultEntry::try_from(&rec)
 }
 
 fn rename_did(
@@ -344,7 +367,7 @@ fn rename_did_impl(
     name: ProfileAlias,
 ) -> Fallible<()> {
     let did = did_str.parse()?;
-    let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    let mut state = lock_state(&state)?;
     state.rename_profile(Some(did), name)?;
     state.save_vault()?;
     Ok(())
@@ -371,6 +394,41 @@ type DataUri = String;
 type ImageFormat = String;
 type ImageBlob = Vec<u8>;
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct ProfileMetadata {
+    image_blob: ImageBlob,
+    image_format: ImageFormat,
+    claims: Vec<Claim>,
+}
+
+impl TryFrom<&[u8]> for ProfileMetadata {
+    type Error = failure::Error;
+    fn try_from(src: &[u8]) -> Fallible<Self> {
+        Ok(serde_json::from_slice(src)?)
+    }
+}
+
+impl TryInto<Vec<u8>> for ProfileMetadata {
+    type Error = failure::Error;
+    fn try_into(self) -> Fallible<Vec<u8>> {
+        Ok(serde_json::to_vec(&self)?)
+    }
+}
+
+impl TryFrom<&str> for ProfileMetadata {
+    type Error = failure::Error;
+    fn try_from(src: &str) -> Fallible<Self> {
+        Ok(serde_json::from_str(src)?)
+    }
+}
+
+impl TryInto<String> for ProfileMetadata {
+    type Error = failure::Error;
+    fn try_into(self) -> Fallible<String> {
+        Ok(serde_json::to_string(&self)?)
+    }
+}
+
 // TODO do we need support for more encodings than just base64 here?
 pub fn parse_avatar(data_uri: &str) -> Fallible<(ImageFormat, ImageBlob)> {
     let re = regex::Regex::new(r"(?x)data:image/(?P<format>\w+);base64,(?P<data>.*)")?;
@@ -388,12 +446,35 @@ fn set_avatar_impl(
     avatar_datauri: DataUri,
 ) -> Fallible<()> {
     let did = did_str.parse()?;
-    // TODO we should also save format with the binary image
     let (format, avatar_binary) = parse_avatar(&avatar_datauri)?;
-    let mut state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
-    state.set_profile_metadata(Some(did), avatar_binary)?;
+    let mut state = lock_state(&state)?;
+    let mut metadata = ProfileMetadata::default();
+    metadata.image_format = format;
+    metadata.image_blob = avatar_binary;
+    state.set_profile_metadata(Some(did), metadata.try_into()?)?;
     state.save_vault()?;
     Ok(())
+}
+
+fn list_claims(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Responder {
+    match list_claims_impl(state, did.clone()) {
+        Ok(list) => {
+            debug!("Fetched list of claims for did {}", did);
+            HttpResponse::Ok().json(list)
+        }
+        Err(e) => {
+            error!("Failed to fetch list of claims: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+fn list_claims_impl(state: web::Data<Mutex<Context>>, did_str: String) -> Fallible<Vec<Claim>> {
+    let did = did_str.parse()?;
+    let state = lock_state(&state)?;
+    let metadata_ser = state.get_profile_metadata(Some(did))?;
+    let metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
+    Ok(metadata.claims)
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
@@ -435,7 +516,7 @@ fn list_schemas(state: web::Data<Mutex<Context>>) -> impl Responder {
 }
 
 fn list_schemas_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ClaimSchema>> {
-    let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    let state = lock_state(&state)?;
     let repo = state.claim_schemas()?;
     Ok(repo.iter().map(|v| v.into()).collect::<Vec<_>>())
 }
