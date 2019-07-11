@@ -1,6 +1,5 @@
 mod options;
 
-use std::collections::HashMap;
 use std::sync::Mutex;
 use std::time::Duration;
 
@@ -12,6 +11,7 @@ use log::*;
 use serde::Serializer;
 use serde_derive::{Deserialize, Serialize};
 pub use structopt::StructOpt;
+use tokio::runtime::current_thread;
 
 pub use crate::options::Options;
 use claims::api::*;
@@ -19,7 +19,6 @@ use did::repo::*;
 use did::vault::*;
 use keyvault::Seed;
 use osg_rpc_storage::RpcProfileRepository;
-use tokio::runtime::current_thread;
 
 pub struct Daemon {
     rt: current_thread::Runtime,
@@ -66,6 +65,7 @@ fn start_daemon(options: Options) -> Fallible<Server> {
     let vault_path = did::paths::vault_path(options.config_dir.clone())?;
     let repo_path = did::paths::profile_repo_path(options.config_dir.clone())?;
     let base_path = did::paths::base_repo_path(options.config_dir.clone())?;
+    let schema_path = did::paths::schemas_path(options.schemas_dir.clone())?;
 
     let vault_exists = vault_path.exists();
     let mut vault: Option<Box<ProfileVault + Send>> = None;
@@ -83,6 +83,7 @@ fn start_daemon(options: Options) -> Fallible<Server> {
 
     let ctx = Context::new(
         vault_path.clone(),
+        schema_path.clone(),
         vault,
         local_repo,
         Box::new(base_repo),
@@ -395,27 +396,22 @@ fn set_avatar_impl(
     Ok(())
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 struct ClaimSchema {
-    name: String,
-    author: String,
-    version: u64,
-    contents: String,
+    id: String,
+    alias: String,
+    content: serde_json::Value,
 }
 
 impl ClaimSchema {
-    fn new(
-        name: impl ToString,
-        author: impl ToString,
-        version: u64,
-        contents: impl ToString,
-    ) -> Self {
-        Self {
-            name: name.to_string(),
-            author: author.to_string(),
-            version,
-            contents: contents.to_string(),
-        }
+    fn new(id: impl ToString, alias: impl ToString, content: serde_json::Value) -> Self {
+        Self { id: id.to_string(), alias: alias.to_string(), content }
+    }
+}
+
+impl From<&claims::claim_schema::SchemaVersion> for ClaimSchema {
+    fn from(model: &claims::claim_schema::SchemaVersion) -> Self {
+        Self::new(&model.id, &model.name, model.content.clone())
     }
 }
 
@@ -432,19 +428,8 @@ fn list_schemas(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn list_schemas_impl(_state: web::Data<Mutex<Context>>) -> Fallible<Vec<ClaimSchema>> {
-    Ok(vec![ClaimSchema::new(
-        "age-over",
-        "iop",
-        0,
-        r#"{
-            "$id": "/claim-schemas/McL9746fWtE9EXV5/0",
-            "type": "object",
-            "properties": {
-                "age": {
-                    "type": "number"
-                }
-            }
-        }"#,
-    )])
+fn list_schemas_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ClaimSchema>> {
+    let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
+    let repo = state.claim_schemas()?;
+    Ok(repo.schemas.iter().map(|(_k, v)| v.into()).collect::<Vec<_>>())
 }

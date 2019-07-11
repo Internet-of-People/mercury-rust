@@ -9,6 +9,11 @@ fn main() -> Fallible<()> {
 
     let daemon = Daemon::start(options)?;
 
+    // let registry = prometheusd::ClaimSchemaRegistry::import_folder(&std::path::PathBuf::from("./schemas"))?;
+    // for (_k, v) in registry.schemas {
+    //     info!("***\n{:#?}\n***", v);
+    // }
+
     // NOTE HTTP server already handles signals internally unless the no_signals option is set.
     match daemon.join() {
         Err(e) => info!("Daemon thread failed with error: {:?}", e),

@@ -23,6 +23,11 @@ pub struct Options {
     /// Default: OS-specific app_cfg_dir/prometheus
     pub config_dir: Option<PathBuf>,
 
+    #[structopt(long, raw(value_name = r#""DIR""#), parse(from_os_str))]
+    /// Directory that contains all claim schema definitions.
+    /// Default: OS-specific app_cfg_dir/prometheus/schemas
+    pub schemas_dir: Option<PathBuf>,
+
     #[structopt(
         long = "repository",
         default_value = "127.0.0.1:6161",

@@ -5,6 +5,7 @@ use failure::{bail, ensure, err_msg, Fallible};
 use futures::prelude::*;
 use log::*;
 
+pub use crate::claim_schema::ClaimSchemaRegistry;
 use crate::model::*;
 use did::repo::*;
 use did::vault::{self, ProfileAlias, ProfileMetadata, ProfileVault, ProfileVaultRecord};
@@ -93,10 +94,13 @@ pub trait Api {
         my_profile_id: Option<ProfileId>,
         key: &AttributeId,
     ) -> Fallible<()>;
+
+    fn claim_schemas(&self) -> Fallible<ClaimSchemaRegistry>;
 }
 
 pub struct Context {
     vault_path: PathBuf,
+    schema_path: PathBuf, // TODO Re-reading all schemas each time might be expensive
     vault: Option<Box<ProfileVault + Send>>,
     local_repo: FileProfileRepository, // NOTE match arms of get_profile() conflicts with Box<LocalProfileRepository>
     base_repo: Box<PrivateProfileRepository + Send>,
@@ -114,13 +118,14 @@ const ERR_MSG_VAULT_UNINITIALIZED: &str = "Vault is uninitialized, `restore vaul
 impl Context {
     pub fn new(
         vault_path: PathBuf,
+        schema_path: PathBuf,
         vault: Option<Box<ProfileVault + Send>>,
         local_repo: FileProfileRepository,
         base_repo: Box<PrivateProfileRepository + Send>,
         remote_repo: Box<PrivateProfileRepository + Send>,
         explorer: Box<ProfileExplorer + Send>,
     ) -> Self {
-        Self { vault_path, vault, local_repo, base_repo, remote_repo, explorer }
+        Self { vault_path, schema_path, vault, local_repo, base_repo, remote_repo, explorer }
     }
 
     fn vault(&self) -> Fallible<&ProfileVault> {
@@ -472,5 +477,9 @@ impl Api for Context {
         profile.mut_public_data().increase_version();
         self.local_repo.set(profile).wait()?;
         Ok(())
+    }
+
+    fn claim_schemas(&self) -> Fallible<ClaimSchemaRegistry> {
+        ClaimSchemaRegistry::import_folder(&self.schema_path)
     }
 }

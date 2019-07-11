@@ -1,0 +1,16 @@
+{
+    "id": "McL9746fWtE9EXV5",
+    "author": "iop",
+    "name": "age-over",
+    "version": 0,
+    "content": {
+        "type": "object",
+        "properties": {
+            "age": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 255
+            }
+        }
+    }
+}

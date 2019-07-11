@@ -30,6 +30,7 @@ fn run() -> Fallible<()> {
     let vault_path = did::paths::vault_path(options.config_dir.clone())?;
     let repo_path = did::paths::profile_repo_path(options.config_dir.clone())?;
     let base_path = did::paths::base_repo_path(options.config_dir.clone())?;
+    let schema_path = did::paths::schemas_path(None)?;
 
     let vault_exists = vault_path.exists();
     if command.needs_vault() && !vault_exists {
@@ -52,7 +53,8 @@ fn run() -> Fallible<()> {
     let rpc_repo = RpcProfileRepository::new(&options.remote_repo_address, timeout)?;
 
     let mut ctx = Context::new(
-        vault_path.clone(),
+        vault_path,
+        schema_path,
         vault,
         local_repo,
         Box::new(base_repo),

@@ -23,5 +23,6 @@ osg-rpc-storage = { path="../osg-rpc-storage" }
 regex = "*"
 serde = "*"
 serde_derive = "*"
+serde_json = "*"
 structopt = "*"
 tokio = "*"
