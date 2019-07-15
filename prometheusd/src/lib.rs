@@ -401,17 +401,23 @@ struct ClaimSchema {
     id: String,
     alias: String,
     content: serde_json::Value,
+    ordering: Vec<String>,
 }
 
 impl ClaimSchema {
-    fn new(id: impl ToString, alias: impl ToString, content: serde_json::Value) -> Self {
-        Self { id: id.to_string(), alias: alias.to_string(), content }
+    fn new(
+        id: impl ToString,
+        alias: impl ToString,
+        content: serde_json::Value,
+        ordering: Vec<String>,
+    ) -> Self {
+        Self { id: id.to_string(), alias: alias.to_string(), content, ordering }
     }
 }
 
 impl From<&claims::claim_schema::SchemaVersion> for ClaimSchema {
     fn from(model: &claims::claim_schema::SchemaVersion) -> Self {
-        Self::new(model.id(), model.name(), model.content().clone())
+        Self::new(model.id(), model.name(), model.content().clone(), model.ordering().to_vec())
     }
 }
 

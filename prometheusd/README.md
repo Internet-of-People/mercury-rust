@@ -21,7 +21,6 @@ This can be overridden using configuration option `--listen IP:PORT`.
 - [Claim schemas](#Claim-schemas)
   - [List all claim schemas](#List-all-claim-schemas)
 
-
 ## Authentication and/or authorization
 
 TODO
@@ -255,8 +254,11 @@ Response:
                 "maximum": 255
             }
         }  
-    }
+    },
+    "ordering": ["age-over"]
 }]
 ```
 
 Id is a content hash of the whole schema excluding that single field. To avoid simple mistakes, the JSON document is normalized before calculating its hash.
+
+The `ordering` top-level property is useful for the frontend to order editable fields on the user interface. Notice that JSON properties in an object have an undefined order. The array of property names needs to be treated quite liberally. There might be extra elements that are missing from the JSON Schema and there might be extra properties in the schema that have to be listed after all ordered properties. The only promises the backend make is that this `ordering` property will be an array of strings, but it might be potentially empty.

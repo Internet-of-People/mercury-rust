@@ -48,7 +48,7 @@ fn email_address() -> SchemaVersion {
 }
 
 fn full_name() -> SchemaVersion {
-    SchemaVersion::new(
+    SchemaVersion::new_with_order(
         "McL9746fWtE9EXVa",
         "iop",
         "full-name",
@@ -82,5 +82,6 @@ fn full_name() -> SchemaVersion {
                 },
             },
         }],
+        vec!["title", "firstName", "middleName", "lastName"],
     )
 }

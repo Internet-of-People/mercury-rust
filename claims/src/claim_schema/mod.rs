@@ -10,6 +10,8 @@ use serde_derive::{Deserialize, Serialize};
 
 use did::model::ContentId;
 
+const EMPTY_ORDERING: [String; 0] = [];
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SchemaVersion {
     id: ContentId,
@@ -17,6 +19,8 @@ pub struct SchemaVersion {
     name: String,
     version: u32,
     content: serde_json::Value,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    ordering: Option<Vec<String>>,
 }
 
 impl SchemaVersion {
@@ -33,6 +37,28 @@ impl SchemaVersion {
             name: name.to_string(),
             version,
             content,
+            ordering: None,
+        }
+    }
+
+    pub fn new_with_order<T>(
+        id: impl ToString,
+        author: impl ToString,
+        name: impl ToString,
+        version: u32,
+        content: serde_json::Value,
+        ordering: impl IntoIterator<Item = T>,
+    ) -> Self
+    where
+        T: ToString,
+    {
+        Self {
+            id: id.to_string(),
+            author: author.to_string(),
+            name: name.to_string(),
+            version,
+            content,
+            ordering: Some(ordering.into_iter().map(|s| s.to_string()).collect()),
         }
     }
 
@@ -55,6 +81,13 @@ impl SchemaVersion {
     pub fn content(&self) -> &serde_json::Value {
         &self.content
     }
+
+    pub fn ordering(&self) -> &[String] {
+        match &self.ordering {
+            Some(v) => v.as_slice(),
+            None => &EMPTY_ORDERING,
+        }
+    }
 }
 
 pub struct ClaimSchemaRegistry {
@@ -71,7 +104,7 @@ impl ClaimSchemaRegistry {
             let file_name =
                 format!("{}_{}_{}.schema.json", schema.author, schema.name, schema.version);
             let file = std::fs::File::create(&path.join(file_name))?;
-            serde_json::to_writer(file, &schema)?;
+            serde_json::to_writer_pretty(file, &schema)?;
         }
         Ok(())
     }
