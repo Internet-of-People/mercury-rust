@@ -7,7 +7,7 @@ use std::time::Duration;
 use actix_cors::Cors;
 use actix_server::Server;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer, Responder};
-use failure::{err_msg, Fallible};
+use failure::{bail, err_msg, Fallible};
 use log::*;
 use serde::Serializer;
 use serde_derive::{Deserialize, Serialize};
@@ -106,33 +106,38 @@ fn start_daemon(options: Options) -> Fallible<Server> {
             .register_data(daemon_state.clone())
             .service(
                 web::scope("/bip39")
-                    .service(web::resource("").route(web::post().to(generate_bip39_phrase)))
-                    .service(
-                        web::resource("/validate-phrase")
-                            .route(web::post().to(validate_bip39_phrase)),
-                    )
-                    .service(
-                        web::resource("/validate-word").route(web::post().to(validate_bip39_word)),
-                    ),
+                .service(web::resource("").route(web::post().to(generate_bip39_phrase)))
+                .service(
+                    web::resource("/validate-phrase")
+                        .route(web::post().to(validate_bip39_phrase)),
+                )
+                .service(
+                    web::resource("/validate-word").route(web::post().to(validate_bip39_word)),
+                ),
             )
             .service(
                 web::scope("/vault")
-                    .service(web::resource("").route(web::post().to(init_vault)))
+                .service(web::resource("").route(web::post().to(init_vault)))
+                .service(
+                    web::scope("/dids")
+                    .service(web::resource("")
+                        .route(web::get().to(list_did))
+                        .route(web::post().to(create_did))
+                    )
                     .service(
-                        web::scope("/dids")
-                        .service(web::resource("")
-                            .route(web::get().to(list_did))
-                            .route(web::post().to(create_did))
-                        )
-                        .service(web::resource("/{did}").route(web::get().to(get_did)))
-                        .service(web::resource("/{did}/alias").route(web::put().to(rename_did)))
-                        .service(web::resource("/{did}/avatar").route(web::put().to(set_avatar)))
-                        .service(web::scope("/{did}/claims")
+                        web::scope("/{did}")
+                        .service(web::resource("").route(web::get().to(get_did)))
+                        .service(web::resource("/alias").route(web::put().to(rename_did)))
+                        .service(web::resource("/avatar").route(web::put().to(set_avatar)))
+                        .service(web::scope("/claims")
                             .service( web::resource("")
-                            .route(web::get().to(list_claims))
-                            .route(web::post().to(create_claim)))
+                                .route(web::get().to(list_claims))
+                                .route(web::post().to(create_claim)) )
+                            .service( web::resource("{claim_id}")
+                                .route(web::delete().to(delete_claim)))
                         ),
                     )
+                )
             )
             .service(web::resource("/claim-schemas").route(web::get().to(list_schemas)))
             .default_service(web::to(HttpResponse::NotFound))
@@ -514,16 +519,66 @@ fn create_claim_impl(
     let metadata_ser = state.get_profile_metadata(Some(did.clone()))?;
     let mut metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
 
-    // TODO check if schema_id is available
-    // TODO validate contents agains schema details
-
     let claim = Claim::new(claim_details.schema, claim_details.content);
     let claim_id = claim.id();
+
+    let conflicting_claims = metadata.claims.iter().filter(|claim| claim.id() == claim_id);
+    if conflicting_claims.count() != 0 {
+        bail!("Claim {} is already present", claim_id);
+    }
+
+    // TODO check if schema_id is available
+    // TODO validate contents agains schema details
     metadata.claims.push(claim);
 
     state.set_profile_metadata(Some(did), metadata.try_into()?)?;
     state.save_vault()?;
     Ok(claim_id)
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct ClaimPath {
+    did: String,
+    claim_id: String,
+}
+
+fn delete_claim(
+    state: web::Data<Mutex<Context>>,
+    claim_path: web::Path<ClaimPath>,
+) -> impl Responder {
+    match delete_claim_impl(state, claim_path.clone()) {
+        Ok(()) => {
+            debug!("Deleted claim {} from profile {}", claim_path.claim_id, claim_path.did);
+            HttpResponse::Ok().body("")
+        }
+        Err(e) => {
+            error!(
+                "Failed to delete claim {} from profile {}: {}",
+                claim_path.claim_id, claim_path.did, e
+            );
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+fn delete_claim_impl(state: web::Data<Mutex<Context>>, claim_path: ClaimPath) -> Fallible<()> {
+    let did: ProfileId = claim_path.did.parse()?;
+    let claim_id = claim_path.claim_id;
+    let mut state = lock_state(&state)?;
+    let metadata_ser = state.get_profile_metadata(Some(did.clone()))?;
+    let mut metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
+
+    let claims_len_before = metadata.claims.len();
+    metadata.claims.retain(|claim| claim.id() != claim_id);
+    if metadata.claims.len() != claims_len_before - 1 {
+        bail!("Claim {} not found", claim_id);
+    }
+
+    // TODO consider if deleting all related presentations are needed as a separate step
+
+    state.set_profile_metadata(Some(did), metadata.try_into()?)?;
+    state.save_vault()?;
+    Ok(())
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]

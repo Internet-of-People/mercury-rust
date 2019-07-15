@@ -287,7 +287,20 @@ TODO what happens with related presentations?
 
 ### Delete a claim
 
-TODO probably all related presentations must be deleted as well?
+Delete a claim instance with specified identifier.
+
+Request:
+
+- Endpoint: DELETE `/vault/dids/{did}/claims/{claim_id}`
+- Parameters: -
+- Headers: -
+- Content: -
+
+Response:
+
+- Status: 200 or 409 (uninitialized vault)
+- Content: -  
+
 
 ## Claim schemas
 
