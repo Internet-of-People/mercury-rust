@@ -7,16 +7,18 @@ pub use did::model::*;
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Claim {
     id: ContentId,
-    schema: ContentId,
-    content: serde_json::Value,
-    proof: Vec<ClaimProof>,
-    presentation: Vec<ClaimPresentation>,
+    pub subject_id: ProfileId,
+    pub schema: ContentId,
+    pub content: serde_json::Value,
+    pub proof: Vec<ClaimProof>,
+    pub presentation: Vec<ClaimPresentation>,
 }
 
 impl Claim {
-    pub fn new(schema: impl ToString, content: serde_json::Value) -> Self {
+    pub fn new(subject_id: ProfileId, schema: impl ToString, content: serde_json::Value) -> Self {
         let mut this = Self {
             id: Default::default(),
+            subject_id,
             schema: schema.to_string(),
             content,
             proof: vec![],

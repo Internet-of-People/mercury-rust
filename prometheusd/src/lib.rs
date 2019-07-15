@@ -478,12 +478,36 @@ fn list_claims(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl
     }
 }
 
-fn list_claims_impl(state: web::Data<Mutex<Context>>, did_str: String) -> Fallible<Vec<Claim>> {
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ApiClaim {
+    id: ContentId,
+    subject_id: String,
+    schema: ContentId,
+    content: serde_json::Value,
+    proof: Vec<ClaimProof>,
+    presentation: Vec<ClaimPresentation>,
+}
+
+impl From<&Claim> for ApiClaim {
+    fn from(src: &Claim) -> Self {
+        Self {
+            id: src.id(),
+            subject_id: src.subject_id.to_string(),
+            schema: src.schema.to_owned(),
+            content: src.content.to_owned(),
+            proof: src.proof.to_owned(),
+            presentation: src.presentation.to_owned(),
+        }
+    }
+}
+
+fn list_claims_impl(state: web::Data<Mutex<Context>>, did_str: String) -> Fallible<Vec<ApiClaim>> {
     let did = did_str.parse()?;
     let state = lock_state(&state)?;
     let metadata_ser = state.get_profile_metadata(Some(did))?;
     let metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
-    Ok(metadata.claims)
+    let claims = metadata.claims.iter().map(|claim| claim.into()).collect();
+    Ok(claims)
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
@@ -519,7 +543,7 @@ fn create_claim_impl(
     let metadata_ser = state.get_profile_metadata(Some(did.clone()))?;
     let mut metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
 
-    let claim = Claim::new(claim_details.schema, claim_details.content);
+    let claim = Claim::new(did.clone(), claim_details.schema, claim_details.content);
     let claim_id = claim.id();
 
     let conflicting_claims = metadata.claims.iter().filter(|claim| claim.id() == claim_id);

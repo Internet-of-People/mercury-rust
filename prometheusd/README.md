@@ -235,6 +235,7 @@ Response:
 ```json
 {
   "id": "<content_hash_of_claim_instance>",
+  "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n", // Morpheus ID
   "schema": "<content_hash_of_claim_schema>",
   "content": {
     // Completely schema-dependent structure here
