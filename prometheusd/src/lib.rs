@@ -131,13 +131,14 @@ fn start_daemon(options: Options) -> Fallible<Server> {
                         .service(web::resource("/avatar").route(web::put().to(set_avatar)))
                         .service(web::scope("/claims")
                             .service( web::resource("")
-                                .route(web::get().to(list_claims))
+                                .route(web::get().to(list_did_claims))
                                 .route(web::post().to(create_claim)) )
                             .service( web::resource("{claim_id}")
                                 .route(web::delete().to(delete_claim)))
                         ),
                     )
                 )
+                .service(web::resource("/claims").route(web::get().to(list_vault_claims)))
             )
             .service(web::resource("/claim-schemas").route(web::get().to(list_schemas)))
             .default_service(web::to(HttpResponse::NotFound))
@@ -465,11 +466,11 @@ fn set_avatar_impl(
     Ok(())
 }
 
-fn list_claims(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Responder {
-    match list_claims_impl(state, did.clone()) {
-        Ok(list) => {
+fn list_did_claims(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Responder {
+    match list_did_claims_impl(state, did.clone()) {
+        Ok(did_claims) => {
             debug!("Fetched list of claims for did {}", did);
-            HttpResponse::Ok().json(list)
+            HttpResponse::Ok().json(did_claims)
         }
         Err(e) => {
             error!("Failed to fetch list of claims: {}", e);
@@ -501,12 +502,41 @@ impl From<&Claim> for ApiClaim {
     }
 }
 
-fn list_claims_impl(state: web::Data<Mutex<Context>>, did_str: String) -> Fallible<Vec<ApiClaim>> {
+fn list_did_claims_impl(
+    state: web::Data<Mutex<Context>>,
+    did_str: String,
+) -> Fallible<Vec<ApiClaim>> {
     let did = did_str.parse()?;
     let state = lock_state(&state)?;
     let metadata_ser = state.get_profile_metadata(Some(did))?;
     let metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
     let claims = metadata.claims.iter().map(|claim| claim.into()).collect();
+    Ok(claims)
+}
+
+fn list_vault_claims(state: web::Data<Mutex<Context>>) -> impl Responder {
+    match list_vault_claims_impl(state) {
+        Ok(claims) => {
+            debug!("Fetched list of claims");
+            HttpResponse::Ok().json(claims)
+        }
+        Err(e) => {
+            error!("Failed to fetch list of claims: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+fn list_vault_claims_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ApiClaim>> {
+    let state = lock_state(&state)?;
+    let claims = state
+        .list_vault_records()?
+        .iter()
+        // TODO we should at least log conversion problems here
+        .filter_map(|rec| ProfileMetadata::try_from(rec.metadata().as_str()).ok() )
+        .flat_map(|metadata| metadata.claims)
+        .map(|claim| (&claim).into())
+        .collect();
     Ok(claims)
 }
 

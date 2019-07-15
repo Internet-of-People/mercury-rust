@@ -216,6 +216,36 @@ Response:
 
 ## Claims
 
+### List all claims
+
+List all claims that are present in the whole vault, regardless of their subject.
+
+Request:
+
+- Endpoint: GET `/vault/claims`
+- Parameters: -
+- Headers: -
+- Content: -
+
+Response:
+
+- Status: 200 or 409 (uninitialized vault)
+- Content: array of claim objects found in the vault, e.g.
+
+```json
+[{
+  "id": "<claim_id>",
+  "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n", // Morpheus DID
+  "schema": "<schema_id>",
+  "content": {
+    // Completely schema-dependent structure here
+  },
+  "proof": [ "TODO" ],
+  "presentation": [ "TODO" ]
+}]
+```
+
+
 ### List claims of a profile
 
 List all claims that have a specified profile as their subject.
@@ -233,16 +263,16 @@ Response:
 - Content: array of claim objects found for the specified profile, e.g.
 
 ```json
-{
-  "id": "<content_hash_of_claim_instance>",
-  "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n", // Morpheus ID
-  "schema": "<content_hash_of_claim_schema>",
+[{
+  "id": "<claim_id>",
+  "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n", // Morpheus DID
+  "schema": "<schema_id>",
   "content": {
     // Completely schema-dependent structure here
   },
   "proof": [ "TODO" ],
   "presentation": [ "TODO" ]
-}
+}]
 ```
 
 ### Create a claim
