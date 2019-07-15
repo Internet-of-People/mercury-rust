@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
 
-use failure::Fallible;
+use failure::{err_msg, Fallible};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 
@@ -97,6 +97,13 @@ pub struct ClaimSchemaRegistry {
 impl ClaimSchemaRegistry {
     pub fn iter(&self) -> impl Iterator<Item = &SchemaVersion> {
         self.schemas.values()
+    }
+
+    pub fn get(&self, id: &ContentId) -> Fallible<SchemaVersion> {
+        self.schemas
+            .get(id)
+            .map(|val| val.to_owned())
+            .ok_or_else(|| err_msg(format!("Schema id {} not found in registry", id)))
     }
 
     pub fn populate_folder(path: &Path) -> Fallible<()> {

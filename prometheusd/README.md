@@ -236,7 +236,9 @@ Response:
 [{
   "id": "<claim_id>",
   "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n", // Morpheus DID
-  "schema": "<schema_id>",
+  "subject_alias": "Neo",
+  "schema_id": "<schema_id>",
+  "schema_name": "age-over",
   "content": {
     // Completely schema-dependent structure here
   },
@@ -266,7 +268,9 @@ Response:
 [{
   "id": "<claim_id>",
   "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n", // Morpheus DID
-  "schema": "<schema_id>",
+  "subject_alias": "Neo",
+  "schema_id": "<schema_id>",
+  "schema_name": "age-over",
   "content": {
     // Completely schema-dependent structure here
   },

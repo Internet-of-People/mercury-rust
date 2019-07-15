@@ -483,22 +483,31 @@ fn list_did_claims(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> 
 pub struct ApiClaim {
     id: ContentId,
     subject_id: String,
-    schema: ContentId,
+    subject_alias: String,
+    schema_id: String,
+    schema_name: String,
     content: serde_json::Value,
     proof: Vec<ClaimProof>,
     presentation: Vec<ClaimPresentation>,
 }
 
-impl From<&Claim> for ApiClaim {
-    fn from(src: &Claim) -> Self {
-        Self {
+impl ApiClaim {
+    fn try_from(
+        src: &Claim,
+        subject_alias: ProfileAlias,
+        schema_registry: &ClaimSchemaRegistry,
+    ) -> Fallible<Self> {
+        let schema_name = schema_registry.get(&src.schema)?.name().to_owned();
+        Ok(Self {
             id: src.id(),
             subject_id: src.subject_id.to_string(),
-            schema: src.schema.to_owned(),
+            subject_alias,
+            schema_id: src.schema.to_owned(),
+            schema_name,
             content: src.content.to_owned(),
             proof: src.proof.to_owned(),
             presentation: src.presentation.to_owned(),
-        }
+        })
     }
 }
 
@@ -508,9 +517,15 @@ fn list_did_claims_impl(
 ) -> Fallible<Vec<ApiClaim>> {
     let did = did_str.parse()?;
     let state = lock_state(&state)?;
-    let metadata_ser = state.get_profile_metadata(Some(did))?;
-    let metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
-    let claims = metadata.claims.iter().map(|claim| claim.into()).collect();
+    let rec = state.get_vault_record(Some(did))?;
+    let schema_registry = state.claim_schemas()?;
+    let metadata = ProfileMetadata::try_from(rec.metadata().as_str())?;
+    let claims = metadata
+        .claims
+        .iter()
+        // TODO at least log conversion errors 
+        .filter_map(|claim| ApiClaim::try_from(claim, rec.alias(), &schema_registry).ok())
+        .collect();
     Ok(claims)
 }
 
@@ -529,14 +544,16 @@ fn list_vault_claims(state: web::Data<Mutex<Context>>) -> impl Responder {
 
 fn list_vault_claims_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ApiClaim>> {
     let state = lock_state(&state)?;
-    let claims = state
-        .list_vault_records()?
-        .iter()
-        // TODO we should at least log conversion problems here
-        .filter_map(|rec| ProfileMetadata::try_from(rec.metadata().as_str()).ok() )
-        .flat_map(|metadata| metadata.claims)
-        .map(|claim| (&claim).into())
-        .collect();
+    let schema_registry = state.claim_schemas()?;
+
+    let mut claims = Vec::new();
+    for rec in state.list_vault_records()? {
+        let metadata = ProfileMetadata::try_from(rec.metadata().as_str())?;
+        for claim in metadata.claims {
+            claims.push(ApiClaim::try_from(&claim, rec.alias(), &schema_registry)?);
+        }
+    }
+
     Ok(claims)
 }
 
