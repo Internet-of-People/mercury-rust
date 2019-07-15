@@ -411,7 +411,7 @@ impl ClaimSchema {
 
 impl From<&claims::claim_schema::SchemaVersion> for ClaimSchema {
     fn from(model: &claims::claim_schema::SchemaVersion) -> Self {
-        Self::new(&model.id, &model.name, model.content.clone())
+        Self::new(model.id(), model.name(), model.content().clone())
     }
 }
 
@@ -431,5 +431,5 @@ fn list_schemas(state: web::Data<Mutex<Context>>) -> impl Responder {
 fn list_schemas_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ClaimSchema>> {
     let state = state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))?;
     let repo = state.claim_schemas()?;
-    Ok(repo.schemas.iter().map(|(_k, v)| v.into()).collect::<Vec<_>>())
+    Ok(repo.iter().map(|v| v.into()).collect::<Vec<_>>())
 }

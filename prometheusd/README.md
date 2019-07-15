@@ -20,10 +20,6 @@ This can be overridden using configuration option `--listen IP:PORT`.
 - [Claims](#Claims)
 - [Claim schemas](#Claim-schemas)
   - [List all claim schemas](#List-all-claim-schemas)
-  - [Create new schema (not implemented)](#Create-new-schema-not-implemented)
-  - [Create new version of a given schema (not implemented)](#Create-new-version-of-a-given-schema-not-implemented)
-  - [Get latest version of a given schema](#Get-latest-version-of-a-given-schema)
-  - [Get given version of a given schema](#Get-given-version-of-a-given-schema)
 
 
 ## Authentication and/or authorization
@@ -227,9 +223,11 @@ TODO
 
 ## Claim schemas
 
+Each claim has to conform to a JSON schema that is identified by a content hash.
+
 ### List all claim schemas
 
-TODO Consolidate with `GET /vault/dids` so either both expand objects, or both return just links to objects as REST defines.
+This is a simplistic endpoint to retrieve all schemas with all metadat from the backend upon startup. We decided against a proper REST API with lazy retrieval of each schema by `id` after getting a list of metadata here.
 
 Request:
 
@@ -241,13 +239,13 @@ Request:
 Response:
 
 - Status: 200
-- Content: List of schema identifiers, e.g.
+- Content: List of all schema with metadata, e.g.
 
 ```json
 
 [{
     "id": "McL9746fWtE9EXV5",
-    "alias": "age-over"
+    "alias": "age-over",
     "content": {
         "type": "object",
         "properties": {
@@ -261,115 +259,4 @@ Response:
 }]
 ```
 
-### Create new schema (not implemented)
-
-TODO Provide authentication to prove rights to author the schema.
-
-Request:
-
-- Endpoint: POST `/claim-schemas`
-- Parameters: -
-- Headers: -
-- Content: Content and metadata of the schema, e.g.
-
-```json
-{
-    "alias": "age-over"
-    "content": {
-        "type": "object",
-        "properties": {
-            "age": {
-                "type": "number",
-                "minimum": 0,
-                "maximum": 255
-            }
-        }  
-    }
-}
-```
-
-Response:
-
-- Status: 201 or 403 (unauthorized)
-- Headers -
-- Content
-
-### Create new version of a given schema (not implemented)
-
-TODO Provide authentication to prove rights to author the schema.
-
-Request:
-
-- Endpoint: POST `/claim-schemas/{id}`
-- Parameters: `id` is the artificial identifier of the schema
-- Headers: -
-- Content: New content of the schema, e.g.
-
-```json
-{
-    "type": "object",
-    "properties": {
-        "age": {
-            "type": "number",
-            "minimum": 0,
-            "maximum": 255
-        }
-    }
-}
-```
-
-Response:
-
-- Status: 303 or 403 (unauthorized)
-- Headers
-  - Location: Link to the created object, e.g. `Location: /claim-schemas/McL9746fWtE9EXV5/1`
-- Content: Empty
-
-### Get latest version of a given schema
-
-Request:
-
-- Endpoint: GET `/claim-schemas/{id}/latest`
-- Parameters: `id` is the artificial identifier of the schema
-- Headers: -
-- Content: -
-
-Response:
-
-- Status: 302 (temporary redirect) or 404 (id not found)
-- Headers:
-  - Location: Link to the latest version, e.g. `Location: /claim-schemas/McL9746fWtE9EXV5/1`
-- Content: Empty
-
-### Get given version of a given schema
-
-Request:
-
-- Endpoint: GET `/claim-schemas/{id}/{version}`
-- Parameters: `id` is the artificial identifier of the schema
-- Headers: -
-- Content: -
-
-Response:
-
-- Status: 200 or 404 (id is not found or invalid version)
-- Headers:
-  - `Link: </claim/schemas/{id}/{version}>; rel="latest-version"`
-- Content: Contents and metadata of the given version of the given schema, e.g.
-
-```json
-{
-  name: "age-over",
-  author: "iop",
-  version: 0,
-  contents: {
-      "$id": "/claim-schemas/McL9746fWtE9EXV5/0",
-      "type": "object",
-      "properties": {
-          "age": {
-              "type": "number"
-          }
-      }
-  }
-}
-```
+Id is a content hash of the whole schema excluding that single field. To avoid simple mistakes, the JSON document is normalized before calculating its hash.

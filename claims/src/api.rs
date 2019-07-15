@@ -480,6 +480,11 @@ impl Api for Context {
     }
 
     fn claim_schemas(&self) -> Fallible<ClaimSchemaRegistry> {
-        ClaimSchemaRegistry::import_folder(&self.schema_path)
+        let p = &self.schema_path;
+        if !p.exists() {
+            std::fs::create_dir_all(p)?;
+            ClaimSchemaRegistry::populate_folder(p)?;
+        }
+        ClaimSchemaRegistry::import_folder(p)
     }
 }
