@@ -234,8 +234,8 @@ Response:
 
 ```json
 {
-  "id": "<multihash_of_claim_instance>",
-  "schema": "<DID_of_claim_schema>",
+  "id": "<content_hash_of_claim_instance>",
+  "schema": "<content_hash_of_claim_schema>",
   "content": {
     // Completely schema-dependent structure here
   },
@@ -246,7 +246,28 @@ Response:
 
 ### Create a claim
 
-TODO
+Create a claim instance with given schema and contents for a specified profile as subject.
+
+Request:
+
+- Endpoint: POST `/vault/dids/{did}/claims`
+- Parameters: -
+- Headers: -
+- Content: JSON object with details of the claim to be created, e.g.
+```json
+{
+  "schema": "<content_hash_of_claim_schema>",
+  "content": {
+    // Completely schema-dependent structure here
+  },
+}
+```
+
+Response:
+
+- Status: 201 or 409 (uninitialized vault)
+- Content: id (content hash) string of the created claim  
+
 
 ### Request witness signature for a claim
 

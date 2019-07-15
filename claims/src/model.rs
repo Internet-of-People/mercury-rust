@@ -6,22 +6,35 @@ pub use did::model::*;
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct Claim {
-    id: String,     // TODO multihash?
-    schema: String, // TODO multihash?
+    id: ContentId,
+    schema: ContentId,
     content: serde_json::Value,
     proof: Vec<ClaimProof>,
     presentation: Vec<ClaimPresentation>,
 }
 
 impl Claim {
-    pub fn new(id: &str, schema: &str, content: serde_json::Value) -> Self {
-        Self {
-            id: id.to_owned(),
-            schema: schema.to_owned(),
+    pub fn new(schema: impl ToString, content: serde_json::Value) -> Self {
+        let mut this = Self {
+            id: Default::default(),
+            schema: schema.to_string(),
             content,
             proof: vec![],
             presentation: vec![],
-        }
+        };
+        this.id = this.content_hash();
+        this
+    }
+
+    fn content_hash(&self) -> ContentId {
+        // TODO
+        // unimplemented!()
+        use rand::Rng;
+        rand::thread_rng().gen_ascii_chars().take(16).collect()
+    }
+
+    pub fn id(&self) -> ContentId {
+        self.id.clone()
     }
 }
 

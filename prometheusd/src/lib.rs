@@ -127,7 +127,11 @@ fn start_daemon(options: Options) -> Fallible<Server> {
                         .service(web::resource("/{did}").route(web::get().to(get_did)))
                         .service(web::resource("/{did}/alias").route(web::put().to(rename_did)))
                         .service(web::resource("/{did}/avatar").route(web::put().to(set_avatar)))
-                        .service(web::resource("/{did}/claims").route(web::get().to(list_claims))),
+                        .service(web::scope("/{did}/claims")
+                            .service( web::resource("")
+                            .route(web::get().to(list_claims))
+                            .route(web::post().to(create_claim)))
+                        ),
                     )
             )
             .service(web::resource("/claim-schemas").route(web::get().to(list_schemas)))
@@ -475,6 +479,51 @@ fn list_claims_impl(state: web::Data<Mutex<Context>>, did_str: String) -> Fallib
     let metadata_ser = state.get_profile_metadata(Some(did))?;
     let metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
     Ok(metadata.claims)
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+struct CreateClaim {
+    schema: ContentId, // TODO multihash?
+    content: serde_json::Value,
+}
+
+fn create_claim(
+    state: web::Data<Mutex<Context>>,
+    did: web::Path<String>,
+    claim_details: web::Json<CreateClaim>,
+) -> impl Responder {
+    match create_claim_impl(state, did.clone(), claim_details.clone()) {
+        Ok(claim) => {
+            debug!("Created claim for did {}", did);
+            HttpResponse::Created().json(claim)
+        }
+        Err(e) => {
+            debug!("Failed to create claim for did {}: {}", did, e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+fn create_claim_impl(
+    state: web::Data<Mutex<Context>>,
+    did_str: String,
+    claim_details: CreateClaim,
+) -> Fallible<ContentId> {
+    let did: ProfileId = did_str.parse()?;
+    let mut state = lock_state(&state)?;
+    let metadata_ser = state.get_profile_metadata(Some(did.clone()))?;
+    let mut metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
+
+    // TODO check if schema_id is available
+    // TODO validate contents agains schema details
+
+    let claim = Claim::new(claim_details.schema, claim_details.content);
+    let claim_id = claim.id();
+    metadata.claims.push(claim);
+
+    state.set_profile_metadata(Some(did), metadata.try_into()?)?;
+    state.save_vault()?;
+    Ok(claim_id)
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
