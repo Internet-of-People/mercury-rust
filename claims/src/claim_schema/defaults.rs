@@ -62,7 +62,7 @@ fn full_name() -> SchemaVersion {
                     "required": false,
                     "description": "eg.: Mr.",
                 },
-                "firstName": {
+                "givenName": {
                     "type": "string",
                     "maxLength": 50,
                     "required": true,
@@ -74,7 +74,7 @@ fn full_name() -> SchemaVersion {
                     "required": false,
                     "description": "eg.: Canary",
                 },
-                "lastName": {
+                "familyName": {
                     "type": "string",
                     "maxLength": 50,
                     "required": true,
@@ -82,6 +82,6 @@ fn full_name() -> SchemaVersion {
                 },
             },
         }],
-        vec!["title", "firstName", "middleName", "lastName"],
+        vec!["title", "givenName", "middleName", "familyName"],
     )
 }
