@@ -455,10 +455,11 @@ fn set_avatar_impl(
     did_str: String,
     avatar_datauri: DataUri,
 ) -> Fallible<()> {
-    let did = did_str.parse()?;
+    let did: ProfileId = did_str.parse()?;
     let (format, avatar_binary) = parse_avatar(&avatar_datauri)?;
     let mut state = lock_state(&state)?;
-    let mut metadata = ProfileMetadata::default();
+    let metadata_ser = state.get_profile_metadata(Some(did.clone()))?;
+    let mut metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
     metadata.image_format = format;
     metadata.image_blob = avatar_binary;
     state.set_profile_metadata(Some(did), metadata.try_into()?)?;
