@@ -101,7 +101,7 @@ pub use cc::{ChainCode, CHAIN_CODE_SIZE};
 pub use ext_pk::SecpExtPublicKey;
 pub use ext_sk::SecpExtPrivateKey;
 pub use id::{SecpKeyId, KEY_ID_SIZE, KEY_ID_VERSION1};
-pub use network::{btc, iop};
+pub use network::{ark, btc, hyd, iop};
 pub use pk::{SecpPublicKey, PUBLIC_KEY_SIZE, PUBLIC_KEY_UNCOMPRESSED_SIZE};
 pub use sig::{SecpSignature, SIGNATURE_SIZE, SIGNATURE_VERSION1};
 pub use sk::{SecpPrivateKey, PRIVATE_KEY_SIZE};
@@ -204,6 +204,10 @@ pub trait Network {
     fn bip32_xprv(&self) -> &'static [u8; BIP32_VERSION_PREFIX_SIZE];
     /// `to_xpub` and `from_xpub` needs version bytes
     fn bip32_xpub(&self) -> &'static [u8; BIP32_VERSION_PREFIX_SIZE];
+    /// signed free-text messages are prefixed with this text
+    fn message_prefix(&self) -> &'static str;
+    /// SLIP-44 registered coin number for BIP-44 derivation
+    fn slip44(&self) -> i32;
 }
 
 #[cfg(test)]

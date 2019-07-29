@@ -13,11 +13,17 @@ impl Network for Mainnet {
     fn wif(&self) -> &'static [u8; 1] {
         b"\x80"
     }
+    fn bip32_xpub(&self) -> &'static [u8; 4] {
+        b"\x04\x88\xB2\x1E"
+    }
     fn bip32_xprv(&self) -> &'static [u8; 4] {
         b"\x04\x88\xAD\xE4"
     }
-    fn bip32_xpub(&self) -> &'static [u8; 4] {
-        b"\x04\x88\xB2\x1E"
+    fn message_prefix(&self) -> &'static str {
+        "\x18Bitcoin Signed Message:\n"
+    }
+    fn slip44(&self) -> i32 {
+        0
     }
 }
 
@@ -34,10 +40,16 @@ impl Network for Testnet {
     fn wif(&self) -> &'static [u8; 1] {
         b"\xEF"
     }
+    fn bip32_xpub(&self) -> &'static [u8; 4] {
+        b"\x04\x35\x87\xCF"
+    }
     fn bip32_xprv(&self) -> &'static [u8; 4] {
         b"\x04\x35\x83\x94"
     }
-    fn bip32_xpub(&self) -> &'static [u8; 4] {
-        b"\x04\x35\x87\xCF"
+    fn message_prefix(&self) -> &'static str {
+        "\x18Bitcoin Signed Message:\n"
+    }
+    fn slip44(&self) -> i32 {
+        1
     }
 }
