@@ -1,6 +1,8 @@
 use failure::Fallible;
 use log::*;
-use prometheusd::{init_logger, Daemon, Options, StructOpt};
+use structopt::StructOpt;
+
+use prometheusd::{init_logger, Daemon, Options};
 
 fn main() -> Fallible<()> {
     let options = Options::from_args();
