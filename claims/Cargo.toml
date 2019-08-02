@@ -12,7 +12,7 @@ failure = "*"
 futures = "0.1"
 log = "*"
 keyvault = { path="../keyvault" }
-rand = "0.5"
+rand = "*"
 serde = "*"
 serde_derive = "*"
 serde_json = "*"

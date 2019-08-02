@@ -31,8 +31,8 @@ impl Claim {
     fn content_hash(&self) -> ContentId {
         // TODO
         // unimplemented!()
-        use rand::Rng;
-        rand::thread_rng().gen_ascii_chars().take(16).collect()
+        use rand::{distributions::Alphanumeric, Rng};
+        rand::thread_rng().sample_iter(&Alphanumeric).take(16).collect()
     }
 
     pub fn id(&self) -> ContentId {
