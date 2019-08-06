@@ -5,8 +5,9 @@ use actix_web::{web, HttpResponse, Responder};
 use failure::{bail, err_msg, Fallible};
 
 use crate::data::{ProfileMetadata, *};
+use crate::names::DeterministicNameGenerator;
 use claims::{api::*, model::*};
-use did::vault::ProfileAlias;
+use did::vault::ProfileLabel;
 use keyvault::Seed;
 
 pub fn generate_bip39_phrase() -> impl Responder {
@@ -50,19 +51,18 @@ pub fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<VaultEnt
 
 pub fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<VaultEntry> {
     let mut state = lock_state(&state)?;
+    let did = state.create_profile(None)?;
+    let did_bytes = did.to_bytes();
 
-    //let alias = state.list_profiles()?.len().to_string();
-    // TODO this name generation is not deterministic, but should be (found no proper lib)
-    // TODO instantiating generators here might provide worse performance than keeping
-    //      a generator instance in the state, but that is probably not significant in practice
-    let alias = names::Generator::default().next().unwrap_or_else(|| "FAILING FAILURE".to_owned());
-    let did = state.create_profile(alias.clone())?;
+    //let label = names::Generator::default().next().unwrap_or_else(|| "FAILING FAILURE".to_owned());
+    let label = DeterministicNameGenerator::default().name(&did_bytes);
+    state.rename_profile(Some(did.clone()), label.clone())?;
 
     let mut avatar_png = Vec::new();
     blockies::Ethereum::default()
-        .create_icon(&mut avatar_png, &did.to_bytes())
+        .create_icon(&mut avatar_png, &did_bytes)
         .map_err(|e| err_msg(format!("Failed to generate default profile icon: {:?}", e)))?;
-    //std::fs::write(format!("/tmp/{}.png", alias), &avatar_png)?;
+    //std::fs::write(format!("/tmp/{}.png", label), &avatar_png)?;
 
     let mut metadata = ProfileMetadata::default();
     metadata.image_blob = avatar_png;
@@ -72,7 +72,7 @@ pub fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<VaultEntry
     state.save_vault()?;
     Ok(VaultEntry {
         id: did.to_string(),
-        alias,
+        label,
         avatar: Image { format: metadata.image_format, blob: metadata.image_blob },
         state: "TODO".to_owned(),
     })
@@ -89,7 +89,7 @@ pub fn rename_did_impl(
     state: web::Data<Mutex<Context>>,
     did_str: String,
     //did: ProfileId,
-    name: ProfileAlias,
+    name: ProfileLabel,
 ) -> Fallible<()> {
     let did = did_str.parse()?;
     let mut state = lock_state(&state)?;
@@ -128,7 +128,7 @@ pub fn list_did_claims_impl(
         .claims
         .iter()
         // TODO at least log conversion errors 
-        .filter_map(|claim| ApiClaim::try_from(claim, rec.alias(), &schema_registry).ok())
+        .filter_map(|claim| ApiClaim::try_from(claim, rec.label(), &schema_registry).ok())
         .collect();
     Ok(claims)
 }
@@ -141,7 +141,7 @@ pub fn list_vault_claims_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<
     for rec in state.list_vault_records()? {
         let metadata = ProfileMetadata::try_from(rec.metadata().as_str())?;
         for claim in metadata.claims {
-            claims.push(ApiClaim::try_from(&claim, rec.alias(), &schema_registry)?);
+            claims.push(ApiClaim::try_from(&claim, rec.label(), &schema_registry)?);
         }
     }
 

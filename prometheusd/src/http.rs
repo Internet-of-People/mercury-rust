@@ -33,7 +33,7 @@ pub fn init_url_mapping(service: &mut web::ServiceConfig) {
                         .service(
                             web::scope("/{did}")
                                 .service(web::resource("").route(web::get().to(get_did)))
-                                .service(web::resource("/alias").route(web::put().to(rename_did)))
+                                .service(web::resource("/label").route(web::put().to(rename_did)))
                                 .service(web::resource("/avatar").route(web::put().to(set_avatar)))
                                 .service(
                                     web::scope("/claims")
@@ -84,7 +84,7 @@ fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
 fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     match create_dids_impl(state) {
         Ok(entry) => {
-            debug!("Created profile {} with alias {}", entry.id, entry.alias);
+            debug!("Created profile {} with label {}", entry.id, entry.label);
             HttpResponse::Created().json(entry)
         }
         Err(e) => {
@@ -111,7 +111,7 @@ fn rename_did(
     state: web::Data<Mutex<Context>>,
     did: web::Path<String>,
     //did: web::Path<ProfileId>,
-    name: web::Json<ProfileAlias>,
+    name: web::Json<ProfileLabel>,
 ) -> impl Responder {
     match rename_did_impl(state, did.clone(), name.clone()) {
         Ok(()) => {

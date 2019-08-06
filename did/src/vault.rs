@@ -42,13 +42,13 @@ impl HdSecrets {
     }
 }
 
-pub type ProfileAlias = String;
+pub type ProfileLabel = String;
 pub type ProfileMetadata = String;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ProfileVaultRecord {
     id: ProfileId,
-    alias: ProfileAlias,
+    label: ProfileLabel,
     metadata: ProfileMetadata,
     // TODO these might be needed as well soon
     // pub bip32: String,
@@ -59,8 +59,8 @@ impl ProfileVaultRecord {
     pub fn id(&self) -> ProfileId {
         self.id.to_owned()
     }
-    pub fn alias(&self) -> ProfileAlias {
-        self.alias.to_owned()
+    pub fn label(&self) -> ProfileLabel {
+        self.label.to_owned()
     }
     pub fn metadata(&self) -> ProfileMetadata {
         self.metadata.to_owned()
@@ -68,17 +68,17 @@ impl ProfileVaultRecord {
 }
 
 pub trait ProfileVault {
-    fn create_key(&mut self, alias: ProfileAlias) -> Fallible<PublicKey>;
+    fn create_key(&mut self, label: Option<ProfileLabel>) -> Fallible<PublicKey>;
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()>;
 
     fn get_active(&self) -> Fallible<Option<ProfileId>>;
     fn set_active(&mut self, id: &ProfileId) -> Fallible<()>;
 
-    // TODO reconsider this API: either alias_by_id() and metadata_by_id() or profile()
+    // TODO reconsider this API: either label_by_id() and metadata_by_id() or profile()
     //      is redundant and should be removed
-    fn alias_by_id(&self, id: &ProfileId) -> Fallible<ProfileAlias>;
-    fn id_by_alias(&self, alias: &ProfileAlias) -> Fallible<ProfileId>;
-    fn set_alias(&mut self, id: ProfileId, alias: ProfileAlias) -> Fallible<()>;
+    fn label_by_id(&self, id: &ProfileId) -> Fallible<ProfileLabel>;
+    fn id_by_label(&self, label: &ProfileLabel) -> Fallible<ProfileId>;
+    fn set_label(&mut self, id: ProfileId, label: ProfileLabel) -> Fallible<()>;
 
     fn metadata_by_id(&self, id: &ProfileId) -> Fallible<ProfileMetadata>;
     fn set_metadata(&mut self, id: ProfileId, data: ProfileMetadata) -> Fallible<()>;
@@ -125,9 +125,9 @@ impl HdProfileVault {
         ensure!(vault.next_idx as usize == vault.profiles.len(), "a record must exist for each id");
 
         use std::{collections::HashSet, iter::FromIterator};
-        let unique_aliases: HashSet<String> =
-            HashSet::from_iter(vault.profiles.iter().map(|rec| rec.alias.to_owned()));
-        ensure!(vault.profiles.len() == unique_aliases.len(), "all aliases must be unique");
+        let unique_labels: HashSet<String> =
+            HashSet::from_iter(vault.profiles.iter().map(|rec| rec.label.to_owned()));
+        ensure!(vault.profiles.len() == unique_labels.len(), "all labels must be unique");
 
         Ok(vault)
     }
@@ -142,10 +142,6 @@ impl HdProfileVault {
         }
         None
     }
-
-    //    fn index_of_alias(&self, alias: &ProfileAlias) -> Option<usize> {
-    //        self.list().ok().and_then(|v| v.iter().position(|pair| pair.0 == *alias))
-    //    }
 
     fn profile_by_id(&self, id: &ProfileId) -> Fallible<&ProfileVaultRecord> {
         self.profiles
@@ -175,12 +171,13 @@ impl HdProfileVault {
 }
 
 impl ProfileVault for HdProfileVault {
-    fn create_key(&mut self, alias: ProfileAlias) -> Fallible<PublicKey> {
-        ensure!(self.id_by_alias(&alias).is_err(), "the specified alias must be unique");
+    fn create_key(&mut self, label_opt: Option<ProfileLabel>) -> Fallible<PublicKey> {
+        let label = label_opt.unwrap_or(self.profiles.len().to_string());
+        ensure!(self.id_by_label(&label).is_err(), "the specified label must be unique");
         ensure!(self.profiles.len() == self.next_idx as usize, "a record must exist for each id");
 
         let key = self.keys()?.public_key(self.next_idx)?;
-        self.profiles.push(ProfileVaultRecord { id: key.key_id(), alias, metadata: "".to_owned() });
+        self.profiles.push(ProfileVaultRecord { id: key.key_id(), label, metadata: "".to_owned() });
 
         debug!("Active profile was set to {}", key.key_id());
         self.active_idx = Option::Some(self.next_idx);
@@ -231,22 +228,22 @@ impl ProfileVault for HdProfileVault {
         }
     }
 
-    fn alias_by_id(&self, id: &ProfileId) -> Fallible<ProfileAlias> {
-        Ok(self.profile_by_id(id)?.alias.to_owned())
+    fn label_by_id(&self, id: &ProfileId) -> Fallible<ProfileLabel> {
+        Ok(self.profile_by_id(id)?.label.to_owned())
     }
 
-    fn id_by_alias(&self, alias: &ProfileAlias) -> Fallible<ProfileId> {
+    fn id_by_label(&self, label: &ProfileLabel) -> Fallible<ProfileId> {
         // TODO this currently scans all records which might turn out to be too slow.
-        //      In such a case, we should use a dedicated index (i.e. Map<alias,id>) here
+        //      In such a case, we should use a dedicated index (i.e. Map<label,id>) here
         self.profiles
             .iter()
-            .filter_map(|rec| if rec.alias == *alias { Some(rec.id.to_owned()) } else { None })
+            .filter_map(|rec| if rec.label == *label { Some(rec.id.to_owned()) } else { None })
             .nth(0)
-            .ok_or_else(|| err_msg("alias is not found in vault"))
+            .ok_or_else(|| err_msg("label is not found in vault"))
     }
 
-    fn set_alias(&mut self, id: ProfileId, alias: ProfileAlias) -> Fallible<()> {
-        self.mut_profile_by_id(&id)?.alias = alias;
+    fn set_label(&mut self, id: ProfileId, label: ProfileLabel) -> Fallible<()> {
+        self.mut_profile_by_id(&id)?.label = label;
         Ok(())
     }
 

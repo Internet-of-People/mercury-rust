@@ -161,7 +161,7 @@ impl Command for ListCommand {
                         }
                         None => "",
                     };
-                    info!("  {}: {}{}", profile_record.alias(), profile_record.id(), status);
+                    info!("  {}: {}{}", profile_record.label(), profile_record.id(), status);
                 }
             }
             IncomingLinks { my_profile_id } => {
@@ -225,7 +225,7 @@ pub enum CreateCommand {
     Profile {
         #[structopt()]
         /// Human-readable name of the new profile for easier identification
-        name: Option<String>,
+        label: Option<String>,
     },
 
     #[structopt(name = "link")]
@@ -246,10 +246,9 @@ impl Command for CreateCommand {
     fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
         use CreateCommand::*;
         match *self {
-            Profile { name } => {
+            Profile { label } => {
                 let profiles = api.list_vault_records()?;
-                let alias = name.unwrap_or_else(|| profiles.len().to_string());
-                let profile_id = api.create_profile(alias)?;
+                let profile_id = api.create_profile(label)?;
                 info!("Created and activated profile with id {}", profile_id);
             }
             Link { my_profile_id, peer_profile_id } => {

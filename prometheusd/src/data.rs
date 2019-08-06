@@ -20,7 +20,7 @@ pub struct Image {
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct VaultEntry {
     pub id: String,
-    pub alias: String,
+    pub label: String,
     #[serde(serialize_with = "serialize_avatar")] //, deserialize_with = "deserialize_avatar")]
     pub avatar: Image,
     pub state: String,
@@ -32,7 +32,7 @@ impl TryFrom<&ProfileVaultRecord> for VaultEntry {
         let metadata: ProfileMetadata = src.metadata().as_str().try_into()?;
         Ok(VaultEntry {
             id: src.id().to_string(),
-            alias: src.alias(),
+            label: src.label(),
             avatar: Image { format: metadata.image_format, blob: metadata.image_blob },
             state: "TODO".to_owned(), // TODO this will probably need another query to context
         })
@@ -111,7 +111,7 @@ pub fn parse_avatar(data_uri: &str) -> Fallible<(ImageFormat, ImageBlob)> {
 pub struct ApiClaim {
     id: ContentId,
     subject_id: String,
-    subject_alias: String,
+    subject_label: String,
     schema_id: String,
     schema_name: String,
     content: serde_json::Value,
@@ -122,14 +122,14 @@ pub struct ApiClaim {
 impl ApiClaim {
     pub fn try_from(
         src: &Claim,
-        subject_alias: ProfileAlias,
+        subject_label: ProfileLabel,
         schema_registry: &ClaimSchemaRegistry,
     ) -> Fallible<Self> {
         let schema_name = schema_registry.get(&src.schema)?.name().to_owned();
         Ok(Self {
             id: src.id(),
             subject_id: src.subject_id.to_string(),
-            subject_alias,
+            subject_label,
             schema_id: src.schema.to_owned(),
             schema_name,
             content: src.content.to_owned(),
@@ -148,7 +148,7 @@ pub struct ClaimPath {
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ClaimSchema {
     id: String,
-    alias: String,
+    label: String,
     content: serde_json::Value,
     ordering: Vec<String>,
 }
@@ -156,11 +156,11 @@ pub struct ClaimSchema {
 impl ClaimSchema {
     fn new(
         id: impl ToString,
-        alias: impl ToString,
+        label: impl ToString,
         content: serde_json::Value,
         ordering: Vec<String>,
     ) -> Self {
-        Self { id: id.to_string(), alias: alias.to_string(), content, ordering }
+        Self { id: id.to_string(), label: label.to_string(), content, ordering }
     }
 }
 

@@ -8,7 +8,7 @@ use log::*;
 pub use crate::claim_schema::ClaimSchemaRegistry;
 use crate::model::*;
 use did::repo::*;
-use did::vault::{self, ProfileAlias, ProfileMetadata, ProfileVault, ProfileVaultRecord};
+use did::vault::{self, ProfileLabel, ProfileMetadata, ProfileVault, ProfileVaultRecord};
 use keyvault::PublicKey as KeyVaultPublicKey;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
@@ -39,13 +39,13 @@ pub trait Api {
     fn get_active_profile(&self) -> Fallible<Option<ProfileId>>;
 
     fn list_vault_records(&self) -> Fallible<Vec<ProfileVaultRecord>>;
-    fn create_profile(&mut self, alias: ProfileAlias) -> Fallible<ProfileId>;
+    fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileId>;
     fn get_vault_record(&self, id: Option<ProfileId>) -> Fallible<ProfileVaultRecord>;
 
     fn rename_profile(
         &mut self,
         my_profile_id: Option<ProfileId>,
-        alias: ProfileAlias,
+        label: ProfileLabel,
     ) -> Fallible<()>;
 
     fn get_profile_metadata(&self, my_profile_id: Option<ProfileId>) -> Fallible<ProfileMetadata>;
@@ -334,8 +334,8 @@ impl Api for Context {
         self.vault()?.profiles()
     }
 
-    fn create_profile(&mut self, alias: ProfileAlias) -> Fallible<ProfileId> {
-        let new_profile_key = self.mut_vault()?.create_key(alias)?;
+    fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileId> {
+        let new_profile_key = self.mut_vault()?.create_key(label)?;
         let empty_profile = PrivateProfileData::empty(&new_profile_key);
         self.local_repo.set(empty_profile).wait()?;
         Ok(new_profile_key.key_id())
@@ -349,10 +349,10 @@ impl Api for Context {
     fn rename_profile(
         &mut self,
         my_profile_id: Option<ProfileId>,
-        alias: ProfileAlias,
+        label: ProfileLabel,
     ) -> Fallible<()> {
         let profile_id = self.selected_profile(my_profile_id)?.id();
-        self.mut_vault()?.set_alias(profile_id, alias)
+        self.mut_vault()?.set_label(profile_id, label)
     }
 
     fn get_profile_metadata(&self, my_profile_id: Option<ProfileId>) -> Fallible<ProfileMetadata> {

@@ -116,13 +116,13 @@ Response:
 [
   {
     "id":"IezbeWGSY2dqcUBqT8K7R14xr",
-    "alias":"Mr Anderson",
+    "label":"Mr Anderson",
     "avatar":"data:image/png;base64,iVBOR...",
     "state":"TODO",
   },
   {
     "id":"Iez25N5WZ1Q6TQpgpyYgiu9gTX",
-    "alias":"Neo",
+    "label":"Neo",
     "avatar":"data:image/png;base64,iVBOR...",
     "state":"TODO",
   }
@@ -148,7 +148,7 @@ Response:
 ```json
 {
   "id":"IezbeWGSY2dqcUBqT8K7R14xr",
-  "alias":"Mr Anderson",
+  "label":"Mr Anderson",
   "avatar":"data:image/png;base64,iVBOR...",
   "state":"TODO",
 }
@@ -173,7 +173,7 @@ Response:
 ```json
 {
   "id":"IezbeWGSY2dqcUBqT8K7R14xr",
-  "alias":"disco-deer",
+  "label":"disco-deer",
   "avatar":"data:image/png;base64,iVBOR...",
   "state":"TODO",
 }
@@ -181,16 +181,16 @@ Response:
 
 ### Rename profile
 
-Specify a new alias for an already existing profile.
+Specify a new label for an already existing profile.
 
 TODO should we join name and avatar updates into a single update operation as standard REST usually does?
 
 Request:
 
-- Endpoint: PUT `/vault/dids/{did}/alias`
+- Endpoint: PUT `/vault/dids/{did}/label`
 - Parameters: `did` is the identifier of an existing profile
 - Headers: -
-- Content: new alias as string, e.g. `"Family"`
+- Content: new label as string, e.g. `"Family"`
 
 Response:
 
@@ -236,7 +236,7 @@ Response:
 [{
   "id": "<claim_id>",
   "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n", // Morpheus DID
-  "subject_alias": "Neo",
+  "subject_label": "Neo",
   "schema_id": "<schema_id>",
   "schema_name": "age-over",
   "content": {
@@ -268,7 +268,7 @@ Response:
 [{
   "id": "<claim_id>",
   "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n", // Morpheus DID
-  "subject_alias": "Neo",
+  "subject_label": "Neo",
   "schema_id": "<schema_id>",
   "schema_name": "age-over",
   "content": {
@@ -361,7 +361,7 @@ Response:
 
 [{
     "id": "McL9746fWtE9EXV5",
-    "alias": "age-over",
+    "label": "age-over",
     "content": {
         "type": "object",
         "properties": {
