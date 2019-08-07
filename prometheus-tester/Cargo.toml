@@ -8,6 +8,7 @@ keywords = ["iop", "mercury", "morpheus", "prometheus", "test", "tool"]
 edition = "2018"
 
 [dependencies]
+claims = { path="../claims" }
 did = { path="../did" }
 failure = "*"
 futures = "0.1"

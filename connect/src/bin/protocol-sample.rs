@@ -10,7 +10,7 @@ use log::*;
 use multiaddr::ToMultiaddr;
 use tokio_core::reactor;
 
-use did::repo::InMemoryProfileRepository;
+use claims::repo::InMemoryProfileRepository;
 use keyvault::PublicKey as KeyVaultPublicKey;
 use mercury_connect::profile::MyProfileImpl;
 use mercury_connect::*;

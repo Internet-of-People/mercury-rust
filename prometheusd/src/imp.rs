@@ -56,7 +56,7 @@ pub fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<VaultEntry
 
     //let label = names::Generator::default().next().unwrap_or_else(|| "FAILING FAILURE".to_owned());
     let label = DeterministicNameGenerator::default().name(&did_bytes);
-    state.rename_profile(Some(did.clone()), label.clone())?;
+    state.set_profile_label(Some(did.clone()), label.clone())?;
 
     let mut avatar_png = Vec::new();
     blockies::Ethereum::default()
@@ -93,7 +93,7 @@ pub fn rename_did_impl(
 ) -> Fallible<()> {
     let did = did_str.parse()?;
     let mut state = lock_state(&state)?;
-    state.rename_profile(Some(did), name)?;
+    state.set_profile_label(Some(did), name)?;
     state.save_vault()?;
     Ok(())
 }

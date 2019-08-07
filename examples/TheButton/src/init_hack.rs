@@ -16,7 +16,7 @@ pub fn init_connect_service(
     use std::net::SocketAddr;
     use std::time::Duration;
 
-    use did::repo::InMemoryProfileRepository;
+    use claims::repo::InMemoryProfileRepository;
     use mercury_connect::service::{DummyUserInterface, MyProfileFactory, SignerFactory};
     use osg_rpc_storage::RpcProfileRepository;
 

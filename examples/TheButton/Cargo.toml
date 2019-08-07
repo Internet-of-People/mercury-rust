@@ -9,6 +9,7 @@ edition = "2018"
 
 [dependencies]
 clap = "*"
+claims = { path="../../claims" }
 did = { path="../../did" }
 failure = "*"
 futures = "0.1"

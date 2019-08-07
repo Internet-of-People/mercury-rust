@@ -8,8 +8,8 @@ use tokio_core::reactor;
 
 use super::*;
 use crate::mercury_capnp::{FillFrom, PromiseUtil};
-use did::model::Link;
-use did::repo::ProfileExplorer;
+use claims::model::Link;
+use claims::repo::ProfileExplorer;
 
 pub struct HomeClientCapnProto {
     repo: mercury_capnp::profile_repo::Client,

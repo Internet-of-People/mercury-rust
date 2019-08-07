@@ -48,7 +48,7 @@ pub trait ProfileExplorer {
     // fn list(&self, /* TODO what filter criteria should we have here? */ ) -> AsyncFallible<Profile>;
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct InMemoryProfileRepository {
     profiles: HashMap<ProfileId, PrivateProfileData>,
 }

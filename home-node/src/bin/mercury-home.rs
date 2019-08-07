@@ -6,7 +6,7 @@ use futures::{Future, Stream};
 use log::*;
 use tokio_core::{net::TcpListener, reactor};
 
-use did::repo::{DistributedPublicProfileRepository, FileProfileRepository};
+use claims::repo::{DistributedPublicProfileRepository, FileProfileRepository};
 use mercury_home_node::{config::*, server::*};
 use mercury_home_protocol::{
     crypto::*, handshake, mercury_capnp::server_dispatcher::HomeDispatcherCapnProto, *,

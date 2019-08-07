@@ -15,6 +15,7 @@ bincode = "*"
 bytes = "*"
 capnp = "*"
 capnp-rpc = "*"
+claims = { path="../claims" }
 did = { path="../did" }
 failure= "*"
 futures = "0.1"

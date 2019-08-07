@@ -7,7 +7,7 @@ use log::*;
 
 use crate::messages::*;
 use crate::profile::Profile;
-use did::model::*;
+use claims::model::*;
 
 const MORPHEUS_HANDLER: &str = "osg";
 const RESPONSE_CODE_OK: u8 = 0;

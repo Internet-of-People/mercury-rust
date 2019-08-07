@@ -7,7 +7,7 @@ use structopt::StructOpt;
 
 use crate::seed::{read_phrase, show_generated_phrase};
 use claims::api::*;
-use did::model::*;
+use claims::model::*;
 
 pub type CmdRes = Fallible<()>;
 pub trait Command {
@@ -247,7 +247,7 @@ impl Command for CreateCommand {
         use CreateCommand::*;
         match *self {
             Profile { label } => {
-                let profiles = api.list_vault_records()?;
+                //let profiles = api.list_vault_records()?;
                 let profile_id = api.create_profile(label)?;
                 info!("Created and activated profile with id {}", profile_id);
             }

@@ -7,7 +7,7 @@ use log::*;
 
 pub use crate::claim_schema::ClaimSchemaRegistry;
 use crate::model::*;
-use did::repo::*;
+use crate::repo::*;
 use did::vault::{self, ProfileLabel, ProfileMetadata, ProfileVault, ProfileVaultRecord};
 use keyvault::PublicKey as KeyVaultPublicKey;
 
@@ -42,7 +42,7 @@ pub trait Api {
     fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileId>;
     fn get_vault_record(&self, id: Option<ProfileId>) -> Fallible<ProfileVaultRecord>;
 
-    fn rename_profile(
+    fn set_profile_label(
         &mut self,
         my_profile_id: Option<ProfileId>,
         label: ProfileLabel,
@@ -73,17 +73,6 @@ pub trait Api {
         force: bool,
     ) -> Fallible<PrivateProfileData>;
 
-    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>>;
-    fn create_link(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        peer_profile_id: &ProfileId,
-    ) -> Fallible<Link>;
-    fn remove_link(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        peer_profile_id: &ProfileId,
-    ) -> Fallible<()>;
     fn set_attribute(
         &mut self,
         my_profile_id: Option<ProfileId>,
@@ -97,6 +86,19 @@ pub trait Api {
     ) -> Fallible<()>;
 
     fn claim_schemas(&self) -> Fallible<ClaimSchemaRegistry>;
+
+    // NOTE links are derived as a special kind of claims. Maybe they could be removed from here on the long term.
+    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>>;
+    fn create_link(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        peer_profile_id: &ProfileId,
+    ) -> Fallible<Link>;
+    fn remove_link(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        peer_profile_id: &ProfileId,
+    ) -> Fallible<()>;
 }
 
 pub struct Context {
@@ -346,7 +348,7 @@ impl Api for Context {
         self.vault()?.profile(&profile_id)
     }
 
-    fn rename_profile(
+    fn set_profile_label(
         &mut self,
         my_profile_id: Option<ProfileId>,
         label: ProfileLabel,
@@ -430,37 +432,6 @@ impl Api for Context {
         Ok(profile)
     }
 
-    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>> {
-        let profile = self.selected_profile(my_profile_id)?;
-        let followers = self.explorer.followers(&profile.id()).wait()?;
-        Ok(followers)
-    }
-
-    fn create_link(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        peer_profile_id: &ProfileId,
-    ) -> Fallible<Link> {
-        let mut profile = self.selected_profile(my_profile_id)?;
-        let link = profile.mut_public_data().create_link(peer_profile_id);
-        profile.mut_public_data().increase_version();
-        self.local_repo.set(profile).wait()?;
-        debug!("Created link: {:?}", link);
-        Ok(link)
-    }
-
-    fn remove_link(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        peer_profile_id: &ProfileId,
-    ) -> Fallible<()> {
-        let mut profile = self.selected_profile(my_profile_id)?;
-        profile.mut_public_data().remove_link(&peer_profile_id);
-        profile.mut_public_data().increase_version();
-        self.local_repo.set(profile).wait()?;
-        Ok(())
-    }
-
     fn set_attribute(
         &mut self,
         my_profile_id: Option<ProfileId>,
@@ -492,5 +463,36 @@ impl Api for Context {
             ClaimSchemaRegistry::populate_folder(p)?;
         }
         ClaimSchemaRegistry::import_folder(p)
+    }
+
+    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>> {
+        let profile = self.selected_profile(my_profile_id)?;
+        let followers = self.explorer.followers(&profile.id()).wait()?;
+        Ok(followers)
+    }
+
+    fn create_link(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        peer_profile_id: &ProfileId,
+    ) -> Fallible<Link> {
+        let mut profile = self.selected_profile(my_profile_id)?;
+        let link = profile.mut_public_data().create_link(peer_profile_id);
+        profile.mut_public_data().increase_version();
+        self.local_repo.set(profile).wait()?;
+        debug!("Created link: {:?}", link);
+        Ok(link)
+    }
+
+    fn remove_link(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        peer_profile_id: &ProfileId,
+    ) -> Fallible<()> {
+        let mut profile = self.selected_profile(my_profile_id)?;
+        profile.mut_public_data().remove_link(&peer_profile_id);
+        profile.mut_public_data().increase_version();
+        self.local_repo.set(profile).wait()?;
+        Ok(())
     }
 }

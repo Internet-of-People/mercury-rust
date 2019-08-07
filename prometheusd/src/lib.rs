@@ -19,7 +19,7 @@ pub use crate::daemon::Daemon;
 use crate::http::init_url_mapping;
 pub use crate::options::Options;
 use claims::api::*;
-use did::repo::*;
+use claims::repo::*;
 use did::vault::*;
 use osg_rpc_storage::RpcProfileRepository;
 

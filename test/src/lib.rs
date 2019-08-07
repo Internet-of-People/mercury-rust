@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use rand::rngs::OsRng;
 use tokio_core::reactor;
 
-use did::repo::InMemoryProfileRepository;
+use claims::repo::InMemoryProfileRepository;
 use mercury_home_node::server::HomeServer;
 use mercury_home_protocol::crypto::*;
 use mercury_home_protocol::*;

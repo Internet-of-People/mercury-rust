@@ -6,7 +6,7 @@ use structopt::StructOpt;
 
 use crate::options::{Command, Options};
 use claims::api::*;
-use did::repo::*;
+use claims::repo::*;
 use did::vault::*;
 use osg_rpc_storage::RpcProfileRepository;
 

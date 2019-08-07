@@ -7,11 +7,11 @@ use multiaddr::{Multiaddr, ToMultiaddr};
 
 use crate::*;
 
-pub use did::model::{
-    AttributeId, AttributeMap, AttributeValue, PrivateKey, ProfileId, PublicKey, Signature, Version,
-};
-pub type Profile = did::model::PublicProfileData;
-pub type OwnProfile = did::model::PrivateProfileData;
+pub use claims::model::{AttributeId, AttributeMap, AttributeValue, ProfileId, Signature, Version};
+pub use did::model::{PrivateKey, PublicKey};
+
+pub type Profile = claims::model::PublicProfileData;
+pub type OwnProfile = claims::model::PrivateProfileData;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ApplicationId(pub String);

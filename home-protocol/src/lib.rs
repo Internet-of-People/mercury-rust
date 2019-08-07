@@ -20,10 +20,10 @@ pub use crate::api::*;
 pub use crate::crypto::{Signer, Validator};
 pub(crate) use crate::error::*;
 pub use crate::primitives::*;
-pub use did::model::{AsyncFallible, AsyncResult};
-pub use did::repo::{
+pub use claims::repo::{
     DistributedPublicProfileRepository, PrivateProfileRepository, ProfileExplorer,
 };
+pub use did::model::{AsyncFallible, AsyncResult};
 pub use keyvault;
 pub use keyvault::ed25519;
 

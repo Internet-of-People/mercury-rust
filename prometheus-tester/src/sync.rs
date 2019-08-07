@@ -2,8 +2,8 @@ use failure::Fallible;
 use futures::prelude::*;
 use log::*;
 
-use did::model::{PrivateProfileData, ProfileId};
-use did::repo::PrivateProfileRepository;
+use claims::model::{PrivateProfileData, ProfileId};
+use claims::repo::PrivateProfileRepository;
 use keyvault::PublicKey as KeyVaultPublicKey;
 
 use crate::{state::State, vault::Vault};
