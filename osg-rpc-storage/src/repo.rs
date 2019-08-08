@@ -176,7 +176,7 @@ impl DistributedPublicProfileRepository for RpcProfileRepository {
     }
 
     fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()> {
-        let priv_profile = PrivateProfileData::new(profile, vec![]);
+        let priv_profile = PrivateProfileData::from_public(profile);
         (self as &mut PrivateProfileRepository).set(priv_profile)
     }
 

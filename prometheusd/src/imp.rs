@@ -2,7 +2,8 @@ use std::convert::{TryFrom, TryInto};
 use std::sync::{Mutex, MutexGuard};
 
 use actix_web::{web, HttpResponse, Responder};
-use failure::{bail, err_msg, Fallible};
+use failure::{err_msg, Fallible};
+use log::*;
 
 use crate::data::{ProfileMetadata, *};
 use crate::names::DeterministicNameGenerator;
@@ -44,8 +45,16 @@ pub fn init_vault_impl(
 pub fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<VaultEntry>> {
     let state = lock_state(&state)?;
     let recs = state.list_vault_records()?;
-    // TODO we should also log errors here if any occurs during the conversion
-    let entries = recs.iter().filter_map(|rec| VaultEntry::try_from(rec).ok()).collect::<Vec<_>>();
+    let entries = recs
+        .iter()
+        .filter_map(|record| {
+            let res = VaultEntry::try_from(record);
+            if res.is_err() {
+                error!("Failed to convert vault record {:?} for HTTP API: {:?}", record, res);
+            }
+            res.ok()
+        })
+        .collect::<Vec<_>>();
     Ok(entries)
 }
 
@@ -119,16 +128,21 @@ pub fn list_did_claims_impl(
     state: web::Data<Mutex<Context>>,
     did_str: String,
 ) -> Fallible<Vec<ApiClaim>> {
-    let did = did_str.parse()?;
+    let did: ProfileId = did_str.parse()?;
     let state = lock_state(&state)?;
+    let claims = state.claims(Some(did.clone()))?;
+
     let rec = state.get_vault_record(Some(did))?;
     let schema_registry = state.claim_schemas()?;
-    let metadata = ProfileMetadata::try_from(rec.metadata().as_str())?;
-    let claims = metadata
-        .claims
+    let claims = claims
         .iter()
-        // TODO at least log conversion errors 
-        .filter_map(|claim| ApiClaim::try_from(claim, rec.label(), &schema_registry).ok())
+        .filter_map(|claim| {
+            let res = ApiClaim::try_from(claim, rec.label(), &schema_registry);
+            if res.is_err() {
+                error!("Failed to convert claim {:?} for HTTP API: {:?}", claim, res);
+            }
+            res.ok()
+        })
         .collect();
     Ok(claims)
 }
@@ -139,8 +153,8 @@ pub fn list_vault_claims_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<
 
     let mut claims = Vec::new();
     for rec in state.list_vault_records()? {
-        let metadata = ProfileMetadata::try_from(rec.metadata().as_str())?;
-        for claim in metadata.claims {
+        let did_claims = state.claims(Some(rec.id()))?;
+        for claim in did_claims {
             claims.push(ApiClaim::try_from(&claim, rec.label(), &schema_registry)?);
         }
     }
@@ -155,22 +169,12 @@ pub fn create_claim_impl(
 ) -> Fallible<ContentId> {
     let did: ProfileId = did_str.parse()?;
     let mut state = lock_state(&state)?;
-    let metadata_ser = state.get_profile_metadata(Some(did.clone()))?;
-    let mut metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
 
-    let claim = Claim::new(did.clone(), claim_details.schema, claim_details.content);
+    let claim =
+        Claim::new(did.clone(), claim_details.schema, serde_json::to_vec(&claim_details.content)?);
     let claim_id = claim.id();
 
-    let conflicting_claims = metadata.claims.iter().filter(|claim| claim.id() == claim_id);
-    if conflicting_claims.count() != 0 {
-        bail!("Claim {} is already present", claim_id);
-    }
-
-    // TODO check if schema_id is valid and related schema contents are available
-    // TODO validate contents against schema details
-    metadata.claims.push(claim);
-
-    state.set_profile_metadata(Some(did), metadata.try_into()?)?;
+    state.add_claim(Some(did), claim)?;
     state.save_vault()?;
     Ok(claim_id)
 }
@@ -179,18 +183,8 @@ pub fn delete_claim_impl(state: web::Data<Mutex<Context>>, claim_path: ClaimPath
     let did: ProfileId = claim_path.did.parse()?;
     let claim_id = claim_path.claim_id;
     let mut state = lock_state(&state)?;
-    let metadata_ser = state.get_profile_metadata(Some(did.clone()))?;
-    let mut metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
 
-    let claims_len_before = metadata.claims.len();
-    metadata.claims.retain(|claim| claim.id() != claim_id);
-    if metadata.claims.len() != claims_len_before - 1 {
-        bail!("Claim {} not found", claim_id);
-    }
-
-    // TODO consider if deleting all related presentations are needed as a separate step
-
-    state.set_profile_metadata(Some(did), metadata.try_into()?)?;
+    state.remove_claim(Some(did), claim_id)?;
     state.save_vault()?;
     Ok(())
 }

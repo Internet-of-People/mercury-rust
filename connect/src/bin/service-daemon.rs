@@ -65,7 +65,7 @@ pub fn init_connect_service(
     }
 
     let my_profiles = Rc::new(vec![my_profile_id.clone()].iter().cloned().collect::<HashSet<_>>());
-    let my_own_profile = OwnProfile::new(my_profile, vec![]);
+    let my_own_profile = OwnProfile::from_public(my_profile);
     let signers = vec![(my_profile_id.clone(), my_signer)].into_iter().collect();
     let signer_factory: Rc<SignerFactory> = Rc::new(SignerFactory::new(signers));
     let home_connector = Rc::new(SimpleTcpHomeConnector::new(reactor.handle()));

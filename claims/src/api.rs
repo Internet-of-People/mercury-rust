@@ -87,6 +87,22 @@ pub trait Api {
 
     fn claim_schemas(&self) -> Fallible<ClaimSchemaRegistry>;
 
+    fn claims(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Claim>>;
+    fn add_claim(&mut self, my_profile_id: Option<ProfileId>, claim: Claim) -> Fallible<()>;
+    fn remove_claim(&mut self, my_profile_id: Option<ProfileId>, claim: ClaimId) -> Fallible<()>;
+    fn add_claim_proof(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        claim: ClaimId,
+        proof: ClaimProof,
+    ) -> Fallible<()>;
+    fn present_claim(
+        &mut self,
+        my_profile_id: Option<ProfileId>,
+        claim: ClaimId,
+        // TODO audience, purpose, expiry, etc
+    ) -> Fallible<ClaimPresentation>;
+
     // NOTE links are derived as a special kind of claims. Maybe they could be removed from here on the long term.
     fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>>;
     fn create_link(
@@ -463,6 +479,64 @@ impl Api for Context {
             ClaimSchemaRegistry::populate_folder(p)?;
         }
         ClaimSchemaRegistry::import_folder(p)
+    }
+
+    fn claims(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Claim>> {
+        let profile = self.selected_profile(my_profile_id)?;
+        Ok(profile.claims())
+    }
+
+    fn add_claim(&mut self, my_profile_id: Option<ProfileId>, claim: Claim) -> Fallible<()> {
+        let claim_id = claim.id();
+        let mut profile = self.selected_profile(my_profile_id)?;
+
+        // TODO check if schema_id is valid and related schema contents are available
+        // TODO validate contents against schema details
+        let present_claims = profile.claims();
+        let conflicts = present_claims.iter().filter(|old_claim| old_claim.id() == claim_id);
+        if conflicts.count() != 0 {
+            bail!("Claim {} is already present", claim_id);
+        }
+
+        profile.mut_claims().push(claim);
+        // TODO this is not public data, should not affect public version
+        // profile.mut_public_data().increase_version();
+        self.local_repo.set(profile).wait()?;
+        debug!("Added claim: {:?}", claim_id);
+        Ok(())
+    }
+
+    fn remove_claim(&mut self, my_profile_id: Option<ProfileId>, id: ClaimId) -> Fallible<()> {
+        let mut profile = self.selected_profile(my_profile_id)?;
+        let claims = profile.mut_claims();
+
+        let claims_len_before = claims.len();
+        claims.retain(|claim| claim.id() != id);
+        if claims.len() + 1 != claims_len_before {
+            bail!("Claim {} not found", id);
+        }
+
+        self.local_repo.set(profile).wait()?;
+        debug!("Removed claim: {:?}", id);
+        Ok(())
+    }
+
+    fn add_claim_proof(
+        &mut self,
+        _my_profile_id: Option<ProfileId>,
+        _claim: ClaimId,
+        _proof: ClaimProof,
+    ) -> Fallible<()> {
+        unimplemented!()
+    }
+
+    fn present_claim(
+        &mut self,
+        _my_profile_id: Option<ProfileId>,
+        _claim: ClaimId,
+        // TODO audience, purpose, expiry, etc
+    ) -> Fallible<ClaimPresentation> {
+        unimplemented!()
     }
 
     fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>> {

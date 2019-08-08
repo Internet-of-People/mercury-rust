@@ -26,7 +26,8 @@ pub trait Profile {
     fn clear_attribute(&mut self, key: &AttributeId) -> Fallible<()>;
 
     fn to_data(&self) -> Fallible<PrivateProfileData> {
-        Ok(PrivateProfileData::new(
+        // TODO fill in claims here
+        Ok(PrivateProfileData::without_morpheus_claims(
             PublicProfileData::new(
                 self.public_key()?,
                 self.version()?,

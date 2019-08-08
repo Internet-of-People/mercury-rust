@@ -3,6 +3,7 @@ use std::time::SystemTime;
 
 use serde_derive::{Deserialize, Serialize};
 
+use crate::claim_schema::SchemaId;
 pub use did::model::*;
 
 // TODO this overlaps with JournalState, maybe they could be merged
@@ -10,42 +11,7 @@ pub type Version = u64; // monotonically increasing, e.g. normal version, unix d
 pub type AttributeId = String;
 pub type AttributeValue = String;
 pub type AttributeMap = HashMap<AttributeId, AttributeValue>;
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct Claim {
-    id: ContentId,
-    pub subject_id: ProfileId,
-    pub schema: ContentId,
-    pub content: serde_json::Value,
-    pub proof: Vec<ClaimProof>,
-    pub presentation: Vec<ClaimPresentation>,
-}
-
-impl Claim {
-    pub fn new(subject_id: ProfileId, schema: impl ToString, content: serde_json::Value) -> Self {
-        let mut this = Self {
-            id: Default::default(),
-            subject_id,
-            schema: schema.to_string(),
-            content,
-            proof: vec![],
-            presentation: vec![],
-        };
-        this.id = this.content_hash();
-        this
-    }
-
-    fn content_hash(&self) -> ContentId {
-        // TODO
-        // unimplemented!()
-        use rand::{distributions::Alphanumeric, Rng};
-        rand::thread_rng().sample_iter(&Alphanumeric).take(16).collect()
-    }
-
-    pub fn id(&self) -> ContentId {
-        self.id.clone()
-    }
-}
+pub type ClaimId = ContentId;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ClaimProof {
@@ -58,6 +24,71 @@ pub struct ClaimProof {
 pub struct ClaimPresentation {
     // TODO: shared_with_subject, usable_for_purpose, expires_at, etc
     journal: Vec<String>, // TODO links to multihash stored on ledger
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct Claim {
+    id: ClaimId,
+    pub subject_id: ProfileId,
+    pub schema: SchemaId,
+    pub content: Vec<u8>,
+    pub proof: Vec<ClaimProof>,
+    pub presentation: Vec<ClaimPresentation>,
+}
+
+impl Claim {
+    pub fn new(subject_id: ProfileId, schema: impl ToString, content: Vec<u8>) -> Self {
+        let mut this = Self {
+            id: Default::default(),
+            subject_id,
+            schema: schema.to_string(),
+            content,
+            proof: vec![],
+            presentation: vec![],
+        };
+        this.id = HashableClaimContent::from(&this).content_hash();
+        this
+    }
+
+    pub fn id(&self) -> ClaimId {
+        self.id.clone()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct HashableClaimContent {
+    pub subject_id: ProfileId,
+    pub schema: SchemaId,
+    pub content: Vec<u8>,
+    pub proof: Vec<ClaimProof>,
+    pub presentation: Vec<ClaimPresentation>,
+}
+
+impl HashableClaimContent {
+    fn content_hash(&self) -> ContentId {
+        // TODO make it better usable from other languages
+        let content_res = serde_json::to_vec(self);
+
+        // NOTE docs: "Serialization can fail if `T`'s implementation of `Serialize` decides to
+        //      fail, or if `T` contains a map with non-string keys." This cannot happen here.
+        let content = content_res.unwrap();
+
+        // NOTE docs: "Will return an error if the specified hash type is not supported", cannot happen.
+        let hash = multihash::encode(multihash::Hash::Keccak256, &content).unwrap();
+        multibase::encode(multibase::Base64, &hash)
+    }
+}
+
+impl From<&Claim> for HashableClaimContent {
+    fn from(src: &Claim) -> Self {
+        Self {
+            subject_id: src.subject_id.to_owned(),
+            schema: src.schema.to_owned(),
+            content: src.content.to_owned(),
+            proof: src.proof.to_owned(),
+            presentation: src.presentation.to_owned(),
+        }
+    }
 }
 
 // TODO generalize links (i.e. edges) between two profiles into verifiable claims,
@@ -75,21 +106,19 @@ pub struct PublicProfileData {
     public_key: PublicKey,
     version: Version,
     attributes: AttributeMap,
-    claims: Vec<Claim>,
     // TODO remove this, links/contacts should be a special case of claims and filtered from them
     links: Vec<Link>,
     // TODO consider adding a signature of the profile data here
 }
 
 impl PublicProfileData {
-    // TODO receive and use claims argument instead of default
     pub fn new(
         public_key: PublicKey,
         version: Version,
         links: Vec<Link>,
         attributes: AttributeMap,
     ) -> Self {
-        Self { public_key, version, links, attributes, claims: Default::default() }
+        Self { public_key, version, links, attributes }
     }
 
     pub fn empty(public_key: &PublicKey) -> Self {
@@ -102,7 +131,6 @@ impl PublicProfileData {
             version: last_version + 1,
             links: Default::default(),
             attributes: Default::default(),
-            claims: Default::default(),
         }
     }
 
@@ -158,22 +186,35 @@ impl PublicProfileData {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct PrivateProfileData {
     public_data: PublicProfileData,
+    claims: Vec<Claim>,
     private_data: Vec<u8>,
-    // TODO consider adding a signature of the profile data here
 }
 
 impl PrivateProfileData {
-    pub fn new(public_data: PublicProfileData, private_data: Vec<u8>) -> Self {
-        Self { public_data, private_data }
+    pub fn new(public_data: PublicProfileData, private_data: Vec<u8>, claims: Vec<Claim>) -> Self {
+        Self { public_data, private_data, claims }
+    }
+
+    // TODO The lower-level Mercury network layer should not be aware of claims and the
+    //      structure of any private encrypted data in general. It should operate with a different data type
+    //      after this is splitted into a lower-level part of Mercury
+    #[deprecated]
+    pub fn without_morpheus_claims(public_data: PublicProfileData, private_data: Vec<u8>) -> Self {
+        Self::new(public_data, private_data, vec![])
+    }
+
+    pub fn from_public(public_data: PublicProfileData) -> Self {
+        Self::new(public_data, vec![], vec![])
     }
 
     pub fn empty(public_key: &PublicKey) -> Self {
-        Self::new(PublicProfileData::empty(public_key), vec![])
+        Self::from_public(PublicProfileData::empty(public_key))
     }
 
     pub fn tombstone(public_key: &PublicKey, last_version: Version) -> Self {
         Self {
             public_data: PublicProfileData::tombstone(public_key, last_version),
+            claims: Default::default(),
             private_data: Default::default(),
         }
     }
@@ -181,12 +222,18 @@ impl PrivateProfileData {
     pub fn public_data(&self) -> PublicProfileData {
         self.public_data.clone()
     }
+    pub fn claims(&self) -> Vec<Claim> {
+        self.claims.clone()
+    }
     pub fn private_data(&self) -> Vec<u8> {
         self.private_data.clone()
     }
 
     pub fn mut_public_data(&mut self) -> &mut PublicProfileData {
         &mut self.public_data
+    }
+    pub fn mut_claims(&mut self) -> &mut Vec<Claim> {
+        &mut self.claims
     }
     pub fn mut_private_data(&mut self) -> &mut Vec<u8> {
         &mut self.private_data

@@ -65,7 +65,6 @@ pub fn serialize_avatar<S: Serializer>(avatar: &Image, serializer: S) -> Result<
 pub struct ProfileMetadata {
     pub image_blob: ImageBlob,
     pub image_format: ImageFormat,
-    pub claims: Vec<Claim>,
 }
 
 impl TryFrom<&[u8]> for ProfileMetadata {
@@ -132,7 +131,7 @@ impl ApiClaim {
             subject_label,
             schema_id: src.schema.to_owned(),
             schema_name,
-            content: src.content.to_owned(),
+            content: serde_json::from_slice(&src.content)?,
             proof: src.proof.to_owned(),
             presentation: src.presentation.to_owned(),
         })

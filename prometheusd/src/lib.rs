@@ -13,7 +13,6 @@ use actix_server::Server;
 use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use failure::{err_msg, Fallible};
 use log::*;
-//use structopt::StructOpt;
 
 pub use crate::daemon::Daemon;
 use crate::http::init_url_mapping;

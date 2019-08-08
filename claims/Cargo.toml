@@ -12,6 +12,8 @@ failure = "*"
 futures = "0.1"
 log = "*"
 keyvault = { path="../keyvault" }
+multibase = "*"
+multihash = "*"
 rand = "*"
 serde = "*"
 serde_derive = "*"

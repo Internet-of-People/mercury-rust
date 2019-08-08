@@ -74,7 +74,7 @@ impl<'a> TryFrom<own_profile::Reader<'a>> for OwnProfile {
     fn try_from(src: own_profile::Reader) -> Result<Self, Self::Error> {
         let profile = bytes_to_profile(src.get_profile()?)?;
         let private_data = src.get_private_data()?;
-        Ok(OwnProfile::new(profile, private_data.to_owned()))
+        Ok(OwnProfile::without_morpheus_claims(profile, private_data.to_owned()))
     }
 }
 

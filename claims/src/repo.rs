@@ -61,7 +61,8 @@ impl InMemoryProfileRepository {
     fn put(&mut self, profile: PrivateProfileData) -> Fallible<()> {
         if let Some(old_profile) = self.profiles.get(&profile.id()) {
             if old_profile.version() > profile.version()
-                || (old_profile.version() == profile.version() && *old_profile != profile)
+                || (old_profile.version() == profile.version()
+                    && old_profile.public_data() != profile.public_data())
             {
                 bail!("Version must increase on profile change");
             }
@@ -97,7 +98,7 @@ impl DistributedPublicProfileRepository for InMemoryProfileRepository {
     }
 
     fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()> {
-        let private_profile = PrivateProfileData::new(profile, vec![]);
+        let private_profile = PrivateProfileData::from_public(profile);
         let res = (self as &mut PrivateProfileRepository).set(private_profile);
         Box::new(res)
     }
@@ -164,6 +165,7 @@ impl FileProfileRepository {
         trace!("Loading profile repository from {:?}", filename);
         let repo_file = File::open(filename)?;
         let repo: InMemoryProfileRepository = bincode::deserialize_from(repo_file)?;
+        //let repo: InMemoryProfileRepository = serde_json::from_reader(repo_file)?;
         Ok(repo)
     }
 
@@ -177,6 +179,7 @@ impl FileProfileRepository {
 
         let repo_file = File::create(filename)?;
         bincode::serialize_into(repo_file, &mem_repo)?;
+        //serde_json::to_writer(repo_file, &mem_repo)?;
         Ok(())
     }
 
@@ -298,10 +301,12 @@ mod test {
         me = repo.get(&my_id).wait()?;
         assert_eq!(
             me,
-            PrivateProfileData::new(
-                PublicProfileData::new(my_pubkey, 3, Default::default(), Default::default()),
-                vec![]
-            )
+            PrivateProfileData::from_public(PublicProfileData::new(
+                my_pubkey,
+                3,
+                Default::default(),
+                Default::default()
+            ),)
         );
 
         std::fs::remove_file(&tmp_file)?;

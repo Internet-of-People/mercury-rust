@@ -10,11 +10,13 @@ use serde_derive::{Deserialize, Serialize};
 
 use did::model::ContentId;
 
+pub type SchemaId = ContentId;
+
 const EMPTY_ORDERING: [String; 0] = [];
 
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct SchemaVersion {
-    id: ContentId,
+    id: SchemaId,
     author: String,
     name: String,
     version: u32,
@@ -91,7 +93,7 @@ impl SchemaVersion {
 }
 
 pub struct ClaimSchemaRegistry {
-    schemas: HashMap<ContentId, SchemaVersion>,
+    schemas: HashMap<SchemaId, SchemaVersion>,
 }
 
 impl ClaimSchemaRegistry {
@@ -99,7 +101,7 @@ impl ClaimSchemaRegistry {
         self.schemas.values()
     }
 
-    pub fn get(&self, id: &ContentId) -> Fallible<SchemaVersion> {
+    pub fn get(&self, id: &SchemaId) -> Fallible<SchemaVersion> {
         self.schemas
             .get(id)
             .map(|val| val.to_owned())

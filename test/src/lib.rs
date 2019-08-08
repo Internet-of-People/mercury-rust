@@ -23,7 +23,7 @@ pub fn generate_ownprofile(attributes: AttributeMap) -> (OwnProfile, PrivateKeyS
     let private_key = generate_keypair();
     let signer = PrivateKeySigner::new(private_key).expect("TODO: this should not ever fail");
     let profile = Profile::new(signer.public_key(), 1, vec![], attributes);
-    let own_profile = OwnProfile::new(profile, vec![]);
+    let own_profile = OwnProfile::without_morpheus_claims(profile, vec![]);
     (own_profile, signer)
 }
 

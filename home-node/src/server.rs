@@ -218,7 +218,7 @@ impl Home for HomeConnectionServer {
                     pub_prof.links().to_owned(),
                     attributes,
                 );
-                OwnProfile::new(profile, own_prof.private_data())
+                OwnProfile::without_morpheus_claims(profile, own_prof.private_data())
             }
             None => return Box::new(future::err((own_prof, ErrorKind::PersonaExpected.into()))),
         };
