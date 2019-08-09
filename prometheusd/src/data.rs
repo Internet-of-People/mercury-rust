@@ -1,7 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 
 use failure::{err_msg, Fallible};
-use serde::Serializer;
+use serde::{Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
 use claims::{api::*, model::*};
@@ -21,7 +21,7 @@ pub struct Image {
 pub struct VaultEntry {
     pub id: String,
     pub label: String,
-    #[serde(serialize_with = "serialize_avatar")] //, deserialize_with = "deserialize_avatar")]
+    #[serde(serialize_with = "serialize_avatar", deserialize_with = "deserialize_avatar")]
     pub avatar: Image,
     pub state: String,
 }
@@ -46,20 +46,20 @@ pub fn serialize_avatar<S: Serializer>(avatar: &Image, serializer: S) -> Result<
     serializer.serialize_str(&data_uri)
 }
 
-//pub fn deserialize_avatar<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<u8>, D::Error> {
-//    use serde::{de, Deserialize};
-//    let data_uri = String::deserialize(deserializer)?;
-//
-//    // TODO do we need support for more encodings than just base64 here?
-//    let re = regex::Regex::new(r"(?x)data:image/(?P<format>\w+);base64,(?P<data>.*)")
-//        .map_err(de::Error::custom)?;
-//    let captures = re
-//        .captures(&data_uri)
-//        .ok_or_else(|| de::Error::custom("Provided image is not in DataURI format"))?;
-//    let (avatar_format, encoded_avatar) = (&captures["format"], &captures["data"]);
-//    let avatar = base64::decode(encoded_avatar).map_err(de::Error::custom)?;
-//    Ok(avatar)
-//}
+pub fn deserialize_avatar<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Image, D::Error> {
+    use serde::{de, Deserialize};
+    let data_uri = String::deserialize(deserializer)?;
+
+    // TODO do we need support for more encodings than just base64 here?
+    let re = regex::Regex::new(r"(?x)data:image/(?P<format>\w+);base64,(?P<data>.*)")
+        .map_err(de::Error::custom)?;
+    let captures = re
+        .captures(&data_uri)
+        .ok_or_else(|| de::Error::custom("Provided image is not in DataURI format"))?;
+    let (format, encoded_avatar) = (captures["format"].to_owned(), &captures["data"]);
+    let blob = base64::decode(encoded_avatar).map_err(de::Error::custom)?;
+    Ok(Image { format, blob })
+}
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct ProfileMetadata {

@@ -407,6 +407,7 @@ impl Command for RestoreCommand {
         match *self {
             Vault { demo } => {
                 let phrase = if demo {
+                    // TODO remove this hardcoded phrase, it should be either removed or be a constant near the API
                     "include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already".to_owned()
                 } else {
                     read_phrase()?

@@ -55,7 +55,7 @@ fn start_daemon(options: Options) -> Fallible<Server> {
         info!("Found profile vault, loading {}", vault_path.to_string_lossy());
         vault = Some(Box::new(HdProfileVault::load(&vault_path)?))
     } else {
-        info!("No profile vault found, it'll need initialization");
+        info!("No profile vault found in {}, restore it first", vault_path.to_string_lossy());
     }
 
     let local_repo = FileProfileRepository::new(&repo_path)?;
@@ -84,7 +84,7 @@ fn start_daemon(options: Options) -> Fallible<Server> {
             .wrap(Cors::default())
             .data(web::JsonConfig::default().limit(16_777_216))
             .register_data(daemon_state.clone())
-            .configure(init_url_mapping)
+            .configure(http::server::init_url_mapping)
             .default_service(web::to(HttpResponse::NotFound))
     })
     .workers(1) // default is a thread on each CPU core, but we're serving on localhost only

@@ -56,6 +56,10 @@ pub struct ProfileVaultRecord {
 }
 
 impl ProfileVaultRecord {
+    pub fn new(id: ProfileId, label: ProfileLabel, metadata: ProfileMetadata) -> Self {
+        Self { id, label, metadata }
+    }
+
     pub fn id(&self) -> ProfileId {
         self.id.to_owned()
     }
@@ -177,7 +181,7 @@ impl ProfileVault for HdProfileVault {
         ensure!(self.profiles.len() == self.next_idx as usize, "a record must exist for each id");
 
         let key = self.keys()?.public_key(self.next_idx)?;
-        self.profiles.push(ProfileVaultRecord { id: key.key_id(), label, metadata: "".to_owned() });
+        self.profiles.push(ProfileVaultRecord::new(key.key_id(), label, "".to_owned()));
 
         debug!("Active profile was set to {}", key.key_id());
         self.active_idx = Option::Some(self.next_idx);

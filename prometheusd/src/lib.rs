@@ -3,7 +3,7 @@ pub mod data;
 pub mod http;
 pub mod imp;
 pub mod names;
-mod options;
+pub mod options;
 
 use std::sync::Mutex;
 use std::time::Duration;
@@ -15,7 +15,6 @@ use failure::{err_msg, Fallible};
 use log::*;
 
 pub use crate::daemon::Daemon;
-use crate::http::init_url_mapping;
 pub use crate::options::Options;
 use claims::api::*;
 use claims::repo::*;
