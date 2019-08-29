@@ -23,11 +23,27 @@ fn test_http_api() {
         assert!(api.list_vault_records().unwrap().is_empty());
     }
 
-    let profile_id = api.create_profile(Some("FirstTestProfile".to_owned())).unwrap();
+    let first_id = api.create_profile(Some("FirstTestProfile".to_owned())).unwrap();
+    let second_id = api.create_profile(Some("SecondTestProfile".to_owned())).unwrap();
     {
         let profiles = api.list_vault_records().unwrap();
-        assert_eq!(profiles.len(), 1);
-        assert_eq!(profiles[0].id(), profile_id);
+        assert_eq!(profiles.len(), 2);
+        assert_eq!(profiles[0].id(), first_id);
+        assert_eq!(profiles[1].id(), second_id);
+
+        let first_profile = api.get_vault_record(Some(first_id)).unwrap();
+        assert_eq!(profiles[0], first_profile);
+
+        let second_profile = api.get_vault_record(Some(second_id)).unwrap();
+        assert_eq!(profiles[1], second_profile);
+
+        let active_profile = api.get_vault_record(None).unwrap();
+        assert_eq!(second_profile, active_profile);
+    }
+
+    let schemas = api.claim_schemas().unwrap();
+    {
+        assert_eq!(schemas.iter().count(), 3);
     }
 
     daemon.stop().unwrap();

@@ -1,11 +1,13 @@
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::str::FromStr;
 
 use failure::{bail, ensure, err_msg, Fallible};
 use futures::prelude::*;
 use log::*;
 
-pub use crate::claim_schema::ClaimSchemaRegistry;
+use crate::claim_schema::ClaimSchemaRegistry;
+pub use crate::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
 use crate::model::*;
 use crate::repo::*;
 use did::vault::{self, ProfileLabel, ProfileMetadata, ProfileVault, ProfileVaultRecord};
@@ -85,7 +87,7 @@ pub trait Api {
         key: &AttributeId,
     ) -> Fallible<()>;
 
-    fn claim_schemas(&self) -> Fallible<ClaimSchemaRegistry>;
+    fn claim_schemas(&self) -> Fallible<Rc<dyn ClaimSchemas>>;
 
     fn claims(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Claim>>;
     fn add_claim(&mut self, my_profile_id: Option<ProfileId>, claim: Claim) -> Fallible<()>;
@@ -472,13 +474,14 @@ impl Api for Context {
         Ok(())
     }
 
-    fn claim_schemas(&self) -> Fallible<ClaimSchemaRegistry> {
+    fn claim_schemas(&self) -> Fallible<Rc<ClaimSchemas>> {
         let p = &self.schema_path;
         if !p.exists() {
             std::fs::create_dir_all(p)?;
             ClaimSchemaRegistry::populate_folder(p)?;
         }
-        ClaimSchemaRegistry::import_folder(p)
+        let registry = ClaimSchemaRegistry::import_folder(p)?;
+        Ok(Rc::new(registry))
     }
 
     fn claims(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Claim>> {

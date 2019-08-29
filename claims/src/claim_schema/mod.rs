@@ -92,22 +92,16 @@ impl SchemaVersion {
     }
 }
 
+pub trait ClaimSchemas {
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &SchemaVersion> + 'a>;
+    fn get(&self, id: &SchemaId) -> Fallible<SchemaVersion>;
+}
+
 pub struct ClaimSchemaRegistry {
     schemas: HashMap<SchemaId, SchemaVersion>,
 }
 
 impl ClaimSchemaRegistry {
-    pub fn iter(&self) -> impl Iterator<Item = &SchemaVersion> {
-        self.schemas.values()
-    }
-
-    pub fn get(&self, id: &SchemaId) -> Fallible<SchemaVersion> {
-        self.schemas
-            .get(id)
-            .map(|val| val.to_owned())
-            .ok_or_else(|| err_msg(format!("Schema id {} not found in registry", id)))
-    }
-
     pub fn populate_folder(path: &Path) -> Fallible<()> {
         for schema in defaults::get() {
             let file_name =
@@ -155,5 +149,18 @@ impl ClaimSchemaRegistry {
         let schema_version = serde_json::from_str::<SchemaVersion>(&content)?;
         self.schemas.insert(schema_version.id.clone(), schema_version);
         Ok(())
+    }
+}
+
+impl ClaimSchemas for ClaimSchemaRegistry {
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &SchemaVersion> + 'a> {
+        Box::new(self.schemas.values())
+    }
+
+    fn get(&self, id: &SchemaId) -> Fallible<SchemaVersion> {
+        self.schemas
+            .get(id)
+            .map(|val| val.to_owned())
+            .ok_or_else(|| err_msg(format!("Schema id {} not found in registry", id)))
     }
 }

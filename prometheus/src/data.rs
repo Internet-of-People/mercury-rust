@@ -1,4 +1,5 @@
 use std::convert::{TryFrom, TryInto};
+use std::str::FromStr;
 
 use failure::{err_msg, Fallible};
 use serde::{Deserializer, Serializer};
@@ -36,6 +37,17 @@ impl TryFrom<&ProfileVaultRecord> for VaultEntry {
             avatar: Image { format: metadata.image_format, blob: metadata.image_blob },
             state: "TODO".to_owned(), // TODO this will probably need another query to context
         })
+    }
+}
+
+impl TryInto<ProfileVaultRecord> for &VaultEntry {
+    type Error = failure::Error;
+    fn try_into(self) -> Result<ProfileVaultRecord, Self::Error> {
+        Ok(ProfileVaultRecord::new(
+            ProfileId::from_str(&self.id)?,
+            self.label.to_owned(),
+            Default::default(), // TODO fill in metadata properly
+        ))
     }
 }
 
@@ -122,7 +134,7 @@ impl ApiClaim {
     pub fn try_from(
         src: &Claim,
         subject_label: ProfileLabel,
-        schema_registry: &ClaimSchemaRegistry,
+        schema_registry: &dyn ClaimSchemas,
     ) -> Fallible<Self> {
         let schema_name = schema_registry.get(&src.schema)?.name().to_owned();
         Ok(Self {
@@ -148,6 +160,8 @@ pub struct ClaimPath {
 pub struct ClaimSchema {
     id: String,
     label: String,
+    author: String,
+    version: u32,
     content: serde_json::Value,
     ordering: Vec<String>,
 }
@@ -159,15 +173,49 @@ impl ClaimSchema {
         content: serde_json::Value,
         ordering: Vec<String>,
     ) -> Self {
-        Self { id: id.to_string(), label: label.to_string(), content, ordering }
+        Self {
+            id: id.to_string(),
+            label: label.to_string(),
+            content,
+            ordering,
+            // TODO these should be received and filled from request values
+            author: Default::default(),
+            version: Default::default(),
+        }
     }
 }
 
-impl From<&claims::claim_schema::SchemaVersion> for ClaimSchema {
-    fn from(model: &claims::claim_schema::SchemaVersion) -> Self {
+impl From<&SchemaVersion> for ClaimSchema {
+    fn from(model: &SchemaVersion) -> Self {
         Self::new(model.id(), model.name(), model.content().clone(), model.ordering().to_vec())
     }
 }
+
+impl Into<SchemaVersion> for ClaimSchema {
+    fn into(self) -> SchemaVersion {
+        SchemaVersion::new_with_order(
+            self.id,
+            self.author,
+            self.label,
+            self.version,
+            self.content,
+            self.ordering,
+        )
+    }
+}
+
+//impl Into<SchemaVersion> for &ClaimSchema {
+//    fn into(self) -> SchemaVersion {
+//        SchemaVersion::new_with_order(
+//            &self.id,
+//            &self.author,
+//            &self.label,
+//            self.version,
+//            self.content.clone(),
+//            self.ordering.clone(),
+//        )
+//    }
+//}
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CreateClaim {

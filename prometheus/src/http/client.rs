@@ -1,8 +1,11 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
+use std::rc::Rc;
 use std::str::FromStr;
 
 use actix_web::client::Client as HttpClient;
-use failure::{bail, err_msg, format_err, Fallible};
+use failure::{bail, ensure, err_msg, format_err, Fallible};
 use futures::Future;
 use log::*;
 
@@ -33,6 +36,13 @@ impl ApiHttpClient {
     }
 }
 
+fn did_str(did_opt: Option<ProfileId>) -> String {
+    match did_opt {
+        None => "_".to_owned(),
+        Some(did) => did.to_string(),
+    }
+}
+
 impl Api for ApiHttpClient {
     fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
         let url = format!("{}/vault", self.root_url);
@@ -42,7 +52,7 @@ impl Api for ApiHttpClient {
         let fut = req_fut.and_then(|mut response| {
             // TODO this probably ignores status code, so we should check it properly
             response.body().from_err().and_then(|body| {
-                info!("Received response: {:?}", String::from_utf8(body.to_vec()));
+                //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
                 Ok(())
             })
         });
@@ -66,17 +76,13 @@ impl Api for ApiHttpClient {
         let req_fut = HttpClient::new().get(url).send().from_err();
         // TODO this probably ignores status code, so we should check it properly
         let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|body| {
-            info!("Received response: {:?}", String::from_utf8(body.to_vec()));
+            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
             let entries: Vec<VaultEntry> = serde_json::from_slice(&body)?;
             let recs = entries
                 .iter()
                 .filter_map(|entry| {
-                    Some(ProfileVaultRecord::new(
-                        // TODO we should at least log errors here
-                        ProfileId::from_str(&entry.id).ok()?,
-                        entry.label.to_owned(),
-                        Default::default(), // TODO fill in metadata properly
-                    ))
+                    // TODO we should at least log errors here
+                    entry.try_into().ok()
                 })
                 .collect();
             Ok(recs)
@@ -90,7 +96,7 @@ impl Api for ApiHttpClient {
         let fut = req_fut.and_then(|mut response| {
             // TODO this probably ignores status code, so we should check it properly
             response.body().from_err().and_then(|body| {
-                info!("Received response: {:?}", String::from_utf8(body.to_vec()));
+                //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
                 let entry: VaultEntry = serde_json::from_slice(&body)?;
                 let id = ProfileId::from_str(&entry.id)?;
                 Ok(id)
@@ -100,7 +106,17 @@ impl Api for ApiHttpClient {
     }
 
     fn get_vault_record(&self, id: Option<ProfileId>) -> Fallible<ProfileVaultRecord> {
-        unimplemented!()
+        let did = did_str(id);
+        let url = format!("{}/vault/dids/{}", self.root_url, did);
+        let req_fut = HttpClient::new().get(url).send().from_err();
+        // TODO this probably ignores status code, so we should check it properly
+        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|body| {
+            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
+            let entry: VaultEntry = serde_json::from_slice(&body)?;
+            let rec = (&entry).try_into()?;
+            Ok(rec)
+        });
+        self.await_fut(fut)
     }
 
     fn set_profile_label(
@@ -164,8 +180,17 @@ impl Api for ApiHttpClient {
         unimplemented!()
     }
 
-    fn claim_schemas(&self) -> Fallible<ClaimSchemaRegistry> {
-        unimplemented!()
+    fn claim_schemas(&self) -> Fallible<Rc<dyn ClaimSchemas>> {
+        let url = format!("{}/claim-schemas", self.root_url);
+        let req_fut = HttpClient::new().get(url).send().from_err();
+        // TODO this probably ignores status code, so we should check it properly
+        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|body| {
+            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
+            let schema_items: Vec<ClaimSchema> = serde_json::from_slice(&body)?;
+            let schemas = Rc::new(InMemoryClaimSchemas::new(schema_items)) as Rc<dyn ClaimSchemas>;
+            Ok(schemas)
+        });
+        self.await_fut(fut)
     }
 
     fn claims(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Claim>> {
@@ -215,5 +240,30 @@ impl Api for ApiHttpClient {
         peer_profile_id: &ProfileId,
     ) -> Fallible<()> {
         unimplemented!()
+    }
+}
+
+struct InMemoryClaimSchemas {
+    schemas: HashMap<SchemaId, SchemaVersion>,
+}
+
+impl InMemoryClaimSchemas {
+    pub fn new(schemas_vec: Vec<ClaimSchema>) -> Self {
+        let mut schemas = HashMap::new();
+        for schema in schemas_vec {
+            let val: SchemaVersion = schema.into();
+            schemas.insert(val.id().to_owned(), val);
+        }
+        Self { schemas }
+    }
+}
+
+impl ClaimSchemas for InMemoryClaimSchemas {
+    fn iter<'a>(&'a self) -> Box<dyn Iterator<Item = &SchemaVersion> + 'a> {
+        Box::new(self.schemas.values())
+    }
+
+    fn get(&self, id: &String) -> Fallible<SchemaVersion> {
+        self.schemas.get(id).cloned().ok_or_else(|| format_err!("Schema not found: {}", id))
     }
 }

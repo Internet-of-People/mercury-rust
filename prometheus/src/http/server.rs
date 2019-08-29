@@ -8,6 +8,7 @@ use crate::imp::*;
 use claims::api::*;
 use did::vault::*;
 
+// TODO make URLs const variables and share them between server and client
 pub fn init_url_mapping(service: &mut web::ServiceConfig) {
     service
         .service(
