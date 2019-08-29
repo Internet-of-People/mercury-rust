@@ -2,7 +2,7 @@ use failure::Fallible;
 use log::*;
 use structopt::StructOpt;
 
-use prometheusd::{init_logger, Daemon, Options};
+use prometheus::{init_logger, Daemon, Options};
 
 fn main() -> Fallible<()> {
     let options = Options::from_args();
@@ -11,7 +11,7 @@ fn main() -> Fallible<()> {
 
     let daemon = Daemon::start(options)?;
 
-    // let registry = prometheusd::ClaimSchemaRegistry::import_folder(&std::path::PathBuf::from("./schemas"))?;
+    // let registry = prometheus::ClaimSchemaRegistry::import_folder(&std::path::PathBuf::from("./schemas"))?;
     // for (_k, v) in registry.schemas {
     //     info!("***\n{:#?}\n***", v);
     // }

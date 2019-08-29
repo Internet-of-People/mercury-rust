@@ -9,5 +9,5 @@ debian/prometheus.*.debhelper
 debian/prometheus.debhelper.log
 debian/files
 debian/.debhelper
-prometheusd/src/names/adjectives.rs
-prometheusd/src/names/nouns.rs
+prometheus/src/names/adjectives.rs
+prometheus/src/names/nouns.rs

@@ -1,5 +1,5 @@
 [package]
-name = "prometheusd"
+name = "prometheus"
 version = "0.1.0"
 authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 edition = "2018"

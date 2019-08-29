@@ -1,9 +1,9 @@
 use structopt::StructOpt;
 
 use claims::api::Api;
-use prometheusd::daemon::Daemon;
-use prometheusd::http::client::ApiHttpClient;
-use prometheusd::options::Options;
+use prometheus::daemon::Daemon;
+use prometheus::http::client::ApiHttpClient;
+use prometheus::options::Options;
 
 #[test]
 fn test_http_api() {
@@ -19,7 +19,9 @@ fn test_http_api() {
 
     // TODO get this demo phrase from a single constant in some crate
     api.restore_vault("include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already".to_owned()).unwrap();
-    assert!(api.list_vault_records().unwrap().is_empty());
+    {
+        assert!(api.list_vault_records().unwrap().is_empty());
+    }
 
     let profile_id = api.create_profile(Some("FirstTestProfile".to_owned())).unwrap();
     {
