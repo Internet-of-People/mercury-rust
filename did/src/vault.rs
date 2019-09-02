@@ -100,7 +100,7 @@ pub trait ProfileVault {
     fn save(&self, filename: &PathBuf) -> Fallible<()>;
 }
 
-pub const GAP: usize = 20;
+pub const GAP: u32 = 20;
 
 #[derive(Debug, Deserialize, Serialize)]
 pub struct HdProfileVault {

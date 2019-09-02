@@ -42,6 +42,26 @@ pub fn init_vault_impl(
     state.save_vault()
 }
 
+pub fn restore_all_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<RestoreCounts> {
+    let mut state = lock_state(&state)?;
+    let counts = state.restore_all_profiles()?;
+    state.save_vault()?;
+    Ok(counts)
+}
+
+pub fn get_default_did_impl(state: web::Data<Mutex<Context>>) -> Fallible<Option<ProfileId>> {
+    let state = lock_state(&state)?;
+    state.get_active_profile()
+}
+
+pub fn set_default_did_impl(state: web::Data<Mutex<Context>>, did_str: String) -> Fallible<()> {
+    let did = did_str.parse()?;
+    let mut state = lock_state(&state)?;
+    state.set_active_profile(&did)?;
+    state.save_vault()?;
+    Ok(())
+}
+
 pub fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<VaultEntry>> {
     let state = lock_state(&state)?;
     let recs = state.list_vault_records()?;
@@ -58,14 +78,19 @@ pub fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<VaultEnt
     Ok(entries)
 }
 
-pub fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<VaultEntry> {
+pub fn create_dids_impl(
+    state: web::Data<Mutex<Context>>,
+    mut label: Option<String>,
+) -> Fallible<VaultEntry> {
     let mut state = lock_state(&state)?;
-    let did = state.create_profile(None)?;
+    let did = state.create_profile(label.clone())?;
     let did_bytes = did.to_bytes();
 
-    //let label = names::Generator::default().next().unwrap_or_else(|| "FAILING FAILURE".to_owned());
-    let label = DeterministicNameGenerator::default().name(&did_bytes);
-    state.set_profile_label(Some(did.clone()), label.clone())?;
+    if (label.is_none()) {
+        let hd_label = DeterministicNameGenerator::default().name(&did_bytes);
+        state.set_profile_label(Some(did.clone()), hd_label.clone())?;
+        label = Some(hd_label);
+    }
 
     let mut avatar_png = Vec::new();
     blockies::Ethereum::default()
@@ -81,7 +106,7 @@ pub fn create_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<VaultEntry
     state.save_vault()?;
     Ok(VaultEntry {
         id: did.to_string(),
-        label,
+        label: label.unwrap_or_default(),
         avatar: Image { format: metadata.image_format, blob: metadata.image_blob },
         state: "TODO".to_owned(),
     })

@@ -5,6 +5,7 @@ use std::str::FromStr;
 use failure::{bail, ensure, err_msg, Fallible};
 use futures::prelude::*;
 use log::*;
+use serde_derive::{Deserialize, Serialize};
 
 use crate::claim_schema::ClaimSchemaRegistry;
 pub use crate::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
@@ -32,10 +33,16 @@ impl FromStr for ProfileRepositoryKind {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub struct RestoreCounts {
+    pub try_count: u32,
+    pub restore_count: u32,
+}
+
 // TODO expose sync state of profile here
 pub trait Api {
     fn restore_vault(&mut self, phrase: String) -> Fallible<()>;
-    fn restore_all_profiles(&mut self) -> Fallible<(u32, u32)>;
+    fn restore_all_profiles(&mut self) -> Fallible<RestoreCounts>;
 
     fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()>;
     fn get_active_profile(&self) -> Fallible<Option<ProfileId>>;
@@ -307,9 +314,9 @@ impl Api for Context {
         self.restore_vault_impl(phrase)
     }
 
-    fn restore_all_profiles(&mut self) -> Fallible<(u32, u32)> {
+    fn restore_all_profiles(&mut self) -> Fallible<RestoreCounts> {
         let keys = self.vault()?.keys()?;
-        let len = self.vault()?.len();
+        let len = self.vault()?.len() as u32;
 
         let mut try_count = 0;
         let mut restore_count = 0;
@@ -338,7 +345,7 @@ impl Api for Context {
             restore_count += 1;
         }
 
-        Ok((try_count, restore_count))
+        Ok(RestoreCounts { try_count, restore_count })
     }
 
     fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()> {

@@ -50,7 +50,7 @@ fn start_daemon(options: Options) -> Fallible<Server> {
     let schema_path = did::paths::schemas_path(options.schemas_dir.clone())?;
 
     let vault_exists = vault_path.exists();
-    let mut vault: Option<Box<ProfileVault + Send>> = None;
+    let mut vault: Option<Box<dyn ProfileVault + Send>> = None;
     if vault_exists {
         info!("Found profile vault, loading {}", vault_path.to_string_lossy());
         vault = Some(Box::new(HdProfileVault::load(&vault_path)?))

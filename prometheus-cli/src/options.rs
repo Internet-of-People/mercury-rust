@@ -405,12 +405,18 @@ impl Command for RestoreCommand {
                 };
                 api.restore_vault(phrase)?;
                 info!("Vault successfully initialized");
-                let (try_count, restore_count) = api.restore_all_profiles()?;
-                info!("Tried {} profiles, successfully restored {}", try_count, restore_count);
+                let counts = api.restore_all_profiles()?;
+                info!(
+                    "Tried {} profiles, successfully restored {}",
+                    counts.try_count, counts.restore_count
+                );
             }
             Profiles => {
-                let (try_count, restore_count) = api.restore_all_profiles()?;
-                info!("Tried {} profiles, successfully restored {}", try_count, restore_count);
+                let counts = api.restore_all_profiles()?;
+                info!(
+                    "Tried {} profiles, successfully restored {}",
+                    counts.try_count, counts.restore_count
+                );
             }
             Profile { my_profile_id, force } => {
                 let profile = api.restore_profile(my_profile_id, force)?;

@@ -1,11 +1,11 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+use std::convert::TryInto;
 use std::rc::Rc;
 use std::str::FromStr;
 
 use actix_web::client::Client as HttpClient;
-use failure::{bail, ensure, err_msg, format_err, Fallible};
+use failure::{err_msg, format_err, Fallible};
 use futures::Future;
 use log::*;
 
@@ -51,7 +51,7 @@ impl Api for ApiHttpClient {
         let req_fut = HttpClient::new().post(url).send_json(&vec![phrase]).from_err();
         let fut = req_fut.and_then(|mut response| {
             // TODO this probably ignores status code, so we should check it properly
-            response.body().from_err().and_then(|body| {
+            response.body().from_err().and_then(|_body| {
                 //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
                 Ok(())
             })
@@ -59,16 +59,48 @@ impl Api for ApiHttpClient {
         self.await_fut(fut)
     }
 
-    fn restore_all_profiles(&mut self) -> Fallible<(u32, u32)> {
-        unimplemented!()
+    fn restore_all_profiles(&mut self) -> Fallible<RestoreCounts> {
+        let url = format!("{}/vault/restore-dids", self.root_url);
+        let req_fut = HttpClient::new().post(url).send().from_err();
+        let fut = req_fut.and_then(|mut response| {
+            // TODO this probably ignores status code, so we should check it properly
+            response.body().from_err().and_then(|body| {
+                //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
+                let counts = serde_json::from_slice(&body)?;
+                Ok(counts)
+            })
+        });
+        self.await_fut(fut)
     }
 
     fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()> {
-        unimplemented!()
+        let url = format!("{}/vault/default-did", self.root_url);
+        let req_fut = HttpClient::new().put(url).send_json(&my_profile_id.to_string()).from_err();
+        let fut = req_fut.and_then(|mut response| {
+            // TODO this probably ignores status code, so we should check it properly
+            response.body().from_err().and_then(|_body| {
+                //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
+                Ok(())
+            })
+        });
+        self.await_fut(fut)
     }
 
     fn get_active_profile(&self) -> Fallible<Option<ProfileId>> {
-        unimplemented!()
+        let url = format!("{}/vault/default-did", self.root_url);
+        let req_fut = HttpClient::new().get(url).send().from_err();
+        let fut = req_fut.and_then(|mut response| {
+            // TODO this probably ignores status code, so we should check it properly
+            response.body().from_err().and_then(|body| {
+                // info!("Received response: {:?}", String::from_utf8(body.to_vec()).unwrap_or_default() );
+                let active_opt = match serde_json::from_slice::<Option<String>>(&body)? {
+                    None => None,
+                    Some(did_str) => Some(did_str.parse()?),
+                };
+                Ok(active_opt)
+            })
+        });
+        self.await_fut(fut)
     }
 
     fn list_vault_records(&self) -> Fallible<Vec<ProfileVaultRecord>> {
@@ -92,7 +124,7 @@ impl Api for ApiHttpClient {
 
     fn create_profile(&mut self, label: Option<String>) -> Fallible<ProfileId> {
         let url = format!("{}/vault/dids", self.root_url);
-        let req_fut = HttpClient::new().post(url).send().from_err();
+        let req_fut = HttpClient::new().post(url).send_json(&label).from_err();
         let fut = req_fut.and_then(|mut response| {
             // TODO this probably ignores status code, so we should check it properly
             response.body().from_err().and_then(|body| {
@@ -119,12 +151,16 @@ impl Api for ApiHttpClient {
         self.await_fut(fut)
     }
 
-    fn set_profile_label(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        label: String,
-    ) -> Fallible<()> {
-        unimplemented!()
+    fn set_profile_label(&mut self, id: Option<ProfileId>, label: String) -> Fallible<()> {
+        let did = did_str(id);
+        let url = format!("{}/vault/dids/{}/label", self.root_url, did);
+        let req_fut = HttpClient::new().put(url).send_json(&label).from_err();
+        // TODO this probably ignores status code, so we should check it properly
+        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|_body| {
+            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
+            Ok(())
+        });
+        self.await_fut(fut)
     }
 
     fn get_profile_metadata(&self, my_profile_id: Option<ProfileId>) -> Fallible<String> {

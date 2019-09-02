@@ -24,6 +24,14 @@ pub fn init_url_mapping(service: &mut web::ServiceConfig) {
         .service(
             web::scope("/vault")
                 .service(web::resource("").route(web::post().to(init_vault)))
+                .service(web::resource("/restore-dids").route(web::post().to(restore_all_dids)))
+                .service(
+                    web::scope("/default-did").service(
+                        web::resource("")
+                            .route(web::get().to(get_default_did))
+                            .route(web::put().to(set_default_did)),
+                    ),
+                )
                 .service(
                     web::scope("/dids")
                         .service(
@@ -69,6 +77,41 @@ fn init_vault(state: web::Data<Mutex<Context>>, words: web::Json<Vec<String>>) -
     }
 }
 
+fn restore_all_dids(state: web::Data<Mutex<Context>>) -> impl Responder {
+    match restore_all_dids_impl(state) {
+        Ok(counts) => {
+            debug!("Restored all profiles of vault");
+            // Can we expose counts directly here or should we duplicate a similar, independent data structure to be used on the web UI?
+            HttpResponse::Created().json(counts)
+        }
+        Err(e) => {
+            error!("Failed to restore all profiles of vault: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+fn get_default_did(state: web::Data<Mutex<Context>>) -> impl Responder {
+    match get_default_did_impl(state) {
+        Ok(did_opt) => HttpResponse::Ok().json(did_opt.map(|did| did.to_string())),
+        Err(e) => {
+            error!("Failed to get default profile: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+fn set_default_did(state: web::Data<Mutex<Context>>, did: web::Json<String>) -> impl Responder {
+    info!("Setting default did: {:?}", did);
+    match set_default_did_impl(state, did.clone()) {
+        Ok(entry) => HttpResponse::Ok().json(entry),
+        Err(e) => {
+            error!("Failed to set default profile: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
 fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     match list_dids_impl(state) {
         Ok(dids) => {
@@ -82,8 +125,11 @@ fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn create_did(state: web::Data<Mutex<Context>>) -> impl Responder {
-    match create_dids_impl(state) {
+fn create_did(
+    state: web::Data<Mutex<Context>>,
+    label: web::Json<Option<ProfileLabel>>,
+) -> impl Responder {
+    match create_dids_impl(state, label.clone()) {
         Ok(entry) => {
             debug!("Created profile {} with label {}", entry.id, entry.label);
             HttpResponse::Created().json(entry)
