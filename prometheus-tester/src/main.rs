@@ -18,24 +18,20 @@ use state::State;
 #[structopt(
     name = "prometheus-tester",
     about = "A simulator for populating the Morpheus open social graph",
-    raw(setting = "structopt::clap::AppSettings::ColoredHelp")
+    setting = structopt::clap::AppSettings::ColoredHelp
 )]
 pub struct Options {
-    #[structopt(
-        long = "storage",
-        default_value = "172.17.0.2:6161",
-        raw(value_name = r#""ADDRESS""#)
-    )]
+    #[structopt(long = "storage", default_value = "172.17.0.2:6161", value_name = "ADDRESS")]
     /// IPv4/6 address of the storage backend used for this demo
     pub storage_address: SocketAddr,
 
-    #[structopt(long = "timeout", default_value = "10", raw(value_name = r#""SECS""#))]
+    #[structopt(long = "timeout", default_value = "10", value_name = "SECS")]
     /// Number of seconds used for network timeouts
     pub network_timeout_secs: u64,
 
     /// Number of steps to take in the simulation after resynchronization
     /// of local state with the storage backend
-    #[structopt(long = "actions", default_value = "200", raw(value_name = r#""STEPS""#))]
+    #[structopt(long = "actions", default_value = "200", value_name = "STEPS")]
     pub actions: u64,
 
     #[structopt(long = "state", default_value = "state.json")]

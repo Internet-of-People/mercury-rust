@@ -8,7 +8,7 @@ use prometheus::options::Options;
 #[test]
 fn test_http_api() {
     let tempdir = tempfile::tempdir().unwrap().into_path().into_os_string().into_string().unwrap();
-    let args = vec!["dummy_test_binary_name", "--config_dir", &tempdir];
+    let args = vec!["dummy_test_binary_name", "--config-dir", &tempdir];
     let options = Options::from_iter_safe(args).unwrap();
     let url = format!("http://{}", options.listen_on);
 

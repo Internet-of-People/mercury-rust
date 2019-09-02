@@ -92,7 +92,7 @@ struct Config {
     #[structopt(
         long = "my-private-key",
         default_value = "../etc/client.id",
-        raw(value_name = r#""FILE""#),
+        value_name = "FILE",
         parse(from_os_str),
         help = "Private key file used to prove server identity. Currently only ed25519 keys are supported in raw binary format"
     )]
@@ -101,7 +101,7 @@ struct Config {
     #[structopt(
         long = "home-public-key",
         default_value = "../etc/homenode.id.pub",
-        raw(value_name = r#""FILE""#),
+        value_name = "FILE",
         parse(from_os_str),
         help = "Public key file of home node used by the selected profile"
     )]
@@ -110,18 +110,18 @@ struct Config {
     #[structopt(
         long = "home-address",
         default_value = "127.0.0.1:2077",
-        raw(value_name = r#""IP:PORT""#),
+        value_name = "IP:PORT",
         help = "TCP address of the home node to be connected"
     )]
     home_address: String,
 
-    //    #[structopt(long="jsonrpc-tcp", default_value="0.0.0.0:2222", raw(value_name=r#""IP:PORT""#),
+    //    #[structopt(long="jsonrpc-tcp", default_value="0.0.0.0:2222", value_name="IP:PORT"),
     //        help="Listen on this socket to serve JsonRpc clients via TCP")]
     //    tcp_address: String,
     #[structopt(
         long = "jsonrpc-uds",
         default_value = "/tmp/jsonrpc.sock",
-        raw(value_name = r#""FILE""#),
+        value_name = "FILE",
         parse(from_os_str),
         help = "Socket file path to serve JsonRpc clients via Unix Domain Sockets"
     )]

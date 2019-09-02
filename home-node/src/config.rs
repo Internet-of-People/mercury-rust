@@ -12,15 +12,15 @@ use mercury_home_protocol::*;
 #[structopt(
     name = "mercury-home",
     about = "Mercury Home Node daemon",
-    raw(setting = "structopt::clap::AppSettings::ColoredHelp")
+    setting = structopt::clap::AppSettings::ColoredHelp
 )]
 struct CliConfig {
-    #[structopt(long = "keyvault-dir", raw(value_name = r#""DIR""#), parse(from_os_str))]
+    #[structopt(long = "keyvault-dir", value_name = "DIR", parse(from_os_str))]
     /// Configuration directory to load keyvault from.
     /// Default: OS-specific app_cfg_dir/prometheus
     pub keyvault_dir: Option<PathBuf>,
 
-    #[structopt(long = "profileid", raw(value_name = r#""ID""#))]
+    #[structopt(long = "profileid", value_name = "ID")]
     /// Key ID within keyvault to be used for authentication by this node.
     pub profile_id: Option<ProfileId>,
 
@@ -28,7 +28,7 @@ struct CliConfig {
         long = "private-storage",
         default_value = "/tmp/mercury/home/hosted-profiles",
         parse(from_os_str),
-        raw(value_name = r#""PATH""#)
+        value_name = "PATH"
     )]
     /// Directory path to store hosted profiles in
     private_storage_path: PathBuf,
@@ -36,12 +36,12 @@ struct CliConfig {
     #[structopt(
         long = "distributed-storage",
         default_value = "127.0.0.1:6161",
-        raw(value_name = r#""IP:PORT""#)
+        value_name = "IP:PORT"
     )]
     /// Network address of public profile storage
     distributed_storage_address: String,
 
-    #[structopt(long = "tcp", default_value = "0.0.0.0:2077", raw(value_name = r#""IP:Port""#))]
+    #[structopt(long = "tcp", default_value = "0.0.0.0:2077", value_name = "IP:Port")]
     /// Listen on this socket to serve TCP clients
     socket_addr: String,
 }
