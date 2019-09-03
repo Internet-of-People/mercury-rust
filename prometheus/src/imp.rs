@@ -1,7 +1,6 @@
 use std::convert::{TryFrom, TryInto};
-use std::sync::{Mutex, MutexGuard};
 
-use actix_web::{web, HttpResponse, Responder};
+use actix_web::web;
 use failure::{err_msg, Fallible};
 use log::*;
 
@@ -10,42 +9,30 @@ use crate::names::DeterministicNameGenerator;
 use claims::{api::*, model::*};
 use did::vault::ProfileLabel;
 
-fn lock_state(state: &web::Data<Mutex<Context>>) -> Fallible<MutexGuard<Context>> {
-    state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))
-}
-
-pub fn init_vault_impl(
-    state: web::Data<Mutex<Context>>,
-    words: web::Json<Vec<String>>,
-) -> Fallible<()> {
-    let mut state = lock_state(&state)?;
+pub fn init_vault_impl(state: &mut Context, words: web::Json<Vec<String>>) -> Fallible<()> {
     let phrase = words.join(" ");
     state.restore_vault(phrase)?;
     state.save_vault()
 }
 
-pub fn restore_all_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<RestoreCounts> {
-    let mut state = lock_state(&state)?;
+pub fn restore_all_dids_impl(state: &mut Context) -> Fallible<RestoreCounts> {
     let counts = state.restore_all_profiles()?;
     state.save_vault()?;
     Ok(counts)
 }
 
-pub fn get_default_did_impl(state: web::Data<Mutex<Context>>) -> Fallible<Option<ProfileId>> {
-    let state = lock_state(&state)?;
+pub fn get_default_did_impl(state: &Context) -> Fallible<Option<ProfileId>> {
     state.get_active_profile()
 }
 
-pub fn set_default_did_impl(state: web::Data<Mutex<Context>>, did_str: String) -> Fallible<()> {
+pub fn set_default_did_impl(state: &mut Context, did_str: String) -> Fallible<()> {
     let did = did_str.parse()?;
-    let mut state = lock_state(&state)?;
     state.set_active_profile(&did)?;
     state.save_vault()?;
     Ok(())
 }
 
-pub fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<VaultEntry>> {
-    let state = lock_state(&state)?;
+pub fn list_dids_impl(state: &Context) -> Fallible<Vec<VaultEntry>> {
     let recs = state.list_vault_records()?;
     let entries = recs
         .iter()
@@ -60,15 +47,11 @@ pub fn list_dids_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<VaultEnt
     Ok(entries)
 }
 
-pub fn create_dids_impl(
-    state: web::Data<Mutex<Context>>,
-    mut label: Option<String>,
-) -> Fallible<VaultEntry> {
-    let mut state = lock_state(&state)?;
+pub fn create_dids_impl(state: &mut Context, mut label: Option<String>) -> Fallible<VaultEntry> {
     let did = state.create_profile(label.clone())?;
     let did_bytes = did.to_bytes();
 
-    if (label.is_none()) {
+    if label.is_none() {
         let hd_label = DeterministicNameGenerator::default().name(&did_bytes);
         state.set_profile_label(Some(did.clone()), hd_label.clone())?;
         label = Some(hd_label);
@@ -102,34 +85,55 @@ fn did_opt(did_str: String) -> Fallible<Option<ProfileId>> {
     Ok(Some(did))
 }
 
-pub fn get_did_impl(state: web::Data<Mutex<Context>>, did_str: String) -> Fallible<VaultEntry> {
+pub fn get_did_impl(state: &Context, did_str: String) -> Fallible<VaultEntry> {
     let did = did_opt(did_str)?;
-    let state = lock_state(&state)?;
     let rec = state.get_vault_record(did)?;
     VaultEntry::try_from(&rec)
 }
 
+pub fn get_profile_impl(state: &Context, did_str: String) -> Fallible<PrivateProfileData> {
+    let did = did_opt(did_str)?;
+    state.get_profile_data(did, ProfileRepositoryKind::Local)
+}
+
+pub fn restore_did_impl(
+    state: &mut Context,
+    did_str: String,
+    force: bool,
+) -> Fallible<PrivateProfileData> {
+    let did = did_opt(did_str)?;
+    state.restore_profile(did, force)
+}
+
+pub fn revert_did_impl(state: &mut Context, did_str: String) -> Fallible<PrivateProfileData> {
+    let did = did_opt(did_str)?;
+    state.revert_profile(did)
+}
+
+pub fn publish_did_impl(state: &mut Context, did_str: String, force: bool) -> Fallible<ProfileId> {
+    let did = did_opt(did_str)?;
+    state.publish_profile(did, force)
+}
+
 pub fn rename_did_impl(
-    state: web::Data<Mutex<Context>>,
+    state: &mut Context,
     did_str: String,
     //did: ProfileId,
     name: ProfileLabel,
 ) -> Fallible<()> {
     let did = did_opt(did_str)?;
-    let mut state = lock_state(&state)?;
     state.set_profile_label(did, name)?;
     state.save_vault()?;
     Ok(())
 }
 
 pub fn set_avatar_impl(
-    state: web::Data<Mutex<Context>>,
+    state: &mut Context,
     did_str: String,
     avatar_datauri: DataUri,
 ) -> Fallible<()> {
     let did = did_opt(did_str)?;
     let (format, avatar_binary) = parse_avatar(&avatar_datauri)?;
-    let mut state = lock_state(&state)?;
     let metadata_ser = state.get_profile_metadata(did.clone())?;
     let mut metadata = ProfileMetadata::try_from(metadata_ser.as_str())?;
     metadata.image_format = format;
@@ -139,12 +143,22 @@ pub fn set_avatar_impl(
     Ok(())
 }
 
-pub fn list_did_claims_impl(
-    state: web::Data<Mutex<Context>>,
-    did_str: String,
-) -> Fallible<Vec<ApiClaim>> {
+pub fn set_did_attribute_impl(
+    state: &mut Context,
+    path: AttributePath,
+    val: AttributeValue,
+) -> Fallible<()> {
+    let did = did_opt(path.did)?;
+    state.set_attribute(did, &path.attribute_id, &val)
+}
+
+pub fn clear_did_attribute_impl(state: &mut Context, path: AttributePath) -> Fallible<()> {
+    let did = did_opt(path.did)?;
+    state.clear_attribute(did, &path.attribute_id)
+}
+
+pub fn list_did_claims_impl(state: &Context, did_str: String) -> Fallible<Vec<ApiClaim>> {
     let did = did_opt(did_str)?;
-    let state = lock_state(&state)?;
     let claims = state.claims(did.clone())?;
 
     let rec = state.get_vault_record(did)?;
@@ -162,8 +176,7 @@ pub fn list_did_claims_impl(
     Ok(claims)
 }
 
-pub fn list_vault_claims_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ApiClaim>> {
-    let state = lock_state(&state)?;
+pub fn list_vault_claims_impl(state: &Context) -> Fallible<Vec<ApiClaim>> {
     let schema_registry = state.claim_schemas()?;
 
     let mut claims = Vec::new();
@@ -177,12 +190,11 @@ pub fn list_vault_claims_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<
     Ok(claims)
 }
 
-pub fn create_claim_impl(
-    state: web::Data<Mutex<Context>>,
+pub fn create_did_claim_impl(
+    state: &mut Context,
     did_str: String,
     claim_details: CreateClaim,
 ) -> Fallible<ContentId> {
-    let mut state = lock_state(&state)?;
     let did = did_opt(did_str)?.or(state.get_active_profile()?);
 
     let subject = did
@@ -197,18 +209,15 @@ pub fn create_claim_impl(
     Ok(claim_id)
 }
 
-pub fn delete_claim_impl(state: web::Data<Mutex<Context>>, claim_path: ClaimPath) -> Fallible<()> {
+pub fn delete_claim_impl(state: &mut Context, claim_path: ClaimPath) -> Fallible<()> {
     let did = did_opt(claim_path.did)?;
     let claim_id = claim_path.claim_id;
-    let mut state = lock_state(&state)?;
-
     state.remove_claim(did, claim_id)?;
     state.save_vault()?;
     Ok(())
 }
 
-pub fn list_schemas_impl(state: web::Data<Mutex<Context>>) -> Fallible<Vec<ClaimSchema>> {
-    let state = lock_state(&state)?;
+pub fn list_schemas_impl(state: &Context) -> Fallible<Vec<ClaimSchema>> {
     let repo = state.claim_schemas()?;
     Ok(repo.iter().map(|v| v.into()).collect::<Vec<_>>())
 }

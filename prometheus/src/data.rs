@@ -118,6 +118,12 @@ pub fn parse_avatar(data_uri: &str) -> Fallible<(ImageFormat, ImageBlob)> {
     Ok((format.to_owned(), avatar))
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct AttributePath {
+    pub did: String,
+    pub attribute_id: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 pub struct ApiClaim {
     id: ContentId,
@@ -147,6 +153,16 @@ impl ApiClaim {
             proof: src.proof.to_owned(),
             presentation: src.presentation.to_owned(),
         })
+    }
+}
+
+impl TryInto<Claim> for &ApiClaim {
+    type Error = failure::Error;
+
+    fn try_into(self) -> Result<Claim, Self::Error> {
+        let subject_id = self.subject_id.parse()?;
+        let content: Vec<u8> = serde_json::from_value(self.content.clone())?;
+        Ok(Claim::new(subject_id, self.schema_id.to_owned(), content))
     }
 }
 
@@ -221,4 +237,13 @@ impl Into<SchemaVersion> for ClaimSchema {
 pub struct CreateClaim {
     pub schema: ContentId, // TODO multihash?
     pub content: serde_json::Value,
+}
+
+impl TryFrom<Claim> for CreateClaim {
+    type Error = failure::Error;
+
+    fn try_from(src: Claim) -> Result<Self, Self::Error> {
+        let content = serde_json::to_value(src.content)?;
+        Ok(CreateClaim { schema: src.schema, content })
+    }
 }

@@ -1,6 +1,9 @@
 use structopt::StructOpt;
 
-use claims::api::Api;
+use claims::{
+    api::{Api, ProfileRepositoryKind as RepoKind},
+    model::*,
+};
 use prometheus::daemon::Daemon;
 use prometheus::http::client::ApiHttpClient;
 use prometheus::options::Options;
@@ -68,10 +71,55 @@ fn test_http_api() {
         assert_eq!(active_profile, Some(first_id.clone()));
     }
 
+    let first_attrid = "my_attrid".to_string();
+    let first_attrval = "my_attrval".to_string();
+    {
+        let first_profile = api.get_profile_data(Some(first_id.clone()), RepoKind::Local).unwrap();
+        assert!(first_profile.public_data().attributes().is_empty());
+    }
+    api.set_attribute(Some(first_id.clone()), &first_attrid, &first_attrval).unwrap();
+    {
+        let first_profile = api.get_profile_data(Some(first_id.clone()), RepoKind::Local).unwrap();
+        assert_eq!(first_profile.public_data().attributes().len(), 1);
+        assert_eq!(
+            first_profile.public_data().attributes().get(&first_attrid).unwrap(),
+            "my_attrval"
+        );
+    }
+    api.clear_attribute(Some(first_id.clone()), &first_attrid).unwrap();
+    {
+        let first_profile = api.get_profile_data(Some(first_id.clone()), RepoKind::Local).unwrap();
+        assert!(first_profile.public_data().attributes().is_empty());
+    }
+
     let schemas = api.claim_schemas().unwrap();
     {
         assert_eq!(schemas.iter().count(), 3);
+
+        let claims = api.claims(Some(first_id.clone())).unwrap();
+        assert!(claims.is_empty());
     }
+
+    let age_schema_id = "McL9746fWtE9EXV5";
+    let first_claim = Claim::new(first_id.clone(), age_schema_id, "1st".as_bytes().to_vec());
+    api.add_claim(Some(first_id.clone()), first_claim.clone()).unwrap();
+    {
+        let claims = api.claims(Some(first_id.clone())).unwrap();
+        assert_eq!(claims.len(), 1);
+        assert_eq!(claims[0], first_claim);
+    }
+
+    let email_schema_id = "McL9746fWtE9EXVb";
+    let second_claim = Claim::new(first_id.clone(), email_schema_id, "2nd".as_bytes().to_vec());
+    api.add_claim(Some(first_id.clone()), second_claim.clone()).unwrap();
+    {
+        let claims = api.claims(Some(first_id.clone())).unwrap();
+        assert_eq!(claims.len(), 2);
+        assert_eq!(claims[0], first_claim);
+        assert_eq!(claims[1], second_claim);
+    }
+
+    // TODO find out how to test publish, restore and revert profile commands here
 
     daemon.stop().unwrap();
     daemon.join().unwrap();

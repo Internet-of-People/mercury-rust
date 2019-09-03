@@ -15,7 +15,7 @@ pub type ClaimId = ContentId;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ClaimProof {
-    claim_id: String,
+    claim_id: ClaimId,
     witness: String,   // TODO DID
     signature: String, // TODO multicrypto signature
 }

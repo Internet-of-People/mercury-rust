@@ -1,10 +1,7 @@
-use actix_web::{web, HttpResponse, Responder};
-use log::*;
+use actix_web::web;
+//use log::*;
 
-use crate::data::{ClaimPath, CreateClaim, DataUri};
 use crate::http::server::status::*;
-use claims::api::*;
-use did::vault::*;
 
 // TODO make URLs const variables and share them between server and client
 pub fn init_url_mapping(service: &mut web::ServiceConfig) {
@@ -42,12 +39,28 @@ pub fn init_url_mapping(service: &mut web::ServiceConfig) {
                                 .service(web::resource("").route(web::get().to(get_did)))
                                 .service(web::resource("/label").route(web::put().to(rename_did)))
                                 .service(web::resource("/avatar").route(web::put().to(set_avatar)))
+
+                                // TODO URL mapping might be misleading here because these calls
+                                //      work with a ProfileRepository, not the DidVault itself.
+                                //      Consider a different mapping, e.g. /profiles/{did}/...
+                                .service(web::resource("/profiledata").route(web::get().to(get_profile)))
+                                .service(web::resource("/restore").route(web::post().to(restore)))
+                                .service(web::resource("/revert").route(web::post().to(revert)))
+                                .service(web::resource("/publish").route(web::post().to(publish)))
+                                .service(
+                                    web::scope("/attributes")
+                                        .service(
+                                            web::resource("{attribute_id}")
+                                                .route(web::post().to(set_did_attribute))
+                                                .route(web::delete().to(clear_did_attribute)),
+                                        )
+                                )
                                 .service(
                                     web::scope("/claims")
                                         .service(
                                             web::resource("")
                                                 .route(web::get().to(list_did_claims))
-                                                .route(web::post().to(create_claim)),
+                                                .route(web::post().to(create_did_claim)),
                                         )
                                         .service(
                                             web::resource("{claim_id}")
