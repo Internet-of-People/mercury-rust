@@ -1,7 +1,6 @@
 pub mod daemon;
 pub mod data;
 pub mod http;
-pub mod imp;
 pub mod names;
 pub mod options;
 

@@ -9,24 +9,6 @@ use crate::data::{ProfileMetadata, *};
 use crate::names::DeterministicNameGenerator;
 use claims::{api::*, model::*};
 use did::vault::ProfileLabel;
-use keyvault::Seed;
-
-pub fn generate_bip39_phrase() -> impl Responder {
-    let phrase_str = Seed::generate_bip39();
-    let words = phrase_str.split_whitespace().collect::<Vec<_>>();
-    HttpResponse::Ok().json(words)
-}
-
-pub fn validate_bip39_phrase(words: web::Json<Vec<String>>) -> impl Responder {
-    let phrase = words.join(" ");
-    let is_valid = Seed::from_bip39(&phrase).is_ok();
-    HttpResponse::Ok().json(is_valid)
-}
-
-pub fn validate_bip39_word(word: web::Json<String>) -> impl Responder {
-    let is_valid = Seed::check_word(&word);
-    HttpResponse::Ok().json(is_valid)
-}
 
 fn lock_state(state: &web::Data<Mutex<Context>>) -> Fallible<MutexGuard<Context>> {
     state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))

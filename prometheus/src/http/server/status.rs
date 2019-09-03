@@ -4,67 +4,33 @@ use actix_web::{web, HttpResponse, Responder};
 use log::*;
 
 use crate::data::{ClaimPath, CreateClaim, DataUri};
-use crate::imp::*;
+use crate::http::server::imp::*;
 use claims::api::*;
 use did::vault::*;
+use keyvault::Seed;
 
-// TODO make URLs const variables and share them between server and client
-pub fn init_url_mapping(service: &mut web::ServiceConfig) {
-    service
-        .service(
-            web::scope("/bip39")
-                .service(web::resource("").route(web::post().to(generate_bip39_phrase)))
-                .service(
-                    web::resource("/validate-phrase").route(web::post().to(validate_bip39_phrase)),
-                )
-                .service(
-                    web::resource("/validate-word").route(web::post().to(validate_bip39_word)),
-                ),
-        )
-        .service(
-            web::scope("/vault")
-                .service(web::resource("").route(web::post().to(init_vault)))
-                .service(web::resource("/restore-dids").route(web::post().to(restore_all_dids)))
-                .service(
-                    web::scope("/default-did").service(
-                        web::resource("")
-                            .route(web::get().to(get_default_did))
-                            .route(web::put().to(set_default_did)),
-                    ),
-                )
-                .service(
-                    web::scope("/dids")
-                        .service(
-                            web::resource("")
-                                .route(web::get().to(list_did))
-                                .route(web::post().to(create_did)),
-                        )
-                        .service(
-                            web::scope("/{did}")
-                                .service(web::resource("").route(web::get().to(get_did)))
-                                .service(web::resource("/label").route(web::put().to(rename_did)))
-                                .service(web::resource("/avatar").route(web::put().to(set_avatar)))
-                                .service(
-                                    web::scope("/claims")
-                                        .service(
-                                            web::resource("")
-                                                .route(web::get().to(list_did_claims))
-                                                .route(web::post().to(create_claim)),
-                                        )
-                                        .service(
-                                            web::resource("{claim_id}")
-                                                .route(web::delete().to(delete_claim)),
-                                        ),
-                                ),
-                        ),
-                )
-                .service(web::resource("/claims").route(web::get().to(list_vault_claims))),
-        )
-        .service(web::resource("/claim-schemas").route(web::get().to(list_schemas)));
+pub fn generate_bip39_phrase() -> impl Responder {
+    let phrase_str = Seed::generate_bip39();
+    let words = phrase_str.split_whitespace().collect::<Vec<_>>();
+    HttpResponse::Ok().json(words)
+}
+
+pub fn validate_bip39_phrase(words: web::Json<Vec<String>>) -> impl Responder {
+    let phrase = words.join(" ");
+    let is_valid = Seed::from_bip39(&phrase).is_ok();
+    HttpResponse::Ok().json(is_valid)
+}
+
+pub fn validate_bip39_word(word: web::Json<String>) -> impl Responder {
+    let is_valid = Seed::check_word(&word);
+    HttpResponse::Ok().json(is_valid)
 }
 
 // TODO this Fallible -> Responder mapping + logging should be somehow less manual
-fn init_vault(state: web::Data<Mutex<Context>>, words: web::Json<Vec<String>>) -> impl Responder {
+pub fn init_vault(
+    state: web::Data<Mutex<Context>>,
+    words: web::Json<Vec<String>>,
+) -> impl Responder {
     match init_vault_impl(state, words) {
         Ok(()) => {
             debug!("Initialized vault");
@@ -77,7 +43,7 @@ fn init_vault(state: web::Data<Mutex<Context>>, words: web::Json<Vec<String>>) -
     }
 }
 
-fn restore_all_dids(state: web::Data<Mutex<Context>>) -> impl Responder {
+pub fn restore_all_dids(state: web::Data<Mutex<Context>>) -> impl Responder {
     match restore_all_dids_impl(state) {
         Ok(counts) => {
             debug!("Restored all profiles of vault");
@@ -91,7 +57,7 @@ fn restore_all_dids(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn get_default_did(state: web::Data<Mutex<Context>>) -> impl Responder {
+pub fn get_default_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     match get_default_did_impl(state) {
         Ok(did_opt) => HttpResponse::Ok().json(did_opt.map(|did| did.to_string())),
         Err(e) => {
@@ -101,7 +67,7 @@ fn get_default_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn set_default_did(state: web::Data<Mutex<Context>>, did: web::Json<String>) -> impl Responder {
+pub fn set_default_did(state: web::Data<Mutex<Context>>, did: web::Json<String>) -> impl Responder {
     info!("Setting default did: {:?}", did);
     match set_default_did_impl(state, did.clone()) {
         Ok(entry) => HttpResponse::Ok().json(entry),
@@ -112,7 +78,7 @@ fn set_default_did(state: web::Data<Mutex<Context>>, did: web::Json<String>) -> 
     }
 }
 
-fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
+pub fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     match list_dids_impl(state) {
         Ok(dids) => {
             debug!("Listing {} profiles", dids.len());
@@ -125,7 +91,7 @@ fn list_did(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn create_did(
+pub fn create_did(
     state: web::Data<Mutex<Context>>,
     label: web::Json<Option<ProfileLabel>>,
 ) -> impl Responder {
@@ -141,7 +107,7 @@ fn create_did(
     }
 }
 
-fn get_did(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Responder {
+pub fn get_did(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Responder {
     match get_did_impl(state, did.clone()) {
         Ok(entry) => {
             debug!("Fetched info for profile {}", did);
@@ -154,7 +120,7 @@ fn get_did(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Res
     }
 }
 
-fn rename_did(
+pub fn rename_did(
     state: web::Data<Mutex<Context>>,
     did: web::Path<String>,
     //did: web::Path<ProfileId>,
@@ -172,7 +138,7 @@ fn rename_did(
     }
 }
 
-fn set_avatar(
+pub fn set_avatar(
     state: web::Data<Mutex<Context>>,
     did: web::Path<String>,
     avatar: web::Json<DataUri>,
@@ -189,7 +155,7 @@ fn set_avatar(
     }
 }
 
-fn list_did_claims(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Responder {
+pub fn list_did_claims(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Responder {
     match list_did_claims_impl(state, did.clone()) {
         Ok(did_claims) => {
             debug!("Fetched list of claims for did {}", did);
@@ -202,7 +168,7 @@ fn list_did_claims(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> 
     }
 }
 
-fn list_vault_claims(state: web::Data<Mutex<Context>>) -> impl Responder {
+pub fn list_vault_claims(state: web::Data<Mutex<Context>>) -> impl Responder {
     match list_vault_claims_impl(state) {
         Ok(claims) => {
             debug!("Fetched list of claims");
@@ -215,7 +181,7 @@ fn list_vault_claims(state: web::Data<Mutex<Context>>) -> impl Responder {
     }
 }
 
-fn create_claim(
+pub fn create_claim(
     state: web::Data<Mutex<Context>>,
     did: web::Path<String>,
     claim_details: web::Json<CreateClaim>,
@@ -232,7 +198,7 @@ fn create_claim(
     }
 }
 
-fn delete_claim(
+pub fn delete_claim(
     state: web::Data<Mutex<Context>>,
     claim_path: web::Path<ClaimPath>,
 ) -> impl Responder {
@@ -251,7 +217,7 @@ fn delete_claim(
     }
 }
 
-fn list_schemas(state: web::Data<Mutex<Context>>) -> impl Responder {
+pub fn list_schemas(state: web::Data<Mutex<Context>>) -> impl Responder {
     match list_schemas_impl(state) {
         Ok(list) => {
             debug!("Fetched list of claim schemas");
