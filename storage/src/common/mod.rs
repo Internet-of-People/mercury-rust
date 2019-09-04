@@ -7,7 +7,7 @@ pub mod imp;
 
 pub trait Data {
     fn blob(&self) -> &[u8];
-    fn attributes<'a>(&'a self) -> Box<'a + Iterator<Item = &Attribute>>;
+    fn attributes<'a>(&'a self) -> Box<dyn 'a + Iterator<Item = &dyn Attribute>>;
 
     // Convenience function to access attributes by name/path
     fn first_attrval_by_name(&self, name: &str) -> Option<AttributeValue> {

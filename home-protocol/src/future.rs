@@ -99,7 +99,7 @@ where
     }
 
     let vec_fut = loop_fn(
-        (Box::new(iter::empty()) as Box<Iterator<Item = _>>, futures_vec),
+        (Box::new(iter::empty()) as Box<dyn Iterator<Item = _>>, futures_vec),
         |(finished_results, pending_futures)| {
             // Wait for a single future to complete
             future::select_all(pending_futures).then(|first_finished_res| {
@@ -107,12 +107,12 @@ where
                 let (completed, pending) = match first_finished_res {
                     Err(((idx, err), _i, rest)) => (
                         Box::new(finished_results.chain(iter::once((idx, Err(err)))))
-                            as Box<Iterator<Item = _>>,
+                            as Box<dyn Iterator<Item = _>>,
                         rest,
                     ),
                     Ok(((idx, item), _i, rest)) => (
                         Box::new(finished_results.chain(iter::once((idx, Ok(item)))))
-                            as Box<Iterator<Item = _>>,
+                            as Box<dyn Iterator<Item = _>>,
                         rest,
                     ),
                 };

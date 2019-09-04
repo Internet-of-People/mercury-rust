@@ -42,7 +42,7 @@ impl SecpKeyId {
     ///
     /// # Panics
     /// If internal invariants of the key id format are not maintained because of a bug
-    pub fn to_p2pkh_addr(&self, network: &Network) -> String {
+    pub fn to_p2pkh_addr(&self, network: &dyn Network) -> String {
         assert_eq!(self.0[0], KEY_ID_VERSION1);
         assert_eq!(self.0.len(), KEY_ID_SIZE);
 
@@ -56,7 +56,7 @@ impl SecpKeyId {
     }
 
     /// Deserializes the key identifier from a `p2pkh` bitcoin address
-    pub fn from_p2pkh_addr(addr: &str, network: &Network) -> Fallible<Self> {
+    pub fn from_p2pkh_addr(addr: &str, network: &dyn Network) -> Fallible<Self> {
         let expected_prefix = network.p2pkh_addr();
         debug_assert_eq!(expected_prefix.len(), ADDR_PREFIX_SIZE);
         debug_assert_eq!(ADDR_PREFIX_SIZE, 1);

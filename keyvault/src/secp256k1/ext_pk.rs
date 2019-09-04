@@ -45,7 +45,7 @@ impl SecpExtPublicKey {
     /// Serializes the extended public key according to the format defined in [`BIP32`]
     ///
     /// [`BIP32`]: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#serialization-format
-    pub fn to_xpub(&self, network: &Network) -> String {
+    pub fn to_xpub(&self, network: &dyn Network) -> String {
         let mut res = Vec::with_capacity(XPUB_DATA_SIZE);
         res.extend_from_slice(network.bip32_xpub());
         res.push(self.depth);
@@ -60,7 +60,7 @@ impl SecpExtPublicKey {
     /// Deserializes the extended public key from the format defined in [`BIP32`]
     ///
     /// [`BIP32`]: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#serialization-format
-    pub fn from_xpub(xprv: &str, network: &Network) -> Fallible<Self> {
+    pub fn from_xpub(xprv: &str, network: &dyn Network) -> Fallible<Self> {
         let data = from_base58check(xprv)?;
         ensure!(data.len() == XPUB_DATA_SIZE, "Length of data must be {}", XPUB_DATA_SIZE);
 

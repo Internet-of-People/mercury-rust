@@ -32,8 +32,8 @@ pub struct DAppCall {
 //    { fn drop(&mut self) { debug!("DAppCall was dropped"); } }
 
 pub enum DAppEvent {
-    PairingResponse(Box<Contact>),
-    Call(Box<IncomingCall>), // TODO wrap IncomingCall so as call.answer() could return a DAppCall directly
+    PairingResponse(Box<dyn Contact>),
+    Call(Box<dyn IncomingCall>), // TODO wrap IncomingCall so as call.answer() could return a DAppCall directly
 }
 
 pub trait DAppEndpoint {
@@ -42,7 +42,7 @@ pub trait DAppEndpoint {
         &self,
         app: &ApplicationId,
         authorization: Option<DAppPermission>,
-    ) -> AsyncResult<Rc<DAppSession>, Error>;
+    ) -> AsyncResult<Rc<dyn DAppSession>, Error>;
 }
 
 // NOTE A specific DApp is logged in to the Connect Service with given details, e.g. a selected profile.
@@ -52,15 +52,15 @@ pub trait DAppSession {
     fn selected_profile(&self) -> ProfileId;
 
     // TODO merge these two operations using an optional profile argument
-    fn contacts(&self) -> AsyncResult<Vec<Box<Contact>>, Error>;
+    fn contacts(&self) -> AsyncResult<Vec<Box<dyn Contact>>, Error>;
     fn contacts_with_profile(
         &self,
         profile: &ProfileId,
         relation_type: Option<&str>,
-    ) -> AsyncResult<Vec<Box<Contact>>, Error>;
+    ) -> AsyncResult<Vec<Box<dyn Contact>>, Error>;
     fn initiate_contact(&self, with_profile: &ProfileId) -> AsyncResult<(), Error>;
 
-    fn app_storage(&self) -> AsyncResult<KeyValueStore<String, String>, Error>;
+    fn app_storage(&self) -> AsyncResult<dyn KeyValueStore<String, String>, Error>;
 
-    fn checkin(&self) -> AsyncResult<Box<Stream<Item = DAppEvent, Error = ()>>, Error>;
+    fn checkin(&self) -> AsyncResult<Box<dyn Stream<Item = DAppEvent, Error = ()>>, Error>;
 }

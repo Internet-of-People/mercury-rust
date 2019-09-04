@@ -11,14 +11,14 @@ use super::*;
 use crate::mercury_capnp::{capnp_err, FillFrom};
 
 pub struct HomeDispatcherCapnProto {
-    home: Rc<Home>,
+    home: Rc<dyn Home>,
     handle: reactor::Handle,
     // TODO probably we should have a SessionFactory here instead of instantiating sessions "manually"
 }
 
 impl HomeDispatcherCapnProto {
     // TODO how to access PeerContext in the Home implementation?
-    pub fn dispatch<R, W>(home: Rc<Home>, reader: R, writer: W, handle: reactor::Handle)
+    pub fn dispatch<R, W>(home: Rc<dyn Home>, reader: R, writer: W, handle: reactor::Handle)
     where
         R: std::io::Read + 'static,
         W: std::io::Write + 'static,
@@ -40,7 +40,7 @@ impl HomeDispatcherCapnProto {
         handle.spawn(rpc_system.map_err(|e| warn!("Capnp RPC failed: {}", e)));
     }
 
-    pub fn dispatch_tcp(home: Rc<Home>, tcp_stream: TcpStream, handle: reactor::Handle) {
+    pub fn dispatch_tcp(home: Rc<dyn Home>, tcp_stream: TcpStream, handle: reactor::Handle) {
         use tokio_io::AsyncRead;
 
         tcp_stream.set_nodelay(true).unwrap();
@@ -212,12 +212,12 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto {
 }
 
 pub struct HomeSessionDispatcherCapnProto {
-    session: Rc<HomeSession>,
+    session: Rc<dyn HomeSession>,
     handle: reactor::Handle,
 }
 
 impl HomeSessionDispatcherCapnProto {
-    pub fn new(session: Rc<HomeSession>, handle: reactor::Handle) -> Self {
+    pub fn new(session: Rc<dyn HomeSession>, handle: reactor::Handle) -> Self {
         Self { session, handle }
     }
 }

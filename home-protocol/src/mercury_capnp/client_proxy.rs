@@ -121,7 +121,7 @@ impl Home for HomeClientCapnProto {
         Box::new(resp_fut)
     }
 
-    fn login(&self, proof_of_home: &RelationProof) -> AsyncResult<Rc<HomeSession>, Error> {
+    fn login(&self, proof_of_home: &RelationProof) -> AsyncResult<Rc<dyn HomeSession>, Error> {
         let mut request = self.home.login_request();
         request.get().init_proof_of_home().fill_from(proof_of_home);
 
@@ -132,7 +132,7 @@ impl Home for HomeClientCapnProto {
             .and_then(|resp| {
                 resp.get().and_then(|res| res.get_session()).map(|session_client| {
                     Rc::new(HomeSessionClientCapnProto::new(session_client, handle_clone))
-                        as Rc<HomeSession>
+                        as Rc<dyn HomeSession>
                 })
             })
             .map_err(|e| e.context(ErrorKind::FailedToCreateSession).into());
@@ -311,7 +311,7 @@ impl HomeSession for HomeSessionClientCapnProto {
         recv
     }
 
-    fn checkin_app(&self, app: &ApplicationId) -> AsyncStream<Box<IncomingCall>, String> {
+    fn checkin_app(&self, app: &ApplicationId) -> AsyncStream<Box<dyn IncomingCall>, String> {
         // Send a call dispatcher proxy to remote home through which we'll accept incoming calls
         let (send, recv) = mpsc::channel(1);
         let listener = CallDispatcherCapnProto::new(send.clone(), self.handle.clone());
@@ -352,13 +352,13 @@ impl HomeSession for HomeSessionClientCapnProto {
 const CALL_TIMEOUT_SECS: u32 = 30;
 
 struct CallDispatcherCapnProto {
-    sender: mpsc::Sender<Result<Box<IncomingCall>, String>>,
+    sender: mpsc::Sender<Result<Box<dyn IncomingCall>, String>>,
     handle: reactor::Handle,
 }
 
 impl CallDispatcherCapnProto {
     fn new(
-        sender: mpsc::Sender<Result<Box<IncomingCall>, String>>,
+        sender: mpsc::Sender<Result<Box<dyn IncomingCall>, String>>,
         handle: reactor::Handle,
     ) -> Self {
         Self { sender, handle }

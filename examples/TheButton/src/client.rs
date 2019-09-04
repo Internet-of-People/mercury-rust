@@ -17,10 +17,10 @@ impl Client {
     }
 
     pub fn wait_for_pairing_response(
-        events: Box<Stream<Item = DAppEvent, Error = ()>>,
+        events: Box<dyn Stream<Item = DAppEvent, Error = ()>>,
         my_profile_id: ProfileId,
         handle: reactor::Handle,
-    ) -> AsyncResult<Box<Contact>, Error> {
+    ) -> AsyncResult<Box<dyn Contact>, Error> {
         let fut = events
             .filter_map(move |event| {
                 debug!("TheButton got event");
@@ -58,8 +58,8 @@ impl Client {
 
     fn get_or_create_contact(
         self,
-        dapp_session: Rc<DAppSession>,
-    ) -> AsyncResult<Box<Contact>, Error> {
+        dapp_session: Rc<dyn DAppSession>,
+    ) -> AsyncResult<Box<dyn Contact>, Error> {
         let callee_profile_id = self.cfg.callee_profile_id.clone();
         let contact_fut = dapp_session.contacts_with_profile(&callee_profile_id, None).and_then({
             let peer_id = self.cfg.callee_profile_id.clone();

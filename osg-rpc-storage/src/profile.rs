@@ -5,7 +5,7 @@ use failure::Fallible;
 
 use claims::model::*;
 
-pub type ProfilePtr = Rc<RefCell<Profile>>;
+pub type ProfilePtr = Rc<RefCell<dyn Profile>>;
 
 // TODO these operations are basically the same as of struct PublicProfileData
 //      but can fail. We should somehow merge them together if this storage impl is kept.

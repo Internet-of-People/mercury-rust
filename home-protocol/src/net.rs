@@ -8,8 +8,8 @@ pub trait HomeConnector {
     fn connect_to_addrs(
         &self,
         addresses: &[Multiaddr],
-        signer: Rc<Signer>,
-    ) -> AsyncResult<Rc<Home>, Error>;
+        signer: Rc<dyn Signer>,
+    ) -> AsyncResult<Rc<dyn Home>, Error>;
 
     /// Initiate a permanent connection to the home server defined by `home_profile`, or return an
     /// existing, live `Home` immediately.
@@ -18,6 +18,6 @@ pub trait HomeConnector {
     fn connect_to_home(
         &self,
         home_profile: &Profile,
-        signer: Rc<Signer>,
-    ) -> AsyncResult<Rc<Home>, Error>;
+        signer: Rc<dyn Signer>,
+    ) -> AsyncResult<Rc<dyn Home>, Error>;
 }

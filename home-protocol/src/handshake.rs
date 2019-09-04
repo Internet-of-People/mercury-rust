@@ -20,8 +20,8 @@ struct AuthenticationInfo {
 fn exchange_identities<R, W>(
     reader: R,
     writer: W,
-    signer: Rc<Signer>,
-) -> Box<Future<Item = (R, W, AuthenticationInfo), Error = Error>>
+    signer: Rc<dyn Signer>,
+) -> Box<dyn Future<Item = (R, W, AuthenticationInfo), Error = Error>>
 where
     R: std::io::Read + tokio_io::AsyncRead + 'static,
     W: std::io::Write + tokio_io::AsyncWrite + 'static,
@@ -59,7 +59,7 @@ where
             let size_in_bytes = buf.into_buf().get_u32_le();
             if size_in_bytes > 8096 {
                 let err = Err(std::io::Error::from(std::io::ErrorKind::ConnectionAborted));
-                return Box::new(err.into_future()) as Box<Future<Item = _, Error = _>>;
+                return Box::new(err.into_future()) as Box<dyn Future<Item = _, Error = _>>;
             }
             let mut in_bytes = BytesMut::new();
             in_bytes.resize(size_in_bytes as usize, 0);
@@ -92,8 +92,8 @@ pub fn tcpstream_to_reader_writer(
 pub fn ecdh_handshake<R, W>(
     reader: R,
     writer: W,
-    signer: Rc<Signer>,
-) -> Box<Future<Item = (R, W, PeerContext), Error = Error>>
+    signer: Rc<dyn Signer>,
+) -> Box<dyn Future<Item = (R, W, PeerContext), Error = Error>>
 where
     R: std::io::Read + tokio_io::AsyncRead + 'static,
     W: std::io::Write + tokio_io::AsyncWrite + 'static,
@@ -119,8 +119,8 @@ where
 pub fn temporary_unsafe_handshake_until_diffie_hellman_done<R, W>(
     reader: R,
     writer: W,
-    signer: Rc<Signer>,
-) -> Box<Future<Item = (R, W, PeerContext), Error = Error>>
+    signer: Rc<dyn Signer>,
+) -> Box<dyn Future<Item = (R, W, PeerContext), Error = Error>>
 where
     R: std::io::Read + tokio_io::AsyncRead + 'static,
     W: std::io::Write + tokio_io::AsyncWrite + 'static,
@@ -138,9 +138,9 @@ where
 
 pub fn tcp_ecdh_handshake(
     socket: TcpStream,
-    signer: Rc<Signer>,
+    signer: Rc<dyn Signer>,
 ) -> Box<
-    Future<
+    dyn Future<
         Item = (
             impl std::io::Read + tokio_io::AsyncRead,
             impl std::io::Write + tokio_io::AsyncWrite,
@@ -158,9 +158,9 @@ pub fn tcp_ecdh_handshake(
 
 pub fn temporary_unsafe_tcp_handshake_until_diffie_hellman_done(
     socket: TcpStream,
-    signer: Rc<Signer>,
+    signer: Rc<dyn Signer>,
 ) -> Box<
-    Future<
+    dyn Future<
         Item = (
             impl std::io::Read + tokio_io::AsyncRead,
             impl std::io::Write + tokio_io::AsyncWrite,

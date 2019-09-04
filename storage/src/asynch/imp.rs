@@ -61,13 +61,13 @@ impl HashWebLink {
 }
 
 pub struct HashWeb<ObjectType> {
-    hashspaces: HashMap<HashSpaceId, Box<HashSpace<ObjectType, String>>>,
+    hashspaces: HashMap<HashSpaceId, Box<dyn HashSpace<ObjectType, String>>>,
     default: HashSpaceId,
 }
 
 impl<ObjectType: 'static> HashWeb<ObjectType> {
     pub fn new(
-        hashspaces: HashMap<HashSpaceId, Box<HashSpace<ObjectType, String>>>,
+        hashspaces: HashMap<HashSpaceId, Box<dyn HashSpace<ObjectType, String>>>,
         default: HashSpaceId,
     ) -> Self {
         HashWeb { hashspaces, default }
@@ -305,7 +305,7 @@ mod tests {
             reactor::Core::new().expect("Failed to initialize the reactor event loop");
 
         let default_space = "cache".to_owned();
-        let mut spaces: HashMap<String, Box<HashSpace<Vec<u8>, String>>> = HashMap::new();
+        let mut spaces: HashMap<String, Box<dyn HashSpace<Vec<u8>, String>>> = HashMap::new();
         spaces.insert(default_space.clone(), Box::new(cache_space));
         //        spaces.insert( "postgres".to_owned(), Box::new(postgres_space) );
         let mut hashweb = HashWeb::new(spaces, default_space.clone());

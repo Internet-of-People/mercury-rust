@@ -8,7 +8,7 @@ use keyvault::PublicKey as KeyVaultPublicKey;
 
 use crate::{state::State, vault::Vault};
 
-pub fn synchronize(state: &mut State, repo: &mut PrivateProfileRepository) -> Fallible<()> {
+pub fn synchronize(state: &mut State, repo: &mut dyn PrivateProfileRepository) -> Fallible<()> {
     let vault = Vault::new(&state.vault_seed())?;
     let mut id_map = std::collections::HashMap::<usize, ProfileId>::with_capacity(state.len());
 

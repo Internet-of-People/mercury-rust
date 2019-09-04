@@ -46,7 +46,7 @@ pub fn init_connect_service(
     let my_private_key_ed = ed25519::EdPrivateKey::from_bytes(my_private_key_bytes)
         .map_err(|e| Error::from(e.context(ErrorKind::LookupFailed)))?;
     let my_private_key = PrivateKey::from(my_private_key_ed);
-    let my_signer = Rc::new(PrivateKeySigner::new(my_private_key).unwrap()) as Rc<Signer>;
+    let my_signer = Rc::new(PrivateKeySigner::new(my_private_key).unwrap()) as Rc<dyn Signer>;
     let my_profile_id = my_signer.profile_id().to_owned();
     let my_attrs = PersonaFacet::new(vec![], vec![]).to_attributes();
     let my_profile = Profile::new(my_signer.public_key(), 1, vec![], my_attrs);

@@ -70,7 +70,7 @@ impl SecpExtPrivateKey {
     /// Serializes the extended private key according to the format defined in [`BIP32`]
     ///
     /// [`BIP32`]: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#serialization-format
-    pub fn to_xprv(&self, network: &Network) -> String {
+    pub fn to_xprv(&self, network: &dyn Network) -> String {
         let mut res = Vec::with_capacity(XPRV_DATA_SIZE);
         res.extend_from_slice(network.bip32_xprv());
         res.push(self.depth);
@@ -86,7 +86,7 @@ impl SecpExtPrivateKey {
     /// Deserializes the extended private key from the format defined in [`BIP32`]
     ///
     /// [`BIP32`]: https://github.com/bitcoin/bips/blob/master/bip-0032.mediawiki#serialization-format
-    pub fn from_xprv(xprv: &str, network: &Network) -> Fallible<Self> {
+    pub fn from_xprv(xprv: &str, network: &dyn Network) -> Fallible<Self> {
         let data = from_base58check(xprv)?;
         ensure!(data.len() == XPRV_DATA_SIZE, "Length of data must be {}", XPRV_DATA_SIZE);
 

@@ -9,14 +9,14 @@ use profile::MyProfile;
 
 pub struct RelationImpl {
     relation_proof: RelationProof,
-    my_profile: Rc<MyProfile>,
+    my_profile: Rc<dyn MyProfile>,
     app_id: ApplicationId,
 }
 
 impl RelationImpl {
     fn new(
         relation_proof: RelationProof,
-        my_profile: Rc<MyProfile>,
+        my_profile: Rc<dyn MyProfile>,
         app_id: ApplicationId,
     ) -> Self {
         Self { relation_proof, my_profile, app_id }
@@ -50,24 +50,24 @@ impl Contact for RelationImpl {
 }
 
 pub struct DAppSessionImpl {
-    my_profile: Rc<MyProfile>,
+    my_profile: Rc<dyn MyProfile>,
     app_id: ApplicationId,
 }
 
 impl DAppSessionImpl {
-    pub fn new(my_profile: Rc<MyProfile>, app_id: ApplicationId) -> Rc<DAppSession> {
+    pub fn new(my_profile: Rc<dyn MyProfile>, app_id: ApplicationId) -> Rc<dyn DAppSession> {
         Rc::new(Self { my_profile, app_id })
     }
 
-    fn relation_from(&self, proof: RelationProof) -> Box<Contact> {
+    fn relation_from(&self, proof: RelationProof) -> Box<dyn Contact> {
         Self::relation_from2(proof, self.my_profile.clone(), self.app_id.clone())
     }
 
     fn relation_from2(
         proof: RelationProof,
-        my_profile: Rc<MyProfile>,
+        my_profile: Rc<dyn MyProfile>,
         app_id: ApplicationId,
-    ) -> Box<Contact> {
+    ) -> Box<dyn Contact> {
         Box::new(RelationImpl::new(proof, my_profile, app_id))
     }
 }
@@ -79,7 +79,7 @@ impl DAppSession for DAppSessionImpl {
         self.my_profile.signer().profile_id()
     }
 
-    fn contacts(&self) -> AsyncResult<Vec<Box<Contact>>, Error> {
+    fn contacts(&self) -> AsyncResult<Vec<Box<dyn Contact>>, Error> {
         let mut proofs = self.my_profile.relations();
         let app_contacts = proofs
             .drain(..)
@@ -93,7 +93,7 @@ impl DAppSession for DAppSessionImpl {
         &self,
         profile: &ProfileId,
         relation_type: Option<&str>,
-    ) -> AsyncResult<Vec<Box<Contact>>, Error> {
+    ) -> AsyncResult<Vec<Box<dyn Contact>>, Error> {
         let mut proofs =
             self.my_profile.relations_with_peer(profile, Some(&self.app_id), relation_type);
         let peer_contacts = proofs.drain(..).map(|proof| self.relation_from(proof)).collect();
@@ -105,11 +105,11 @@ impl DAppSession for DAppSessionImpl {
         self.my_profile.initiate_relation(&self.app_id.0, with_profile)
     }
 
-    fn app_storage(&self) -> AsyncResult<KeyValueStore<String, String>, Error> {
+    fn app_storage(&self) -> AsyncResult<dyn KeyValueStore<String, String>, Error> {
         unimplemented!();
     }
 
-    fn checkin(&self) -> AsyncResult<Box<Stream<Item = DAppEvent, Error = ()>>, Error> {
+    fn checkin(&self) -> AsyncResult<Box<dyn Stream<Item = DAppEvent, Error = ()>>, Error> {
         let app = self.app_id.clone();
         let my_profile = self.my_profile.clone();
         let fut = self.my_profile.login().map(move |my_session| {
@@ -139,7 +139,7 @@ impl DAppSession for DAppSessionImpl {
                     _ => None,
                 });
 
-            Box::new(calls_stream.select(events_stream)) as Box<Stream<Item = _, Error = _>>
+            Box::new(calls_stream.select(events_stream)) as Box<dyn Stream<Item = _, Error = _>>
         });
 
         Box::new(fut)

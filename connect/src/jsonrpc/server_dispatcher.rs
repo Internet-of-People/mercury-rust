@@ -26,7 +26,7 @@ use crate::*;
 
 pub struct SessionData {
     pubsub_session: Arc<PubSubSession>,
-    dapp_session: Option<Rc<DAppSession>>,
+    dapp_session: Option<Rc<dyn DAppSession>>,
     cancel_events: Option<oneshot::Sender<()>>,
 }
 
@@ -57,10 +57,10 @@ impl Session {
         Self { inner: Rc::new(RefCell::new(SessionData::new(transport_tx))) }
     }
 
-    pub fn dapp_session(&self) -> Option<Rc<DAppSession>> {
+    pub fn dapp_session(&self) -> Option<Rc<dyn DAppSession>> {
         self.inner.borrow().dapp_session.clone()
     }
-    pub fn set_dapp_session(&mut self, dapp_session: Rc<DAppSession>) {
+    pub fn set_dapp_session(&mut self, dapp_session: Rc<dyn DAppSession>) {
         self.inner.borrow_mut().dapp_session.replace(dapp_session);
     }
 

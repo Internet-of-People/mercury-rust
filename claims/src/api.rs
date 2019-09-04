@@ -129,11 +129,11 @@ pub trait Api {
 pub struct Context {
     vault_path: PathBuf,
     schema_path: PathBuf, // TODO Re-reading all schemas each time might be expensive
-    vault: Option<Box<ProfileVault + Send>>,
+    vault: Option<Box<dyn ProfileVault + Send>>,
     local_repo: FileProfileRepository, // NOTE match arms of get_profile() conflicts with Box<LocalProfileRepository>
-    base_repo: Box<PrivateProfileRepository + Send>,
-    remote_repo: Box<PrivateProfileRepository + Send>,
-    explorer: Box<ProfileExplorer + Send>,
+    base_repo: Box<dyn PrivateProfileRepository + Send>,
+    remote_repo: Box<dyn PrivateProfileRepository + Send>,
+    explorer: Box<dyn ProfileExplorer + Send>,
 }
 
 const ERR_MSG_VAULT_UNINITIALIZED: &str = "Vault is uninitialized, `restore vault` first";
@@ -147,26 +147,26 @@ impl Context {
     pub fn new(
         vault_path: PathBuf,
         schema_path: PathBuf,
-        vault: Option<Box<ProfileVault + Send>>,
+        vault: Option<Box<dyn ProfileVault + Send>>,
         local_repo: FileProfileRepository,
-        base_repo: Box<PrivateProfileRepository + Send>,
-        remote_repo: Box<PrivateProfileRepository + Send>,
-        explorer: Box<ProfileExplorer + Send>,
+        base_repo: Box<dyn PrivateProfileRepository + Send>,
+        remote_repo: Box<dyn PrivateProfileRepository + Send>,
+        explorer: Box<dyn ProfileExplorer + Send>,
     ) -> Self {
         Self { vault_path, schema_path, vault, local_repo, base_repo, remote_repo, explorer }
     }
 
-    fn vault(&self) -> Fallible<&ProfileVault> {
+    fn vault(&self) -> Fallible<&dyn ProfileVault> {
         self.vault
             .as_ref()
-            .map(|v| v.as_ref() as &ProfileVault)
+            .map(|v| v.as_ref() as &dyn ProfileVault)
             .ok_or_else(|| err_msg(ERR_MSG_VAULT_UNINITIALIZED))
     }
 
-    fn mut_vault(&mut self) -> Fallible<&mut ProfileVault> {
+    fn mut_vault(&mut self) -> Fallible<&mut dyn ProfileVault> {
         self.vault
             .as_mut()
-            .map(|v| v.as_mut() as &mut ProfileVault)
+            .map(|v| v.as_mut() as &mut dyn ProfileVault)
             .ok_or_else(|| err_msg(ERR_MSG_VAULT_UNINITIALIZED))
     }
 
@@ -481,7 +481,7 @@ impl Api for Context {
         Ok(())
     }
 
-    fn claim_schemas(&self) -> Fallible<Rc<ClaimSchemas>> {
+    fn claim_schemas(&self) -> Fallible<Rc<dyn ClaimSchemas>> {
         let p = &self.schema_path;
         if !p.exists() {
             std::fs::create_dir_all(p)?;

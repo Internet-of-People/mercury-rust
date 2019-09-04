@@ -57,7 +57,7 @@ impl CliConfig {
 pub struct Config {
     private_storage_path: PathBuf,
     distributed_storage_address: SocketAddr,
-    signer: Rc<Signer>,
+    signer: Rc<dyn Signer>,
     listen_socket: SocketAddr, // TODO consider using Vec if listening on several network devices is needed
 }
 
@@ -115,7 +115,7 @@ impl Config {
     pub fn distributed_storage_address(&self) -> &SocketAddr {
         &self.distributed_storage_address
     }
-    pub fn signer(&self) -> Rc<Signer> {
+    pub fn signer(&self) -> Rc<dyn Signer> {
         self.signer.clone()
     }
     pub fn listen_socket(&self) -> &SocketAddr {

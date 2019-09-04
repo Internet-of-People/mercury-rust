@@ -1,4 +1,3 @@
-use std::net::SocketAddr;
 use std::path::PathBuf;
 
 use failure::Fallible;
@@ -33,7 +32,7 @@ pub struct Options {
 
 pub type CmdRes = Fallible<()>;
 pub trait Command {
-    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes;
+    fn execute(self: Box<Self>, api: &mut dyn Api) -> CmdRes;
 }
 
 #[derive(Debug, StructOpt)]
@@ -81,9 +80,9 @@ pub enum CommandVerb {
 }
 
 impl Command for CommandVerb {
-    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
+    fn execute(self: Box<Self>, api: &mut dyn Api) -> CmdRes {
         use CommandVerb::*;
-        let sub: Box<Command> = match *self {
+        let sub: Box<dyn Command> = match *self {
             Generate(sub) => Box::new(sub),
             Restore(sub) => Box::new(sub),
             List(sub) => Box::new(sub),
@@ -115,7 +114,7 @@ pub enum ListCommand {
 }
 
 impl Command for ListCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
+    fn execute(self: Box<Self>, api: &mut dyn Api) -> CmdRes {
         use ListCommand::*;
         match *self {
             Profiles => {
@@ -165,7 +164,7 @@ pub enum ShowCommand {
 }
 
 impl Command for ShowCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
+    fn execute(self: Box<Self>, api: &mut dyn Api) -> CmdRes {
         match *self {
             ShowCommand::Profile { profile_id, source } => {
                 let profile = api.get_profile_data(profile_id, source)?;
@@ -215,7 +214,7 @@ pub enum CreateCommand {
 }
 
 impl Command for CreateCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
+    fn execute(self: Box<Self>, api: &mut dyn Api) -> CmdRes {
         use CreateCommand::*;
         match *self {
             Profile { label } => {
@@ -248,7 +247,7 @@ pub enum RemoveCommand {
 }
 
 impl Command for RemoveCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
+    fn execute(self: Box<Self>, api: &mut dyn Api) -> CmdRes {
         match *self {
             RemoveCommand::Link { my_profile_id, peer_profile_id } => {
                 api.remove_link(my_profile_id, &peer_profile_id)?;
@@ -288,7 +287,7 @@ pub enum SetCommand {
 }
 
 impl Command for SetCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
+    fn execute(self: Box<Self>, api: &mut dyn Api) -> CmdRes {
         use SetCommand::*;
         match *self {
             ActiveProfile { my_profile_id } => {
@@ -320,7 +319,7 @@ pub enum ClearCommand {
 }
 
 impl Command for ClearCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
+    fn execute(self: Box<Self>, api: &mut dyn Api) -> CmdRes {
         match *self {
             ClearCommand::Attribute { my_profile_id, key } => {
                 api.clear_attribute(my_profile_id, &key)?;
@@ -339,7 +338,7 @@ pub enum GenerateCommand {
 }
 
 impl Command for GenerateCommand {
-    fn execute(self: Box<Self>, _api: &mut Api) -> CmdRes {
+    fn execute(self: Box<Self>, _api: &mut dyn Api) -> CmdRes {
         match *self {
             GenerateCommand::Vault => {
                 show_generated_phrase();
@@ -374,7 +373,7 @@ pub enum RestoreCommand {
 }
 
 impl Command for RestoreCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
+    fn execute(self: Box<Self>, api: &mut dyn Api) -> CmdRes {
         use RestoreCommand::*;
         match *self {
             Vault { demo } => {
@@ -424,7 +423,7 @@ pub enum PublishCommand {
 }
 
 impl Command for PublishCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
+    fn execute(self: Box<Self>, api: &mut dyn Api) -> CmdRes {
         match *self {
             PublishCommand::Profile { my_profile_id, force } => {
                 let profile_id = api.publish_profile(my_profile_id, force)?;
@@ -447,7 +446,7 @@ pub enum RevertCommand {
 }
 
 impl Command for RevertCommand {
-    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes {
+    fn execute(self: Box<Self>, api: &mut dyn Api) -> CmdRes {
         match *self {
             RevertCommand::Profile { my_profile_id } => {
                 let profile = api.revert_profile(my_profile_id)?;

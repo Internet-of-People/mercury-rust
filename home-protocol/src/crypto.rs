@@ -18,7 +18,7 @@ pub trait ProfileIdValidator {
     ) -> Result<bool, Error>;
 }
 
-impl Default for Box<ProfileIdValidator> {
+impl Default for Box<dyn ProfileIdValidator> {
     fn default() -> Self {
         Box::new(MultiHashProfileValidator::default())
     }
@@ -35,7 +35,7 @@ pub trait SignatureValidator {
     ) -> Result<bool, Error>;
 }
 
-impl Default for Box<SignatureValidator> {
+impl Default for Box<dyn SignatureValidator> {
     fn default() -> Self {
         Box::new(PublicKeyValidator::default())
     }
@@ -158,14 +158,14 @@ impl SignatureValidator for PublicKeyValidator {
 
 #[derive(Default)]
 pub struct CompositeValidator {
-    profile_validator: Box<ProfileIdValidator>,
-    signature_validator: Box<SignatureValidator>,
+    profile_validator: Box<dyn ProfileIdValidator>,
+    signature_validator: Box<dyn SignatureValidator>,
 }
 
 impl CompositeValidator {
     pub fn compose(
-        profile_validator: Box<ProfileIdValidator>,
-        signature_validator: Box<SignatureValidator>,
+        profile_validator: Box<dyn ProfileIdValidator>,
+        signature_validator: Box<dyn SignatureValidator>,
     ) -> Self {
         Self { profile_validator, signature_validator }
     }

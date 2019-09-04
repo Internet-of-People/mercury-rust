@@ -8,16 +8,16 @@ pub const CHANNEL_CAPACITY: usize = 1;
 /// Represents a connection to another Profile (Home <-> Persona), (Persona <-> Persona)
 #[derive(Clone)]
 pub struct PeerContext {
-    my_signer: Rc<Signer>,
+    my_signer: Rc<dyn Signer>,
     peer_pubkey: PublicKey,
 }
 
 impl PeerContext {
-    pub fn new(my_signer: Rc<Signer>, peer_pubkey: PublicKey) -> Self {
+    pub fn new(my_signer: Rc<dyn Signer>, peer_pubkey: PublicKey) -> Self {
         Self { my_signer, peer_pubkey }
     }
 
-    pub fn my_signer(&self) -> &Signer {
+    pub fn my_signer(&self) -> &dyn Signer {
         &*self.my_signer
     }
     pub fn peer_pubkey(&self) -> PublicKey {
@@ -27,7 +27,7 @@ impl PeerContext {
         self.peer_pubkey.key_id()
     }
 
-    pub fn validate(&self, validator: &Validator) -> Result<(), Error> {
+    pub fn validate(&self, validator: &dyn Validator) -> Result<(), Error> {
         validator.validate_profile_auth(&self.peer_pubkey(), &self.peer_id()).and_then(|valid| {
             if valid {
                 Ok(())
@@ -82,7 +82,7 @@ pub trait Home: ProfileExplorer {
     ) -> AsyncResult<OwnProfile, (OwnProfile, Error)>;
 
     /// By calling this method, any active session of the same profile is closed.
-    fn login(&self, proof_of_home: &RelationProof) -> AsyncResult<Rc<HomeSession>, Error>;
+    fn login(&self, proof_of_home: &RelationProof) -> AsyncResult<Rc<dyn HomeSession>, Error>;
 
     /// The peer in `half_proof` must be hosted on this home server.
     /// Returns Error if the peer is not hosted on this home server or an empty result if it is.
@@ -144,7 +144,7 @@ pub trait HomeSession {
 
     // TODO some kind of proof might be needed that the AppId given really belongs to the caller
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
-    fn checkin_app(&self, app: &ApplicationId) -> AsyncStream<Box<IncomingCall>, String>;
+    fn checkin_app(&self, app: &ApplicationId) -> AsyncStream<Box<dyn IncomingCall>, String>;
 
     // TODO remove this after testing
     fn ping(&self, txt: &str) -> AsyncResult<String, Error>;

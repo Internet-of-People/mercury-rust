@@ -43,12 +43,12 @@ impl Context {
 }
 
 struct DuplexChannel {
-    rx: Box<AsyncRead>,
-    tx: Box<AsyncWrite>,
+    rx: Box<dyn AsyncRead>,
+    tx: Box<dyn AsyncWrite>,
 }
 
 impl DuplexChannel {
-    fn new(rx: Box<AsyncRead>, tx: Box<AsyncWrite>) -> Self {
+    fn new(rx: Box<dyn AsyncRead>, tx: Box<dyn AsyncWrite>) -> Self {
         Self { rx, tx }
     }
 }
@@ -165,7 +165,7 @@ impl DAppEndpoint for DAppEndpointClient {
         &self,
         _app: &ApplicationId,
         _authorization: Option<DAppPermission>,
-    ) -> AsyncResult<Rc<DAppSession>, Error> {
+    ) -> AsyncResult<Rc<dyn DAppSession>, Error> {
         unimplemented!()
     }
 }
@@ -178,7 +178,7 @@ impl DAppSession for DAppSessionClient {
     }
 
     // TODO merge these two operations using an optional profile argument
-    fn contacts(&self) -> AsyncResult<Vec<Box<Contact>>, Error> {
+    fn contacts(&self) -> AsyncResult<Vec<Box<dyn Contact>>, Error> {
         unimplemented!()
     }
 
@@ -186,7 +186,7 @@ impl DAppSession for DAppSessionClient {
         &self,
         _profile: &ProfileId,
         _relation_type: Option<&str>,
-    ) -> AsyncResult<Vec<Box<Contact>>, Error> {
+    ) -> AsyncResult<Vec<Box<dyn Contact>>, Error> {
         unimplemented!()
     }
 
@@ -194,11 +194,11 @@ impl DAppSession for DAppSessionClient {
         unimplemented!()
     }
 
-    fn app_storage(&self) -> AsyncResult<KeyValueStore<String, String>, Error> {
+    fn app_storage(&self) -> AsyncResult<dyn KeyValueStore<String, String>, Error> {
         unimplemented!()
     }
 
-    fn checkin(&self) -> AsyncResult<Box<Stream<Item = DAppEvent, Error = ()>>, Error> {
+    fn checkin(&self) -> AsyncResult<Box<dyn Stream<Item = DAppEvent, Error = ()>>, Error> {
         unimplemented!()
     }
 }

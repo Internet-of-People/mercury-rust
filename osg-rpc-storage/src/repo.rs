@@ -159,7 +159,7 @@ impl PrivateProfileRepository for RpcProfileRepository {
 
 impl ProfileExplorer for RpcProfileRepository {
     fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
-        let res = (self as &PrivateProfileRepository).get(id).map(|prof| prof.public_data());
+        let res = (self as &dyn PrivateProfileRepository).get(id).map(|prof| prof.public_data());
         Box::new(res.into_future())
     }
 
@@ -171,16 +171,16 @@ impl ProfileExplorer for RpcProfileRepository {
 
 impl DistributedPublicProfileRepository for RpcProfileRepository {
     fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
-        let fut = (self as &PrivateProfileRepository).get(id).map(|prof| prof.public_data());
+        let fut = (self as &dyn PrivateProfileRepository).get(id).map(|prof| prof.public_data());
         Box::new(fut)
     }
 
     fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()> {
         let priv_profile = PrivateProfileData::from_public(profile);
-        (self as &mut PrivateProfileRepository).set(priv_profile)
+        (self as &mut dyn PrivateProfileRepository).set(priv_profile)
     }
 
     fn clear_public_local(&mut self, key: &PublicKey) -> AsyncFallible<()> {
-        (self as &mut PrivateProfileRepository).clear(key)
+        (self as &mut dyn PrivateProfileRepository).clear(key)
     }
 }

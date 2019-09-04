@@ -80,7 +80,7 @@ macro_rules! erased_type {
             #[allow(dead_code)]
             pub(super) suite: CipherSuite,
             #[allow(dead_code)]
-            pub(super) erased: Box<Any + Send>,
+            pub(super) erased: Box<dyn Any + Send>,
         }
     };
 }
@@ -94,7 +94,7 @@ macro_rules! reify {
 
 macro_rules! erase {
     ($suite:ident, $type:ident, $result:expr) => {
-        $type { suite: $suite!(variant), erased: Box::new($result) as Box<Any + Send> }
+        $type { suite: $suite!(variant), erased: Box::new($result) as Box<dyn Any + Send> }
     };
 }
 

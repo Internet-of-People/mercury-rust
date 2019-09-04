@@ -93,18 +93,18 @@ impl Default for InMemoryProfileRepository {
 impl DistributedPublicProfileRepository for InMemoryProfileRepository {
     fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
         let res =
-            (self as &PrivateProfileRepository).get(id).map(|prof_ref| prof_ref.public_data());
+            (self as &dyn PrivateProfileRepository).get(id).map(|prof_ref| prof_ref.public_data());
         Box::new(res)
     }
 
     fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()> {
         let private_profile = PrivateProfileData::from_public(profile);
-        let res = (self as &mut PrivateProfileRepository).set(private_profile);
+        let res = (self as &mut dyn PrivateProfileRepository).set(private_profile);
         Box::new(res)
     }
 
     fn clear_public_local(&mut self, key: &PublicKey) -> AsyncFallible<()> {
-        let res = (self as &mut PrivateProfileRepository).clear(key);
+        let res = (self as &mut dyn PrivateProfileRepository).clear(key);
         Box::new(res)
     }
 }
@@ -138,7 +138,7 @@ impl LocalProfileRepository for InMemoryProfileRepository {
 
 impl ProfileExplorer for InMemoryProfileRepository {
     fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
-        (self as &DistributedPublicProfileRepository).get_public(id)
+        (self as &dyn DistributedPublicProfileRepository).get_public(id)
     }
     fn followers(&self, _id: &ProfileId) -> AsyncFallible<Vec<Link>> {
         unimplemented!() // TODO

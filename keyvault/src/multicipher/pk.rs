@@ -142,7 +142,7 @@ impl std::fmt::Display for MPublicKey {
 
 impl std::fmt::Debug for MPublicKey {
     fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        (self as &std::fmt::Display).fmt(f)
+        (self as &dyn std::fmt::Display).fmt(f)
     }
 }
 

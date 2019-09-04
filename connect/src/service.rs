@@ -31,7 +31,7 @@ pub trait KeyVault {
 
     // TODO what do we need here to unlock the private key? Maybe a password?
     // Get or create an empty profile for a path returned by next()
-    fn unlock_profile(&self, bip32_path: &Bip32Path) -> Rc<Signer>;
+    fn unlock_profile(&self, bip32_path: &Bip32Path) -> Rc<dyn Signer>;
 }
 
 // Usage of Bip32 hierarchy, format: path => data stored with that key
@@ -48,7 +48,7 @@ pub trait Bip32PathMapper {
 
 pub trait AccessManager {
     fn ask_read_access(&self, resource: &Bip32Path) -> AsyncResult<PublicKey, Error>;
-    fn ask_write_access(&self, resource: &Bip32Path) -> AsyncResult<Rc<Signer>, Error>;
+    fn ask_write_access(&self, resource: &Bip32Path) -> AsyncResult<Rc<dyn Signer>, Error>;
 }
 
 // User interface (probably implemented with platform-native GUI) for actions
@@ -85,9 +85,9 @@ pub trait UserInterface {
 }
 
 pub trait AdminSession {
-    fn profiles(&self) -> AsyncResult<Vec<Rc<MyProfile>>, Error>;
-    fn profile(&self, id: ProfileId) -> AsyncResult<Rc<MyProfile>, Error>;
-    fn create_profile(&self) -> AsyncResult<Rc<MyProfile>, Error>;
+    fn profiles(&self) -> AsyncResult<Vec<Rc<dyn MyProfile>>, Error>;
+    fn profile(&self, id: ProfileId) -> AsyncResult<Rc<dyn MyProfile>, Error>;
+    fn create_profile(&self) -> AsyncResult<Rc<dyn MyProfile>, Error>;
     fn remove_profile(&self, profile: &ProfileId) -> AsyncResult<(), Error>;
     //    fn claim_profile(&self, home: ProfileId, profile: ProfileId)
     //        -> AsyncResult<Rc<MyProfile>, Error>;
@@ -95,25 +95,25 @@ pub trait AdminSession {
 
 pub struct SignerFactory {
     // TODO this should also support HW wallets
-    signers: HashMap<ProfileId, Rc<Signer>>,
+    signers: HashMap<ProfileId, Rc<dyn Signer>>,
 }
 
 impl SignerFactory {
-    pub fn new(signers: HashMap<ProfileId, Rc<Signer>>) -> Self {
+    pub fn new(signers: HashMap<ProfileId, Rc<dyn Signer>>) -> Self {
         Self { signers }
     }
 
-    pub fn signer(&self, profile_id: &ProfileId) -> Option<Rc<Signer>> {
+    pub fn signer(&self, profile_id: &ProfileId) -> Option<Rc<dyn Signer>> {
         self.signers.get(profile_id).map(|s| s.clone())
     }
 }
 
 pub struct MyProfileFactory {
     signer_factory: Rc<SignerFactory>,
-    profile_repo: Rc<RefCell<DistributedPublicProfileRepository>>,
-    home_connector: Rc<HomeConnector>,
+    profile_repo: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
+    home_connector: Rc<dyn HomeConnector>,
     handle: reactor::Handle,
-    cache: Rc<RefCell<HashMap<ProfileId, Rc<MyProfile>>>>,
+    cache: Rc<RefCell<HashMap<ProfileId, Rc<dyn MyProfile>>>>,
 }
 
 // TODO maybe this should be merged into AdminSessionImpl, the only thing it does is caching
@@ -121,14 +121,14 @@ impl MyProfileFactory {
     //pub fn new(signer_factory: Rc<SignerFactory>, profile_repo: Rc<ProfileRepo>, home_connector: Rc<HomeConnector>)
     pub fn new(
         signer_factory: Rc<SignerFactory>,
-        profile_repo: Rc<RefCell<DistributedPublicProfileRepository>>,
-        home_connector: Rc<HomeConnector>,
+        profile_repo: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
+        home_connector: Rc<dyn HomeConnector>,
         handle: reactor::Handle,
     ) -> Self {
         Self { signer_factory, profile_repo, home_connector, handle, cache: Default::default() }
     }
 
-    pub fn create(&self, own_profile: OwnProfile) -> Result<Rc<MyProfile>, Error> {
+    pub fn create(&self, own_profile: OwnProfile) -> Result<Rc<dyn MyProfile>, Error> {
         let profile_id = own_profile.id();
         if let Some(ref my_profile_rc) = self.cache.borrow().get(&profile_id) {
             return Ok(Rc::clone(my_profile_rc));
@@ -145,7 +145,7 @@ impl MyProfileFactory {
                     self.home_connector.clone(),
                     self.handle.clone(),
                 );
-                let result_rc = Rc::new(result) as Rc<MyProfile>;
+                let result_rc = Rc::new(result) as Rc<dyn MyProfile>;
                 // TODO this allows initiating several fill attempts in parallel
                 //      until first one succeeds, last one wins by overwriting.
                 //      Is this acceptable?
@@ -160,27 +160,27 @@ pub struct AdminSessionImpl {
     //    keyvault:   Rc<KeyVault>,
     //    pathmap:    Rc<Bip32PathMapper>,
     //    accessman:  Rc<AccessManager>,
-    ui: Rc<UserInterface>,
+    ui: Rc<dyn UserInterface>,
     my_profile_ids: Rc<HashSet<ProfileId>>,
-    profile_store: Rc<RefCell<PrivateProfileRepository>>,
+    profile_store: Rc<RefCell<dyn PrivateProfileRepository>>,
     profile_factory: Rc<MyProfileFactory>,
     //    handle:         reactor::Handle,
 }
 
 impl AdminSessionImpl {
     pub fn new(
-        ui: Rc<UserInterface>,
+        ui: Rc<dyn UserInterface>,
         my_profile_ids: Rc<HashSet<ProfileId>>,
-        profile_store: Rc<RefCell<PrivateProfileRepository>>,
+        profile_store: Rc<RefCell<dyn PrivateProfileRepository>>,
         profile_factory: Rc<MyProfileFactory>,
-    ) -> Rc<AdminSession> {
+    ) -> Rc<dyn AdminSession> {
         let this = Self { ui, profile_store, my_profile_ids, profile_factory }; //, handle };
         Rc::new(this)
     }
 }
 
 impl AdminSession for AdminSessionImpl {
-    fn profiles(&self) -> AsyncResult<Vec<Rc<MyProfile>>, Error> {
+    fn profiles(&self) -> AsyncResult<Vec<Rc<dyn MyProfile>>, Error> {
         // TODO consider delegating implementation to profile(id)
         let store = self.profile_store.clone();
         let prof_factory = self.profile_factory.clone();
@@ -200,7 +200,7 @@ impl AdminSession for AdminSessionImpl {
         Box::new(profiles_fut)
     }
 
-    fn profile(&self, id: ProfileId) -> AsyncResult<Rc<MyProfile>, Error> {
+    fn profile(&self, id: ProfileId) -> AsyncResult<Rc<dyn MyProfile>, Error> {
         let profile_factory = self.profile_factory.clone();
         let fut = self
             .profile_store
@@ -211,7 +211,7 @@ impl AdminSession for AdminSessionImpl {
         Box::new(fut)
     }
 
-    fn create_profile(&self) -> AsyncResult<Rc<MyProfile>, Error> {
+    fn create_profile(&self) -> AsyncResult<Rc<dyn MyProfile>, Error> {
         unimplemented!()
     }
 
@@ -236,18 +236,18 @@ pub struct ConnectService {
     //    keyvault:       Rc<KeyVault>,
     //    pathmap:        Rc<Bip32PathMapper>,
     //    accessman:      Rc<AccessManager>,
-    ui: Rc<UserInterface>,
+    ui: Rc<dyn UserInterface>,
     my_profile_ids: Rc<HashSet<ProfileId>>,
-    profile_store: Rc<RefCell<PrivateProfileRepository>>,
+    profile_store: Rc<RefCell<dyn PrivateProfileRepository>>,
     profile_factory: Rc<MyProfileFactory>,
     //    handle:         reactor::Handle,
 }
 
 impl ConnectService {
     pub fn new(
-        ui: Rc<UserInterface>,
+        ui: Rc<dyn UserInterface>,
         my_profile_ids: Rc<HashSet<ProfileId>>,
-        profile_store: Rc<RefCell<PrivateProfileRepository>>,
+        profile_store: Rc<RefCell<dyn PrivateProfileRepository>>,
         profile_factory: Rc<MyProfileFactory>,
     ) -> Self {
         Self { ui, my_profile_ids, profile_store, profile_factory }
@@ -255,8 +255,8 @@ impl ConnectService {
 
     pub fn admin_session(
         &self,
-        authorization: Option<DAppPermission>,
-    ) -> AsyncResult<Rc<AdminSession>, Error> {
+        _authorization: Option<DAppPermission>,
+    ) -> AsyncResult<Rc<dyn AdminSession>, Error> {
         let adm = AdminSessionImpl::new(
             self.ui.clone(),
             self.my_profile_ids.clone(),
@@ -272,8 +272,8 @@ impl DAppEndpoint for ConnectService {
     fn dapp_session(
         &self,
         app: &ApplicationId,
-        authorization: Option<DAppPermission>,
-    ) -> AsyncResult<Rc<DAppSession>, Error> {
+        _authorization: Option<DAppPermission>,
+    ) -> AsyncResult<Rc<dyn DAppSession>, Error> {
         let app = app.to_owned();
         let profile_store = self.profile_store.clone();
         let profile_factory = self.profile_factory.clone();

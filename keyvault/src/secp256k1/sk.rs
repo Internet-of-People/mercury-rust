@@ -32,7 +32,7 @@ impl SecpPrivateKey {
     }
 
     /// Serializes private key into wallet import format supported by many pre-HD wallets
-    pub fn to_wif(&self, network: &Network, usage: Bip178) -> String {
+    pub fn to_wif(&self, network: &dyn Network, usage: Bip178) -> String {
         let mut res = Vec::with_capacity(1 + 1 + PRIVATE_KEY_SIZE);
         res.extend_from_slice(network.wif());
         res.extend_from_slice(&self.to_bytes());
@@ -42,7 +42,7 @@ impl SecpPrivateKey {
     }
 
     /// Deserializes private key from wallet import format supported by many pre-HD wallets
-    pub fn from_wif(wif: &str, network: &Network) -> Fallible<(Self, Bip178)> {
+    pub fn from_wif(wif: &str, network: &dyn Network) -> Fallible<(Self, Bip178)> {
         let data = from_base58check(wif)?;
         ensure!(data.len() > PRIVATE_KEY_SIZE, "WIF data is too short");
 

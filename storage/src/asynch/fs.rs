@@ -92,7 +92,7 @@ impl AsyncFileStore {
     fn schedule<T, F>(
         &self,
         future: F,
-    ) -> Box<Future<Item = T, Error = failure::Error> + Send + 'static>
+    ) -> Box<dyn Future<Item = T, Error = failure::Error> + Send + 'static>
     where
         F: Future<Item = T, Error = failure::Error> + Send + 'static,
         T: Send + 'static,
@@ -165,7 +165,7 @@ where
 fn test_file_store() {
     let mut reactor = tokio_core::reactor::Core::new().unwrap();
     // let mut runtime = tokio::runtime::Runtime::new().unwrap();
-    let mut storage: Box<KeyValueStore<String, String>> =
+    let mut storage: Box<dyn KeyValueStore<String, String>> =
         Box::new(FileStore::new("./filetest/store/").unwrap());
     let count = 100;
     let content = "my_application".to_string();

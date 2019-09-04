@@ -44,13 +44,13 @@ impl fmt::Display for InlinkCount {
 
 pub struct Simulation<'a> {
     state: &'a mut State,
-    repo: &'a mut PrivateProfileRepository,
+    repo: &'a mut dyn PrivateProfileRepository,
     inlinks: BTreeMap<usize, usize>,
     vault: Vault,
 }
 
 impl<'a> Simulation<'a> {
-    pub fn new(state: &'a mut State, repo: &'a mut PrivateProfileRepository) -> Fallible<Self> {
+    pub fn new(state: &'a mut State, repo: &'a mut dyn PrivateProfileRepository) -> Fallible<Self> {
         let vault = Vault::new(state.vault_seed())?;
         let mut inlinks = BTreeMap::new();
         for user in state.into_iter() {

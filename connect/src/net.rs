@@ -61,8 +61,8 @@ impl HomeConnector for SimpleTcpHomeConnector {
     fn connect_to_addrs(
         &self,
         addresses: &[Multiaddr],
-        signer: Rc<Signer>,
-    ) -> AsyncResult<Rc<Home>, mercury_home_protocol::error::Error> {
+        signer: Rc<dyn Signer>,
+    ) -> AsyncResult<Rc<dyn Home>, mercury_home_protocol::error::Error> {
         let handle_clone = self.handle.clone();
         let tcp_conns = addresses.iter().map(move |addr| {
             SimpleTcpHomeConnector::connect_addr(&addr, &handle_clone).map_err(|err| {
@@ -80,7 +80,7 @@ impl HomeConnector for SimpleTcpHomeConnector {
                     .map_err(|err| err.context(mercury_home_protocol::error::ErrorKind::DiffieHellmanHandshakeFailed).into())
             }).map( |(reader, writer, _peer_ctx)| {
                 use mercury_home_protocol::mercury_capnp::client_proxy::HomeClientCapnProto;
-                Rc::new( HomeClientCapnProto::new(reader, writer, handle_clone) ) as Rc<Home>
+                Rc::new( HomeClientCapnProto::new(reader, writer, handle_clone) ) as Rc<dyn Home>
             });
 
         Box::new(capnp_home)
@@ -89,8 +89,8 @@ impl HomeConnector for SimpleTcpHomeConnector {
     fn connect_to_home(
         &self,
         home_profile: &Profile,
-        signer: Rc<Signer>,
-    ) -> AsyncResult<Rc<Home>, mercury_home_protocol::error::Error> {
+        signer: Rc<dyn Signer>,
+    ) -> AsyncResult<Rc<dyn Home>, mercury_home_protocol::error::Error> {
         let addrs = match home_profile.as_home() {
             Some(ref home_facet) => home_facet.addrs.clone(),
             None => {

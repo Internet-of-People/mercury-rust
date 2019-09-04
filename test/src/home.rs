@@ -17,7 +17,7 @@ pub fn app_channel(capacity: usize) -> (AppMsgSink, AppMsgStream) {
 pub struct TestClient {
     ownprofile: OwnProfile,
     home_context: PeerContext,
-    home_connection: Rc<Home>,
+    home_connection: Rc<dyn Home>,
 }
 
 #[derive(Clone)]
@@ -30,9 +30,9 @@ impl TestClient {
     fn new(
         test_mode: TestMode,
         ownprofile: OwnProfile,
-        client_signer: Rc<Signer>,
+        client_signer: Rc<dyn Signer>,
         home_server: Rc<HomeServer>,
-        home_signer: Rc<Signer>,
+        home_signer: Rc<dyn Signer>,
         home_profile: &Profile,
         handle: reactor::Handle,
     ) -> Self {
@@ -53,9 +53,9 @@ impl TestClient {
 
     fn memsocket(
         ownprofile: OwnProfile,
-        client_signer: Rc<Signer>,
+        client_signer: Rc<dyn Signer>,
         home_server: Rc<HomeServer>,
-        home_signer: Rc<Signer>,
+        home_signer: Rc<dyn Signer>,
         home_profile: &Profile,
         handle: reactor::Handle,
     ) -> Self {
@@ -95,9 +95,9 @@ impl TestClient {
 
     fn direct(
         client_ownprofile: OwnProfile,
-        client_signer: Rc<Signer>,
+        client_signer: Rc<dyn Signer>,
         home_server: Rc<HomeServer>,
-        home_signer: Rc<Signer>,
+        home_signer: Rc<dyn Signer>,
         home_profile: &Profile,
     ) -> Self {
         let home_client_context =
@@ -120,7 +120,7 @@ pub struct TestSetup {
     pub mode: TestMode,
     pub reactor: reactor::Core,
     pub home_server: Rc<HomeServer>,
-    pub home_signer: Rc<Signer>,
+    pub home_signer: Rc<dyn Signer>,
     pub home_profile: Profile,
     pub testclient: TestClient, // not spelled as test_client, because that would be misleading, e.g. test_client_home_session
 }
@@ -378,7 +378,7 @@ fn test_home_call(mut setup: TestSetup) {
     setup.reactor.run(read_orange_fut).unwrap();
 }
 
-fn do_test(test_fn: &Fn(TestSetup) -> ()) {
+fn do_test(test_fn: &dyn Fn(TestSetup) -> ()) {
     println!("> Direct mode");
     test_fn(TestSetup::init(TestMode::Direct));
     println!("> Memsocket mode");

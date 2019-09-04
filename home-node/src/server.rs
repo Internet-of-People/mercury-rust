@@ -18,18 +18,18 @@ const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct HomeServer {
     handle: reactor::Handle,
-    validator: Rc<Validator>,
-    public_profile_dht: Rc<RefCell<DistributedPublicProfileRepository>>,
-    hosted_profile_db: Rc<RefCell<PrivateProfileRepository>>,
+    validator: Rc<dyn Validator>,
+    public_profile_dht: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
+    hosted_profile_db: Rc<RefCell<dyn PrivateProfileRepository>>,
     sessions: Rc<RefCell<HashMap<ProfileId, Weak<HomeSessionServer>>>>,
 }
 
 impl HomeServer {
     pub fn new(
         handle: &reactor::Handle,
-        validator: Rc<Validator>,
-        public_dht: Rc<RefCell<DistributedPublicProfileRepository>>,
-        private_db: Rc<RefCell<PrivateProfileRepository>>,
+        validator: Rc<dyn Validator>,
+        public_dht: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
+        private_db: Rc<RefCell<dyn PrivateProfileRepository>>,
     ) -> Self {
         Self {
             handle: handle.clone(),
@@ -59,7 +59,7 @@ impl HomeConnectionServer {
     fn get_live_session(
         server: Rc<HomeServer>,
         to_profile: ProfileId,
-    ) -> Box<Future<Item = Option<Rc<HomeSessionServer>>, Error = Error>> {
+    ) -> Box<dyn Future<Item = Option<Rc<HomeSessionServer>>, Error = Error>> {
         let sessions_clone = server.sessions.clone();
 
         // Check if this profile is hosted on this server
@@ -83,7 +83,7 @@ impl HomeConnectionServer {
         server: Rc<HomeServer>,
         to_profile: ProfileId,
         event: ProfileEvent,
-    ) -> Box<Future<Item = (), Error = Error>> {
+    ) -> Box<dyn Future<Item = (), Error = Error>> {
         let push_fut = Self::get_live_session(server, to_profile).and_then(|session_rc_opt| {
             match session_rc_opt {
                 // TODO if push to session fails, consider just dropping the session
@@ -101,15 +101,15 @@ impl HomeConnectionServer {
         server: Rc<HomeServer>,
         to_profile: ProfileId,
         to_app: ApplicationId,
-        call: Box<IncomingCall>,
-    ) -> Box<Future<Item = (), Error = Error>> {
+        call: Box<dyn IncomingCall>,
+    ) -> Box<dyn Future<Item = (), Error = Error>> {
         let push_fut = Self::get_live_session(server, to_profile).and_then(|session_rc_opt| {
             match session_rc_opt {
                 Some(ref session) => {
                     // TODO if push to session fails, consider just dropping the session
                     //      (is anything manual needed using weak pointers?) and requiring a reconnect
                     let push_fut = session.push_call(to_app, call);
-                    Box::new(push_fut) as Box<Future<Item = (), Error = Error>>
+                    Box::new(push_fut) as Box<dyn Future<Item = (), Error = Error>>
                 }
                 // TODO save event into persistent storage and delegate it when profile is online again
                 None => Box::new(future::ok(())),
@@ -138,7 +138,7 @@ impl ProfileExplorer for HomeConnectionServer {
 }
 
 impl Home for HomeConnectionServer {
-    fn claim(&self, profile: ProfileId) -> Box<Future<Item = OwnProfile, Error = Error>> {
+    fn claim(&self, profile: ProfileId) -> Box<dyn Future<Item = OwnProfile, Error = Error>> {
         if profile != self.context.peer_id() {
             return Box::new(future::err(ErrorKind::FailedToClaimProfile.into()));
         }
@@ -157,7 +157,7 @@ impl Home for HomeConnectionServer {
         own_prof: OwnProfile,
         half_proof: RelationHalfProof,
         //_invite: Option<HomeInvitation>,
-    ) -> Box<Future<Item = OwnProfile, Error = (OwnProfile, Error)>> {
+    ) -> Box<dyn Future<Item = OwnProfile, Error = (OwnProfile, Error)>> {
         if own_prof.id() != self.context.peer_id() {
             return Box::new(future::err((own_prof, ErrorKind::ProfileMismatch.into())));
         }
@@ -194,7 +194,7 @@ impl Home for HomeConnectionServer {
 
         let own_prof_clone = own_prof.clone();
         let error_mapper =
-            move |e: failure::Error| (own_prof_clone, ErrorKind::StorageFailed.into());
+            move |_e: failure::Error| (own_prof_clone, ErrorKind::StorageFailed.into());
         let error_mapper_clone = error_mapper.clone();
 
         let home_proof =
@@ -266,7 +266,7 @@ impl Home for HomeConnectionServer {
     fn login(
         &self,
         proof_of_home: &RelationProof,
-    ) -> Box<Future<Item = Rc<HomeSession>, Error = Error>> {
+    ) -> Box<dyn Future<Item = Rc<dyn HomeSession>, Error = Error>> {
         if *proof_of_home.relation_type != *RelationProof::RELATION_TYPE_HOSTED_ON_HOME {
             return Box::new(future::err(ErrorKind::RelationTypeMismatch.into()));
         }
@@ -291,7 +291,7 @@ impl Home for HomeConnectionServer {
                         .borrow_mut()
                         .entry(profile_id)
                         .or_insert(Rc::downgrade(&session));
-                    session as Rc<HomeSession>
+                    session as Rc<dyn HomeSession>
                 }
             })
             .map_err(|e| e.context(ErrorKind::FailedToLoadProfile).into());
@@ -299,7 +299,10 @@ impl Home for HomeConnectionServer {
         Box::new(val_fut)
     }
 
-    fn pair_request(&self, half_proof: RelationHalfProof) -> Box<Future<Item = (), Error = Error>> {
+    fn pair_request(
+        &self,
+        half_proof: RelationHalfProof,
+    ) -> Box<dyn Future<Item = (), Error = Error>> {
         if half_proof.signer_id != self.context.peer_id() {
             return Box::new(future::err(ErrorKind::ProfileMismatch.into()));
         }
@@ -317,7 +320,7 @@ impl Home for HomeConnectionServer {
         Self::push_event(self.server.clone(), to_profile, ProfileEvent::PairingRequest(half_proof))
     }
 
-    fn pair_response(&self, relation: RelationProof) -> Box<Future<Item = (), Error = Error>> {
+    fn pair_response(&self, relation: RelationProof) -> Box<dyn Future<Item = (), Error = Error>> {
         let to_profile = match relation.peer_id(&self.context.peer_id()) {
             Ok(profile_id) => profile_id.to_owned(),
             Err(err) => {
@@ -365,7 +368,7 @@ impl Home for HomeConnectionServer {
         &self,
         app: ApplicationId,
         call_req: CallRequestDetails,
-    ) -> Box<Future<Item = Option<AppMsgSink>, Error = Error>> {
+    ) -> Box<dyn Future<Item = Option<AppMsgSink>, Error = Error>> {
         // TODO add error case for calling self
         let to_profile = match call_req.relation.peer_id(&self.context.peer_id()) {
             Ok(profile_id) => profile_id.to_owned(),
@@ -442,7 +445,7 @@ impl IncomingCall for Call {
     fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>) -> CallRequestDetails {
         // NOTE needed to dereference Box because otherwise the whole self is moved at its first dereference
         let this = *self;
-        if let Err(e) = this.sender.send(to_callee) {
+        if let Err(_e) = this.sender.send(to_callee) {
             // TODO We should at least log the error here.
             //      To solve this better, the function probably should return a Result<T,E> instead of T.
         }
@@ -462,7 +465,7 @@ pub struct HomeSessionServer {
     context: Rc<PeerContext>,
     server: Rc<HomeServer>,
     events: RefCell<ServerSink<ProfileEvent, String>>,
-    apps: RefCell<HashMap<ApplicationId, ServerSink<Box<IncomingCall>, String>>>, // {appId->sender<call>}
+    apps: RefCell<HashMap<ApplicationId, ServerSink<Box<dyn IncomingCall>, String>>>, // {appId->sender<call>}
 }
 
 impl HomeSessionServer {
@@ -476,7 +479,7 @@ impl HomeSessionServer {
         }
     }
 
-    fn push_event(&self, event: ProfileEvent) -> Box<Future<Item = (), Error = Error>> {
+    fn push_event(&self, event: ProfileEvent) -> Box<dyn Future<Item = (), Error = Error>> {
         debug!("Session with {} got event dispatched: {:?}", self.context.peer_id(), event);
         match *self.events.borrow_mut() {
             ServerSink::Buffer(ref mut bufvec) => {
@@ -490,7 +493,7 @@ impl HomeSessionServer {
                     .send(Ok(event))
                     .map(|_sender| ())
                     // TODO if call dispatch fails we probably should replace the sender with a buffer
-                    .map_err(|e| ErrorKind::FailedToSend.into());
+                    .map_err(|_e| ErrorKind::FailedToSend.into());
                 Box::new(fut)
             }
         }
@@ -499,8 +502,8 @@ impl HomeSessionServer {
     fn push_call(
         &self,
         app: ApplicationId,
-        call: Box<IncomingCall>,
-    ) -> Box<Future<Item = (), Error = Error>> {
+        call: Box<dyn IncomingCall>,
+    ) -> Box<dyn Future<Item = (), Error = Error>> {
         debug!(
             "Session with {} dispatched call with relation: {:?}",
             self.context.peer_id(),
@@ -519,7 +522,7 @@ impl HomeSessionServer {
                     .send(Ok(call))
                     .map(|_sender| ())
                     // TODO if call dispatch fails we probably should replace the sender with a buffer
-                    .map_err(|e| ErrorKind::FailedToSend.into()),
+                    .map_err(|_e| ErrorKind::FailedToSend.into()),
             ),
         }
     }
@@ -534,7 +537,7 @@ impl Drop for HomeSessionServer {
 }
 
 impl HomeSession for HomeSessionServer {
-    fn update(&self, own_prof: OwnProfile) -> Box<Future<Item = (), Error = Error>> {
+    fn update(&self, own_prof: OwnProfile) -> Box<dyn Future<Item = (), Error = Error>> {
         if own_prof.id() != self.context.peer_id() {
             return Box::new(future::err(ErrorKind::ProfileMismatch.into()));
         }
@@ -569,14 +572,14 @@ impl HomeSession for HomeSessionServer {
                 }
             })
             // TODO: fix it after storage error refactorings
-            .map_err(|e| ErrorKind::ProfileUpdateFailed.into());
+            .map_err(|_e| ErrorKind::ProfileUpdateFailed.into());
 
         Box::new(upd_fut)
     }
 
     // TODO is the ID of the new home enough here or do we need the whole profile?
     // TODO newhome should be stored and some special redirect to new home should be sent when someone looking for the profile
-    fn unregister(&self, _newhome: Option<Profile>) -> Box<Future<Item = (), Error = Error>> {
+    fn unregister(&self, _newhome: Option<Profile>) -> Box<dyn Future<Item = (), Error = Error>> {
         let profile_id = self.context.peer_id().to_owned();
         let profile_key = self.context.peer_pubkey();
 
@@ -603,7 +606,7 @@ impl HomeSession for HomeSessionServer {
     }
 
     // TODO add argument in a later milestone, presence: Option<AppMessageFrame>) ->
-    fn checkin_app(&self, app: &ApplicationId) -> AsyncStream<Box<IncomingCall>, String> {
+    fn checkin_app(&self, app: &ApplicationId) -> AsyncStream<Box<dyn IncomingCall>, String> {
         let (sender, receiver) = mpsc::channel(CHANNEL_CAPACITY);
 
         match self.apps.borrow_mut().insert(app.to_owned(), ServerSink::Sender(sender.clone())) {
@@ -660,7 +663,7 @@ impl HomeSession for HomeSessionServer {
     }
 
     // TODO consider removing this after testing
-    fn ping(&self, txt: &str) -> Box<Future<Item = String, Error = Error>> {
+    fn ping(&self, txt: &str) -> Box<dyn Future<Item = String, Error = Error>> {
         debug!("Ping received `{}`, sending it back", txt);
         Box::new(future::ok(txt.to_owned()))
     }

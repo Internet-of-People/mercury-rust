@@ -163,14 +163,14 @@ impl Api for ApiHttpClient {
         self.await_fut(fut)
     }
 
-    fn get_profile_metadata(&self, id: Option<ProfileId>) -> Fallible<ProfileMetadata> {
+    fn get_profile_metadata(&self, _id: Option<ProfileId>) -> Fallible<ProfileMetadata> {
         unimplemented!() // NOTE not present in the CLI so far
     }
 
     fn set_profile_metadata(
         &mut self,
-        id: Option<ProfileId>,
-        data: ProfileMetadata,
+        _id: Option<ProfileId>,
+        _data: ProfileMetadata,
     ) -> Fallible<()> {
         unimplemented!() // NOTE not present in the CLI so far
     }
@@ -178,7 +178,7 @@ impl Api for ApiHttpClient {
     fn get_profile_data(
         &self,
         id: Option<ProfileId>,
-        repo_kind: ProfileRepositoryKind,
+        _repo_kind: ProfileRepositoryKind,
     ) -> Fallible<PrivateProfileData> {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/profiledata", self.root_url, did);
@@ -310,43 +310,43 @@ impl Api for ApiHttpClient {
         self.await_fut(fut)
     }
 
-    fn remove_claim(&mut self, my_profile_id: Option<ProfileId>, claim: ClaimId) -> Fallible<()> {
+    fn remove_claim(&mut self, _my_profile_id: Option<ProfileId>, _claim: ClaimId) -> Fallible<()> {
         unimplemented!()
     }
 
     fn add_claim_proof(
         &mut self,
-        my_profile_id: Option<ProfileId>,
-        claim: ClaimId,
-        proof: ClaimProof,
+        _my_profile_id: Option<ProfileId>,
+        _claim: ClaimId,
+        _proof: ClaimProof,
     ) -> Fallible<()> {
         unimplemented!()
     }
 
     fn present_claim(
         &mut self,
-        my_profile_id: Option<ProfileId>,
-        claim: ClaimId,
+        _my_profile_id: Option<ProfileId>,
+        _claim: ClaimId,
     ) -> Fallible<ClaimPresentation> {
         unimplemented!()
     }
 
-    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>> {
+    fn list_incoming_links(&self, _my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>> {
         unimplemented!()
     }
 
     fn create_link(
         &mut self,
-        my_profile_id: Option<ProfileId>,
-        peer_profile_id: &ProfileId,
+        _my_profile_id: Option<ProfileId>,
+        _peer_profile_id: &ProfileId,
     ) -> Fallible<Link> {
         unimplemented!()
     }
 
     fn remove_link(
         &mut self,
-        my_profile_id: Option<ProfileId>,
-        peer_profile_id: &ProfileId,
+        _my_profile_id: Option<ProfileId>,
+        _peer_profile_id: &ProfileId,
     ) -> Fallible<()> {
         unimplemented!()
     }

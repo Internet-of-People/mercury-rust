@@ -68,9 +68,9 @@ pub trait HashSpace<ObjectType, ReadableHashType> {
 
 pub struct ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType> {
     //    serializer: Rc< Serializer<ObjectType, SerializedType> >,
-    hasher: Rc<Hasher<SerializedType, BinaryHashType>>,
-    storage: Box<KeyValueStore<BinaryHashType, SerializedType>>,
-    hash_coder: Box<HashCoder<BinaryHashType, ReadableHashType>>,
+    hasher: Rc<dyn Hasher<SerializedType, BinaryHashType>>,
+    storage: Box<dyn KeyValueStore<BinaryHashType, SerializedType>>,
+    hash_coder: Box<dyn HashCoder<BinaryHashType, ReadableHashType>>,
 }
 
 impl<SerializedType, BinaryHashType, ReadableHashType>
@@ -78,9 +78,9 @@ impl<SerializedType, BinaryHashType, ReadableHashType>
 {
     pub fn new(
         // serializer: Rc< Serializer<ObjectType, SerializedType> >,
-        hasher: Rc<Hasher<SerializedType, BinaryHashType>>,
-        storage: Box<KeyValueStore<BinaryHashType, SerializedType>>,
-        hash_coder: Box<HashCoder<BinaryHashType, ReadableHashType>>,
+        hasher: Rc<dyn Hasher<SerializedType, BinaryHashType>>,
+        storage: Box<dyn KeyValueStore<BinaryHashType, SerializedType>>,
+        hash_coder: Box<dyn HashCoder<BinaryHashType, ReadableHashType>>,
     ) -> Self {
         Self {
             // serializer:   serializer,

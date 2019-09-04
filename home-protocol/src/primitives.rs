@@ -114,7 +114,7 @@ pub struct RelationHalfProof {
 }
 
 impl RelationHalfProof {
-    pub fn new(relation_type: &str, peer_id: &ProfileId, signer: &Signer) -> Self {
+    pub fn new(relation_type: &str, peer_id: &ProfileId, signer: &dyn Signer) -> Self {
         let signable = RelationSignablePart::new(relation_type, &signer.profile_id(), peer_id);
         Self {
             relation_type: relation_type.to_owned(),
@@ -216,7 +216,7 @@ impl RelationSignablePart {
         serialize(self).unwrap()
     }
 
-    fn sign(&self, signer: &Signer) -> Signature {
+    fn sign(&self, signer: &dyn Signer) -> Signature {
         signer.sign(&self.serialized())
     }
 }
@@ -265,7 +265,7 @@ impl RelationProof {
 
     pub fn sign_remaining_half(
         half_proof: &RelationHalfProof,
-        signer: &Signer,
+        signer: &dyn Signer,
     ) -> Result<Self, Error> {
         let my_profile_id = signer.profile_id().to_owned();
         if half_proof.peer_id != my_profile_id {

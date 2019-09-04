@@ -14,7 +14,7 @@ use mercury_home_protocol::net::HomeConnector;
 
 pub trait MyProfile {
     //fn own_profile(&self) -> &OwnProfile;
-    fn signer(&self) -> &Signer;
+    fn signer(&self) -> &dyn Signer;
 
     fn homes(&self) -> AsyncResult<Vec<RelationProof>, Error>;
     // TODO we should be able to handle profile URLs and/or home address hints to avoid needing a profile repository to join the first home node
@@ -51,7 +51,7 @@ pub trait MyProfile {
         to_caller: Option<AppMsgSink>,
     ) -> AsyncResult<Option<AppMsgSink>, Error>;
 
-    fn login(&self) -> AsyncResult<Rc<MyHomeSession>, Error>;
+    fn login(&self) -> AsyncResult<Rc<dyn MyHomeSession>, Error>;
 
     //    fn events(&self, profile: &ProfileId) -> AsyncResult<EventStream, Error>;
     //    fn update(&self, home: ProfileId, own_prof: &OwnProfile) -> AsyncResult<(), Error>;
@@ -63,18 +63,18 @@ pub type EventStream = mpsc::Receiver<ProfileEvent>;
 // TODO consider if event listeners should be handled here or we should delete this and
 //      allow event listeners somewhere under the service instead
 pub trait MyHomeSession {
-    fn session(&self) -> Rc<HomeSession>;
+    fn session(&self) -> Rc<dyn HomeSession>;
     fn events(&self) -> EventStream;
 }
 
 #[derive(Clone)]
 pub struct MyProfileImpl {
     own_profile: Rc<RefCell<OwnProfile>>,
-    signer: Rc<Signer>,
-    profile_repo: Rc<RefCell<DistributedPublicProfileRepository>>,
-    home_connector: Rc<HomeConnector>,
+    signer: Rc<dyn Signer>,
+    profile_repo: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
+    home_connector: Rc<dyn HomeConnector>,
     handle: reactor::Handle,
-    session_cache: Rc<RefCell<HashMap<ProfileId, Rc<MyHomeSession>>>>, // {home_id -> session}
+    session_cache: Rc<RefCell<HashMap<ProfileId, Rc<dyn MyHomeSession>>>>, // {home_id -> session}
     // on_updated:     Rc< Fn(&OwnProfile) -> AsyncResult<(),Error>,
     // TODO remove this after testing, this should be get_publiced from the private binary part of OwnProfile
     relations: Rc<RefCell<Vec<RelationProof>>>,
@@ -83,9 +83,9 @@ pub struct MyProfileImpl {
 impl MyProfileImpl {
     pub fn new(
         own_profile: OwnProfile,
-        signer: Rc<Signer>,
-        profile_repo: Rc<RefCell<DistributedPublicProfileRepository>>,
-        home_connector: Rc<HomeConnector>,
+        signer: Rc<dyn Signer>,
+        profile_repo: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
+        home_connector: Rc<dyn HomeConnector>,
         handle: reactor::Handle,
     ) -> Self {
         Self {
@@ -99,7 +99,7 @@ impl MyProfileImpl {
         }
     }
 
-    pub fn connect_home(&self, home_profile_id: &ProfileId) -> AsyncResult<Rc<Home>, Error> {
+    pub fn connect_home(&self, home_profile_id: &ProfileId) -> AsyncResult<Rc<dyn Home>, Error> {
         Self::connect_home2(
             home_profile_id,
             self.profile_repo.clone(),
@@ -110,10 +110,10 @@ impl MyProfileImpl {
 
     fn connect_home2(
         home_profile_id: &ProfileId,
-        prof_repo: Rc<RefCell<DistributedPublicProfileRepository>>,
-        connector: Rc<HomeConnector>,
-        signer: Rc<Signer>,
-    ) -> AsyncResult<Rc<Home>, Error> {
+        prof_repo: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
+        connector: Rc<dyn HomeConnector>,
+        signer: Rc<dyn Signer>,
+    ) -> AsyncResult<Rc<dyn Home>, Error> {
         let home_conn_fut = prof_repo
             .borrow()
             .get_public(home_profile_id)
@@ -130,7 +130,10 @@ impl MyProfileImpl {
         Box::new(home_conn_fut)
     }
 
-    pub fn login_home(&self, home_profile_id: ProfileId) -> AsyncResult<Rc<MyHomeSession>, Error> {
+    pub fn login_home(
+        &self,
+        home_profile_id: ProfileId,
+    ) -> AsyncResult<Rc<dyn MyHomeSession>, Error> {
         if let Some(ref session_rc) = self.session_cache.borrow().get(&home_profile_id) {
             return Box::new(Ok(Rc::clone(session_rc)).into_future());
         }
@@ -189,7 +192,10 @@ impl MyProfileImpl {
         Box::new(login_fut)
     }
 
-    pub fn any_home_of(&self, profile: &Profile) -> AsyncResult<(RelationProof, Rc<Home>), Error> {
+    pub fn any_home_of(
+        &self,
+        profile: &Profile,
+    ) -> AsyncResult<(RelationProof, Rc<dyn Home>), Error> {
         MyProfileImpl::any_home_of2(
             profile,
             self.profile_repo.clone(),
@@ -200,10 +206,10 @@ impl MyProfileImpl {
 
     fn any_home_of2(
         profile: &Profile,
-        prof_repo: Rc<RefCell<DistributedPublicProfileRepository>>,
-        connector: Rc<HomeConnector>,
-        signer: Rc<Signer>,
-    ) -> AsyncResult<(RelationProof, Rc<Home>), Error> {
+        prof_repo: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
+        connector: Rc<dyn HomeConnector>,
+        signer: Rc<dyn Signer>,
+    ) -> AsyncResult<(RelationProof, Rc<dyn Home>), Error> {
         let homes = match profile.as_persona() {
             Some(ref persona) => persona.homes.clone(),
             None => return Box::new(future::err(ErrorKind::PersonaProfileExpected.into())),
@@ -264,7 +270,7 @@ impl MyProfileImpl {
 
     fn start_event_handler(
         relations: Weak<RefCell<Vec<RelationProof>>>,
-        session: Rc<MyHomeSession>,
+        session: Rc<dyn MyHomeSession>,
         handle: &reactor::Handle,
     ) {
         let events = session.events();
@@ -296,7 +302,7 @@ impl MyProfileImpl {
 }
 
 impl MyProfile for MyProfileImpl {
-    fn signer(&self) -> &Signer {
+    fn signer(&self) -> &dyn Signer {
         &*self.signer
     }
 
@@ -517,7 +523,7 @@ impl MyProfile for MyProfileImpl {
     }
 
     // TODO this should try connecting to ALL of our homes, using our collect_results() future util function
-    fn login(&self) -> AsyncResult<Rc<MyHomeSession>, Error> {
+    fn login(&self) -> AsyncResult<Rc<dyn MyHomeSession>, Error> {
         if let Some(ref session_rc) = self.session_cache.borrow().values().next() {
             return Box::new(Ok(Rc::clone(session_rc)).into_future());
         }
@@ -581,12 +587,12 @@ impl Drop for MyProfileImpl {
 }
 
 pub struct MyHomeSessionImpl {
-    session: Rc<HomeSession>,
+    session: Rc<dyn HomeSession>,
     event_listeners: Rc<RefCell<Vec<EventSink>>>,
 }
 
 impl MyHomeSessionImpl {
-    fn new(session: Rc<HomeSession>, handle: reactor::Handle) -> Rc<MyHomeSession> {
+    fn new(session: Rc<dyn HomeSession>, handle: reactor::Handle) -> Rc<dyn MyHomeSession> {
         let this = Rc::new(Self { session, event_listeners: Default::default() });
 
         debug!("Created MyHomeSession, start forwarding profile events to listeners");
@@ -666,7 +672,7 @@ impl Drop for MyHomeSessionImpl {
 }
 
 impl MyHomeSession for MyHomeSessionImpl {
-    fn session(&self) -> Rc<HomeSession> {
+    fn session(&self) -> Rc<dyn HomeSession> {
         self.session.clone()
     }
 

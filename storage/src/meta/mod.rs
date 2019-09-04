@@ -18,8 +18,8 @@ pub enum AttributeValue<'a> {
     String(&'a str),
     Blob(&'a [u8]),
     Link(&'a str),
-    Array(Box<'a + Iterator<Item = AttributeValue<'a>>>),
-    Object(Box<'a + Iterator<Item = &'a Attribute>>),
+    Array(Box<dyn 'a + Iterator<Item = AttributeValue<'a>>>),
+    Object(Box<dyn 'a + Iterator<Item = &'a dyn Attribute>>),
 }
 
 #[derive(Debug, Copy, Clone, Serialize, Deserialize, PartialEq)]
@@ -29,14 +29,14 @@ pub struct GpsLocation {
 }
 
 pub fn iter_first_attrval_by_name<'a, 'n>(
-    iter: Box<'a + Iterator<Item = &'a Attribute>>,
+    iter: Box<dyn 'a + Iterator<Item = &'a dyn Attribute>>,
     name: &'n str,
 ) -> Option<AttributeValue<'a>> {
     iter.filter(|attr| attr.name() == name).nth(0).map(|attr| attr.value())
 }
 
 pub fn iter_first_attrval_by_path<'a, 'p>(
-    iter: Box<'a + Iterator<Item = &'a Attribute>>,
+    iter: Box<dyn 'a + Iterator<Item = &'a dyn Attribute>>,
     path: &'p [&'p str],
 ) -> Option<AttributeValue<'a>> {
     if path.is_empty() {
@@ -89,7 +89,7 @@ pub mod tests {
                     AttributeValue::Array(Box::new(v.iter().map(|m| m.to_attr_val())))
                 }
                 MetaAttrVal::OBJECT(ref v) => {
-                    AttributeValue::Object(Box::new(v.iter().map(|m| m as &Attribute)))
+                    AttributeValue::Object(Box::new(v.iter().map(|m| m as &dyn Attribute)))
                 }
             }
         }
@@ -135,8 +135,8 @@ pub mod tests {
             self.blob.as_ref()
         }
 
-        fn attributes<'a>(&'a self) -> Box<Iterator<Item = &Attribute> + 'a> {
-            let result = self.attrs.iter().map(|meta| meta as &Attribute);
+        fn attributes<'a>(&'a self) -> Box<dyn Iterator<Item = &dyn Attribute> + 'a> {
+            let result = self.attrs.iter().map(|meta| meta as &dyn Attribute);
             Box::new(result)
         }
     }

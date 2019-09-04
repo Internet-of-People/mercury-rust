@@ -30,7 +30,7 @@ use mercury_home_protocol::*;
 use server::Server;
 use server_config::*;
 
-pub fn signal_recv(sig: i32) -> Box<Stream<Item = i32, Error = Error>> {
+pub fn signal_recv(sig: i32) -> Box<dyn Stream<Item = i32, Error = Error>> {
     Box::new(
         Signal::new(sig)
             .flatten_stream()
