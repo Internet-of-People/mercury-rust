@@ -1,17 +1,12 @@
-use std::time::Duration;
+mod options;
+mod seed;
 
-use failure::{bail, Fallible};
+use failure::Fallible;
 use log::*;
 use structopt::StructOpt;
 
 use crate::options::{Command, Options};
-use claims::api::*;
-use claims::repo::*;
-use did::vault::*;
-use osg_rpc_storage::RpcProfileRepository;
-
-mod options;
-mod seed;
+use prometheus::http::client::ApiHttpClient;
 
 fn main() {
     match run() {
@@ -27,45 +22,9 @@ fn run() -> Fallible<()> {
     let command = options.command;
     debug!("Got command {:?}", command);
 
-    let vault_path = did::paths::vault_path(options.config_dir.clone())?;
-    let repo_path = did::paths::profile_repo_path(options.config_dir.clone())?;
-    let base_path = did::paths::base_repo_path(options.config_dir.clone())?;
-    let schema_path = did::paths::schemas_path(None)?;
-
-    let vault_exists = vault_path.exists();
-    if command.needs_vault() && !vault_exists {
-        error!("Profile vault is required but not found at {}", vault_path.to_string_lossy());
-        seed::show_generated_phrase();
-        bail!("First you need a profile vault initialized to run {:?}", command);
-    }
-
-    let mut vault: Option<Box<ProfileVault + Send>> = None;
-    if vault_exists {
-        info!("Found profile vault, loading {}", vault_path.to_string_lossy());
-        vault = Some(Box::new(HdProfileVault::load(&vault_path)?))
-    } else {
-        debug!("No profile vault found");
-    }
-
-    let local_repo = FileProfileRepository::new(&repo_path)?;
-    let base_repo = FileProfileRepository::new(&base_path)?;
-    let timeout = Duration::from_secs(options.network_timeout_secs);
-    let rpc_repo = RpcProfileRepository::new(&options.remote_repo_address, timeout)?;
-
-    let mut ctx = Context::new(
-        vault_path,
-        schema_path,
-        vault,
-        local_repo,
-        Box::new(base_repo),
-        Box::new(rpc_repo.clone()),
-        Box::new(rpc_repo),
-    );
+    let mut ctx = ApiHttpClient::new(&format!("http://{}", options.prometheus_address));
     let command = Box::new(command);
-    command.execute(&mut ctx)?;
-
-    ctx.save_vault()?;
-    Ok(())
+    command.execute(&mut ctx)
 }
 
 fn init_logger(options: &Options) -> Fallible<()> {

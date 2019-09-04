@@ -9,11 +9,6 @@ use crate::seed::{read_phrase, show_generated_phrase};
 use claims::api::*;
 use claims::model::*;
 
-pub type CmdRes = Fallible<()>;
-pub trait Command {
-    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes;
-}
-
 #[derive(Debug, StructOpt)]
 #[structopt(
     name = "prometheus-cli",
@@ -21,25 +16,24 @@ pub trait Command {
     setting = structopt::clap::AppSettings::ColoredHelp
 )]
 pub struct Options {
-    #[structopt(long, value_name = "DIR", parse(from_os_str))]
-    /// Configuration directory to pick vault and profile info from.
-    /// Default: OS-specific app_cfg_dir/prometheus
-    pub config_dir: Option<PathBuf>,
-
-    #[structopt(long = "repository", default_value = "127.0.0.1:6161", value_name = "IP:PORT")]
+    #[structopt(long = "address", default_value = "127.0.0.1:8080", value_name = "IP:PORT")]
     /// IPv4/6 address of the remote profile repository.
-    pub remote_repo_address: SocketAddr,
+    pub prometheus_address: String,
 
-    #[structopt(long = "timeout", default_value = "10", value_name = "SECS")]
-    /// Number of seconds used for network timeouts
-    pub network_timeout_secs: u64,
-
+    // #[structopt(long = "timeout", default_value = "10", value_name = "SECS")]
+    // /// Number of seconds used for network timeouts
+    // pub network_timeout_secs: u64,
     #[structopt(long, default_value = "log4rs.yml", value_name = "FILE", parse(from_os_str))]
     /// Config file for log4rs (YAML).
     pub logger_config: PathBuf,
 
     #[structopt(subcommand)]
     pub command: CommandVerb,
+}
+
+pub type CmdRes = Fallible<()>;
+pub trait Command {
+    fn execute(self: Box<Self>, api: &mut Api) -> CmdRes;
 }
 
 #[derive(Debug, StructOpt)]
@@ -84,19 +78,6 @@ pub enum CommandVerb {
     #[structopt(name = "revert")]
     /// Revert unpublished profile to previous version
     Revert(RevertCommand),
-}
-
-impl CommandVerb {
-    pub fn needs_vault(&self) -> bool {
-        use CommandVerb::*;
-        match self {
-            Generate(GenerateCommand::Vault { .. }) | Restore(RestoreCommand::Vault { .. }) => {
-                false
-            }
-            Show(ShowCommand::Profile { .. }) => false,
-            _ => true,
-        }
-    }
 }
 
 impl Command for CommandVerb {
