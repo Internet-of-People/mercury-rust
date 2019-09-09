@@ -176,7 +176,7 @@ pub fn publish(
 
 pub fn create_did(
     state: web::Data<Mutex<Context>>,
-    label: web::Json<Option<ProfileLabel>>,
+    label: web::Json<ProfileLabel>,
 ) -> impl Responder {
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
@@ -215,15 +215,15 @@ pub fn rename_did(
     state: web::Data<Mutex<Context>>,
     did: web::Path<String>,
     //did: web::Path<ProfileId>,
-    name: web::Json<ProfileLabel>,
+    label: web::Json<ProfileLabel>,
 ) -> impl Responder {
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match rename_did_impl(&mut state, did.clone(), name.clone()) {
+    match rename_did_impl(&mut state, did.clone(), label.clone()) {
         Ok(()) => {
-            debug!("Renamed profile {} to {}", did, name);
+            debug!("Renamed profile {} to {}", did, label);
             HttpResponse::Ok().body("")
         }
         Err(e) => {

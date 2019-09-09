@@ -47,15 +47,21 @@ pub fn list_dids_impl(state: &Context) -> Fallible<Vec<VaultEntry>> {
     Ok(entries)
 }
 
-pub fn create_dids_impl(state: &mut Context, mut label: Option<String>) -> Fallible<VaultEntry> {
-    let did = state.create_profile(label.clone())?;
+fn reset_label_if_empty(state: &mut Context, label: &mut String, did: &ProfileId) -> Fallible<()> {
+    if label.is_empty() || label.find(|c| !char::is_whitespace(c)).is_none() {
+        let hd_label = DeterministicNameGenerator::default().name(&did.to_bytes());
+        state.set_profile_label(Some(did.clone()), hd_label.clone())?;
+        *label = hd_label;
+    }
+    Ok(())
+}
+
+pub fn create_dids_impl(state: &mut Context, mut label: String) -> Fallible<VaultEntry> {
+    debug!("Creating profile with label '{}'", label);
+    let did = state.create_profile(Some(label.clone()))?;
     let did_bytes = did.to_bytes();
 
-    if label.is_none() {
-        let hd_label = DeterministicNameGenerator::default().name(&did_bytes);
-        state.set_profile_label(Some(did.clone()), hd_label.clone())?;
-        label = Some(hd_label);
-    }
+    reset_label_if_empty(state, &mut label, &did)?;
 
     let mut avatar_png = Vec::new();
     blockies::Ethereum::default()
@@ -71,7 +77,7 @@ pub fn create_dids_impl(state: &mut Context, mut label: Option<String>) -> Falli
     state.save_vault()?;
     Ok(VaultEntry {
         id: did.to_string(),
-        label: label.unwrap_or_default(),
+        label,
         avatar: Image { format: metadata.image_format, blob: metadata.image_blob },
         state: "TODO".to_owned(),
     })
@@ -119,10 +125,11 @@ pub fn rename_did_impl(
     state: &mut Context,
     did_str: String,
     //did: ProfileId,
-    name: ProfileLabel,
+    mut label: ProfileLabel,
 ) -> Fallible<()> {
-    let did = did_opt(did_str)?;
-    state.set_profile_label(did, name)?;
+    let did = did_str.parse()?;
+    reset_label_if_empty(state, &mut label, &did)?;
+    state.set_profile_label(Some(did), label)?;
     state.save_vault()?;
     Ok(())
 }

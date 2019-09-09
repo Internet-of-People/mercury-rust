@@ -124,7 +124,7 @@ impl Api for ApiHttpClient {
 
     fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileId> {
         let url = format!("{}/vault/dids", self.root_url);
-        let req_fut = HttpClient::new().post(url).send_json(&label).from_err();
+        let req_fut = HttpClient::new().post(url).send_json(&label.unwrap_or_default()).from_err();
         let fut = req_fut.and_then(|mut response| {
             // TODO this probably ignores status code, so we should check it properly
             response.body().from_err().and_then(|body| {
