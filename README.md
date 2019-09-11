@@ -2,26 +2,33 @@
 
 Mercury
  - is a decentralized, open and secure communication infrastructure.
- - has an identity model that guarantees ownership of your data, privacy, security
+ - guarantees ownership of your digital identity and data, aiming maximal user privacy.
  - has a networking model that allows secure connectivity of end user devices without central services.
- - avoids lockin to service providers or applications.
- - aims to provide open social networking without middlemen.
+ - prevents lockin to service providers or applications, allows easier migration.
+ - enables open social networking without middlemen.
+
+Note that this repository contains the infrastructure backend, consisting of
+background services and command line tools. For a good user experience, you can
+[use a web frontend](https://github.com/Internet-of-People/prometheus-ui)
+built in node.js on top of the backend or Electron-based
+[standalone application binaries](https://github.com/Internet-of-People/prometheus-electron)
+bundling both the backend and the web frontend.
 
 ## Why?
 
-The internet was designed to provide open distributed peer to peer communication,
+The internet was designed to provide open and distributed peer to peer communication,
 but your phone and PC don't have that anymore, only servers in data centers.
 You're closed behind ISPs and home routers (e.g. NAT) so you need intermediaries to communicate.
 Those intermediaries tie you by heavy vendor lockin: you can't change service provider
-(consider email, storage, etc) without sacrificing your old identity and data.
+(consider email, social networks, online storage, etc) without sacrificing your old identity and data.
 The biggest of them make a living from taxing all of your payments in their stores,
-constantly spying on you for selling your data and targeted ads and
-usually hinder or censor you for their advantage or political regulations. 
+constantly spying on you for selling targeted ads and your data to partners and
+usually hinder or censor you for political agendas or any other reasons.
 
 Mercury aims to protect you from all of this.
 Your identity is built on cryptographic keys owned by you alone. These keys are disposable,
 so you can split your digital footprint into as many unrelated profiles as needed,
-e.g. for work, family and hobby.
+e.g. for work, family and hobby. 
 Data storage and communication is organized around such profiles which you can keep
 even changing service provider or applications.
 Your data is encrypted until you decide to share a part of it with a specific peer or the general public.
@@ -52,8 +59,8 @@ SMS, calls, data connections, push notifications, etc, but
 Mercury's identity, data and relations model has the same vision as
 [W3C Distributed IDs](https://w3c-ccg.github.io/did-spec) and
 [W3C Verifiable credentials/claims](https://w3c.github.io/vc-data-model/)
-but is radically simpler without carrying excess burdens of legacy support.
-Mercury's storage layer is built on the same content-hashable network principles as
+but is radically simpler without carrying excess burdens of legacy webstack support.
+Mercury's storage layer is built on content-hashable network principles similarly to e.g.
 [Sidetree](https://github.com/decentralized-identity/sidetree/blob/master/docs/protocol.md). 
 
 ## Project status
@@ -62,15 +69,13 @@ Mercury is a redesigned and advanced version of the IoP Profile Server and IoP C
 which were a step in the right direction but lacked several features from our vision,
 were created by developers who left the community and were hard to fix and maintain.   
 
-Please be aware that this project is still in a very early and experimental phase.
+Please be aware that this project is still in an early and experimental phase.
 We opened up the source code to give a sneak peek to developers interested in either
 developing Mercury itself or building distributed applications on top of it.
 We'd like to have feedback to learn problems in the earliest phases,
 priorities of missing features and your requirements we haven't thought of yet.
 
 We think to have an initial functional implementation of the architecture.
-We're currently working on the Open Social Graph details
-while drafting our SDK API for distributed applications.
 There are still a lot of important components to be added,
 existing ones might be changed or redesigned and
 documentation is still lacking.
@@ -92,9 +97,10 @@ Missing important parts are
  - Finished dApp SDK, including
    - native GUI plugins interfaces for profile, home and contact management
    - hiding all possible tech details to be convenient
- - Diffie-Hellman key exchange, encryption data and communication
+ - Diffie-Hellman key exchange, data encryption
+ - Verifiable claims
  - hole punching support (Stun, Upnp, NatPmp, etc)
- - DHT integration (IPFS with custom IPNS, Kademlia or others)
+ - DHT integration (IPFS with custom IPNS, Kademlia-variants or others)
  - profile search on distributed storage
  - language bindings
  - undelivered message persistance (e.g. missed calls)
@@ -106,17 +112,20 @@ Directories/crates of the project are
  - `keyvault` provides hierarchical deterministic key generation for
    multiple different cipher suites and unified serialization of
    cryptographic components (public and secret keys, ids, signatures, etc).
- - `osg` defines the basic profile data model and interfaces for the Open Social graph.
+ - `did` aligns our `keyvault` implementation with decentralized identities from W3C.
+ - `claim` implements verifiable claims as a foundation for certificates,
+   social relations and shareable user data in general
+ - `prometheus` provides a backend library for handling your identities and claims
+   and a daemon binary for exposing library calls to external GUIs
  - `prometheus-cli` implements a command line tool as the simplest user interface
-   to manage your profiles and relations in the Social Graph 
+   to this daemon 
  - `home-protocol` contains the basics for network communication, defining
    services provided by home nodes operating the network and how clients can use these services.
    File `protocol/mercury.capnp` describes a simple network protocol with Cap'n'Proto
    while `mercury-capnp/mod.rs` contains client and server implementations for Rust. 
  - `home-node` implements the server side by providing the services of the protocol to clients.
  - `connect` implements the client side of the protocol. This includes an admin API to manage your
-   profiles an dApp SDK providing common building blocks to create distributed applications.
-   It also contains work towards a service daemon serving these APIs via JsonRpc.
+   profiles and an dApp SDK providing common building blocks to create distributed applications.
  - `examples/TheButton` is a sample distributed application built on the dApp SDK  
  - `test` and `prometheus-test` contain integration tests between different crates.
  - `storage` contains experimentation on a generic storage layer using hash-based "indexing"
