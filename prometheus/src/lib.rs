@@ -1,3 +1,4 @@
+pub mod api;
 pub mod daemon;
 pub mod data;
 pub mod http;
@@ -14,9 +15,10 @@ use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use failure::{err_msg, Fallible};
 use log::*;
 
+use crate::api::*;
 pub use crate::daemon::Daemon;
+use crate::data::*;
 pub use crate::options::Options;
-use claims::api::*;
 use claims::repo::*;
 use did::vault::*;
 use osg_rpc_storage::RpcProfileRepository;

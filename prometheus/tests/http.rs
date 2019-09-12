@@ -1,9 +1,7 @@
 use structopt::StructOpt;
 
-use claims::{
-    api::{Api, ProfileRepositoryKind as RepoKind},
-    model::*,
-};
+use claims::model::*;
+use prometheus::api::{Api, ProfileRepositoryKind as RepoKind};
 use prometheus::daemon::Daemon;
 use prometheus::http::client::ApiHttpClient;
 use prometheus::options::Options;

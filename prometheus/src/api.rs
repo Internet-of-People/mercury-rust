@@ -7,10 +7,10 @@ use futures::prelude::*;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 
-use crate::claim_schema::ClaimSchemaRegistry;
-pub use crate::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
-use crate::model::*;
-use crate::repo::*;
+use claims::claim_schema::ClaimSchemaRegistry;
+pub use claims::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
+use claims::model::*;
+use claims::repo::*;
 use did::vault::{self, ProfileLabel, ProfileMetadata, ProfileVault, ProfileVaultRecord};
 use keyvault::PublicKey as KeyVaultPublicKey;
 

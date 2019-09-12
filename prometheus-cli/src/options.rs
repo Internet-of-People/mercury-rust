@@ -5,8 +5,8 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::seed::{read_phrase, show_generated_phrase};
-use claims::api::*;
 use claims::model::*;
+use prometheus::api::*;
 
 #[derive(Debug, StructOpt)]
 #[structopt(

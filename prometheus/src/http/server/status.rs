@@ -4,9 +4,8 @@ use actix_web::{web, HttpResponse, Responder};
 use failure::{err_msg, Fallible};
 use log::*;
 
-use crate::data::{AttributePath, ClaimPath, CreateClaim, DataUri};
 use crate::imp::*;
-use claims::api::*;
+use crate::*;
 use did::vault::*;
 use keyvault::Seed;
 
@@ -31,7 +30,8 @@ pub fn lock_state(state: &web::Data<Mutex<Context>>) -> Fallible<MutexGuard<Cont
     state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))
 }
 
-// TODO this Fallible -> Responder mapping + logging should be somehow less manual
+// TODO this Fallible -> Responder mapping + logging should be less manual,
+//      at least parts should be generated, e.g. using macros
 pub fn init_vault(
     state: web::Data<Mutex<Context>>,
     words: web::Json<Vec<String>>,

@@ -1,4 +1,4 @@
-# REST API for `prometheusd`
+# HTTP API for `prometheusd`
 
 Daemon `prometheusd` accepts incoming REST-like client connections on `127.0.0.1:8080` by default.
 This can be overridden using configuration option `--listen IP:PORT`.

@@ -4,9 +4,10 @@ use actix_web::web;
 use failure::{err_msg, Fallible};
 use log::*;
 
-use crate::data::{ProfileMetadata, *};
+use crate::data::ProfileMetadata;
 use crate::names::DeterministicNameGenerator;
-use claims::{api::*, model::*};
+use crate::*;
+use claims::model::*;
 use did::vault::ProfileLabel;
 
 pub fn init_vault_impl(state: &mut Context, words: web::Json<Vec<String>>) -> Fallible<()> {

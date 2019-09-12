@@ -9,8 +9,7 @@ use failure::{err_msg, format_err, Fallible};
 use futures::Future;
 //use log::*;
 
-use crate::data::*;
-use claims::api::*;
+use crate::*;
 use claims::model::*;
 use did::vault::{ProfileLabel, ProfileMetadata, ProfileVaultRecord};
 

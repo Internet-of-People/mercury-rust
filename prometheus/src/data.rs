@@ -5,7 +5,8 @@ use failure::{err_msg, Fallible};
 use serde::{Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
-use claims::{api::*, model::*};
+use crate::*;
+use claims::model::*;
 use did::vault::*;
 
 pub type DataUri = String;
