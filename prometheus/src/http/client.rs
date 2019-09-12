@@ -4,8 +4,12 @@ use std::convert::{TryFrom, TryInto};
 use std::rc::Rc;
 use std::str::FromStr;
 
-use actix_web::client::Client as HttpClient;
-use failure::{err_msg, format_err, Fallible};
+use actix_http::http::StatusCode;
+use actix_web::{
+    client::{Client as HttpClient, ClientResponse, SendRequestError},
+    error::ParseError,
+};
+use failure::{format_err, Fallible};
 use futures::Future;
 //use log::*;
 
@@ -26,9 +30,10 @@ impl ApiHttpClient {
         }
     }
 
-    fn await_fut<T>(
+    // Note could we try using actix_web::error::Error instead?
+    fn await_fut<T, E: actix_http::error::ResponseError>(
         &self,
-        fut: impl Future<Item = T, Error = actix_web::error::Error>,
+        fut: impl Future<Item = T, Error = E>,
     ) -> Fallible<T> {
         let ret = self.reactor.borrow_mut().block_on(fut).map_err(|e| err_msg(e.to_string()))?;
         Ok(ret)
@@ -42,121 +47,118 @@ fn did_str(did_opt: Option<ProfileId>) -> String {
     }
 }
 
+// TODO we should also log and return more response contents describing more error details
+fn validate_response_status<T>(
+    response: ClientResponse<T>,
+    status: StatusCode,
+) -> Result<ClientResponse<T>, SendRequestError> {
+    if response.status() != status {
+        return Err(ParseError::Status.into());
+    }
+    Ok(response)
+}
+
 impl Api for ApiHttpClient {
     fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
         let url = format!("{}/vault", self.root_url);
         // TODO phrase should normally be splitted into words and sent that way,
         //      but this will work for the moment
-        let req_fut = HttpClient::new().post(url).send_json(&vec![phrase]).from_err();
-        let fut = req_fut.and_then(|mut response| {
-            // TODO this probably ignores status code, so we should check it properly
-            response.body().from_err().and_then(|_body| {
-                //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
-                Ok(())
-            })
+        let req_fut = HttpClient::new().post(url).send_json(&vec![phrase]);
+        let fut = req_fut.and_then(|response| {
+            validate_response_status(response, StatusCode::CREATED)?;
+            Ok(())
         });
         self.await_fut(fut)
     }
 
     fn restore_all_profiles(&mut self) -> Fallible<RestoreCounts> {
         let url = format!("{}/vault/restore-dids", self.root_url);
-        let req_fut = HttpClient::new().post(url).send().from_err();
-        let fut = req_fut.and_then(|mut response| {
-            // TODO this probably ignores status code, so we should check it properly
-            response.body().from_err().and_then(|body| {
-                //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
-                let counts = serde_json::from_slice(&body)?;
-                Ok(counts)
-            })
-        });
+        let req_fut = HttpClient::new().post(url).send();
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::CREATED))
+            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())));
         self.await_fut(fut)
     }
 
     fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()> {
         let url = format!("{}/vault/default-did", self.root_url);
-        let req_fut = HttpClient::new().put(url).send_json(&my_profile_id.to_string()).from_err();
-        let fut = req_fut.and_then(|mut response| {
-            // TODO this probably ignores status code, so we should check it properly
-            response.body().from_err().and_then(|_body| {
-                //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
-                Ok(())
-            })
+        let req_fut = HttpClient::new().put(url).send_json(&my_profile_id.to_string());
+        let fut = req_fut.and_then(|response| {
+            validate_response_status(response, StatusCode::OK)?;
+            Ok(())
         });
         self.await_fut(fut)
     }
 
     fn get_active_profile(&self) -> Fallible<Option<ProfileId>> {
         let url = format!("{}/vault/default-did", self.root_url);
-        let req_fut = HttpClient::new().get(url).send().from_err();
-        let fut = req_fut.and_then(|mut response| {
-            // TODO this probably ignores status code, so we should check it properly
-            response.body().from_err().and_then(|body| {
-                // info!("Received response: {:?}", String::from_utf8(body.to_vec()).unwrap_or_default() );
-                let active_opt = match serde_json::from_slice::<Option<String>>(&body)? {
+        let req_fut = HttpClient::new().get(url).send();
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())))
+            .and_then(|did_str_opt: Option<String>| {
+                Ok(match did_str_opt {
                     None => None,
-                    Some(did_str) => Some(did_str.parse()?),
-                };
-                Ok(active_opt)
-            })
-        });
+                    Some(did_str) => Some(
+                        did_str
+                            .parse()
+                            .map_err(|e: failure::Error| SendRequestError::Body(e.into()))?,
+                    ),
+                })
+            });
         self.await_fut(fut)
     }
 
     fn list_vault_records(&self) -> Fallible<Vec<ProfileVaultRecord>> {
         let url = format!("{}/vault/dids", self.root_url);
-        let req_fut = HttpClient::new().get(url).send().from_err();
-        // TODO this probably ignores status code, so we should check it properly
-        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|body| {
-            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
-            let entries: Vec<VaultEntry> = serde_json::from_slice(&body)?;
-            let recs = entries
-                .iter()
-                .filter_map(|entry| {
-                    // TODO we should at least log errors here
-                    entry.try_into().ok()
-                })
-                .collect();
-            Ok(recs)
-        });
+        let req_fut = HttpClient::new().get(url).send();
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())))
+            .and_then(|entries: Vec<VaultEntry>| {
+                let recs = entries
+                    .iter()
+                    .filter_map(|entry| {
+                        // TODO we should at least log errors here
+                        entry.try_into().ok()
+                    })
+                    .collect();
+                Ok(recs)
+            });
         self.await_fut(fut)
     }
 
     fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileId> {
         let url = format!("{}/vault/dids", self.root_url);
-        let req_fut = HttpClient::new().post(url).send_json(&label.unwrap_or_default()).from_err();
-        let fut = req_fut.and_then(|mut response| {
-            // TODO this probably ignores status code, so we should check it properly
-            response.body().from_err().and_then(|body| {
-                //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
-                let entry: VaultEntry = serde_json::from_slice(&body)?;
-                let id = ProfileId::from_str(&entry.id)?;
-                Ok(id)
-            })
-        });
+        let req_fut = HttpClient::new().post(url).send_json(&label.unwrap_or_default());
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::CREATED))
+            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())))
+            .and_then(|entry: VaultEntry| {
+                ProfileId::from_str(&entry.id).map_err(|e| SendRequestError::Body(e.into()))
+            });
         self.await_fut(fut)
     }
 
     fn get_vault_record(&self, id: Option<ProfileId>) -> Fallible<ProfileVaultRecord> {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}", self.root_url, did);
-        let req_fut = HttpClient::new().get(url).send().from_err();
-        // TODO this probably ignores status code, so we should check it properly
-        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|body| {
-            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
-            let entry: VaultEntry = serde_json::from_slice(&body)?;
-            let rec = (&entry).try_into()?;
-            Ok(rec)
-        });
+        let req_fut = HttpClient::new().get(url).send();
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())))
+            .and_then(|entry: VaultEntry| {
+                (&entry).try_into().map_err(|e: failure::Error| SendRequestError::Body(e.into()))
+            });
         self.await_fut(fut)
     }
 
     fn set_profile_label(&mut self, id: Option<ProfileId>, label: ProfileLabel) -> Fallible<()> {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/label", self.root_url, did);
-        let req_fut = HttpClient::new().put(url).send_json(&label).from_err();
-        // TODO this probably ignores status code, so we should check it properly
-        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|_body| {
-            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
+        let req_fut = HttpClient::new().put(url).send_json(&label);
+        let fut = req_fut.and_then(|response| {
+            validate_response_status(response, StatusCode::OK)?;
             Ok(())
         });
         self.await_fut(fut)
@@ -181,39 +183,30 @@ impl Api for ApiHttpClient {
     ) -> Fallible<PrivateProfileData> {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/profiledata", self.root_url, did);
-        let req_fut = HttpClient::new().get(url).send().from_err();
-        // TODO this probably ignores status code, so we should check it properly
-        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|body| {
-            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
-            let prof: PrivateProfileData = serde_json::from_slice(&body)?;
-            Ok(prof)
-        });
+        let req_fut = HttpClient::new().get(url).send();
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())));
         self.await_fut(fut)
     }
 
     fn revert_profile(&mut self, id: Option<ProfileId>) -> Fallible<PrivateProfileData> {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/revert", self.root_url, did);
-        let req_fut = HttpClient::new().post(url).send().from_err();
-        // TODO this probably ignores status code, so we should check it properly
-        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|body| {
-            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
-            let prof: PrivateProfileData = serde_json::from_slice(&body)?;
-            Ok(prof)
-        });
+        let req_fut = HttpClient::new().post(url).send();
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())));
         self.await_fut(fut)
     }
 
     fn publish_profile(&mut self, id: Option<ProfileId>, force: bool) -> Fallible<ProfileId> {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/publish", self.root_url, did);
-        let req_fut = HttpClient::new().post(url).send_json(&force).from_err();
-        // TODO this probably ignores status code, so we should check it properly
-        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|body| {
-            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
-            let id: ProfileId = serde_json::from_slice(&body)?;
-            Ok(id)
-        });
+        let req_fut = HttpClient::new().post(url).send_json(&force);
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())));
         self.await_fut(fut)
     }
 
@@ -224,13 +217,10 @@ impl Api for ApiHttpClient {
     ) -> Fallible<PrivateProfileData> {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/restore", self.root_url, did);
-        let req_fut = HttpClient::new().post(url).send_json(&force).from_err();
-        // TODO this probably ignores status code, so we should check it properly
-        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|body| {
-            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
-            let prof: PrivateProfileData = serde_json::from_slice(&body)?;
-            Ok(prof)
-        });
+        let req_fut = HttpClient::new().post(url).send_json(&force);
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())));
         self.await_fut(fut)
     }
 
@@ -242,10 +232,9 @@ impl Api for ApiHttpClient {
     ) -> Fallible<()> {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/attributes/{}", self.root_url, did, key);
-        let req_fut = HttpClient::new().post(url).send_json(&value).from_err();
-        // TODO this probably ignores status code, so we should check it properly
-        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|_body| {
-            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
+        let req_fut = HttpClient::new().post(url).send_json(&value);
+        let fut = req_fut.and_then(|response| {
+            validate_response_status(response, StatusCode::OK)?;
             Ok(())
         });
         self.await_fut(fut)
@@ -254,10 +243,9 @@ impl Api for ApiHttpClient {
     fn clear_attribute(&mut self, id: Option<ProfileId>, key: &AttributeId) -> Fallible<()> {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/attributes/{}", self.root_url, did, key);
-        let req_fut = HttpClient::new().delete(url).send().from_err();
-        // TODO this probably ignores status code, so we should check it properly
-        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|_body| {
-            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
+        let req_fut = HttpClient::new().delete(url).send();
+        let fut = req_fut.and_then(|response| {
+            validate_response_status(response, StatusCode::OK)?;
             Ok(())
         });
         self.await_fut(fut)
@@ -265,34 +253,32 @@ impl Api for ApiHttpClient {
 
     fn claim_schemas(&self) -> Fallible<Rc<dyn ClaimSchemas>> {
         let url = format!("{}/claim-schemas", self.root_url);
-        let req_fut = HttpClient::new().get(url).send().from_err();
-        // TODO this probably ignores status code, so we should check it properly
-        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|body| {
-            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
-            let schema_items: Vec<ClaimSchema> = serde_json::from_slice(&body)?;
-            let schemas = Rc::new(InMemoryClaimSchemas::new(schema_items)) as Rc<dyn ClaimSchemas>;
-            Ok(schemas)
-        });
+        let req_fut = HttpClient::new().get(url).send();
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())))
+            .map(|schema_items: Vec<ClaimSchema>| {
+                Rc::new(InMemoryClaimSchemas::new(schema_items)) as Rc<dyn ClaimSchemas>
+            });
         self.await_fut(fut)
     }
 
     fn claims(&self, id: Option<ProfileId>) -> Fallible<Vec<Claim>> {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/claims", self.root_url, did);
-        let req_fut = HttpClient::new().get(url).send().from_err();
-        // TODO this probably ignores status code, so we should check it properly
-        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|body| {
-            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
-            let claim_items: Vec<ApiClaim> = serde_json::from_slice(&body)?;
-            let claims = claim_items
-                .iter()
-                .filter_map(|item| {
-                    // TODO we should at least log errors here
-                    item.try_into().ok()
-                })
-                .collect();
-            Ok(claims)
-        });
+        let req_fut = HttpClient::new().get(url).send();
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())))
+            .map(|claim_items: Vec<ApiClaim>| {
+                claim_items
+                    .iter()
+                    .filter_map(|item| {
+                        // TODO we should at least log errors here
+                        item.try_into().ok()
+                    })
+                    .collect()
+            });
         self.await_fut(fut)
     }
 
@@ -300,10 +286,9 @@ impl Api for ApiHttpClient {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/claims", self.root_url, did);
         let api_claim = CreateClaim::try_from(claim)?;
-        let req_fut = HttpClient::new().post(url).send_json(&api_claim).from_err();
-        // TODO this probably ignores status code, so we should check it properly
-        let fut = req_fut.and_then(|mut response| response.body().from_err()).and_then(|_body| {
-            //info!("Received response: {:?}", String::from_utf8(body.to_vec()));
+        let req_fut = HttpClient::new().post(url).send_json(&api_claim);
+        let fut = req_fut.and_then(|response| {
+            validate_response_status(response, StatusCode::CREATED)?;
             Ok(())
         });
         self.await_fut(fut)
