@@ -341,6 +341,7 @@ impl Command for GenerateCommand {
     fn execute(self: Box<Self>, _api: &mut dyn Api) -> CmdRes {
         match *self {
             GenerateCommand::Vault => {
+                // TODO this should probably come from the daemon instead of generating it here
                 show_generated_phrase();
                 Ok(())
             }

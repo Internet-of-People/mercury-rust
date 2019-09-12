@@ -90,7 +90,7 @@ pub fn set_default_did(state: web::Data<Mutex<Context>>, did: web::Json<String>)
         Ok(state) => state,
     };
     match set_default_did_impl(&mut state, did.clone()) {
-        Ok(entry) => HttpResponse::Ok().json(entry),
+        Ok(()) => HttpResponse::Ok().body(""),
         Err(e) => {
             error!("Failed to set default profile: {}", e);
             HttpResponse::Conflict().body(e.to_string())

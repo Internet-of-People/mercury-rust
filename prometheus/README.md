@@ -96,6 +96,75 @@ Response:
 
 ## Profile management
 
+### Restore all profiles
+
+Restore all profiles into the initialized vault,
+similarly to restoring a Bitcoin wallet from a seed phrase.
+This mean regenerating profile keys/ids for your vault and checking for any sign of their usage.
+This means trying to find public information or private backups of those profiles
+on decentralized storage systems known by the server.
+
+Request:
+
+- Endpoint: POST `/vault/restore-dids`
+- Parameters: -
+- Headers: -
+- Content: -
+
+Response:
+
+- Status: 201 or 409 (uninitialized vault)
+- Content: object containing fields of resulted profile counts, e.g.
+
+```json
+{
+    "try_count":23,    // Number of profiles checked for available information
+    "restore_count":3, // Number of profiles successfully restored
+},
+```
+
+### Get default profile
+
+Query profile that is active by default and used by all profile-specific operations
+unless an explicit profile id is given.
+
+Request:
+
+- Endpoint: GET `/vault/default-did`
+- Parameters: -
+- Headers: -
+- Content: -
+
+Response:
+
+- Status: 200 or 409 (uninitialized vault)
+- Content: profile id as a string or null if not set, e.g.
+
+```json
+"IezbeWGSY2dqcUBqT8K7R14xr"
+```
+
+### Set default profile
+
+Set profile that is active by default.
+
+Request:
+
+- Endpoint: PUT `/vault/default-did`
+- Parameters: -
+- Headers: -
+- Content: profile id as a string, e.g.
+
+```json
+"IezbeWGSY2dqcUBqT8K7R14xr"
+```
+
+Response:
+
+- Status: 200 or 409 (uninitialized vault)
+- Content: - 
+
+
 ### List all profiles
 
 List all profiles that are already generated and present in the vault.
@@ -129,9 +198,36 @@ Response:
 ]
 ```
 
+### Create new profile
+
+Create an empty new profile by generating new private and public keys and a profile Id.
+
+Request:
+
+- Endpoint: POST `/vault/dids`
+- Parameters: -
+- Headers: -
+- Content: -
+
+Response:
+
+- Status: 201 or 409 (uninitialized vault)
+- Content: details of the newly created profile, e.g.
+
+```json
+{
+  "id":"IezbeWGSY2dqcUBqT8K7R14xr",
+  "label":"disco-deer",
+  "avatar":"data:image/png;base64,iVBOR...",
+  "state":"TODO",
+}
+```
+
 ### Load a single profile
 
 Query details of a single profile that is already generated and present in the vault.
+Note that using value `_` for the `did` path parameter in the query specifies
+the profile that is active by default. 
 
 Request:
 
@@ -154,36 +250,9 @@ Response:
 }
 ```
 
-### Create new profile
-
-List all profiles that are already generated and present in the vault.
-
-Request:
-
-- Endpoint: POST `/vault/dids`
-- Parameters: -
-- Headers: -
-- Content: -
-
-Response:
-
-- Status: 201 or 409 (uninitialized vault)
-- Content: details of the newly created DID object, e.g.
-
-```json
-{
-  "id":"IezbeWGSY2dqcUBqT8K7R14xr",
-  "label":"disco-deer",
-  "avatar":"data:image/png;base64,iVBOR...",
-  "state":"TODO",
-}
-```
-
 ### Rename profile
 
 Specify a new label for an already existing profile.
-
-TODO should we join name and avatar updates into a single update operation as standard REST usually does?
 
 Request:
 
@@ -246,7 +315,6 @@ Response:
   "presentation": [ "TODO" ]
 }]
 ```
-
 
 ### List claims of a profile
 
