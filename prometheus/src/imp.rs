@@ -59,7 +59,8 @@ fn reset_label_if_empty(state: &mut Context, label: &mut String, did: &ProfileId
 
 pub fn create_dids_impl(state: &mut Context, mut label: String) -> Fallible<VaultEntry> {
     debug!("Creating profile with label '{}'", label);
-    let did = state.create_profile(Some(label.clone()))?;
+    let profile = state.create_profile(Some(label.clone()))?;
+    let did = profile.id();
     let did_bytes = did.to_bytes();
 
     reset_label_if_empty(state, &mut label, &did)?;

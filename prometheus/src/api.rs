@@ -48,7 +48,7 @@ pub trait Api {
     fn get_active_profile(&self) -> Fallible<Option<ProfileId>>;
 
     fn list_vault_records(&self) -> Fallible<Vec<ProfileVaultRecord>>;
-    fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileId>;
+    fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileVaultRecord>;
     fn get_vault_record(&self, id: Option<ProfileId>) -> Fallible<ProfileVaultRecord>;
 
     fn set_profile_label(
@@ -361,11 +361,11 @@ impl Api for Context {
         self.vault()?.profiles()
     }
 
-    fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileId> {
+    fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileVaultRecord> {
         let new_profile_key = self.mut_vault()?.create_key(label)?;
         let empty_profile = PrivateProfileData::empty(&new_profile_key);
         self.local_repo.set(empty_profile).wait()?;
-        Ok(new_profile_key.key_id())
+        self.vault()?.profile(&new_profile_key.key_id())
     }
 
     fn get_vault_record(&self, my_profile_id: Option<ProfileId>) -> Fallible<ProfileVaultRecord> {

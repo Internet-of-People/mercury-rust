@@ -219,8 +219,12 @@ impl Command for CreateCommand {
         match *self {
             Profile { label } => {
                 //let profiles = api.list_vault_records()?;
-                let profile_id = api.create_profile(label)?;
-                info!("Created and activated profile with id {}", profile_id);
+                let profile = api.create_profile(label)?;
+                info!(
+                    "Created and activated profile with label {}, id {}",
+                    profile.label(),
+                    profile.id()
+                );
             }
             Link { my_profile_id, peer_profile_id } => {
                 api.create_link(my_profile_id, &peer_profile_id)?;

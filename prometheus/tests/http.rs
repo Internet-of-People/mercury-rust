@@ -33,8 +33,8 @@ fn test_http_api() {
         assert_eq!(active_opt, None);
     }
 
-    let first_id = api.create_profile(None).unwrap();
-    let second_id = api.create_profile(Some("SecondTestProfileOriginal".to_owned())).unwrap();
+    let first_id = api.create_profile(None).unwrap().id();
+    let second_id = api.create_profile(Some("SecondTestProfileOriginal".to_owned())).unwrap().id();
     {
         let profiles = api.list_vault_records().unwrap();
         assert_eq!(profiles.len(), 2);

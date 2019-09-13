@@ -2,7 +2,6 @@ use std::cell::RefCell;
 use std::collections::HashMap;
 use std::convert::{TryFrom, TryInto};
 use std::rc::Rc;
-use std::str::FromStr;
 
 use actix_http::http::StatusCode;
 use actix_web::{
@@ -143,14 +142,14 @@ impl Api for ApiHttpClient {
         self.await_fut(fut)
     }
 
-    fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileId> {
+    fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileVaultRecord> {
         let url = format!("{}/vault/dids", self.root_url);
         let req_fut = HttpClient::new().post(url).send_json(&label.unwrap_or_default());
         let fut = req_fut
             .and_then(|response| validate_response_status(response, StatusCode::CREATED))
             .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())))
             .and_then(|entry: VaultEntry| {
-                ProfileId::from_str(&entry.id).map_err(|e| SendRequestError::Body(e.into()))
+                (&entry).try_into().map_err(|e: failure::Error| SendRequestError::Body(e.into()))
             });
         self.await_fut(fut)
     }
