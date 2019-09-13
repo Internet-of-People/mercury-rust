@@ -12,6 +12,7 @@ actix-server = "*"
 actix-web = "*"
 base64 = "*"
 blockies = "*"
+bytes = "*"
 claims = { path="../claims" }
 did = { path="../did" }
 failure = "*"

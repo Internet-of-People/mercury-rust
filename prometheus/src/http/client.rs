@@ -10,10 +10,11 @@ use actix_web::{
     error::ParseError,
 };
 use failure::{format_err, Fallible};
-use futures::Future;
+use futures::{Future, IntoFuture};
 //use log::*;
 
 use crate::*;
+use actix_http::error::PayloadError;
 use claims::model::*;
 use did::vault::{ProfileLabel, ProfileMetadata, ProfileVaultRecord};
 
@@ -48,14 +49,30 @@ fn did_str(did_opt: Option<ProfileId>) -> String {
 }
 
 // TODO we should also log and return more response contents describing more error details
-fn validate_response_status<T>(
-    response: ClientResponse<T>,
+
+fn validate_response_status<
+    T: 'static + futures::stream::Stream<Item = bytes::Bytes, Error = actix_http::error::PayloadError>,
+>(
+    mut response: ClientResponse<T>,
     status: StatusCode,
-) -> Result<ClientResponse<T>, SendRequestError> {
+) -> Box<dyn Future<Item = ClientResponse<T>, Error = SendRequestError>> {
     if response.status() != status {
-        return Err(ParseError::Status.into());
+        warn!("Got response with unexpected status: {}", response.status());
+        return Box::new(
+            response
+                .body()
+                .and_then(|body| {
+                    let body_str = String::from_utf8(body.to_vec()).map_err(|e| {
+                        warn!("Failed to decode error message from response: {}", e);
+                        PayloadError::EncodingCorrupted
+                    });
+                    warn!("Error details: {}", body_str?);
+                    Ok(())
+                })
+                .then(|_res| Err(ParseError::Status.into())),
+        );
     }
-    Ok(response)
+    Box::new(Ok(response).into_future())
 }
 
 impl Api for ApiHttpClient {
@@ -64,10 +81,9 @@ impl Api for ApiHttpClient {
         // TODO phrase should normally be splitted into words and sent that way,
         //      but this will work for the moment
         let req_fut = HttpClient::new().post(url).send_json(&vec![phrase]);
-        let fut = req_fut.and_then(|response| {
-            validate_response_status(response, StatusCode::CREATED)?;
-            Ok(())
-        });
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::CREATED))
+            .map(|_response| ());
         self.await_fut(fut)
     }
 
@@ -83,10 +99,9 @@ impl Api for ApiHttpClient {
     fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()> {
         let url = format!("{}/vault/default-did", self.root_url);
         let req_fut = HttpClient::new().put(url).send_json(&my_profile_id.to_string());
-        let fut = req_fut.and_then(|response| {
-            validate_response_status(response, StatusCode::OK)?;
-            Ok(())
-        });
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .map(|_response| ());
         self.await_fut(fut)
     }
 
@@ -157,10 +172,9 @@ impl Api for ApiHttpClient {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/label", self.root_url, did);
         let req_fut = HttpClient::new().put(url).send_json(&label);
-        let fut = req_fut.and_then(|response| {
-            validate_response_status(response, StatusCode::OK)?;
-            Ok(())
-        });
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .map(|_response| ());
         self.await_fut(fut)
     }
 
@@ -232,11 +246,10 @@ impl Api for ApiHttpClient {
     ) -> Fallible<()> {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/attributes/{}", self.root_url, did, key);
-        let req_fut = HttpClient::new().post(url).send_json(&value);
-        let fut = req_fut.and_then(|response| {
-            validate_response_status(response, StatusCode::OK)?;
-            Ok(())
-        });
+        let req_fut = HttpClient::new().post(url).send_json(value);
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .map(|_response| ());
         self.await_fut(fut)
     }
 
@@ -244,10 +257,9 @@ impl Api for ApiHttpClient {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/attributes/{}", self.root_url, did, key);
         let req_fut = HttpClient::new().delete(url).send();
-        let fut = req_fut.and_then(|response| {
-            validate_response_status(response, StatusCode::OK)?;
-            Ok(())
-        });
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .map(|_response| ());
         self.await_fut(fut)
     }
 
@@ -287,10 +299,9 @@ impl Api for ApiHttpClient {
         let url = format!("{}/vault/dids/{}/claims", self.root_url, did);
         let api_claim = CreateClaim::try_from(claim)?;
         let req_fut = HttpClient::new().post(url).send_json(&api_claim);
-        let fut = req_fut.and_then(|response| {
-            validate_response_status(response, StatusCode::CREATED)?;
-            Ok(())
-        });
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::CREATED))
+            .map(|_response| ());
         self.await_fut(fut)
     }
 
