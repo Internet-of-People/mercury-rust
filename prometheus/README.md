@@ -283,6 +283,26 @@ Response:
 - Status: 200 or 409 (uninitialized vault)
 - Content: -
 
+## Cryptography
+
+### Sign message
+
+Sign an arbitrary message in the name of a specific profile. 
+
+Request:
+
+- Endpoint: POST `/vault/dids/{did}/sign-message
+- Parameters: -
+- Headers: -
+- Content: message string to be signed
+
+Response:
+
+- Status: 200 or 409 (uninitialized vault)
+- Content: signature string. Note that it has to contain the public key of the profile internally,
+  validation would be impossible otherwise.
+
+
 ## Claims
 
 ### List all claims
@@ -374,7 +394,37 @@ Response:
 
 ### Request witness signature for a claim
 
-TODO
+Create a message that contains a claim to be shared with a witness for signing. 
+
+Request:
+
+- Endpoint: GET `/vault/dids/{did}/claims/{claimid}/witness-message`
+- Parameters: -
+- Headers: -
+- Content: -
+
+Response:
+
+- Status: 200 or 409 (uninitialized vault)
+- Content: message string to be signed by a witness.
+
+### Import witness signature for a claim
+
+Validate witness signature for a claim and store it with the claim. 
+
+Request:
+
+- Endpoint: PUT `/vault/dids/{did}/claims/{claimid}/witness-signature`
+- Parameters: -
+- Headers: -
+- Content: signature string of a witness for the specified claim
+
+Response:
+
+- Status: 201 or 409 (uninitialized vault)
+- Content: -  
+
+
 
 ### Create a presentation for a claim
 
