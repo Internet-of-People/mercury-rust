@@ -43,7 +43,7 @@ fn test_http_api() {
 
         let first_profile = api.get_vault_record(Some(first_id.clone())).unwrap();
         assert_eq!(profiles[0], first_profile);
-        assert_eq!(first_profile.label(), "Logical Marvel");
+        assert_eq!(first_profile.label(), "Decisive Entertainer");
 
         let second_profile = api.get_vault_record(Some(second_id.clone())).unwrap();
         assert_eq!(profiles[1], second_profile);

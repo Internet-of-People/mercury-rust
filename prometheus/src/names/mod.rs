@@ -33,8 +33,9 @@ impl<'a> DeterministicNameGenerator<'a> {
         self.random_word(data, self.nouns)
     }
 
-    pub fn name(&self, data: &[u8]) -> String {
-        format!("{} {}", self.adjective(data), self.noun(data))
+    pub fn name(&self, bin: &[u8]) -> String {
+        assert!(bin.len() >= 4);
+        format!("{} {}", self.adjective(&bin[..bin.len() / 2]), self.noun(&bin[bin.len() / 2..]))
     }
 }
 
@@ -60,10 +61,10 @@ mod tests {
 
         let did = [42u8; 32];
         let name = DeterministicNameGenerator::default().name(&did);
-        assert_eq!(name, "Beneficial Care");
+        assert_eq!(name, "Gratifying Gratitude");
 
         let did = [255u8; 16];
         let name = DeterministicNameGenerator::default().name(&did);
-        assert_eq!(name, "Venust Warden");
+        assert_eq!(name, "Unhesitating Tutor");
     }
 }
