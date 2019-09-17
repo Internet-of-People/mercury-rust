@@ -1,15 +1,15 @@
 use std::fs::File;
 use std::path::PathBuf;
 
-use failure::{bail, ensure, err_msg, Fallible};
+use failure::{bail, ensure, err_msg, format_err, Fallible};
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::model::*;
 use keyvault::{
     ed25519::{Ed25519, EdExtPrivateKey},
-    ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PublicKey as KeyVaultPublicKey,
-    Seed, BIP43_PURPOSE_MERCURY,
+    ExtendedPrivateKey, ExtendedPublicKey, KeyDerivationCrypto, PrivateKey as KeyVaultPrivateKey,
+    PublicKey as KeyVaultPublicKey, Seed, BIP43_PURPOSE_MERCURY,
 };
 
 // TODO exposing public and private keys below should work with MPrivateKey to support
@@ -71,6 +71,13 @@ impl ProfileVaultRecord {
     }
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SignedMessage {
+    public_key: PublicKey,
+    message: Vec<u8>,
+    signature: Signature,
+}
+
 pub trait ProfileVault {
     fn create_key(&mut self, label: Option<ProfileLabel>) -> Fallible<PublicKey>;
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()>;
@@ -89,6 +96,11 @@ pub trait ProfileVault {
 
     fn profiles(&self) -> Fallible<Vec<ProfileVaultRecord>>;
     fn profile(&self, id: &ProfileId) -> Fallible<ProfileVaultRecord>;
+
+    // fn sign<T: AsRef<[u8]>>(&self, id: &ProfileId, message: T) -> Fallible<SignedMessage<T>>;
+    // fn validate<T: AsRef<[u8]>>(&self, signer: &ProfileId, signed_msg: &SignedMessage<T>) -> bool;
+    fn sign(&self, id: &ProfileId, message: &[u8]) -> Fallible<SignedMessage>;
+    fn validate(&self, signer: &ProfileId, signed_msg: &SignedMessage) -> bool;
 
     // TODO these probably should not be here on the long run, list() is enough in most cases.
     //      Used only for restoring all profiles of a vault with gap detection.
@@ -268,12 +280,30 @@ impl ProfileVault for HdProfileVault {
         Ok(self.profile_by_id(id)?.to_owned())
     }
 
-    fn len(&self) -> usize {
-        self.next_idx as usize
+    fn sign(&self, id: &ProfileId, message: &[u8]) -> Fallible<SignedMessage> {
+        let idx =
+            self.index_of_id(id).ok_or_else(|| format_err!("Profile {} not found in vault", id))?;
+        let private_key = self.mercury_xsk()?.derive_hardened_child(idx as i32)?.as_private_key();
+        let signature = private_key.sign(message.as_ref());
+        Ok(SignedMessage {
+            public_key: PublicKey::from(private_key.public_key()),
+            message: message.to_owned(),
+            signature: Signature::from(signature),
+        })
+    }
+
+    //fn validate(&self, signer_id: &ProfileId, signed_msg: &SignedMessage) -> bool {
+    fn validate(&self, signer: &ProfileId, signed_msg: &SignedMessage) -> bool {
+        let id_ok = signed_msg.public_key.key_id() == *signer;
+        id_ok && signed_msg.public_key.verify(&signed_msg.message, &signed_msg.signature)
     }
 
     fn keys(&self) -> Fallible<HdKeys> {
         Ok(HdKeys { mercury_xsk: self.mercury_xsk()? })
+    }
+
+    fn len(&self) -> usize {
+        self.next_idx as usize
     }
 
     fn save(&self, filename: &PathBuf) -> Fallible<()> {
