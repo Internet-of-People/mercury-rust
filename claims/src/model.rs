@@ -45,7 +45,7 @@ impl TypedContent {
         let content_res = serde_json::to_vec(self);
         let content = content_res.unwrap();
         let hash = multihash::encode(multihash::Hash::Keccak256, &content).unwrap();
-        multibase::encode(multibase::Base64, &hash)
+        multibase::encode(multibase::Base64url, &hash)
     }
 }
 
@@ -63,11 +63,18 @@ impl SignableClaimPart {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ClaimProof {
-    signer_id: ProfileId,
-    signed_message: SignedMessage, // containing a signature of a serialized SignableClaimPart
+    pub signer_id: ProfileId,
+    pub signed_message: SignedMessage, // containing a signature of a serialized SignableClaimPart
 }
 
 impl ClaimProof {
+    pub fn new(signer_id: ProfileId, signed_message: SignedMessage) -> Self {
+        Self { signer_id, signed_message }
+    }
+
+    // pub signer_id(&self) -> &ProfileId { &self.signer_id }
+    // pub signed_message(&self) -> &SignedMessage { &self.signed_message }
+
     pub fn validate(&self, signable_claim: &SignableClaimPart) -> Fallible<()> {
         ensure!(
             self.signed_message.public_key().validate_id(&self.signer_id),
@@ -99,16 +106,30 @@ pub struct Claim {
 }
 
 impl Claim {
-    pub fn new(subject_id: ProfileId, schema: impl ToString, content: serde_json::Value) -> Self {
+    pub fn new(
+        subject_id: ProfileId,
+        schema: impl ToString,
+        content: serde_json::Value,
+        proof: Vec<ClaimProof>,
+        presentation: Vec<ClaimPresentation>,
+    ) -> Self {
         let mut this = Self {
             id: Default::default(),
             subject_id,
             content: TypedContent::new(schema.to_string(), content),
-            proof: vec![],
-            presentation: vec![],
+            proof,
+            presentation,
         };
         this.id = SignableClaimPart::from(&this).claim_id();
         this
+    }
+
+    pub fn unproven(
+        subject_id: ProfileId,
+        schema: impl ToString,
+        content: serde_json::Value,
+    ) -> Self {
+        Self::new(subject_id, schema, content, vec![], vec![])
     }
 
     pub fn id(&self) -> ClaimId {
@@ -216,6 +237,7 @@ impl PublicProfileData {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct PrivateProfileData {
     public_data: PublicProfileData,
+    // TODO consider storing claims in a map for easier search by id
     claims: Vec<Claim>,
     private_data: Vec<u8>,
 }
@@ -255,6 +277,9 @@ impl PrivateProfileData {
     pub fn claims(&self) -> Vec<Claim> {
         self.claims.clone()
     }
+    pub fn claim(&self, id: &ClaimId) -> Option<&Claim> {
+        self.claims.iter().find(|claim| claim.id() == *id)
+    }
     pub fn private_data(&self) -> Vec<u8> {
         self.private_data.clone()
     }
@@ -264,6 +289,9 @@ impl PrivateProfileData {
     }
     pub fn mut_claims(&mut self) -> &mut Vec<Claim> {
         &mut self.claims
+    }
+    pub fn mut_claim(&mut self, id: &ClaimId) -> Option<&mut Claim> {
+        self.claims.iter_mut().find(|claim| claim.id() == *id)
     }
     pub fn mut_private_data(&mut self) -> &mut Vec<u8> {
         &mut self.private_data

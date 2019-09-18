@@ -6,6 +6,7 @@ use log::*;
 
 use crate::imp::*;
 use crate::*;
+use claims::model::*;
 use did::vault::*;
 use keyvault::Seed;
 
@@ -40,7 +41,7 @@ pub fn init_vault(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match init_vault_impl(&mut state, words) {
+    match init_vault_impl(&mut state, &words) {
         Ok(()) => {
             debug!("Initialized vault");
             HttpResponse::Created().body("")
@@ -89,7 +90,7 @@ pub fn set_default_did(state: web::Data<Mutex<Context>>, did: web::Json<String>)
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match set_default_did_impl(&mut state, did.clone()) {
+    match set_default_did_impl(&mut state, &did) {
         Ok(()) => HttpResponse::Ok().body(""),
         Err(e) => {
             error!("Failed to set default profile: {}", e);
@@ -124,7 +125,7 @@ pub fn restore(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match restore_did_impl(&mut state, did.clone(), *force) {
+    match restore_did_impl(&mut state, &did, *force) {
         Ok(priv_data) => {
             debug!("Restored profile {}", did);
             HttpResponse::Ok().json(priv_data) // TODO consider security here
@@ -141,7 +142,7 @@ pub fn revert(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl 
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match revert_did_impl(&mut state, did.clone()) {
+    match revert_did_impl(&mut state, &did) {
         Ok(priv_data) => {
             debug!("Reverted profile {}", did);
             HttpResponse::Ok().json(priv_data) // TODO consider security here
@@ -162,7 +163,7 @@ pub fn publish(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match publish_did_impl(&mut state, did.clone(), *force) {
+    match publish_did_impl(&mut state, &did, *force) {
         Ok(id) => {
             debug!("Published profile {}", did);
             HttpResponse::Ok().json(id)
@@ -176,13 +177,13 @@ pub fn publish(
 
 pub fn create_did(
     state: web::Data<Mutex<Context>>,
-    label: web::Json<ProfileLabel>,
+    mut label: web::Json<ProfileLabel>,
 ) -> impl Responder {
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match create_dids_impl(&mut state, label.clone()) {
+    match create_dids_impl(&mut state, &mut label) {
         Ok(entry) => {
             debug!("Created profile {} with label {}", entry.id, entry.label);
             HttpResponse::Created().json(entry)
@@ -199,7 +200,7 @@ pub fn get_did(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match get_did_impl(&state, did.clone()) {
+    match get_did_impl(&state, &did) {
         Ok(entry) => {
             debug!("Fetched info for profile {}", did);
             HttpResponse::Ok().json(entry)
@@ -215,13 +216,13 @@ pub fn rename_did(
     state: web::Data<Mutex<Context>>,
     did: web::Path<String>,
     //did: web::Path<ProfileId>,
-    label: web::Json<ProfileLabel>,
+    mut label: web::Json<ProfileLabel>,
 ) -> impl Responder {
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match rename_did_impl(&mut state, did.clone(), label.clone()) {
+    match rename_did_impl(&mut state, &did, &mut label) {
         Ok(()) => {
             debug!("Renamed profile {} to {}", did, label);
             HttpResponse::Ok().body("")
@@ -242,7 +243,7 @@ pub fn set_avatar(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match set_avatar_impl(&mut state, did.clone(), avatar.clone()) {
+    match set_avatar_impl(&mut state, &did, &avatar) {
         Ok(()) => {
             debug!("Set profile {} avatar", did);
             HttpResponse::Ok().body("")
@@ -255,13 +256,13 @@ pub fn set_avatar(
 }
 
 // TODO this directly exposes Private/PublicProfileData structs
-// TODO exposign private data should be secured
+// TODO exposing private data should be secured
 pub fn get_profile(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Responder {
     let state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match get_profile_impl(&state, did.clone()) {
+    match get_profile_impl(&state, &did) {
         Ok(data) => {
             debug!("Fetched data for profile {}", did);
             HttpResponse::Ok().json(data)
@@ -282,7 +283,7 @@ pub fn set_did_attribute(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match set_did_attribute_impl(&mut state, attr_path.clone(), attr_val.clone()) {
+    match set_did_attribute_impl(&mut state, &attr_path, &attr_val) {
         Ok(()) => {
             debug!("Set attribute {:?} to {}", attr_path, attr_val);
             HttpResponse::Ok().body("")
@@ -302,7 +303,7 @@ pub fn clear_did_attribute(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match clear_did_attribute_impl(&mut state, attr_path.clone()) {
+    match clear_did_attribute_impl(&mut state, &attr_path) {
         Ok(()) => {
             debug!("Cleared attribute {:?}", attr_path);
             HttpResponse::Ok().body("")
@@ -314,12 +315,33 @@ pub fn clear_did_attribute(
     }
 }
 
+pub fn sign_claim(
+    state: web::Data<Mutex<Context>>,
+    did: web::Path<String>,
+    claim: web::Json<SignableClaimPart>,
+) -> impl Responder {
+    let state = match lock_state(&state) {
+        Err(e) => return HttpResponse::Conflict().body(e.to_string()),
+        Ok(state) => state,
+    };
+    match sign_claim_impl(&state, &did, &claim) {
+        Ok(signed_claim) => {
+            debug!("Signed claim with profile {}", did);
+            HttpResponse::Ok().json(signed_claim)
+        }
+        Err(e) => {
+            error!("Signing claim failed: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
 pub fn list_did_claims(state: web::Data<Mutex<Context>>, did: web::Path<String>) -> impl Responder {
     let state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match list_did_claims_impl(&state, did.clone()) {
+    match list_did_claims_impl(&state, &did) {
         Ok(did_claims) => {
             debug!("Fetched list of claims for did {}", did);
             HttpResponse::Ok().json(did_claims)
@@ -357,7 +379,7 @@ pub fn create_did_claim(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match create_did_claim_impl(&mut state, did.clone(), claim_details.clone()) {
+    match create_did_claim_impl(&mut state, &did, &claim_details) {
         Ok(claim) => {
             debug!("Created claim for did {}", did);
             HttpResponse::Created().json(claim)
@@ -377,7 +399,7 @@ pub fn delete_claim(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match delete_claim_impl(&mut state, claim_path.clone()) {
+    match delete_claim_impl(&mut state, &claim_path) {
         Ok(()) => {
             debug!("Deleted claim {} from profile {}", claim_path.claim_id, claim_path.did);
             HttpResponse::Ok().body("")
@@ -387,6 +409,48 @@ pub fn delete_claim(
                 "Failed to delete claim {} from profile {}: {}",
                 claim_path.claim_id, claim_path.did, e
             );
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+pub fn request_claim_signature(
+    state: web::Data<Mutex<Context>>,
+    claim_path: web::Path<ClaimPath>,
+) -> impl Responder {
+    let state = match lock_state(&state) {
+        Err(e) => return HttpResponse::Conflict().body(e.to_string()),
+        Ok(state) => state,
+    };
+    match request_claim_signature_impl(&state, &claim_path) {
+        Ok(message) => {
+            debug!("Claim signature message received");
+            HttpResponse::Ok().json(message)
+        }
+        Err(e) => {
+            error!("Failed to serve claim signature request: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+pub fn add_claim_proof(
+    state: web::Data<Mutex<Context>>,
+    claim_path: web::Path<ClaimPath>,
+    // TODO consider if exposing SignedMessage gusiness logic type here is a good choice
+    proof: web::Json<ClaimProof>,
+) -> impl Responder {
+    let mut state = match lock_state(&state) {
+        Err(e) => return HttpResponse::Conflict().body(e.to_string()),
+        Ok(state) => state,
+    };
+    match add_claim_proof_impl(&mut state, &claim_path, &proof) {
+        Ok(()) => {
+            debug!("Claim witness signature added");
+            HttpResponse::Created().body("")
+        }
+        Err(e) => {
+            error!("Failed to add witness signature: {}", e);
             HttpResponse::Conflict().body(e.to_string())
         }
     }

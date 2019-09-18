@@ -308,21 +308,30 @@ impl Api for ApiHttpClient {
         unimplemented!()
     }
 
-    fn sign_claim(
-        &self,
-        _my_profile_id: Option<ProfileId>,
-        _claim: SignableClaimPart,
-    ) -> Fallible<SignedMessage> {
-        unimplemented!()
+    fn sign_claim(&self, id: Option<ProfileId>, claim: &SignableClaimPart) -> Fallible<ClaimProof> {
+        let did = did_str(id);
+        let url = format!("{}/vault/dids/{}/sign-claim", self.root_url, did);
+        let req_fut = HttpClient::new().post(url).send_json(claim);
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::OK))
+            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())));
+        self.await_fut(fut)
     }
 
     fn add_claim_proof(
         &mut self,
-        _my_profile_id: Option<ProfileId>,
-        _claim: ClaimId,
-        _proof: ClaimProof,
+        id: Option<ProfileId>,
+        claim: &ClaimId,
+        proof: ClaimProof,
     ) -> Fallible<()> {
-        unimplemented!()
+        let did = did_str(id);
+        let url =
+            format!("{}/vault/dids/{}/claims/{}/witness-signature", self.root_url, did, claim);
+        let req_fut = HttpClient::new().put(url).send_json(&proof);
+        let fut = req_fut
+            .and_then(|response| validate_response_status(response, StatusCode::CREATED))
+            .map(|_response| ());
+        self.await_fut(fut)
     }
 
     fn present_claim(

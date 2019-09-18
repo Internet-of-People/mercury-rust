@@ -163,7 +163,13 @@ impl TryInto<Claim> for &ApiClaim {
 
     fn try_into(self) -> Result<Claim, Self::Error> {
         let subject_id = self.subject_id.parse()?;
-        Ok(Claim::new(subject_id, self.schema_id.to_owned(), self.content.to_owned()))
+        Ok(Claim::new(
+            subject_id,
+            self.schema_id.to_owned(),
+            self.content.to_owned(),
+            self.proof.to_owned(),
+            self.presentation.to_owned(),
+        ))
     }
 }
 

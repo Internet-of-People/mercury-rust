@@ -1,7 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
-use actix_web::web;
-use failure::{err_msg, Fallible};
+use failure::{err_msg, format_err, Fallible};
 use log::*;
 
 use crate::data::ProfileMetadata;
@@ -10,7 +9,7 @@ use crate::*;
 use claims::model::*;
 use did::vault::ProfileLabel;
 
-pub fn init_vault_impl(state: &mut Context, words: web::Json<Vec<String>>) -> Fallible<()> {
+pub fn init_vault_impl(state: &mut Context, words: &Vec<String>) -> Fallible<()> {
     let phrase = words.join(" ");
     state.restore_vault(phrase)?;
     state.save_vault()
@@ -26,7 +25,7 @@ pub fn get_default_did_impl(state: &Context) -> Fallible<Option<ProfileId>> {
     state.get_active_profile()
 }
 
-pub fn set_default_did_impl(state: &mut Context, did_str: String) -> Fallible<()> {
+pub fn set_default_did_impl(state: &mut Context, did_str: &String) -> Fallible<()> {
     let did = did_str.parse()?;
     state.set_active_profile(&did)?;
     state.save_vault()?;
@@ -57,13 +56,13 @@ fn reset_label_if_empty(state: &mut Context, label: &mut String, did: &ProfileId
     Ok(())
 }
 
-pub fn create_dids_impl(state: &mut Context, mut label: String) -> Fallible<VaultEntry> {
+pub fn create_dids_impl(state: &mut Context, label: &mut String) -> Fallible<VaultEntry> {
     debug!("Creating profile with label '{}'", label);
     let profile = state.create_profile(Some(label.clone()))?;
     let did = profile.id();
     let did_bytes = did.to_bytes();
 
-    reset_label_if_empty(state, &mut label, &did)?;
+    reset_label_if_empty(state, label, &did)?;
 
     let mut avatar_png = Vec::new();
     blockies::Ethereum::default()
@@ -79,13 +78,13 @@ pub fn create_dids_impl(state: &mut Context, mut label: String) -> Fallible<Vaul
     state.save_vault()?;
     Ok(VaultEntry {
         id: did.to_string(),
-        label,
+        label: label.to_owned(),
         avatar: Image { format: metadata.image_format, blob: metadata.image_blob },
         state: "TODO".to_owned(),
     })
 }
 
-fn did_opt(did_str: String) -> Fallible<Option<ProfileId>> {
+fn did_opt(did_str: &str) -> Fallible<Option<ProfileId>> {
     if did_str == "_" {
         return Ok(None);
     }
@@ -93,53 +92,53 @@ fn did_opt(did_str: String) -> Fallible<Option<ProfileId>> {
     Ok(Some(did))
 }
 
-pub fn get_did_impl(state: &Context, did_str: String) -> Fallible<VaultEntry> {
+pub fn get_did_impl(state: &Context, did_str: &String) -> Fallible<VaultEntry> {
     let did = did_opt(did_str)?;
     let rec = state.get_vault_record(did)?;
     VaultEntry::try_from(&rec)
 }
 
-pub fn get_profile_impl(state: &Context, did_str: String) -> Fallible<PrivateProfileData> {
+pub fn get_profile_impl(state: &Context, did_str: &String) -> Fallible<PrivateProfileData> {
     let did = did_opt(did_str)?;
     state.get_profile_data(did, ProfileRepositoryKind::Local)
 }
 
 pub fn restore_did_impl(
     state: &mut Context,
-    did_str: String,
+    did_str: &String,
     force: bool,
 ) -> Fallible<PrivateProfileData> {
     let did = did_opt(did_str)?;
     state.restore_profile(did, force)
 }
 
-pub fn revert_did_impl(state: &mut Context, did_str: String) -> Fallible<PrivateProfileData> {
+pub fn revert_did_impl(state: &mut Context, did_str: &String) -> Fallible<PrivateProfileData> {
     let did = did_opt(did_str)?;
     state.revert_profile(did)
 }
 
-pub fn publish_did_impl(state: &mut Context, did_str: String, force: bool) -> Fallible<ProfileId> {
+pub fn publish_did_impl(state: &mut Context, did_str: &String, force: bool) -> Fallible<ProfileId> {
     let did = did_opt(did_str)?;
     state.publish_profile(did, force)
 }
 
 pub fn rename_did_impl(
     state: &mut Context,
-    did_str: String,
+    did_str: &String,
     //did: ProfileId,
-    mut label: ProfileLabel,
+    label: &mut ProfileLabel,
 ) -> Fallible<()> {
     let did = did_str.parse()?;
-    reset_label_if_empty(state, &mut label, &did)?;
-    state.set_profile_label(Some(did), label)?;
+    reset_label_if_empty(state, label, &did)?;
+    state.set_profile_label(Some(did), label.to_owned())?;
     state.save_vault()?;
     Ok(())
 }
 
 pub fn set_avatar_impl(
     state: &mut Context,
-    did_str: String,
-    avatar_datauri: DataUri,
+    did_str: &String,
+    avatar_datauri: &DataUri,
 ) -> Fallible<()> {
     let did = did_opt(did_str)?;
     let (format, avatar_binary) = parse_avatar(&avatar_datauri)?;
@@ -154,19 +153,28 @@ pub fn set_avatar_impl(
 
 pub fn set_did_attribute_impl(
     state: &mut Context,
-    path: AttributePath,
-    val: AttributeValue,
+    path: &AttributePath,
+    val: &AttributeValue,
 ) -> Fallible<()> {
-    let did = did_opt(path.did)?;
+    let did = did_opt(&path.did)?;
     state.set_attribute(did, &path.attribute_id, &val)
 }
 
-pub fn clear_did_attribute_impl(state: &mut Context, path: AttributePath) -> Fallible<()> {
-    let did = did_opt(path.did)?;
+pub fn clear_did_attribute_impl(state: &mut Context, path: &AttributePath) -> Fallible<()> {
+    let did = did_opt(&path.did)?;
     state.clear_attribute(did, &path.attribute_id)
 }
 
-pub fn list_did_claims_impl(state: &Context, did_str: String) -> Fallible<Vec<ApiClaim>> {
+pub fn sign_claim_impl(
+    state: &Context,
+    did_str: &String,
+    claim: &SignableClaimPart,
+) -> Fallible<ClaimProof> {
+    let did_arg = did_opt(did_str)?;
+    state.sign_claim(did_arg.clone(), &claim)
+}
+
+pub fn list_did_claims_impl(state: &Context, did_str: &String) -> Fallible<Vec<ApiClaim>> {
     let did = did_opt(did_str)?;
     let claims = state.claims(did.clone())?;
 
@@ -201,15 +209,16 @@ pub fn list_vault_claims_impl(state: &Context) -> Fallible<Vec<ApiClaim>> {
 
 pub fn create_did_claim_impl(
     state: &mut Context,
-    did_str: String,
-    claim_details: CreateClaim,
+    did_str: &String,
+    claim_details: &CreateClaim,
 ) -> Fallible<ContentId> {
     let did = did_opt(did_str)?.or(state.get_active_profile()?);
 
     let subject = did
         .clone()
         .ok_or_else(|| err_msg("No profile specified and no active profile set in vault"))?;
-    let claim = Claim::new(subject, claim_details.schema, claim_details.content);
+    let claim =
+        Claim::unproven(subject, claim_details.schema.to_owned(), claim_details.content.to_owned());
     let claim_id = claim.id();
 
     state.add_claim(did, claim)?;
@@ -217,12 +226,40 @@ pub fn create_did_claim_impl(
     Ok(claim_id)
 }
 
-pub fn delete_claim_impl(state: &mut Context, claim_path: ClaimPath) -> Fallible<()> {
-    let did = did_opt(claim_path.did)?;
-    let claim_id = claim_path.claim_id;
+pub fn delete_claim_impl(state: &mut Context, claim_path: &ClaimPath) -> Fallible<()> {
+    let did = did_opt(&claim_path.did)?;
+    let claim_id = claim_path.claim_id.to_owned();
     state.remove_claim(did, claim_id)?;
     state.save_vault()?;
     Ok(())
+}
+
+pub fn request_claim_signature_impl(
+    state: &Context,
+    claim_path: &ClaimPath,
+) -> Fallible<SignableClaimPart> {
+    let did = did_opt(&claim_path.did)?;
+    let claim_id = claim_path.claim_id.to_owned();
+    let profile = state.get_profile_data(did.clone(), ProfileRepositoryKind::Local)?;
+    let claim = profile
+        .claim(&claim_id)
+        .ok_or_else(|| format_err!("Claim {} not found in profile {:?}", claim_id, did))?;
+    Ok(SignableClaimPart::from(claim))
+}
+
+pub fn add_claim_proof_impl(
+    state: &mut Context,
+    claim_path: &ClaimPath,
+    proof: &ClaimProof,
+) -> Fallible<()> {
+    let did = did_opt(&claim_path.did)?;
+    let claim_id = &claim_path.claim_id;
+    let profile = state.get_profile_data(did.clone(), ProfileRepositoryKind::Local)?;
+    let claim = profile
+        .claim(claim_id)
+        .ok_or_else(|| format_err!("Claim {} not found in profile {:?}", claim_id, did))?;
+    proof.validate(&SignableClaimPart::from(claim))?;
+    state.add_claim_proof(did, claim_id, proof.to_owned())
 }
 
 pub fn list_schemas_impl(state: &Context) -> Fallible<Vec<ClaimSchema>> {

@@ -2,7 +2,7 @@ use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
 
-use failure::{bail, ensure, err_msg, Fallible};
+use failure::{bail, ensure, err_msg, format_err, Fallible};
 use futures::prelude::*;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
@@ -102,12 +102,12 @@ pub trait Api {
     fn sign_claim(
         &self,
         my_profile_id: Option<ProfileId>,
-        claim: SignableClaimPart,
-    ) -> Fallible<SignedMessage>;
+        claim: &SignableClaimPart,
+    ) -> Fallible<ClaimProof>;
     fn add_claim_proof(
         &mut self,
         my_profile_id: Option<ProfileId>,
-        claim: ClaimId,
+        claim: &ClaimId,
         proof: ClaimProof,
     ) -> Fallible<()>;
     fn present_claim(
@@ -539,20 +539,28 @@ impl Api for Context {
     fn sign_claim(
         &self,
         my_profile_id: Option<ProfileId>,
-        claim: SignableClaimPart,
-    ) -> Fallible<SignedMessage> {
+        claim: &SignableClaimPart,
+    ) -> Fallible<ClaimProof> {
         let profile = self.selected_profile(my_profile_id)?;
-        let claim_bin = serde_json::to_vec(&claim)?;
-        self.vault()?.sign(&profile.id(), &claim_bin)
+        let claim_bin = serde_json::to_vec(claim)?;
+        let signed_message = self.vault()?.sign(&profile.id(), &claim_bin)?;
+        Ok(ClaimProof::new(profile.id(), signed_message))
     }
 
     fn add_claim_proof(
         &mut self,
-        _my_profile_id: Option<ProfileId>,
-        _claim: ClaimId,
-        _proof: ClaimProof,
+        my_profile_id: Option<ProfileId>,
+        claim_id: &ClaimId,
+        proof: ClaimProof,
     ) -> Fallible<()> {
-        unimplemented!()
+        let mut profile = self.selected_profile(my_profile_id)?;
+        let claim = profile
+            .mut_claim(claim_id)
+            .ok_or_else(|| format_err!("Claim {} not found", claim_id))?;
+        claim.proof.push(proof);
+        self.local_repo.set(profile).wait()?;
+        debug!("Added proof to claim: {:?}", claim_id);
+        Ok(())
     }
 
     fn present_claim(

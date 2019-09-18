@@ -19,6 +19,7 @@ pub type ProfileId = KeyId;
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SignedMessage {
     public_key: PublicKey,
+    #[serde(with = "serde_bytes")]
     message: Vec<u8>,
     signature: Signature,
 }

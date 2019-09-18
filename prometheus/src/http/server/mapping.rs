@@ -48,13 +48,11 @@ pub fn init_url_mapping(service: &mut web::ServiceConfig) {
                                 .service(web::resource("/revert").route(web::post().to(revert)))
                                 .service(web::resource("/publish").route(web::post().to(publish)))
                                 .service(
-                                    web::scope("/attributes")
-                                        .service(
-                                            web::resource("{attribute_id}")
-                                                .route(web::post().to(set_did_attribute))
-                                                .route(web::delete().to(clear_did_attribute)),
-                                        )
+                                web::resource("/attributes/{attribute_id}")
+                                    .route(web::post().to(set_did_attribute))
+                                    .route(web::delete().to(clear_did_attribute)),
                                 )
+                                .service( web::resource("/sign-claim").route(web::post().to(sign_claim)))
                                 .service(
                                     web::scope("/claims")
                                         .service(
@@ -63,8 +61,16 @@ pub fn init_url_mapping(service: &mut web::ServiceConfig) {
                                                 .route(web::post().to(create_did_claim)),
                                         )
                                         .service(
-                                            web::resource("{claim_id}")
-                                                .route(web::delete().to(delete_claim)),
+                                            web::scope("{claim_id}")
+                                                .service(web::resource("")
+                                                    .route(web::delete().to(delete_claim)),
+                                                )
+                                                .service(web::resource("/witness-request")
+                                                    .route(web::get().to(request_claim_signature))
+                                                )
+                                                .service(web::resource("/witness-signature")
+                                                    .route(web::put().to(add_claim_proof))
+                                                )
                                         ),
                                 ),
                         ),

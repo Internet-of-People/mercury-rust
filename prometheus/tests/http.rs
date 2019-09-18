@@ -100,22 +100,43 @@ fn test_http_api() {
     }
 
     let age_schema_id = "McL9746fWtE9EXV5";
-    let first_claim = Claim::new(first_id.clone(), age_schema_id, json!("1st"));
+    let first_claim = Claim::unproven(first_id.clone(), age_schema_id, json!("1st"));
     api.add_claim(Some(first_id.clone()), first_claim.clone()).unwrap();
     {
         let claims = api.claims(Some(first_id.clone())).unwrap();
         assert_eq!(claims.len(), 1);
         assert_eq!(claims[0], first_claim);
+        assert!(claims[0].proof.is_empty());
     }
 
     let email_schema_id = "McL9746fWtE9EXVb";
-    let second_claim = Claim::new(first_id.clone(), email_schema_id, json!("2nd"));
+    let second_claim = Claim::unproven(first_id.clone(), email_schema_id, json!("2nd"));
     api.add_claim(Some(first_id.clone()), second_claim.clone()).unwrap();
     {
         let claims = api.claims(Some(first_id.clone())).unwrap();
         assert_eq!(claims.len(), 2);
         assert_eq!(claims[0], first_claim);
         assert_eq!(claims[1], second_claim);
+    }
+
+    let first_signable = SignableClaimPart::from(&first_claim);
+    let first_proof = api.sign_claim(Some(first_id.clone()), &first_signable).unwrap();
+    api.add_claim_proof(Some(first_id.clone()), &first_claim.id(), first_proof.clone()).unwrap();
+    {
+        let mut fake_proof = first_proof.clone();
+        fake_proof.signer_id = second_id.clone();
+        assert!(api
+            .add_claim_proof(Some(first_id.clone()), &first_claim.id(), fake_proof)
+            .is_err());
+
+        let claims = api.claims(Some(first_id.clone())).unwrap();
+        assert_eq!(claims.len(), 2);
+        assert_eq!(claims[1], second_claim);
+
+        assert_ne!(claims[0], first_claim);
+        assert_eq!(claims[0].id(), first_claim.id());
+        assert_eq!(claims[0].proof.len(), 1);
+        assert_eq!(claims[0].proof[0], first_proof);
     }
 
     // TODO find out how to test publish, restore and revert profile commands here

@@ -285,16 +285,18 @@ Response:
 
 ## Cryptography
 
-### Sign message
+### Sign claim
 
-Sign an arbitrary message in the name of a specific profile. 
+Sign a claim in the name of a specific profile. The claim must have been created by the
+`/vault/dids/{did}/claims/{claimid}/witness-request` endpoint,
+but most likely in an different wallet and computer of another user.   
 
 Request:
 
-- Endpoint: POST `/vault/dids/{did}/sign-message
+- Endpoint: POST `/vault/dids/{did}/sign-claim`
 - Parameters: -
 - Headers: -
-- Content: message string to be signed
+- Content: string representation of the claim signature request to be signed
 
 Response:
 
@@ -331,7 +333,14 @@ Response:
   "content": {
     // Completely schema-dependent structure here
   },
-  "proof": [ "TODO" ],
+  "proof": [{
+    "signer_id": "Iez24XMd3BfPn5LAJdGdvZp87n",
+    "signed_message": {
+      "public_key": "PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb",
+      "message": [...], // array of binary data
+      "signature": "SfzAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2",
+    }
+  }],
   "presentation": [ "TODO" ]
 }]
 ```
@@ -362,7 +371,7 @@ Response:
   "content": {
     // Completely schema-dependent structure here
   },
-  "proof": [ "TODO" ],
+  "proof": [],
   "presentation": [ "TODO" ]
 }]
 ```
@@ -394,11 +403,11 @@ Response:
 
 ### Request witness signature for a claim
 
-Create a message that contains a claim to be shared with a witness for signing. 
+Create a request message that contains a claim to be shared with a witness for signing. 
 
 Request:
 
-- Endpoint: GET `/vault/dids/{did}/claims/{claimid}/witness-message`
+- Endpoint: GET `/vault/dids/{did}/claims/{claimid}/witness-request`
 - Parameters: -
 - Headers: -
 - Content: -

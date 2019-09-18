@@ -12,5 +12,6 @@ futures = "0.1"
 log = "*"
 keyvault = { path="../keyvault" }
 serde = "*"
+serde_bytes = "*"
 serde_derive = "*"
 serde_json = "*"
