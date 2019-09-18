@@ -71,13 +71,6 @@ impl ProfileVaultRecord {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct SignedMessage {
-    public_key: PublicKey,
-    message: Vec<u8>,
-    signature: Signature,
-}
-
 pub trait ProfileVault {
     fn create_key(&mut self, label: Option<ProfileLabel>) -> Fallible<PublicKey>;
     fn restore_id(&mut self, id: &ProfileId) -> Fallible<()>;
@@ -285,17 +278,17 @@ impl ProfileVault for HdProfileVault {
             self.index_of_id(id).ok_or_else(|| format_err!("Profile {} not found in vault", id))?;
         let private_key = self.mercury_xsk()?.derive_hardened_child(idx as i32)?.as_private_key();
         let signature = private_key.sign(message.as_ref());
-        Ok(SignedMessage {
-            public_key: PublicKey::from(private_key.public_key()),
-            message: message.to_owned(),
-            signature: Signature::from(signature),
-        })
+        Ok(SignedMessage::new(
+            PublicKey::from(private_key.public_key()),
+            message.to_owned(),
+            Signature::from(signature),
+        ))
     }
 
     //fn validate(&self, signer_id: &ProfileId, signed_msg: &SignedMessage) -> bool {
     fn validate(&self, signer: &ProfileId, signed_msg: &SignedMessage) -> bool {
-        let id_ok = signed_msg.public_key.key_id() == *signer;
-        id_ok && signed_msg.public_key.verify(&signed_msg.message, &signed_msg.signature)
+        let id_ok = signed_msg.public_key().validate_id(signer);
+        id_ok && signed_msg.validate()
     }
 
     fn keys(&self) -> Fallible<HdKeys> {

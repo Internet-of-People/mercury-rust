@@ -34,7 +34,10 @@ pub trait PublicKey<C: AsymmetricCrypto + ?Sized> {
     /// identified only by the digest of the public key in all other channels.
     fn key_id(&self) -> C::KeyId;
 
-    // TODO fn verify_id(&self, id: &C::KeyId) -> bool;
+    // TODO This will probably be needed: consider
+    //      - timing attack for validation with key_id() generation
+    //      - KeyId might have an older version which makes key_id() unusable for verification
+    // fn validate_id(&self, id: &C::KeyId) -> bool;
 
     /// This method can be used to verify if a given signature for a message was made using the private
     /// key that belongs to this public key. See also [`PrivateKey::sign`]

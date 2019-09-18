@@ -99,6 +99,11 @@ pub trait Api {
     fn claims(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Claim>>;
     fn add_claim(&mut self, my_profile_id: Option<ProfileId>, claim: Claim) -> Fallible<()>;
     fn remove_claim(&mut self, my_profile_id: Option<ProfileId>, claim: ClaimId) -> Fallible<()>;
+    fn sign_claim(
+        &self,
+        my_profile_id: Option<ProfileId>,
+        claim: SignableClaimPart,
+    ) -> Fallible<SignedMessage>;
     fn add_claim_proof(
         &mut self,
         my_profile_id: Option<ProfileId>,
@@ -529,6 +534,16 @@ impl Api for Context {
         self.local_repo.set(profile).wait()?;
         debug!("Removed claim: {:?}", id);
         Ok(())
+    }
+
+    fn sign_claim(
+        &self,
+        my_profile_id: Option<ProfileId>,
+        claim: SignableClaimPart,
+    ) -> Fallible<SignedMessage> {
+        let profile = self.selected_profile(my_profile_id)?;
+        let claim_bin = serde_json::to_vec(&claim)?;
+        self.vault()?.sign(&profile.id(), &claim_bin)
     }
 
     fn add_claim_proof(

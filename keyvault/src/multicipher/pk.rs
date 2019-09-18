@@ -23,6 +23,12 @@ macro_rules! verify {
     };
 }
 
+impl MPublicKey {
+    pub fn validate_id(&self, key_id: &MKeyId) -> bool {
+        self.key_id() == *key_id
+    }
+}
+
 impl PublicKey<MultiCipher> for MPublicKey {
     fn key_id(&self) -> MKeyId {
         visit!(key_id(self))

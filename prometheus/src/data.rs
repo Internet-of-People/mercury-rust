@@ -143,14 +143,15 @@ impl ApiClaim {
         subject_label: ProfileLabel,
         schema_registry: &dyn ClaimSchemas,
     ) -> Fallible<Self> {
-        let schema_name = schema_registry.get(&src.schema)?.name().to_owned();
+        let schema_id = src.content.schema_id().to_owned();
+        let schema_name = schema_registry.get(&schema_id)?.name().to_owned();
         Ok(Self {
             id: src.id(),
             subject_id: src.subject_id.to_string(),
             subject_label,
-            schema_id: src.schema.to_owned(),
+            schema_id,
             schema_name,
-            content: serde_json::from_slice(&src.content)?,
+            content: src.content.content().to_owned(),
             proof: src.proof.to_owned(),
             presentation: src.presentation.to_owned(),
         })
@@ -162,8 +163,7 @@ impl TryInto<Claim> for &ApiClaim {
 
     fn try_into(self) -> Result<Claim, Self::Error> {
         let subject_id = self.subject_id.parse()?;
-        let content: Vec<u8> = serde_json::from_value(self.content.clone())?;
-        Ok(Claim::new(subject_id, self.schema_id.to_owned(), content))
+        Ok(Claim::new(subject_id, self.schema_id.to_owned(), self.content.to_owned()))
     }
 }
 
@@ -236,7 +236,7 @@ impl Into<SchemaVersion> for ClaimSchema {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct CreateClaim {
-    pub schema: ContentId, // TODO multihash?
+    pub schema: SchemaId, // TODO multihash?
     pub content: serde_json::Value,
 }
 
@@ -244,7 +244,9 @@ impl TryFrom<Claim> for CreateClaim {
     type Error = failure::Error;
 
     fn try_from(src: Claim) -> Result<Self, Self::Error> {
-        let content = serde_json::to_value(src.content)?;
-        Ok(CreateClaim { schema: src.schema, content })
+        Ok(CreateClaim {
+            schema: src.content.schema_id().to_owned(),
+            content: src.content.content().to_owned(),
+        })
     }
 }

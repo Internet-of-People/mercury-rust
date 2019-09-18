@@ -1,3 +1,4 @@
+use serde_json::json;
 use structopt::StructOpt;
 
 use claims::model::*;
@@ -99,7 +100,7 @@ fn test_http_api() {
     }
 
     let age_schema_id = "McL9746fWtE9EXV5";
-    let first_claim = Claim::new(first_id.clone(), age_schema_id, "1st".as_bytes().to_vec());
+    let first_claim = Claim::new(first_id.clone(), age_schema_id, json!("1st"));
     api.add_claim(Some(first_id.clone()), first_claim.clone()).unwrap();
     {
         let claims = api.claims(Some(first_id.clone())).unwrap();
@@ -108,7 +109,7 @@ fn test_http_api() {
     }
 
     let email_schema_id = "McL9746fWtE9EXVb";
-    let second_claim = Claim::new(first_id.clone(), email_schema_id, "2nd".as_bytes().to_vec());
+    let second_claim = Claim::new(first_id.clone(), email_schema_id, json!("2nd"));
     api.add_claim(Some(first_id.clone()), second_claim.clone()).unwrap();
     {
         let claims = api.claims(Some(first_id.clone())).unwrap();

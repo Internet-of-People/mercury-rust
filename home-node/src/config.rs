@@ -75,6 +75,8 @@ impl Config {
 
         let profile_id = cli.profile_id.or_else(|| vault.get_active().expect("Failed to get active profile") )
             .expect("Profile id is needed for authenticating the node, but neither command line argument is specified, nor active profile is set in vault");
+
+        // TODO signer should be implemented on top of vault's sign/verify, not on private key directly
         let key_idx = vault
             // TODO should use an operation publicly available on ProfileVault, not of a specific implementation
             .index_of_id(&profile_id)

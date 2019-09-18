@@ -1,10 +1,12 @@
 use std::collections::HashMap;
 use std::time::SystemTime;
 
+use failure::{ensure, Fallible};
 use serde_derive::{Deserialize, Serialize};
 
 use crate::claim_schema::SchemaId;
 pub use did::model::*;
+use keyvault::PublicKey as KeyVaultPublicKey;
 
 // TODO this overlaps with JournalState, maybe they could be merged
 pub type Version = u64; // monotonically increasing, e.g. normal version, unix datetime or blockheight
@@ -13,11 +15,72 @@ pub type AttributeValue = String;
 pub type AttributeMap = HashMap<AttributeId, AttributeValue>;
 pub type ClaimId = ContentId;
 
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct TypedContent {
+    schema_id: SchemaId,
+    content: serde_json::Value,
+}
+
+impl Eq for TypedContent {}
+
+impl TypedContent {
+    pub fn new(schema_id: SchemaId, content: serde_json::Value) -> Self {
+        // TODO validate content against schema
+        //      how to access schema registry? add it as a separate argument here?
+        Self { schema_id, content }
+    }
+
+    pub fn schema_id(&self) -> &SchemaId {
+        &self.schema_id
+    }
+    pub fn content(&self) -> &serde_json::Value {
+        &self.content
+    }
+
+    /// Panics: Serialization can fail if self's implementation of `Serialize` decides to
+    ///          fail, or if `self` contains a map with non-string keys.
+    ///         Hashing will panic if the specified hash type is not supported.
+    /// These panics must never happen here.
+    pub fn content_id(&self) -> ContentId {
+        let content_res = serde_json::to_vec(self);
+        let content = content_res.unwrap();
+        let hash = multihash::encode(multihash::Hash::Keccak256, &content).unwrap();
+        multibase::encode(multibase::Base64, &hash)
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct SignableClaimPart {
+    pub subject_id: ProfileId,
+    pub content: TypedContent,
+}
+
+impl SignableClaimPart {
+    pub fn claim_id(&self) -> ClaimId {
+        self.content.content_id().into()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ClaimProof {
-    claim_id: ClaimId,
-    witness: String,   // TODO DID
-    signature: String, // TODO multicrypto signature
+    signer_id: ProfileId,
+    signed_message: SignedMessage, // containing a signature of a serialized SignableClaimPart
+}
+
+impl ClaimProof {
+    pub fn validate(&self, signable_claim: &SignableClaimPart) -> Fallible<()> {
+        ensure!(
+            self.signed_message.public_key().validate_id(&self.signer_id),
+            "Claim was signed with another key"
+        );
+        let message_bin = serde_json::to_vec(signable_claim)?;
+        ensure!(
+            self.signed_message.message() == message_bin.as_slice(),
+            "Different content was signed than expected"
+        );
+        ensure!(self.signed_message.validate(), "Invalid claim signature");
+        Ok(())
+    }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -28,25 +91,23 @@ pub struct ClaimPresentation {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Claim {
-    id: ClaimId,
+    id: ClaimId, // TODO hashes exactly what? Likely not only the content, but something like SignableClaimPart
     pub subject_id: ProfileId,
-    pub schema: SchemaId,
-    pub content: Vec<u8>,
+    pub content: TypedContent,
     pub proof: Vec<ClaimProof>,
     pub presentation: Vec<ClaimPresentation>,
 }
 
 impl Claim {
-    pub fn new(subject_id: ProfileId, schema: impl ToString, content: Vec<u8>) -> Self {
+    pub fn new(subject_id: ProfileId, schema: impl ToString, content: serde_json::Value) -> Self {
         let mut this = Self {
             id: Default::default(),
             subject_id,
-            schema: schema.to_string(),
-            content,
+            content: TypedContent::new(schema.to_string(), content),
             proof: vec![],
             presentation: vec![],
         };
-        this.id = HashableClaimContent::from(&this).content_hash();
+        this.id = SignableClaimPart::from(&this).claim_id();
         this
     }
 
@@ -55,39 +116,9 @@ impl Claim {
     }
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct HashableClaimContent {
-    pub subject_id: ProfileId,
-    pub schema: SchemaId,
-    pub content: Vec<u8>,
-    pub proof: Vec<ClaimProof>,
-    pub presentation: Vec<ClaimPresentation>,
-}
-
-impl HashableClaimContent {
-    fn content_hash(&self) -> ContentId {
-        // TODO make it better usable from other languages
-        let content_res = serde_json::to_vec(self);
-
-        // NOTE docs: "Serialization can fail if `T`'s implementation of `Serialize` decides to
-        //      fail, or if `T` contains a map with non-string keys." This cannot happen here.
-        let content = content_res.unwrap();
-
-        // NOTE docs: "Will return an error if the specified hash type is not supported", cannot happen.
-        let hash = multihash::encode(multihash::Hash::Keccak256, &content).unwrap();
-        multibase::encode(multibase::Base64, &hash)
-    }
-}
-
-impl From<&Claim> for HashableClaimContent {
+impl From<&Claim> for SignableClaimPart {
     fn from(src: &Claim) -> Self {
-        Self {
-            subject_id: src.subject_id.to_owned(),
-            schema: src.schema.to_owned(),
-            content: src.content.to_owned(),
-            proof: src.proof.to_owned(),
-            presentation: src.presentation.to_owned(),
-        }
+        Self { subject_id: src.subject_id.to_owned(), content: src.content.to_owned() }
     }
 }
 
@@ -135,7 +166,6 @@ impl PublicProfileData {
     }
 
     pub fn id(&self) -> ProfileId {
-        use keyvault::PublicKey as KeyVaultPublicKey;
         self.public_key.key_id()
     }
 

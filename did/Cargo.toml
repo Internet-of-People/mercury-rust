@@ -5,7 +5,7 @@ authors = ["IoP Ventures LLC <info@iop-ventures.com>", "Rache Bartmoss <bartmoss
 edition = "2018"
 
 [dependencies]
-bincode = "*"
+#bincode = "*"
 dirs = "*"
 failure = "*"
 futures = "0.1"

@@ -308,6 +308,14 @@ impl Api for ApiHttpClient {
         unimplemented!()
     }
 
+    fn sign_claim(
+        &self,
+        _my_profile_id: Option<ProfileId>,
+        _claim: SignableClaimPart,
+    ) -> Fallible<SignedMessage> {
+        unimplemented!()
+    }
+
     fn add_claim_proof(
         &mut self,
         _my_profile_id: Option<ProfileId>,

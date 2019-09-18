@@ -209,8 +209,7 @@ pub fn create_did_claim_impl(
     let subject = did
         .clone()
         .ok_or_else(|| err_msg("No profile specified and no active profile set in vault"))?;
-    let claim =
-        Claim::new(subject, claim_details.schema, serde_json::to_vec(&claim_details.content)?);
+    let claim = Claim::new(subject, claim_details.schema, claim_details.content);
     let claim_id = claim.id();
 
     state.add_claim(did, claim)?;

@@ -50,7 +50,7 @@ pub trait ProfileExplorer {
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct InMemoryProfileRepository {
-    profiles: HashMap<ProfileId, PrivateProfileData>,
+    profiles: HashMap<String, PrivateProfileData>,
 }
 
 impl InMemoryProfileRepository {
@@ -59,7 +59,7 @@ impl InMemoryProfileRepository {
     }
 
     fn put(&mut self, profile: PrivateProfileData) -> Fallible<()> {
-        if let Some(old_profile) = self.profiles.get(&profile.id()) {
+        if let Some(old_profile) = self.profiles.get(&profile.id().to_string()) {
             if old_profile.version() > profile.version()
                 || (old_profile.version() == profile.version()
                     && old_profile.public_data() != profile.public_data())
@@ -67,7 +67,7 @@ impl InMemoryProfileRepository {
                 bail!("Version must increase on profile change");
             }
         }
-        self.profiles.insert(profile.id(), profile);
+        self.profiles.insert(profile.id().to_string(), profile);
         Ok(())
     }
 
@@ -75,7 +75,7 @@ impl InMemoryProfileRepository {
         let id = key.key_id();
         let profile_version = self
             .profiles
-            .get(&id)
+            .get(&id.to_string())
             .ok_or_else(|| format_err!("Profile not found: {}", key))?
             .version();
         self.put(PrivateProfileData::tombstone(key, profile_version))
@@ -113,7 +113,7 @@ impl PrivateProfileRepository for InMemoryProfileRepository {
     fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData> {
         let res = self
             .profiles
-            .get(id)
+            .get(&id.to_string())
             .map(|prof_ref| prof_ref.to_owned())
             .ok_or_else(|| format_err!("Profile not found: {}", id));
         Box::new(res.into_future())
@@ -164,8 +164,8 @@ impl FileProfileRepository {
     fn from(filename: &PathBuf) -> Fallible<InMemoryProfileRepository> {
         trace!("Loading profile repository from {:?}", filename);
         let repo_file = File::open(filename)?;
-        let repo: InMemoryProfileRepository = bincode::deserialize_from(repo_file)?;
-        //let repo: InMemoryProfileRepository = serde_json::from_reader(repo_file)?;
+        //let repo: InMemoryProfileRepository = bincode::deserialize_from(repo_file)?;
+        let repo: InMemoryProfileRepository = serde_json::from_reader(repo_file)?;
         Ok(repo)
     }
 
@@ -178,8 +178,8 @@ impl FileProfileRepository {
         }
 
         let repo_file = File::create(filename)?;
-        bincode::serialize_into(repo_file, &mem_repo)?;
-        //serde_json::to_writer(repo_file, &mem_repo)?;
+        //bincode::serialize_into(repo_file, &mem_repo)?;
+        serde_json::to_writer(repo_file, &mem_repo)?;
         Ok(())
     }
 
