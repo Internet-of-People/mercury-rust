@@ -4,7 +4,14 @@ use structopt::StructOpt;
 
 use prometheus::{init_logger, Daemon, Options};
 
-fn main() -> Fallible<()> {
+fn main() {
+    match run() {
+        Ok(()) => {}
+        Err(e) => error!("Failed with error: {}", e),
+    }
+}
+
+fn run() -> Fallible<()> {
     let options = Options::from_args();
 
     init_logger(&options)?;

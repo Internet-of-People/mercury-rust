@@ -9,17 +9,27 @@ pub struct Daemon {
 }
 
 impl Daemon {
+    fn run(options: Options, tx: futures::sync::oneshot::Sender<Server>) -> Fallible<()> {
+        let runner = actix_rt::System::builder().name("http-server").build();
+        let server = start_daemon(options)?;
+        tx.send(server).map_err(|_tx| err_msg("Could not initialize runtime"))?;
+
+        runner.run()?;
+        Ok(())
+    }
+
     pub fn start(options: Options) -> Fallible<Self> {
         let (tx, rx) = futures::sync::oneshot::channel();
 
         let mut rt = current_thread::Runtime::new()?;
         let join_handle =
             std::thread::Builder::new().name("actix-system".to_owned()).spawn(move || {
-                let runner = actix_rt::System::builder().name("http-server").build();
-                let server = start_daemon(options)?;
-                tx.send(server).map_err(|_tx| err_msg("Could not initialize runtime"))?;
-
-                runner.run().map_err(|e| e.into())
+                let daemon_res = Daemon::run(options, tx);
+                match daemon_res {
+                    Ok(()) => debug!("Daemon thread exited succesfully"),
+                    Err(ref e) => error!("Daemon thread failed: {}", e),
+                };
+                daemon_res
             })?;
         let server = rt.block_on(rx)?;
 

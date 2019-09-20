@@ -52,12 +52,12 @@ impl TypedContent {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SignableClaimPart {
     pub subject_id: ProfileId,
-    pub content: TypedContent,
+    pub typed_content: TypedContent,
 }
 
 impl SignableClaimPart {
     pub fn claim_id(&self) -> ClaimId {
-        self.content.content_id().into()
+        self.typed_content.content_id().into()
     }
 }
 
@@ -139,7 +139,7 @@ impl Claim {
 
 impl From<&Claim> for SignableClaimPart {
     fn from(src: &Claim) -> Self {
-        Self { subject_id: src.subject_id.to_owned(), content: src.content.to_owned() }
+        Self { subject_id: src.subject_id.to_owned(), typed_content: src.content.to_owned() }
     }
 }
 

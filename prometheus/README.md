@@ -287,7 +287,7 @@ Response:
 
 ### Sign claim
 
-Sign a claim in the name of a specific profile. The claim must have been created by the
+Sign a claim in the name of a specific profile. The request must have been created by the
 `/vault/dids/{did}/claims/{claimid}/witness-request` endpoint,
 but most likely in an different wallet and computer of another user.   
 
@@ -296,14 +296,22 @@ Request:
 - Endpoint: POST `/vault/dids/{did}/sign-claim`
 - Parameters: -
 - Headers: -
-- Content: string representation of the claim signature request to be signed
+- Content: claim details object to be signed, e.g.
+```json
+{
+  "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n",
+  "typed_content": {
+    "schema_id": "McL9746fWtE9EXV5",
+    "content": { "age": 12 },
+  } 
+}
+```
 
 Response:
 
 - Status: 200 or 409 (uninitialized vault)
-- Content: signature string. Note that it has to contain the public key of the profile internally,
-  validation would be impossible otherwise.
-
+- Content: claim signature object. Note that it has to contain the public key of the profile internally,
+  validation would be impossible otherwise. E.g.
 
 ## Claims
 
@@ -415,7 +423,16 @@ Request:
 Response:
 
 - Status: 200 or 409 (uninitialized vault)
-- Content: message string to be signed by a witness.
+- Content: claim details object to be signed by a witness, e.g.
+```json
+{
+  "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n",
+  "typed_content": {
+    "schema_id": "McL9746fWtE9EXV5",
+    "content": { "age": 12 },
+  } 
+}
+```
 
 ### Import witness signature for a claim
 
@@ -426,7 +443,7 @@ Request:
 - Endpoint: PUT `/vault/dids/{did}/claims/{claimid}/witness-signature`
 - Parameters: -
 - Headers: -
-- Content: signature string of a witness for the specified claim
+- Content: signature object of a witness for the specified claim
 
 Response:
 
