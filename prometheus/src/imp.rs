@@ -244,7 +244,7 @@ pub fn request_claim_signature_impl(
     let claim = profile
         .claim(&claim_id)
         .ok_or_else(|| format_err!("Claim {} not found in profile {:?}", claim_id, did))?;
-    Ok(SignableClaimPart::from(claim))
+    Ok(claim.signable_part().to_owned())
 }
 
 pub fn add_claim_proof_impl(
@@ -258,7 +258,7 @@ pub fn add_claim_proof_impl(
     let claim = profile
         .claim(claim_id)
         .ok_or_else(|| format_err!("Claim {} not found in profile {:?}", claim_id, did))?;
-    proof.validate(&SignableClaimPart::from(claim))?;
+    proof.validate(claim.signable_part())?;
     state.add_claim_proof(did, claim_id, proof.to_owned())
 }
 

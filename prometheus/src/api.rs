@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::rc::Rc;
 use std::str::FromStr;
+use std::time::Duration;
 
 use failure::{bail, ensure, err_msg, format_err, Fallible};
 use futures::prelude::*;
@@ -544,7 +545,10 @@ impl Api for Context {
         let profile = self.selected_profile(my_profile_id)?;
         let claim_bin = serde_json::to_vec(claim)?;
         let signed_message = self.vault()?.sign(&profile.id(), &claim_bin)?;
-        Ok(ClaimProof::new(profile.id(), signed_message))
+        let now = TimeStamp::now();
+        // TODO make expiration configurable, e.g. request could contain suggested expiration
+        let valid_until = now + Duration::from_secs(366 * 24 * 60 * 60);
+        Ok(ClaimProof::new(profile.id(), signed_message, now, valid_until))
     }
 
     fn add_claim_proof(
@@ -557,7 +561,7 @@ impl Api for Context {
         let claim = profile
             .mut_claim(claim_id)
             .ok_or_else(|| format_err!("Claim {} not found", claim_id))?;
-        claim.proof.push(proof);
+        claim.mut_proof().push(proof);
         self.local_repo.set(profile).wait()?;
         debug!("Added proof to claim: {:?}", claim_id);
         Ok(())

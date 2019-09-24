@@ -9,11 +9,13 @@ pub use did::model::*;
 use keyvault::PublicKey as KeyVaultPublicKey;
 
 // TODO this overlaps with JournalState, maybe they could be merged
-pub type Version = u64; // monotonically increasing, e.g. normal version, unix datetime or blockheight
+pub type Version = u64; // monotonically increasing, e.g. normal version, unix timestamp or blockheight
 pub type AttributeId = String;
 pub type AttributeValue = String;
 pub type AttributeMap = HashMap<AttributeId, AttributeValue>;
 pub type ClaimId = ContentId;
+pub type ClaimPresentationId = ContentId;
+pub type TimeStamp = std::time::SystemTime;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct TypedContent {
@@ -65,11 +67,18 @@ impl SignableClaimPart {
 pub struct ClaimProof {
     pub signer_id: ProfileId,
     pub signed_message: SignedMessage, // containing a signature of a serialized SignableClaimPart
+    pub issued_at: TimeStamp,
+    pub valid_until: TimeStamp, // TODO should this be optional to be valid until revokation?
 }
 
 impl ClaimProof {
-    pub fn new(signer_id: ProfileId, signed_message: SignedMessage) -> Self {
-        Self { signer_id, signed_message }
+    pub fn new(
+        signer_id: ProfileId,
+        signed_message: SignedMessage,
+        issued_at: TimeStamp,
+        valid_until: TimeStamp,
+    ) -> Self {
+        Self { signer_id, signed_message, issued_at, valid_until }
     }
 
     // pub signer_id(&self) -> &ProfileId { &self.signer_id }
@@ -80,6 +89,8 @@ impl ClaimProof {
             self.signed_message.public_key().validate_id(&self.signer_id),
             "Claim was signed with another key"
         );
+        ensure!(self.valid_until > SystemTime::now(), "Proof expired");
+
         let message_bin = serde_json::to_vec(signable_claim)?;
         ensure!(
             self.signed_message.message() == message_bin.as_slice(),
@@ -91,18 +102,9 @@ impl ClaimProof {
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct ClaimPresentation {
-    // TODO: shared_with_subject, usable_for_purpose, expires_at, etc
-    journal: Vec<String>, // TODO links to multihash stored on ledger
-}
-
-#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Claim {
-    id: ClaimId, // TODO hashes exactly what? Likely not only the content, but something like SignableClaimPart
-    pub subject_id: ProfileId,
-    pub content: TypedContent,
-    pub proof: Vec<ClaimProof>,
-    pub presentation: Vec<ClaimPresentation>,
+    signable: SignableClaimPart,
+    proof: Vec<ClaimProof>,
 }
 
 impl Claim {
@@ -111,17 +113,14 @@ impl Claim {
         schema: impl ToString,
         content: serde_json::Value,
         proof: Vec<ClaimProof>,
-        presentation: Vec<ClaimPresentation>,
     ) -> Self {
-        let mut this = Self {
-            id: Default::default(),
-            subject_id,
-            content: TypedContent::new(schema.to_string(), content),
+        Self {
+            signable: SignableClaimPart {
+                subject_id,
+                typed_content: TypedContent::new(schema.to_string(), content),
+            },
             proof,
-            presentation,
-        };
-        this.id = SignableClaimPart::from(&this).claim_id();
-        this
+        }
     }
 
     pub fn unproven(
@@ -129,18 +128,34 @@ impl Claim {
         schema: impl ToString,
         content: serde_json::Value,
     ) -> Self {
-        Self::new(subject_id, schema, content, vec![], vec![])
+        Self::new(subject_id, schema, content, vec![])
     }
 
     pub fn id(&self) -> ClaimId {
-        self.id.clone()
+        self.signable.claim_id()
+    }
+
+    pub fn signable_part(&self) -> &SignableClaimPart {
+        &self.signable
+    }
+
+    pub fn proof(&self) -> &[ClaimProof] {
+        &self.proof
+    }
+
+    pub fn mut_proof(&mut self) -> &mut Vec<ClaimProof> {
+        &mut self.proof
     }
 }
 
-impl From<&Claim> for SignableClaimPart {
-    fn from(src: &Claim) -> Self {
-        Self { subject_id: src.subject_id.to_owned(), typed_content: src.content.to_owned() }
-    }
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+pub struct ClaimPresentation {
+    id: ClaimPresentationId,
+    claims: Vec<Claim>, // TODO claim details should be sent selectively using some zero knowledge proof technique
+    to: ProfileId,
+    purpose: String, // TODO how to express usability terms here?
+    valid_until: TimeStamp,
+    signature: Signature,
 }
 
 // TODO generalize links (i.e. edges) between two profiles into verifiable claims,
@@ -332,7 +347,7 @@ impl ProfileGrant {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ProfileAuthData {
     id: ProfileId,
-    timestamp: SystemTime, // TODO is this an absolute timestamp or can this be relaxed?
+    timestamp: TimeStamp,
     grants: Vec<ProfileGrant>,
     services: Vec<String>, // TODO what storage pointers type to use here? Ideally would be multistorage link.
 }

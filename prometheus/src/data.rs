@@ -134,7 +134,6 @@ pub struct ApiClaim {
     schema_name: String,
     content: serde_json::Value,
     proof: Vec<ClaimProof>,
-    presentation: Vec<ClaimPresentation>,
 }
 
 impl ApiClaim {
@@ -143,17 +142,17 @@ impl ApiClaim {
         subject_label: ProfileLabel,
         schema_registry: &dyn ClaimSchemas,
     ) -> Fallible<Self> {
-        let schema_id = src.content.schema_id().to_owned();
+        let signable = src.signable_part();
+        let schema_id = signable.typed_content.schema_id().to_owned();
         let schema_name = schema_registry.get(&schema_id)?.name().to_owned();
         Ok(Self {
             id: src.id(),
-            subject_id: src.subject_id.to_string(),
+            subject_id: signable.subject_id.to_string(),
             subject_label,
             schema_id,
             schema_name,
-            content: src.content.content().to_owned(),
-            proof: src.proof.to_owned(),
-            presentation: src.presentation.to_owned(),
+            content: signable.typed_content.content().to_owned(),
+            proof: src.proof().to_owned(),
         })
     }
 }
@@ -168,7 +167,6 @@ impl TryInto<Claim> for &ApiClaim {
             self.schema_id.to_owned(),
             self.content.to_owned(),
             self.proof.to_owned(),
-            self.presentation.to_owned(),
         ))
     }
 }
@@ -250,9 +248,10 @@ impl TryFrom<Claim> for CreateClaim {
     type Error = failure::Error;
 
     fn try_from(src: Claim) -> Result<Self, Self::Error> {
+        let signable = src.signable_part();
         Ok(CreateClaim {
-            schema: src.content.schema_id().to_owned(),
-            content: src.content.content().to_owned(),
+            schema: signable.typed_content.schema_id().to_owned(),
+            content: signable.typed_content.content().to_owned(),
         })
     }
 }

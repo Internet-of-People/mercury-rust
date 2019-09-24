@@ -349,7 +349,6 @@ Response:
       "signature": "SfzAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2",
     }
   }],
-  "presentation": [ "TODO" ]
 }]
 ```
 
@@ -380,7 +379,6 @@ Response:
     // Completely schema-dependent structure here
   },
   "proof": [],
-  "presentation": [ "TODO" ]
 }]
 ```
 
@@ -430,7 +428,9 @@ Response:
   "typed_content": {
     "schema_id": "McL9746fWtE9EXV5",
     "content": { "age": 12 },
-  } 
+  },
+  "issued_at": "...",
+  "valid_until": "..."
 }
 ```
 
