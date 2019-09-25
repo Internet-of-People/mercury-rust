@@ -92,6 +92,12 @@ fn did_opt(did_str: &str) -> Fallible<Option<ProfileId>> {
     Ok(Some(did))
 }
 
+fn did_res(state: &Context, did_str: &str) -> Fallible<ProfileId> {
+    did_opt(did_str)?
+        .or(state.get_active_profile()?)
+        .ok_or_else(|| err_msg("No profile specified and no active profile set in vault"))
+}
+
 pub fn get_did_impl(state: &Context, did_str: &String) -> Fallible<VaultEntry> {
     let did = did_opt(did_str)?;
     let rec = state.get_vault_record(did)?;
@@ -128,7 +134,7 @@ pub fn rename_did_impl(
     //did: ProfileId,
     label: &mut ProfileLabel,
 ) -> Fallible<()> {
-    let did = did_str.parse()?;
+    let did = did_res(state, did_str)?;
     reset_label_if_empty(state, label, &did)?;
     state.set_profile_label(Some(did), label.to_owned())?;
     state.save_vault()?;
@@ -212,16 +218,15 @@ pub fn create_did_claim_impl(
     did_str: &String,
     claim_details: &CreateClaim,
 ) -> Fallible<ContentId> {
-    let did = did_opt(did_str)?.or(state.get_active_profile()?);
-
-    let subject = did
-        .clone()
-        .ok_or_else(|| err_msg("No profile specified and no active profile set in vault"))?;
-    let claim =
-        Claim::unproven(subject, claim_details.schema.to_owned(), claim_details.content.to_owned());
+    let did = did_res(state, did_str)?;
+    let claim = Claim::unproven(
+        did.clone(),
+        claim_details.schema.to_owned(),
+        claim_details.content.to_owned(),
+    );
     let claim_id = claim.id();
 
-    state.add_claim(did, claim)?;
+    state.add_claim(Some(did), claim)?;
     state.save_vault()?;
     Ok(claim_id)
 }
