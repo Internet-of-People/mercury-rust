@@ -152,7 +152,7 @@ impl ApiClaim {
             schema_id,
             schema_name,
             content: signable.typed_content.content().to_owned(),
-            proof: src.proof().to_owned(),
+            proof: src.proofs().to_owned(),
         })
     }
 }

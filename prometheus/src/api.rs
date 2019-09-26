@@ -111,12 +111,12 @@ pub trait Api {
         claim: &ClaimId,
         proof: ClaimProof,
     ) -> Fallible<()>;
-    fn present_claim(
+    fn license_claim(
         &mut self,
         my_profile_id: Option<ProfileId>,
         claim: ClaimId,
         // TODO audience, purpose, expiry, etc
-    ) -> Fallible<ClaimPresentation>;
+    ) -> Fallible<ClaimLicense>;
 
     // NOTE links are derived as a special kind of claims. Maybe they could be removed from here on the long term.
     fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>>;
@@ -561,18 +561,18 @@ impl Api for Context {
         let claim = profile
             .mut_claim(claim_id)
             .ok_or_else(|| format_err!("Claim {} not found", claim_id))?;
-        claim.mut_proof().push(proof);
+        claim.add_proof(proof);
         self.local_repo.set(profile).wait()?;
         debug!("Added proof to claim: {:?}", claim_id);
         Ok(())
     }
 
-    fn present_claim(
+    fn license_claim(
         &mut self,
         _my_profile_id: Option<ProfileId>,
         _claim: ClaimId,
         // TODO audience, purpose, expiry, etc
-    ) -> Fallible<ClaimPresentation> {
+    ) -> Fallible<ClaimLicense> {
         unimplemented!()
     }
 

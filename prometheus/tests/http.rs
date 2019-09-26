@@ -106,7 +106,7 @@ fn test_http_api() {
         let claims = api.claims(Some(first_id.clone())).unwrap();
         assert_eq!(claims.len(), 1);
         assert_eq!(claims[0], first_claim);
-        assert!(claims[0].proof().is_empty());
+        assert!(claims[0].proofs().is_empty());
     }
 
     let email_schema_id = "McL9746fWtE9EXVb";
@@ -134,8 +134,8 @@ fn test_http_api() {
 
         assert_ne!(claims[0], first_claim);
         assert_eq!(claims[0].id(), first_claim.id());
-        assert_eq!(claims[0].proof().len(), 1);
-        assert_eq!(claims[0].proof()[0], first_proof);
+        assert_eq!(claims[0].proofs().len(), 1);
+        assert_eq!(claims[0].proofs()[0], first_proof);
     }
 
     // TODO find out how to test publish, restore and revert profile commands here

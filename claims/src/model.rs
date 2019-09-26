@@ -2,19 +2,19 @@ use std::collections::HashMap;
 use std::time::SystemTime;
 
 use failure::{ensure, Fallible};
-use serde_derive::{Deserialize, Serialize};
+use serde::{Deserialize, Serialize};
 
 use crate::claim_schema::SchemaId;
 pub use did::model::*;
 use keyvault::PublicKey as KeyVaultPublicKey;
 
 // TODO this overlaps with JournalState, maybe they could be merged
-pub type Version = u64; // monotonically increasing, e.g. normal version, unix timestamp or blockheight
+pub type Version = u64; // monotonically increasing, e.g. normal version, unix timestamp or block height
 pub type AttributeId = String;
 pub type AttributeValue = String;
 pub type AttributeMap = HashMap<AttributeId, AttributeValue>;
 pub type ClaimId = ContentId;
-pub type ClaimPresentationId = ContentId;
+pub type ClaimLicenseId = ContentId;
 pub type TimeStamp = std::time::SystemTime;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -38,17 +38,20 @@ impl TypedContent {
     pub fn content(&self) -> &serde_json::Value {
         &self.content
     }
+    // pub fn content_id(&self) -> ContentId {
+    //     content_id(self)
+    // }
+}
 
-    /// Panics: Serialization can fail if self's implementation of `Serialize` decides to
-    ///          fail, or if `self` contains a map with non-string keys.
-    ///         Hashing will panic if the specified hash type is not supported.
-    /// These panics must never happen here.
-    pub fn content_id(&self) -> ContentId {
-        let content_res = serde_json::to_vec(self);
-        let content = content_res.unwrap();
-        let hash = multihash::encode(multihash::Hash::Keccak256, &content).unwrap();
-        multibase::encode(multibase::Base64url, &hash)
-    }
+/// Panics: Serialization can fail if self's implementation of `Serialize` decides to
+///          fail, or if `self` contains a map with non-string keys.
+///         Hashing will panic if the specified hash type is not supported.
+/// These panics must never happen here.
+pub fn content_id<TContent: Serialize>(content: &TContent) -> ContentId {
+    let content_res = serde_json::to_vec(content);
+    let content_bytes = content_res.unwrap();
+    let hash = multihash::encode(multihash::Hash::Keccak256, &content_bytes).unwrap();
+    multibase::encode(multibase::Base64url, &hash)
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -59,16 +62,23 @@ pub struct SignableClaimPart {
 
 impl SignableClaimPart {
     pub fn claim_id(&self) -> ClaimId {
-        self.typed_content.content_id().into()
+        content_id(self).into()
     }
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ClaimProof {
+    /// The morpheus ID of the signer (witness)
     pub signer_id: ProfileId,
-    pub signed_message: SignedMessage, // containing a signature of a serialized SignableClaimPart
+    /// Contains a signature of a serialized SignableClaimPart
+    pub signed_message: SignedMessage,
+    /// Do not forget that Unix time is UTC!
     pub issued_at: TimeStamp,
-    pub valid_until: TimeStamp, // TODO should this be optional to be valid until revokation?
+    /// This is not optional, because there are many reasons to limit validity of claims to something
+    /// like 10 years. Cryptography might get weaker during that time period. Subjects might die and
+    /// their claims get irrelevant. The aggregated state on the chain gets smaller if there is a natural
+    /// expiration of claims (although the number of transactions gets higher because of this design decision).
+    pub valid_until: TimeStamp,
 }
 
 impl ClaimProof {
@@ -104,7 +114,7 @@ impl ClaimProof {
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
 pub struct Claim {
     signable: SignableClaimPart,
-    proof: Vec<ClaimProof>,
+    proofs: Vec<ClaimProof>,
 }
 
 impl Claim {
@@ -119,7 +129,7 @@ impl Claim {
                 subject_id,
                 typed_content: TypedContent::new(schema.to_string(), content),
             },
-            proof,
+            proofs: proof,
         }
     }
 
@@ -139,22 +149,45 @@ impl Claim {
         &self.signable
     }
 
-    pub fn proof(&self) -> &[ClaimProof] {
-        &self.proof
+    pub fn proofs(&self) -> &[ClaimProof] {
+        &self.proofs
     }
 
-    pub fn mut_proof(&mut self) -> &mut Vec<ClaimProof> {
-        &mut self.proof
+    pub fn add_proof(&mut self, proof: ClaimProof) {
+        self.proofs.push(proof);
     }
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
-pub struct ClaimPresentation {
-    id: ClaimPresentationId,
-    claims: Vec<Claim>, // TODO claim details should be sent selectively using some zero knowledge proof technique
-    to: ProfileId,
-    purpose: String, // TODO how to express usability terms here?
+/// Fields of the ClaimLicense that are to be hashed into its ID and signed by the owner.
+pub struct ClaimLicenseSignablePart {
+    /// TODO W3C allows some claim details to be masked using zero knowledge proofs. We do not support
+    /// those yet.
+    claims: Vec<Claim>,
+    /// Owner who granted this license. Maybe not all claims have the owner as the subject, but
+    /// the owner needs to have legal authority over all these claims.
+    owner: ProfileId,
+    /// A single profile that can use the information represented by the claims for a limited purpose
+    /// and a limited time.
+    grantee: ProfileId,
+    /// A placeholder for some purpose description that can be validated without human interaction. Probably
+    /// each purpose will have its own DID document describing its relations semantically to other purposes.
+    purpose: String,
+    /// Expiry of the license. After this time the grantee needs to remove the claims from their storage to
+    /// avoid legal risks of infringing the license or compromising the information within the claims.
     valid_until: TimeStamp,
+}
+
+#[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
+/// This license is a similar concept to the W3C claim presentation, but this vocabulary choice
+/// expresses it better that ownership does not change and data is shared only for a limited
+/// purpose and time interval.
+pub struct ClaimLicense {
+    /// TODO We need to define the "signable" part of the license that is hashed into the ContentId
+    id: ClaimLicenseId,
+    /// See ClaimLicenseSignablePart
+    signable: ClaimLicenseSignablePart,
+    /// License id signed by the owner
     signature: Signature,
 }
 

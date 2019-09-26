@@ -334,11 +334,11 @@ impl Api for ApiHttpClient {
         self.await_fut(fut)
     }
 
-    fn present_claim(
+    fn license_claim(
         &mut self,
         _my_profile_id: Option<ProfileId>,
         _claim: ClaimId,
-    ) -> Fallible<ClaimPresentation> {
+    ) -> Fallible<ClaimLicense> {
         unimplemented!()
     }
 
