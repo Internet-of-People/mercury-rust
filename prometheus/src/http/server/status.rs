@@ -6,7 +6,6 @@ use log::*;
 
 use crate::imp::*;
 use crate::*;
-use claims::model::*;
 use did::vault::*;
 use keyvault::Seed;
 
@@ -318,7 +317,7 @@ pub fn clear_did_attribute(
 pub fn sign_claim(
     state: web::Data<Mutex<Context>>,
     did: web::Path<String>,
-    claim: web::Json<SignableClaimPart>,
+    claim: String,
 ) -> impl Responder {
     let state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
@@ -327,7 +326,7 @@ pub fn sign_claim(
     match sign_claim_impl(&state, &did, &claim) {
         Ok(signed_claim) => {
             debug!("Signed claim with profile {}", did);
-            HttpResponse::Ok().json(signed_claim)
+            HttpResponse::Ok().body(signed_claim)
         }
         Err(e) => {
             error!("Signing claim failed: {}", e);
@@ -425,7 +424,7 @@ pub fn request_claim_signature(
     match request_claim_signature_impl(&state, &claim_path) {
         Ok(message) => {
             debug!("Created claim signature request");
-            HttpResponse::Ok().json(message)
+            HttpResponse::Ok().body(message)
         }
         Err(e) => {
             error!("Failed to serve claim signature request: {}", e);
@@ -437,8 +436,7 @@ pub fn request_claim_signature(
 pub fn add_claim_proof(
     state: web::Data<Mutex<Context>>,
     claim_path: web::Path<ClaimPath>,
-    // TODO consider if exposing SignedMessage gusiness logic type here is a good choice
-    proof: web::Json<ClaimProof>,
+    proof: String,
 ) -> impl Responder {
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),

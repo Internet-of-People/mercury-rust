@@ -296,22 +296,15 @@ Request:
 - Endpoint: POST `/vault/dids/{did}/sign-claim`
 - Parameters: -
 - Headers: -
-- Content: claim details object to be signed, e.g.
-```json
-{
-  "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n",
-  "typed_content": {
-    "schema_id": "McL9746fWtE9EXV5",
-    "content": { "age": 12 },
-  } 
-}
-```
+- Content: opaque claim content string to be signed, e.g.
+`uBjkmVk9cLFjWxFw1aPZuIGwSpsbvTC27f2wluRBKAioFufCHibJPkNTMfdGrKQ509tF5IfV3zSobfs3q4tbCCy6dTZJmjApsGKtP7HL9DheemW8vs2tDOsylXVLIRgNX46QP1fgRPpxGL0HZM7o5TojH44GqvKZqYh3Jy29CHiOnkl6xPfXht2EFhRLKuV4HsKEyEXKh2G5FHl3nq0bfv`
 
 Response:
 
 - Status: 200 or 409 (uninitialized vault)
-- Content: claim signature object. Note that it has to contain the public key of the profile internally,
+- Content: opaque claim witness signature string. Note that it has to internally contain the public key of the profile internally,
   validation would be impossible otherwise. E.g.
+`u3OHYUwntzsAiG02THnSdsuRSDht2lA1TVATQPs8sYD9YA8nvVqSJNIB3je6NrlY5BnnZr3Kh954iAZ5nnZ4J2S7zCza10MScfZz2UAmorRe20ujZH82zFJ6CAdY8X8pOSxkWdoyaVLv4pJm0rPHheCngWY2mSqioz0GQGD85Hb6lfkyyl1gYytsIRswh594L91TyRwtYxxj7Ufg6pndlA2eEMD127whxVtG94YbrEMBCdhoiu0gDataTk52PHv1ycAb0QyTRsFU9ChPROXY8ZE4kujbR7VoMPCewAgwDcunGTWAeox1WBtiw4UHAH9mKhQYrvaUdNTDOFkMC0zqvh864TbkFjNxTbsEKPyAZOLHGh52pYuRl8Yn4yHVnuTy3k9IWTRFL3g8FB9AnczFVfgIc6HXU2Xpdb1AzT42MFmS2eCjiphKYQm3JtkrQwROK1aR9xdOywlAoBRqf5ZL21pC4W7TLZOx85K1sA1d8W0VKTvRDtxogGxeelQODtOObmIZqysKGfyznixtmenzfLZygllwuQvZ67HQcupxtDqZhZfQf1rBUzfm8CWsVXDWwRZDW0z0xCQDEwQDTqimLbXGZU3VFpaoSJJMyQVYuhlE7p0ZkJPMggNEHvcFvsO9KiShErgWjg0lcxhi7I6NsZRuXdRqGFLLc6P22WUJ0ToFmLbBIFufbD43XMt2iFzZ32iulsRwCj6mgbBUxG3R4oJgT0e9yq6jxsVWzFJYdTgnnEjgYoQu4Lqc8SjpQpr50c17EUBtb1TdeOgF9CvB7dzYOTTScqjLxlQKtEvlk5um6Qb98vWqMngQelyzsOjMgtDvOV1ARgR9qVWc2SHc6mFVC7AeV7emkMHtMiS0r9cM6x2UTGw2fqqierRcEBWTWdYKMRxLUyfcgFXV9yoq8QIrrzQ7eHo8djIodERM09Rtv1XUEalpvs7j1e4k6bC1vE2QOoZLL8fPm2LrOVeGqkz4q0jfWLFgPf1qf1JEkltsF2GcyyDUAdBRf4VSItTEj5ROGWtuMpMEaltGbyeMQUoKTOshPBdGt0Tf0HUll8ninRGqjKQQhGa2bHqr8WGmriUUSVVCFOZ1YYVWS2jodngoQzcar7TDk0aCbYHpXp6CQsmy0XMl4RzDB9wOa4mMue78xyBbsIuju87jqJyZr10XglKp0wlC9GxkLgBfJiGDksUbHeaY5vInss5kwVCJmpGetmrkXo1fQjecceuj9XAwmkAU3fVWS9MV0UEzIqqlfi07iKjpzs1j2teYdrrAPtE1BJbwgKGGB1DFDnWIteOflsmxQzU0jZsLFnetxtVob56UFTfXDeEGkvsiI8hykhaIKxqNCEIT8MbgUIvTKzQ5h7HeJlFywy3MYr1MQ7CSTKTXSogQc4vJq6WK7SddWs8hMR1ER7hpbIMtu0SaII8IwQ1tgOn0OahmvHGdoqxyXPhk8inJUu63xQ3cxuwZpcz8u6cVvd7LwzfquTaQ832wSsvrcFFttI6zWhEJq3YJHVimbs0ALhzgcl9cwx4G2THT0hZBWHJLhFyGuSevr25Ec7qqJnArF4WUifRZ0fDAMilL8XvgKP2HOkxY04Qtmcr3uuQMHwA7OxGYLeMxeiAfla0XT20MBsjb`
 
 ## Claims
 
@@ -421,18 +414,8 @@ Request:
 Response:
 
 - Status: 200 or 409 (uninitialized vault)
-- Content: claim details object to be signed by a witness, e.g.
-```json
-{
-  "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n",
-  "typed_content": {
-    "schema_id": "McL9746fWtE9EXV5",
-    "content": { "age": 12 },
-  },
-  "issued_at": "...",
-  "valid_until": "..."
-}
-```
+- Content: opaque claim string to be signed by a witness, e.g.
+`uBjkmVk9cLFjWxFw1aPZuIGwSpsbvTC27f2wluRBKAioFufCHibJPkNTMfdGrKQ509tF5IfV3zSobfs3q4tbCCy6dTZJmjApsGKtP7HL9DheemW8vs2tDOsylXVLIRgNX46QP1fgRPpxGL0HZM7o5TojH44GqvKZqYh3Jy29CHiOnkl6xPfXht2EFhRLKuV4HsKEyEXKh2G5FHl3nq0bfv`
 
 ### Import witness signature for a claim
 
@@ -443,7 +426,7 @@ Request:
 - Endpoint: PUT `/vault/dids/{did}/claims/{claimid}/witness-signature`
 - Parameters: -
 - Headers: -
-- Content: signature object of a witness for the specified claim
+- Content: opaque signature string of a witness for the specified claim, e.g `u3OHYUwntzsAiG02THnSdsuRSDht2lA1TVATQPs8sYD9YA8nvVqSJNIB3je6NrlY5BnnZr3Kh954iAZ5nnZ4J2S7zCza10MScfZz2UAmorRe20ujZH82zFJ6CAdY8X8pOSxkWdoyaVLv4pJm0rPHheCngWY2mSqioz0GQGD85Hb6lfkyyl1gYytsIRswh594L91TyRwtYxxj7Ufg6pndlA2eEMD127whxVtG94YbrEMBCdhoiu0gDataTk52PHv1ycAb0QyTRsFU9ChPROXY8ZE4kujbR7VoMPCewAgwDcunGTWAeox1WBtiw4UHAH9mKhQYrvaUdNTDOFkMC0zqvh864TbkFjNxTbsEKPyAZOLHGh52pYuRl8Yn4yHVnuTy3k9IWTRFL3g8FB9AnczFVfgIc6HXU2Xpdb1AzT42MFmS2eCjiphKYQm3JtkrQwROK1aR9xdOywlAoBRqf5ZL21pC4W7TLZOx85K1sA1d8W0VKTvRDtxogGxeelQODtOObmIZqysKGfyznixtmenzfLZygllwuQvZ67HQcupxtDqZhZfQf1rBUzfm8CWsVXDWwRZDW0z0xCQDEwQDTqimLbXGZU3VFpaoSJJMyQVYuhlE7p0ZkJPMggNEHvcFvsO9KiShErgWjg0lcxhi7I6NsZRuXdRqGFLLc6P22WUJ0ToFmLbBIFufbD43XMt2iFzZ32iulsRwCj6mgbBUxG3R4oJgT0e9yq6jxsVWzFJYdTgnnEjgYoQu4Lqc8SjpQpr50c17EUBtb1TdeOgF9CvB7dzYOTTScqjLxlQKtEvlk5um6Qb98vWqMngQelyzsOjMgtDvOV1ARgR9qVWc2SHc6mFVC7AeV7emkMHtMiS0r9cM6x2UTGw2fqqierRcEBWTWdYKMRxLUyfcgFXV9yoq8QIrrzQ7eHo8djIodERM09Rtv1XUEalpvs7j1e4k6bC1vE2QOoZLL8fPm2LrOVeGqkz4q0jfWLFgPf1qf1JEkltsF2GcyyDUAdBRf4VSItTEj5ROGWtuMpMEaltGbyeMQUoKTOshPBdGt0Tf0HUll8ninRGqjKQQhGa2bHqr8WGmriUUSVVCFOZ1YYVWS2jodngoQzcar7TDk0aCbYHpXp6CQsmy0XMl4RzDB9wOa4mMue78xyBbsIuju87jqJyZr10XglKp0wlC9GxkLgBfJiGDksUbHeaY5vInss5kwVCJmpGetmrkXo1fQjecceuj9XAwmkAU3fVWS9MV0UEzIqqlfi07iKjpzs1j2teYdrrAPtE1BJbwgKGGB1DFDnWIteOflsmxQzU0jZsLFnetxtVob56UFTfXDeEGkvsiI8hykhaIKxqNCEIT8MbgUIvTKzQ5h7HeJlFywy3MYr1MQ7CSTKTXSogQc4vJq6WK7SddWs8hMR1ER7hpbIMtu0SaII8IwQ1tgOn0OahmvHGdoqxyXPhk8inJUu63xQ3cxuwZpcz8u6cVvd7LwzfquTaQ832wSsvrcFFttI6zWhEJq3YJHVimbs0ALhzgcl9cwx4G2THT0hZBWHJLhFyGuSevr25Ec7qqJnArF4WUifRZ0fDAMilL8XvgKP2HOkxY04Qtmcr3uuQMHwA7OxGYLeMxeiAfla0XT20MBsjb`
 
 Response:
 

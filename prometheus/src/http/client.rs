@@ -311,10 +311,27 @@ impl Api for ApiHttpClient {
     fn sign_claim(&self, id: Option<ProfileId>, claim: &SignableClaimPart) -> Fallible<ClaimProof> {
         let did = did_str(id);
         let url = format!("{}/vault/dids/{}/sign-claim", self.root_url, did);
-        let req_fut = HttpClient::new().post(url).send_json(claim);
+        let claim_str = claim.to_string();
+        debug!("Sending claim string: {}", claim_str);
+        let req_fut = HttpClient::new().post(url).send_body(claim_str);
         let fut = req_fut
             .and_then(|response| validate_response_status(response, StatusCode::OK))
-            .and_then(|mut response| response.json().map_err(|e| SendRequestError::Body(e.into())));
+            .and_then(|mut response| {
+                response.body().map_err(|e| {
+                    warn!("Failed to fetch response body: {}", e);
+                    SendRequestError::Response(ParseError::Incomplete)
+                })
+            })
+            .and_then(|body_bytes| {
+                let body_str_res = String::from_utf8(body_bytes.to_vec()).map_err(|e| {
+                    warn!("Failed to decode error message from response: {}", e);
+                    SendRequestError::Response(ParseError::Utf8(e.utf8_error()))
+                });
+                body_str_res
+            })
+            .and_then(|body_str| {
+                body_str.parse::<ClaimProof>().map_err(|e| SendRequestError::Body(e.into()))
+            });
         self.await_fut(fut)
     }
 
@@ -327,7 +344,7 @@ impl Api for ApiHttpClient {
         let did = did_str(id);
         let url =
             format!("{}/vault/dids/{}/claims/{}/witness-signature", self.root_url, did, claim);
-        let req_fut = HttpClient::new().put(url).send_json(&proof);
+        let req_fut = HttpClient::new().put(url).send_body(proof.to_string());
         let fut = req_fut
             .and_then(|response| validate_response_status(response, StatusCode::CREATED))
             .map(|_response| ());

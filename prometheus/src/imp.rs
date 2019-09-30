@@ -171,13 +171,12 @@ pub fn clear_did_attribute_impl(state: &mut Context, path: &AttributePath) -> Fa
     state.clear_attribute(did, &path.attribute_id)
 }
 
-pub fn sign_claim_impl(
-    state: &Context,
-    did_str: &String,
-    claim: &SignableClaimPart,
-) -> Fallible<ClaimProof> {
+pub fn sign_claim_impl(state: &Context, did_str: &String, claim_str: &String) -> Fallible<String> {
+    debug!("Parsing claim string: {}", claim_str);
+    let claim = claim_str.parse()?;
     let did_arg = did_opt(did_str)?;
-    state.sign_claim(did_arg.clone(), &claim)
+    let proof = state.sign_claim(did_arg.clone(), &claim)?;
+    Ok(proof.to_string())
 }
 
 pub fn list_did_claims_impl(state: &Context, did_str: &String) -> Fallible<Vec<ApiClaim>> {
@@ -239,32 +238,30 @@ pub fn delete_claim_impl(state: &mut Context, claim_path: &ClaimPath) -> Fallibl
     Ok(())
 }
 
-pub fn request_claim_signature_impl(
-    state: &Context,
-    claim_path: &ClaimPath,
-) -> Fallible<SignableClaimPart> {
-    let did = did_opt(&claim_path.did)?;
-    let claim_id = claim_path.claim_id.to_owned();
-    let profile = state.get_profile_data(did.clone(), ProfileRepositoryKind::Local)?;
-    let claim = profile
-        .claim(&claim_id)
-        .ok_or_else(|| format_err!("Claim {} not found in profile {:?}", claim_id, did))?;
-    Ok(claim.signable_part().to_owned())
-}
-
-pub fn add_claim_proof_impl(
-    state: &mut Context,
-    claim_path: &ClaimPath,
-    proof: &ClaimProof,
-) -> Fallible<()> {
+pub fn request_claim_signature_impl(state: &Context, claim_path: &ClaimPath) -> Fallible<String> {
     let did = did_opt(&claim_path.did)?;
     let claim_id = &claim_path.claim_id;
     let profile = state.get_profile_data(did.clone(), ProfileRepositoryKind::Local)?;
     let claim = profile
         .claim(claim_id)
         .ok_or_else(|| format_err!("Claim {} not found in profile {:?}", claim_id, did))?;
+    Ok(claim.signable_part().to_string())
+}
+
+pub fn add_claim_proof_impl(
+    state: &mut Context,
+    claim_path: &ClaimPath,
+    proof_str: &String,
+) -> Fallible<()> {
+    let did = did_opt(&claim_path.did)?;
+    let claim_id = &claim_path.claim_id;
+    let proof: ClaimProof = proof_str.parse()?;
+    let profile = state.get_profile_data(did.clone(), ProfileRepositoryKind::Local)?;
+    let claim = profile
+        .claim(claim_id)
+        .ok_or_else(|| format_err!("Claim {} not found in profile {:?}", claim_id, did))?;
     proof.validate(claim.signable_part())?;
-    state.add_claim_proof(did, claim_id, proof.to_owned())
+    state.add_claim_proof(did, claim_id, proof)
 }
 
 pub fn list_schemas_impl(state: &Context) -> Fallible<Vec<ClaimSchema>> {

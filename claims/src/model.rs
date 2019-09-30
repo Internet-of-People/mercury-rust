@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::str::FromStr;
+use std::string::ToString;
 use std::time::SystemTime;
 
 use failure::{ensure, Fallible};
@@ -44,7 +46,7 @@ impl TypedContent {
 }
 
 /// Panics: Serialization can fail if self's implementation of `Serialize` decides to
-///          fail, or if `self` contains a map with non-string keys.
+///         fail, or if `self` contains a map with non-string keys.
 ///         Hashing will panic if the specified hash type is not supported.
 /// These panics must never happen here.
 pub fn content_id<TContent: Serialize>(content: &TContent) -> ContentId {
@@ -63,6 +65,26 @@ pub struct SignableClaimPart {
 impl SignableClaimPart {
     pub fn claim_id(&self) -> ClaimId {
         content_id(self).into()
+    }
+}
+
+/// Panics: Serialization can fail if self's implementation of `Serialize` decides to
+///         fail, or if `self` contains a map with non-string keys.
+///         Hashing will panic if the specified hash type is not supported.
+/// These panics must never happen here.
+impl ToString for SignableClaimPart {
+    fn to_string(&self) -> String {
+        let data = serde_json::to_vec(self).unwrap();
+        multibase::encode(multibase::Base64url, &data)
+    }
+}
+
+impl FromStr for SignableClaimPart {
+    type Err = failure::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (_base, data) = multibase::decode(s)?;
+        let this = serde_json::from_slice(&data)?;
+        Ok(this)
     }
 }
 
@@ -126,6 +148,26 @@ impl ClaimProof {
         );
         ensure!(self.signed_message.validate(), "Invalid claim signature");
         Ok(())
+    }
+}
+
+/// Panics: Serialization can fail if self's implementation of `Serialize` decides to
+///         fail, or if `self` contains a map with non-string keys.
+///         Hashing will panic if the specified hash type is not supported.
+/// These panics must never happen here.
+impl ToString for ClaimProof {
+    fn to_string(&self) -> String {
+        let data = serde_json::to_vec(self).unwrap();
+        multibase::encode(multibase::Base64url, &data)
+    }
+}
+
+impl FromStr for ClaimProof {
+    type Err = failure::Error;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let (_base, data) = multibase::decode(s)?;
+        let this = serde_json::from_slice(&data)?;
+        Ok(this)
     }
 }
 
