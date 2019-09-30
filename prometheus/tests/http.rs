@@ -123,7 +123,7 @@ fn test_http_api() {
     api.add_claim_proof(Some(first_id.clone()), &first_claim.id(), first_proof.clone()).unwrap();
     {
         let mut fake_proof = first_proof.clone();
-        fake_proof.signer_id = second_id.clone();
+        *fake_proof.mut_signer_id() = second_id.clone();
         assert!(api
             .add_claim_proof(Some(first_id.clone()), &first_claim.id(), fake_proof)
             .is_err());

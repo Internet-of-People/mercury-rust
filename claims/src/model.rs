@@ -69,16 +69,19 @@ impl SignableClaimPart {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ClaimProof {
     /// The morpheus ID of the signer (witness)
-    pub signer_id: ProfileId,
+    signer_id: ProfileId,
     /// Contains a signature of a serialized SignableClaimPart
-    pub signed_message: SignedMessage,
+    signed_message: SignedMessage,
+
+    // TODO issued_at and valid_until must be signed to avoid tampering.
+    //      Move them to be part of the binary content.
     /// Do not forget that Unix time is UTC!
-    pub issued_at: TimeStamp,
+    issued_at: TimeStamp,
     /// This is not optional, because there are many reasons to limit validity of claims to something
     /// like 10 years. Cryptography might get weaker during that time period. Subjects might die and
     /// their claims get irrelevant. The aggregated state on the chain gets smaller if there is a natural
     /// expiration of claims (although the number of transactions gets higher because of this design decision).
-    pub valid_until: TimeStamp,
+    valid_until: TimeStamp,
 }
 
 impl ClaimProof {
@@ -91,8 +94,23 @@ impl ClaimProof {
         Self { signer_id, signed_message, issued_at, valid_until }
     }
 
-    // pub signer_id(&self) -> &ProfileId { &self.signer_id }
-    // pub signed_message(&self) -> &SignedMessage { &self.signed_message }
+    pub fn signer_id(&self) -> &ProfileId {
+        &self.signer_id
+    }
+    pub fn signed_message(&self) -> &SignedMessage {
+        &self.signed_message
+    }
+    pub fn issued_at(&self) -> TimeStamp {
+        self.issued_at.clone()
+    }
+    pub fn valid_until(&self) -> TimeStamp {
+        self.valid_until.clone()
+    }
+
+    // NOTE Useful only for testing, shouldn't be here otherwise
+    pub fn mut_signer_id(&mut self) -> &mut ProfileId {
+        &mut self.signer_id
+    }
 
     pub fn validate(&self, signable_claim: &SignableClaimPart) -> Fallible<()> {
         ensure!(

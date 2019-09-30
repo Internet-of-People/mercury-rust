@@ -424,7 +424,7 @@ pub fn request_claim_signature(
     };
     match request_claim_signature_impl(&state, &claim_path) {
         Ok(message) => {
-            debug!("Claim signature message received");
+            debug!("Created claim signature request");
             HttpResponse::Ok().json(message)
         }
         Err(e) => {
