@@ -451,12 +451,11 @@ impl MyProfile for MyProfileImpl {
     }
 
     fn accept_relation(&self, half_proof: &RelationHalfProof) -> AsyncResult<RelationProof, Error> {
-        debug!("Trying to send pairing response");
-
         if half_proof.peer_id != self.own_profile.borrow().id() {
             return Box::new(Err(ErrorKind::LookupFailed.into()).into_future());
         }
 
+        debug!("Signing accepted relation with {}", half_proof.signer_id);
         let proof = match RelationProof::sign_remaining_half(&half_proof, self.signer()) {
             Ok(proof) => proof,
             Err(e) => {
@@ -464,6 +463,7 @@ impl MyProfile for MyProfileImpl {
             }
         };
 
+        debug!("Sending pairing response via peer's home node");
         let proof_clone = proof.clone();
         let pair_fut = self
             .profile_repo

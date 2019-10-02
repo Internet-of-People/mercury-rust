@@ -84,6 +84,7 @@ impl HomeConnectionServer {
         to_profile: ProfileId,
         event: ProfileEvent,
     ) -> Box<dyn Future<Item = (), Error = Error>> {
+        debug!("Dispatching event {:?} to session of profile {}", event, to_profile);
         let push_fut = Self::get_live_session(server, to_profile).and_then(|session_rc_opt| {
             match session_rc_opt {
                 // TODO if push to session fails, consider just dropping the session
@@ -328,6 +329,7 @@ impl Home for HomeConnectionServer {
             }
         };
 
+        debug!("Got pairing response from {} to {}", self.context.peer_id(), to_profile);
         let server_clone = self.server.clone();
         let server_clone2 = self.server.clone();
         let peer_id_clone = self.context.peer_id().clone();
