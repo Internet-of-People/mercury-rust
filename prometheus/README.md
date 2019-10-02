@@ -338,8 +338,8 @@ Response:
     "signer_id": "Iez24XMd3BfPn5LAJdGdvZp87n",
     "signed_message": {
       "public_key": "PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb",
-      "message": [...], // array of binary data
-      "signature": "SfzAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2",
+      "message": "...",
+      "signature": "...",
     }
   }],
 }]

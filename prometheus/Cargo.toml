@@ -20,6 +20,7 @@ futures = "0.1"
 keyvault = { path="../keyvault" }
 log = "*"
 log4rs = "*"
+multibase = "*"
 osg-rpc-storage = { path="../osg-rpc-storage" }
 rand = "*"
 rand_chacha = "*"

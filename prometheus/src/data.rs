@@ -133,7 +133,7 @@ pub struct ApiClaim {
     schema_id: String,
     schema_name: String,
     content: serde_json::Value,
-    proof: Vec<ClaimProof>,
+    proof: Vec<ApiClaimProof>,
 }
 
 impl ApiClaim {
@@ -152,7 +152,7 @@ impl ApiClaim {
             schema_id,
             schema_name,
             content: signable.typed_content.content().to_owned(),
-            proof: src.proofs().to_owned(),
+            proof: src.proofs().iter().map(|proof| proof.into()).collect(),
         })
     }
 }
@@ -162,12 +162,73 @@ impl TryInto<Claim> for &ApiClaim {
 
     fn try_into(self) -> Result<Claim, Self::Error> {
         let subject_id = self.subject_id.parse()?;
-        Ok(Claim::new(
-            subject_id,
-            self.schema_id.to_owned(),
-            self.content.to_owned(),
-            self.proof.to_owned(),
+        let proof = self
+            .proof
+            .iter()
+            .filter_map(|proof| {
+                // TODO log conversion errors
+                proof.try_into().ok()
+            })
+            .collect();
+        Ok(Claim::new(subject_id, self.schema_id.to_owned(), self.content.to_owned(), proof))
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ApiClaimProof {
+    pub signer_id: String,
+    pub signed_message: ApiSignedMessage,
+    pub issued_at: TimeStamp,
+    pub valid_until: TimeStamp,
+}
+
+impl From<&ClaimProof> for ApiClaimProof {
+    fn from(src: &ClaimProof) -> Self {
+        ApiClaimProof {
+            signer_id: src.signer_id().to_string(),
+            signed_message: src.signed_message().into(),
+            issued_at: src.issued_at(),
+            valid_until: src.valid_until(),
+        }
+    }
+}
+
+impl TryFrom<&ApiClaimProof> for ClaimProof {
+    type Error = failure::Error;
+
+    fn try_from(src: &ApiClaimProof) -> Result<Self, Self::Error> {
+        Ok(ClaimProof::new(
+            src.signer_id.parse()?,
+            (&src.signed_message).try_into()?,
+            src.issued_at.to_owned(),
+            src.valid_until.to_owned(),
         ))
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize)]
+pub struct ApiSignedMessage {
+    public_key: String,
+    message: String,
+    signature: String,
+}
+
+impl From<&SignedMessage> for ApiSignedMessage {
+    fn from(src: &SignedMessage) -> Self {
+        ApiSignedMessage {
+            public_key: src.public_key().to_string(),
+            message: multibase::encode(multibase::Base64url, src.message()),
+            signature: src.signature().to_string(),
+        }
+    }
+}
+
+impl TryFrom<&ApiSignedMessage> for SignedMessage {
+    type Error = failure::Error;
+
+    fn try_from(src: &ApiSignedMessage) -> Result<Self, Self::Error> {
+        let (_base, message) = multibase::decode(&src.message)?;
+        Ok(SignedMessage::new(src.public_key.parse()?, message, src.signature.parse()?))
     }
 }
 
