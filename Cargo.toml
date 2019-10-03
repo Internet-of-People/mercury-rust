@@ -5,7 +5,7 @@ members = [
     "did",
     "home-protocol",
     "home-node",
-    "forgetfulfuse",
+#    "forgetfulfuse", # causes compilation problems on Mac, still experimental
     "keyvault",
     "osg-rpc-storage",
     "prometheus",
