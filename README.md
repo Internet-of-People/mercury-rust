@@ -63,6 +63,42 @@ but is radically simpler without carrying excess burdens of legacy webstack supp
 Mercury's storage layer is built on content-hashable network principles similarly to e.g.
 [Sidetree](https://github.com/decentralized-identity/sidetree/blob/master/docs/protocol.md). 
 
+
+## Installation
+
+You are most likely interested in the
+[UI demo binaries](https://github.com/Internet-of-People/prometheus-electron)
+prepared to demonstrate what user experience IoP aims for the client side.
+Otherwise (i.e. deploying the network backend)
+you still have to compile and deploy the codebase for yourself.
+We have prepared installation steps on a Debian-based system below,
+but it shouldn't differ too much on other platforms as well. 
+
+### Install Rust
+
+You can install Rust as a prebuilt OS package, e.g. by running `sudo apt install rustc ...` on Ubuntu.
+However, for the easiest and most convenient result we suggest following instructions on the
+[Rustup site](https://rustup.rs), e.g. running
+`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh` instead.
+
+### Install dependencies
+
+First you will need Git and some dependencies installed.
+
+```bash
+$ sudo apt install git g++ capnproto
+```
+
+### Use the source, Luke
+
+Then you'll have to download and compile the sources.
+
+```bash
+$ git clone https://github.com/Internet-of-People/mercury-rust.git
+$ cd mercury-rust
+$ cargo build
+```
+
 ## Project status
 
 Mercury is a redesigned and advanced version of the IoP Profile Server and IoP Connect
