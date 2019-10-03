@@ -4,12 +4,10 @@ use std::io::{self, BufReader, BufWriter};
 use std::path::Path;
 
 fn main() -> io::Result<()> {
-    generate(
-        Path::new("vocabulary/adjectives.txt"),
-        "ADJECTIVES",
-        Path::new("src/names/adjectives.rs"),
-    )?;
-    generate(Path::new("vocabulary/nouns.txt"), "NOUNS", Path::new("src/names/nouns.rs"))
+    // NOTE generating vocabulary during build caused CI caching problems, so added files to git instead
+    // generate(Path::new("vocabulary/adjectives.txt"), "ADJECTIVES", Path::new("src/names/adjectives.rs"))?;
+    // generate(Path::new("vocabulary/nouns.txt"), "NOUNS", Path::new("src/names/nouns.rs"))?;
+    Ok(())
 }
 
 fn generate(src_path: &Path, identifier: &str, dst_path: &Path) -> io::Result<()> {
