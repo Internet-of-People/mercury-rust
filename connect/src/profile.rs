@@ -76,7 +76,7 @@ pub struct MyProfileImpl {
     handle: reactor::Handle,
     session_cache: Rc<RefCell<HashMap<ProfileId, Rc<dyn MyHomeSession>>>>, // {home_id -> session}
     // on_updated:     Rc< Fn(&OwnProfile) -> AsyncResult<(),Error>,
-    // TODO remove this after testing, this should be get_publiced from the private binary part of OwnProfile
+    // TODO remove this after testing, this should be queried from the private binary part of OwnProfile
     relations: Rc<RefCell<Vec<RelationProof>>>,
 }
 
@@ -210,6 +210,7 @@ impl MyProfileImpl {
         connector: Rc<dyn HomeConnector>,
         signer: Rc<dyn Signer>,
     ) -> AsyncResult<(RelationProof, Rc<dyn Home>), Error> {
+        debug!("Looking up home nodes of persona {}", profile.id());
         let homes = match profile.as_persona() {
             Some(ref persona) => persona.homes.clone(),
             None => return Box::new(future::err(ErrorKind::PersonaProfileExpected.into())),
@@ -287,7 +288,10 @@ impl MyProfileImpl {
                                 .map_err(|e| error!("Notification on new relation failed: {}", e));
                             Box::new(not_fut) as AsyncResult<_, _>
                         }
-                        _ => Box::new(Ok(()).into_future()),
+                        e => {
+                            debug!("Got unhandled event, ignoring {:?}", e);
+                            Box::new(Ok(()).into_future())
+                        }
                     }
                 })
                 .then(|res| {
@@ -597,10 +601,15 @@ impl MyHomeSessionImpl {
 
         debug!("Created MyHomeSession, start forwarding profile events to listeners");
         let listeners = Rc::downgrade(&this.event_listeners);
-        handle.spawn(this.session.events().for_each(move |event| {
-            debug!("Received event {:?}, dispatching", event);
-            Self::forward_event_safe(listeners.clone(), event)
-        }));
+        handle.spawn(
+            this.session
+                .events()
+                .for_each(move |event| {
+                    debug!("Received event {:?}, dispatching", event);
+                    Self::forward_event_safe(listeners.clone(), event)
+                })
+                .map(|()| debug!("Event forwarding finished in session")),
+        );
 
         this
     }

@@ -8,12 +8,11 @@ use super::*;
 use mercury_home_protocol::keyvault::PublicKey as KeyVaultPublicKey;
 
 pub fn init_connect_service(
-    my_private_profilekey_file: &str,
-    home_pubkey_str: &str,
-    _home_addr_str: &str,
+    my_private_profilekey_file: &PathBuf,
+    home_pubkey: &PublicKey,
+    _home_addr_str: &SocketAddr,
     reactor: &mut reactor::Core,
 ) -> Result<(Rc<ConnectService>, ProfileId, ProfileId), Error> {
-    use std::net::SocketAddr;
     use std::time::Duration;
 
     use claims::repo::InMemoryProfileRepository;
@@ -22,9 +21,6 @@ pub fn init_connect_service(
 
     debug!("Initializing service instance");
 
-    let home_pubkey = home_pubkey_str
-        .parse::<PublicKey>()
-        .map_err(|e| Error::from(e.context(ErrorKind::FailedToLoadProfile)))?;
     let home_id = home_pubkey.key_id();
 
     let my_private_key_bytes = std::fs::read(my_private_profilekey_file)

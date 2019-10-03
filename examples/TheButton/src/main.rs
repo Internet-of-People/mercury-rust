@@ -1,34 +1,30 @@
-pub mod cli;
 pub mod client;
-pub mod client_config;
 mod init_hack;
-pub mod logging;
+pub mod options;
 pub mod server;
-pub mod server_config;
 
 use std::cell::RefCell;
 use std::collections::HashSet;
+use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::rc::Rc;
 
-use clap::ArgMatches;
 use failure::Fail;
 use futures::prelude::*;
 use log::*;
+use structopt::StructOpt;
 use tokio_core::reactor;
 use tokio_signal::unix::{Signal, SIGINT};
 
-use cli::cli;
 use client::Client;
-use client_config::*;
 use init_hack::init_connect_service;
-use logging::start_logging;
 use mercury_connect::net::SimpleTcpHomeConnector;
 use mercury_connect::profile::MyProfile;
 use mercury_connect::service::ConnectService;
 use mercury_connect::*;
 use mercury_home_protocol::*;
+use options::*;
 use server::Server;
-use server_config::*;
 
 pub fn signal_recv(sig: i32) -> Box<dyn Stream<Item = i32, Error = Error>> {
     Box::new(
@@ -49,9 +45,9 @@ pub struct AppContext {
 
 impl AppContext {
     pub fn new(
-        priv_key: &str,
-        node_pubkey: &str,
-        node_addr: &str,
+        priv_key: &PathBuf,
+        node_pubkey: &PublicKey,
+        node_addr: &SocketAddr,
         reactor: &mut reactor::Core,
     ) -> Result<Self, Error> {
         // TODO when we'll have a standalone service with proper IPC/RPC interface,
@@ -75,45 +71,27 @@ pub enum OnFail {
 }
 
 fn main() -> Result<(), Error> {
-    //ARGUMENT HANDLING START
-    let matches = cli().get_matches();
-
-    // Print version
-    if matches.is_present(cli::CLI_VERSION) {
-        println!("The Button dApp 0.1 pre-alpha");
-        return Ok(());
-    }
-
-    start_logging(&matches);
+    let options = Options::from_args();
+    log4rs::init_file(&options.logger_config, Default::default()).unwrap();
 
     // Creating a reactor
     let mut reactor = reactor::Core::new().unwrap();
 
     debug!("Parsed options, initializing application");
 
+    let priv_key_file = match options.command {
+        Command::Server(ref cfg) => &cfg.private_key_file,
+        Command::Client(ref cfg) => &cfg.private_key_file,
+    };
+
     // Constructing application context from command line args
-    let appcx = AppContext::new(
-        matches.value_of(cli::CLI_PRIVATE_KEY_FILE).unwrap(),
-        matches.value_of(cli::CLI_HOME_NODE_PUBLIC_KEY).unwrap(),
-        matches.value_of(cli::CLI_SERVER_ADDRESS).unwrap(),
-        &mut reactor,
-    )?;
+    let appcx =
+        AppContext::new(priv_key_file, &options.home_pubkey, &options.home_address, &mut reactor)?;
 
     // Creating application object
-    let (sub_name, sub_args) = matches.subcommand();
-    let app_fut = match sub_args {
-        Some(args) => match sub_name {
-            cli::CLI_SERVER => Server::new(ServerConfig::try_from(args)?, appcx).into_future(),
-            cli::CLI_CLIENT => Client::new(ClientConfig::try_from(args)?, appcx).into_future(),
-            _ => {
-                error!("unknown subcommand '{}'", sub_name);
-                return Err(ErrorKind::LookupFailed.into());
-            }
-        },
-        None => {
-            error!("subcommand missing");
-            return Err(ErrorKind::LookupFailed.into());
-        }
+    let app_fut = match options.command {
+        Command::Server(cfg) => Server::new(cfg, appcx).into_future(),
+        Command::Client(cfg) => Client::new(cfg, appcx).into_future(),
     };
 
     debug!("Initialized application, running");

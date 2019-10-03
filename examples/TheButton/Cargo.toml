@@ -8,7 +8,6 @@ license = "LGPL-3.0+"
 edition = "2018"
 
 [dependencies]
-clap = "*"
 claims = { path="../../claims" }
 did = { path="../../did" }
 failure = "*"
@@ -20,6 +19,7 @@ mercury-connect = { path="../../connect" }
 multiaddr = "*"
 multibase = "*"
 osg-rpc-storage = { path="../../osg-rpc-storage" }
+structopt = "*"
 tempdir = "*"
 tokio-signal = "*"
 tokio-core = "*"

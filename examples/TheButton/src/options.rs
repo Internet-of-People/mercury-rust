@@ -1,0 +1,75 @@
+use std::net::SocketAddr;
+use std::path::PathBuf;
+
+use structopt::StructOpt;
+
+use did::model::*;
+
+#[derive(Debug, StructOpt)]
+#[structopt(
+    setting = structopt::clap::AppSettings::ColoredHelp
+)]
+pub struct Options {
+    #[structopt(long = "repository", default_value = "127.0.0.1:6161", value_name = "IP:PORT")]
+    /// IPv4/6 address of the remote profile repository.
+    pub profile_repo_address: SocketAddr,
+
+    #[structopt(long, default_value = "127.0.0.1:2077", value_name = "IP:PORT")]
+    /// IPv4/6 address to listen on serving REST requests.
+    pub home_address: SocketAddr,
+
+    #[structopt(long, value_name = "KEY")]
+    /// Public key (multicipher) of the Home node to host this dApp
+    pub home_pubkey: PublicKey,
+
+    #[structopt(long, default_value = "log4rs.yml", value_name = "FILE", parse(from_os_str))]
+    /// Config file for log4rs (YAML).
+    pub logger_config: PathBuf,
+
+    #[structopt(subcommand)]
+    pub command: Command,
+    //    #[structopt(long, value_name = "DIR", parse(from_os_str))]
+    //    /// Configuration directory to pick vault and profile info from.
+    //    /// Default: OS-specific app_cfg_dir/prometheus
+    //    pub config_dir: Option<PathBuf>,
+}
+
+#[derive(Debug, StructOpt)]
+pub enum Command {
+    #[structopt(name = "server")]
+    /// Generate a phraselist needed to create a profile vault
+    Server(ServerConfig),
+
+    #[structopt(name = "client")]
+    /// Restore profile vault from a phraselist or profile from remote repository
+    Client(ClientConfig),
+}
+
+#[derive(Clone, Debug, StructOpt)]
+pub struct ServerConfig {
+    #[structopt(
+        long,
+        default_value = "../../etc/server.id",
+        value_name = "FILE",
+        parse(from_os_str)
+    )]
+    pub private_key_file: PathBuf,
+
+    #[structopt(long, value_name = "SECS")]
+    pub event_timer_secs: Option<u64>,
+}
+
+#[derive(Clone, Debug, StructOpt)]
+pub struct ClientConfig {
+    #[structopt(
+        long,
+        default_value = "../../etc/client.id",
+        value_name = "FILE",
+        parse(from_os_str)
+    )]
+    pub private_key_file: PathBuf,
+
+    #[structopt(long, value_name = "DID")]
+    /// Profile Id of the dApp server side to contact
+    pub server_id: ProfileId,
+}

@@ -8,6 +8,7 @@ use tokio_signal::unix::SIGUSR1;
 
 use super::*;
 use crate::init_hack::init_server;
+use crate::options::ServerConfig;
 
 pub struct Server {
     pub cfg: ServerConfig,
@@ -98,7 +99,7 @@ impl IntoFuture for Server {
             .map_err(|(e, _)| e);
 
         // Combine an optional fourth one if timer option is present
-        let server_fut = match self.cfg.event_timer {
+        let server_fut = match self.cfg.event_timer_secs {
             None => Box::new(server_fut) as AsyncResult<_, _>,
 
             // Repeatedly generate an event with the given interval

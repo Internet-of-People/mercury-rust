@@ -2,6 +2,7 @@ use futures::prelude::*;
 use log::*;
 
 use crate::init_hack::init_app_common;
+use crate::options::ClientConfig;
 use crate::*;
 use mercury_home_protocol::*;
 
@@ -60,9 +61,9 @@ impl Client {
         self,
         dapp_session: Rc<dyn DAppSession>,
     ) -> AsyncResult<Box<dyn Contact>, Error> {
-        let callee_profile_id = self.cfg.callee_profile_id.clone();
+        let callee_profile_id = self.cfg.server_id.clone();
         let contact_fut = dapp_session.contacts_with_profile(&callee_profile_id, None).and_then({
-            let peer_id = self.cfg.callee_profile_id.clone();
+            let peer_id = self.cfg.server_id.clone();
             let client_id = self.appctx.client_id.clone();
             let handle = self.appctx.handle.clone();
             move |mut relations| {

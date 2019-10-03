@@ -288,7 +288,7 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto {
             .events()
             .map_err(|e| capnp::Error::failed(format!("Failed to get profile events: {:?}", e)))
             .for_each(move |item| {
-                trace!("Capnp server is forwarding event to the client: {:?}", item);
+                debug!("Capnp server is forwarding event to the client: {:?}", item);
                 match item {
                     Ok(event) => {
                         let mut request = callback.receive_request();
