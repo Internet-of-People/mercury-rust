@@ -8,7 +8,7 @@ edition = "2018"
 actix-rt = "*"
 actix-cors = "*"
 actix-http = { version = "*", features = ["rust-tls"] }
-actix-server = "*"
+actix-server = "0.6" # Concrete version to fix currently conflicting includes from other actix components from latest versions from crates.io
 actix-web = "*"
 base64 = "*"
 blockies = "*"
