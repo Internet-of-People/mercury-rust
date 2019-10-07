@@ -17,12 +17,12 @@ use actix_http::error::PayloadError;
 use claims::model::*;
 use did::vault::{ProfileLabel, ProfileMetadata, ProfileVaultRecord};
 
-pub struct ApiHttpClient {
+pub struct HttpClientServiceImpl {
     root_url: String,
     reactor: RefCell<actix_rt::SystemRunner>,
 }
 
-impl ApiHttpClient {
+impl HttpClientServiceImpl {
     pub fn new(root_url: &str) -> Self {
         Self {
             root_url: root_url.to_owned(),
@@ -74,7 +74,7 @@ fn validate_response_status<
     Box::new(Ok(response).into_future())
 }
 
-impl Api for ApiHttpClient {
+impl VaultApi for HttpClientServiceImpl {
     fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
         let url = format!("{}/vault", self.root_url);
         // TODO phrase should normally be splitted into words and sent that way,
@@ -123,6 +123,7 @@ impl Api for ApiHttpClient {
         self.await_fut(fut)
     }
 
+    //fn list_vault_records(&self) -> Fallible<Vec<VaultEntry>> {
     fn list_vault_records(&self) -> Fallible<Vec<ProfileVaultRecord>> {
         let url = format!("{}/vault/dids", self.root_url);
         let req_fut = HttpClient::new().get(url).send();

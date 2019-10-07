@@ -1,10 +1,11 @@
-pub mod api;
 pub mod daemon;
 pub mod data;
 pub mod http;
-pub mod imp;
+pub mod message_api;
 pub mod names;
 pub mod options;
+pub mod vault_api;
+pub mod vault_api_imp;
 
 use std::sync::Mutex;
 use std::time::Duration;
@@ -15,10 +16,10 @@ use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use failure::{err_msg, Fallible};
 use log::*;
 
-use crate::api::*;
 pub use crate::daemon::Daemon;
 use crate::data::*;
 pub use crate::options::Options;
+use crate::vault_api::*;
 use claims::repo::*;
 use did::vault::*;
 use osg_rpc_storage::RpcProfileRepository;

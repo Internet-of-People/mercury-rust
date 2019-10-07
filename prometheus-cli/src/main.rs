@@ -6,7 +6,7 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::options::{Command, Options};
-use prometheus::http::client::ApiHttpClient;
+use prometheus::http::http_client_service::HttpClientServiceImpl;
 
 fn main() {
     match run() {
@@ -22,7 +22,7 @@ fn run() -> Fallible<()> {
     let command = options.command;
     debug!("Got command {:?}", command);
 
-    let mut ctx = ApiHttpClient::new(&format!("http://{}", options.prometheus_address));
+    let mut ctx = HttpClientServiceImpl::new(&format!("http://{}", options.prometheus_address));
     let command = Box::new(command);
     command.execute(&mut ctx)
 }

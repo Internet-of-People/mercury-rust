@@ -1,13 +1,12 @@
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::str::FromStr;
 use std::time::Duration;
 
 use failure::{bail, ensure, err_msg, format_err, Fallible};
 use futures::prelude::*;
 use log::*;
-use serde_derive::{Deserialize, Serialize};
 
+use crate::*;
 use claims::claim_schema::ClaimSchemaRegistry;
 pub use claims::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
 use claims::model::*;
@@ -15,124 +14,9 @@ use claims::repo::*;
 use did::vault::{self, ProfileLabel, ProfileMetadata, ProfileVault, ProfileVaultRecord};
 use keyvault::PublicKey as KeyVaultPublicKey;
 
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
-pub enum ProfileRepositoryKind {
-    Local,
-    Base,
-    Remote, // TODO Differentiate several remotes, e.g. by including a network address here like Remote(addr)
-}
+const ERR_MSG_VAULT_UNINITIALIZED: &str = "Vault is uninitialized, `restore vault` first";
 
-impl FromStr for ProfileRepositoryKind {
-    type Err = failure::Error;
-    fn from_str(src: &str) -> Result<Self, Self::Err> {
-        match src {
-            "local" => Ok(ProfileRepositoryKind::Local),
-            "base" => Ok(ProfileRepositoryKind::Base),
-            "remote" => Ok(ProfileRepositoryKind::Remote),
-            _ => Err(err_msg("Invalid profile repository kind")),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct RestoreCounts {
-    pub try_count: u32,
-    pub restore_count: u32,
-}
-
-// TODO expose sync state of profile here
-pub trait Api {
-    fn restore_vault(&mut self, phrase: String) -> Fallible<()>;
-    fn restore_all_profiles(&mut self) -> Fallible<RestoreCounts>;
-
-    fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()>;
-    fn get_active_profile(&self) -> Fallible<Option<ProfileId>>;
-
-    fn list_vault_records(&self) -> Fallible<Vec<ProfileVaultRecord>>;
-    fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileVaultRecord>;
-    fn get_vault_record(&self, id: Option<ProfileId>) -> Fallible<ProfileVaultRecord>;
-
-    fn set_profile_label(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        label: ProfileLabel,
-    ) -> Fallible<()>;
-
-    fn get_profile_metadata(&self, my_profile_id: Option<ProfileId>) -> Fallible<ProfileMetadata>;
-    fn set_profile_metadata(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        data: ProfileMetadata,
-    ) -> Fallible<()>;
-
-    fn get_profile_data(
-        &self,
-        id: Option<ProfileId>,
-        repo_kind: ProfileRepositoryKind,
-    ) -> Fallible<PrivateProfileData>;
-
-    fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> Fallible<PrivateProfileData>;
-    fn publish_profile(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        force: bool,
-    ) -> Fallible<ProfileId>;
-    fn restore_profile(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        force: bool,
-    ) -> Fallible<PrivateProfileData>;
-
-    fn set_attribute(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        key: &AttributeId,
-        value: &AttributeValue,
-    ) -> Fallible<()>;
-    fn clear_attribute(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        key: &AttributeId,
-    ) -> Fallible<()>;
-
-    fn claim_schemas(&self) -> Fallible<Rc<dyn ClaimSchemas>>;
-
-    fn claims(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Claim>>;
-    fn add_claim(&mut self, my_profile_id: Option<ProfileId>, claim: Claim) -> Fallible<()>;
-    fn remove_claim(&mut self, my_profile_id: Option<ProfileId>, claim: ClaimId) -> Fallible<()>;
-    fn sign_claim(
-        &self,
-        my_profile_id: Option<ProfileId>,
-        claim: &SignableClaimPart,
-    ) -> Fallible<ClaimProof>;
-    fn add_claim_proof(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        claim: &ClaimId,
-        proof: ClaimProof,
-    ) -> Fallible<()>;
-    fn license_claim(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        claim: ClaimId,
-        // TODO audience, purpose, expiry, etc
-    ) -> Fallible<ClaimLicense>;
-
-    // NOTE links are derived as a special kind of claims. Maybe they could be removed from here on the long term.
-    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>>;
-    fn create_link(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        peer_profile_id: &ProfileId,
-    ) -> Fallible<Link>;
-    fn remove_link(
-        &mut self,
-        my_profile_id: Option<ProfileId>,
-        peer_profile_id: &ProfileId,
-    ) -> Fallible<()>;
-}
-
-pub struct Context {
+pub struct VaultApiImpl {
     vault_path: PathBuf,
     schema_path: PathBuf, // TODO Re-reading all schemas each time might be expensive
     vault: Option<Box<dyn ProfileVault + Send>>,
@@ -142,14 +26,12 @@ pub struct Context {
     explorer: Box<dyn ProfileExplorer + Send>,
 }
 
-const ERR_MSG_VAULT_UNINITIALIZED: &str = "Vault is uninitialized, `restore vault` first";
-
 // TODO !!! The current implementation assumes that though the ProfileRepository
 //      shows an asynchronous interface, in reality all results are ready without waiting.
 //      For real asynchronous repositories this implementation has to be changed,
 //      likely by changing the API itself to be async, or maybe somehow making sure that
 //      the wait() calls below run on a different thread and don't block the running reactor tasks.
-impl Context {
+impl VaultApiImpl {
     pub fn new(
         vault_path: PathBuf,
         schema_path: PathBuf,
@@ -181,33 +63,6 @@ impl Context {
             let vault_path = self.vault_path.clone();
             vault.save(&vault_path)?;
         }
-        Ok(())
-    }
-
-    fn restore_vault_impl(&mut self, phrase: String) -> Fallible<()> {
-        ensure!(
-            self.vault.is_none(),
-            r#"You already have an active vault.
-Please delete {}
-before trying to restore another vault."#,
-            self.vault_path.to_string_lossy()
-        );
-
-        let seed_res = keyvault::Seed::from_bip39(&phrase);
-        let seed = match seed_res {
-            Ok(seed) => Ok(seed),
-            Err(e) => {
-                if let Some(keyvault::Bip39ErrorKind::InvalidChecksum) =
-                    e.find_root_cause().downcast_ref()
-                {
-                    Err(err_msg("All the words entered were valid, still the checksum was wrong.\nIs the order of the words correct?"))
-                } else {
-                    Err(e)
-                }
-            }
-        }?;
-        let new_vault = vault::HdProfileVault::create(seed);
-        self.vault.replace(Box::new(new_vault));
         Ok(())
     }
 
@@ -315,9 +170,32 @@ before trying to restore another vault."#,
     }
 }
 
-impl Api for Context {
+impl VaultApi for VaultApiImpl {
     fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
-        self.restore_vault_impl(phrase)
+        ensure!(
+            self.vault.is_none(),
+            r#"You already have an active vault.
+Please delete {}
+before trying to restore another vault."#,
+            self.vault_path.to_string_lossy()
+        );
+
+        let seed_res = keyvault::Seed::from_bip39(&phrase);
+        let seed = match seed_res {
+            Ok(seed) => Ok(seed),
+            Err(e) => {
+                if let Some(keyvault::Bip39ErrorKind::InvalidChecksum) =
+                    e.find_root_cause().downcast_ref()
+                {
+                    Err(err_msg("All the words entered were valid, still the checksum was wrong.\nIs the order of the words correct?"))
+                } else {
+                    Err(e)
+                }
+            }
+        }?;
+        let new_vault = vault::HdProfileVault::create(seed);
+        self.vault.replace(Box::new(new_vault));
+        self.save_vault()
     }
 
     fn restore_all_profiles(&mut self) -> Fallible<RestoreCounts> {
@@ -351,23 +229,28 @@ impl Api for Context {
             restore_count += 1;
         }
 
+        self.save_vault()?;
         Ok(RestoreCounts { try_count, restore_count })
     }
 
     fn set_active_profile(&mut self, my_profile_id: &ProfileId) -> Fallible<()> {
         self.mut_vault()?.set_active(my_profile_id)?;
-        Ok(())
+        self.save_vault()
     }
 
     fn get_active_profile(&self) -> Fallible<Option<ProfileId>> {
         self.vault()?.get_active()
     }
 
+    //fn list_vault_records(&self) -> Fallible<Vec<VaultEntry>> {
     fn list_vault_records(&self) -> Fallible<Vec<ProfileVaultRecord>> {
-        self.vault()?.profiles()
+        let entries = self.vault()?.profiles()?;
+        Ok(entries)
     }
 
+    //fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<VaultEntry> {
     fn create_profile(&mut self, label: Option<ProfileLabel>) -> Fallible<ProfileVaultRecord> {
+        // TODO label should not be parameter of create_key()
         let new_profile_key = self.mut_vault()?.create_key(label)?;
         let empty_profile = PrivateProfileData::empty(&new_profile_key);
         self.local_repo.set(empty_profile).wait()?;
@@ -385,7 +268,8 @@ impl Api for Context {
         label: ProfileLabel,
     ) -> Fallible<()> {
         let profile_id = self.selected_profile(my_profile_id)?.id();
-        self.mut_vault()?.set_label(profile_id, label)
+        self.mut_vault()?.set_label(profile_id, label)?;
+        self.save_vault()
     }
 
     fn get_profile_metadata(&self, my_profile_id: Option<ProfileId>) -> Fallible<ProfileMetadata> {
@@ -399,7 +283,8 @@ impl Api for Context {
         data: ProfileMetadata,
     ) -> Fallible<()> {
         let profile_id = self.selected_profile(my_profile_id)?.id();
-        self.mut_vault()?.set_metadata(profile_id, data)
+        self.mut_vault()?.set_metadata(profile_id, data)?;
+        self.save_vault()
     }
 
     // TODO this should also work if profile is not ours and we have no control over it.
@@ -409,9 +294,9 @@ impl Api for Context {
         profile_id: Option<ProfileId>,
         kind: ProfileRepositoryKind,
     ) -> Fallible<PrivateProfileData> {
+        use crate::vault_api::ProfileRepositoryKind::*;
         // NOTE must also work with a profile that is not ours
         let profile_id = self.selected_profile_id(profile_id)?;
-        use ProfileRepositoryKind::*;
         let repo = match kind {
             Local => &self.local_repo,
             Base => self.base_repo.as_ref(),
@@ -424,6 +309,7 @@ impl Api for Context {
     fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> Fallible<PrivateProfileData> {
         let profile_id = self.selected_profile(my_profile_id)?.id();
         let profile = self.revert_local_profile_to_base(&profile_id)?;
+        self.save_vault()?;
         Ok(profile)
     }
 
@@ -450,6 +336,7 @@ impl Api for Context {
 
         self.remote_repo.set(profile).wait()?;
         self.pull_base_profile(&profile_id)?;
+        self.save_vault()?;
         Ok(profile_id)
     }
 
@@ -460,6 +347,7 @@ impl Api for Context {
     ) -> Fallible<PrivateProfileData> {
         let profile_id = self.selected_profile_id(my_profile_id)?;
         let profile = self.restore_one_profile(&profile_id, force)?;
+        self.save_vault()?;
         Ok(profile)
     }
 
@@ -472,7 +360,8 @@ impl Api for Context {
         let mut profile = self.selected_profile(my_profile_id)?;
         profile.mut_public_data().set_attribute(key.to_owned(), value.to_owned());
         profile.mut_public_data().increase_version();
-        self.local_repo.set(profile).wait()
+        self.local_repo.set(profile).wait()?;
+        self.save_vault()
     }
 
     fn clear_attribute(
@@ -484,7 +373,7 @@ impl Api for Context {
         profile.mut_public_data().clear_attribute(key);
         profile.mut_public_data().increase_version();
         self.local_repo.set(profile).wait()?;
-        Ok(())
+        self.save_vault()
     }
 
     fn claim_schemas(&self) -> Fallible<Rc<dyn ClaimSchemas>> {
@@ -519,7 +408,7 @@ impl Api for Context {
         // profile.mut_public_data().increase_version();
         self.local_repo.set(profile).wait()?;
         debug!("Added claim: {:?}", claim_id);
-        Ok(())
+        self.save_vault()
     }
 
     fn remove_claim(&mut self, my_profile_id: Option<ProfileId>, id: ClaimId) -> Fallible<()> {
@@ -534,7 +423,7 @@ impl Api for Context {
 
         self.local_repo.set(profile).wait()?;
         debug!("Removed claim: {:?}", id);
-        Ok(())
+        self.save_vault()
     }
 
     fn sign_claim(
@@ -564,7 +453,7 @@ impl Api for Context {
         claim.add_proof(proof);
         self.local_repo.set(profile).wait()?;
         debug!("Added proof to claim: {:?}", claim_id);
-        Ok(())
+        self.save_vault()
     }
 
     fn license_claim(
@@ -592,6 +481,7 @@ impl Api for Context {
         profile.mut_public_data().increase_version();
         self.local_repo.set(profile).wait()?;
         debug!("Created link: {:?}", link);
+        self.save_vault()?;
         Ok(link)
     }
 
@@ -604,6 +494,7 @@ impl Api for Context {
         profile.mut_public_data().remove_link(&peer_profile_id);
         profile.mut_public_data().increase_version();
         self.local_repo.set(profile).wait()?;
+        self.save_vault()?;
         Ok(())
     }
 }

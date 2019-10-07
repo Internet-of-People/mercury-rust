@@ -30,6 +30,7 @@ impl IntoFuture for Server {
     fn into_future(self) -> Self::Future {
         // Create dApp session with Mercury Connect and listen for incoming events, automatically accept calls
         let active_calls_rc = self.active_calls.clone();
+
         let dapp_events_fut = self.appctx.service.dapp_session(&self.appctx.app_id, None)
             .inspect( |_| debug!("dApp session was initialized, checking in") )
             .map_err( |err| { error!("Failed to create dApp session: {:?}", err); err } )

@@ -1,2 +1,2 @@
-pub mod mapping;
-pub mod status;
+pub mod controller;
+pub mod routes;

@@ -17,6 +17,7 @@ claims = { path="../claims" }
 did = { path="../did" }
 failure = "*"
 futures = "0.1"
+mercury-home-protocol = { path="../home-protocol" }
 keyvault = { path="../keyvault" }
 log = "*"
 log4rs = "*"

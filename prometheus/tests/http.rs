@@ -2,10 +2,10 @@ use serde_json::json;
 use structopt::StructOpt;
 
 use claims::model::*;
-use prometheus::api::{Api, ProfileRepositoryKind as RepoKind};
 use prometheus::daemon::Daemon;
-use prometheus::http::client::ApiHttpClient;
+use prometheus::http::http_client_service::HttpClientServiceImpl;
 use prometheus::options::Options;
+use prometheus::vault_api::{ProfileRepositoryKind as RepoKind, VaultApi};
 
 #[test]
 fn test_http_api() {
@@ -17,7 +17,7 @@ fn test_http_api() {
     log4rs::init_file(&options.logger_config, Default::default()).unwrap();
 
     let mut daemon = Daemon::start(options).unwrap();
-    let mut api = ApiHttpClient::new(&url);
+    let mut api = HttpClientServiceImpl::new(&url);
 
     // TODO get this demo phrase from a single constant in some crate
     api.restore_vault("include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already".to_owned()).unwrap();

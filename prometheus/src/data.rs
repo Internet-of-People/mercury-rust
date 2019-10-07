@@ -31,7 +31,7 @@ pub struct VaultEntry {
 impl TryFrom<&ProfileVaultRecord> for VaultEntry {
     type Error = failure::Error;
     fn try_from(src: &ProfileVaultRecord) -> Fallible<Self> {
-        let metadata: ProfileMetadata = src.metadata().as_str().try_into()?;
+        let metadata: PersonaCustomData = src.metadata().as_str().try_into()?;
         Ok(VaultEntry {
             id: src.id().to_string(),
             label: src.label(),
@@ -75,33 +75,33 @@ pub fn deserialize_avatar<'de, D: Deserializer<'de>>(deserializer: D) -> Result<
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
-pub struct ProfileMetadata {
+pub struct PersonaCustomData {
     pub image_blob: ImageBlob,
     pub image_format: ImageFormat,
 }
 
-impl TryFrom<&[u8]> for ProfileMetadata {
+impl TryFrom<&[u8]> for PersonaCustomData {
     type Error = failure::Error;
     fn try_from(src: &[u8]) -> Fallible<Self> {
         Ok(serde_json::from_slice(src)?)
     }
 }
 
-impl TryInto<Vec<u8>> for ProfileMetadata {
+impl TryInto<Vec<u8>> for PersonaCustomData {
     type Error = failure::Error;
     fn try_into(self) -> Fallible<Vec<u8>> {
         Ok(serde_json::to_vec(&self)?)
     }
 }
 
-impl TryFrom<&str> for ProfileMetadata {
+impl TryFrom<&str> for PersonaCustomData {
     type Error = failure::Error;
     fn try_from(src: &str) -> Fallible<Self> {
         Ok(serde_json::from_str(src)?)
     }
 }
 
-impl TryInto<String> for ProfileMetadata {
+impl TryInto<String> for PersonaCustomData {
     type Error = failure::Error;
     fn try_into(self) -> Fallible<String> {
         Ok(serde_json::to_string(&self)?)
