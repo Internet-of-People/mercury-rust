@@ -2,10 +2,10 @@ use serde_json::json;
 use structopt::StructOpt;
 
 use claims::model::*;
+use prometheus::api::{ProfileRepositoryKind as RepoKind, VaultApi};
 use prometheus::daemon::Daemon;
 use prometheus::http::http_client_service::HttpClientServiceImpl;
 use prometheus::options::Options;
-use prometheus::vault_api::{ProfileRepositoryKind as RepoKind, VaultApi};
 
 #[test]
 fn test_http_api() {

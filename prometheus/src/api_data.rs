@@ -5,9 +5,19 @@ use failure::{err_msg, Fallible};
 use serde::{Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
-use crate::*;
+pub use claims::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
 use claims::model::*;
 use did::vault::*;
+
+pub type MessageContent = String;
+
+#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+pub struct Message {
+    pub message: MessageContent,
+    pub sender: ProfileId,
+    pub receiver: ProfileId,
+    pub timestamp: TimeStamp,
+}
 
 pub type DataUri = String;
 pub type ImageFormat = String;

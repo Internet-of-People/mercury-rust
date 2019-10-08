@@ -1,20 +1,8 @@
-use claims::model::TimeStamp;
-use did::model::ProfileId;
+use claims::model::*;
 use mercury_home_protocol::AsyncFallible;
 
-pub type MessageContent = String;
-
-pub struct Message {
-    pub message: MessageContent,
-    pub sender: ProfileId,
-    pub receiver: ProfileId,
-    pub timestamp: TimeStamp,
-}
-
-pub trait MessageApi {
-    fn send_message(&self, to: &ProfileId, message: &MessageContent) -> AsyncFallible<()>;
-    fn list_messages(&self, with: &ProfileId) -> AsyncFallible<Vec<Message>>;
-}
+use crate::api::*;
+use crate::*;
 
 pub struct MessagingImpl {
     // ???

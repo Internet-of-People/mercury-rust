@@ -4,9 +4,15 @@ use std::str::FromStr;
 use failure::{err_msg, Fallible};
 use serde_derive::{Deserialize, Serialize};
 
-pub use claims::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
+//use did::vault::{ProfileLabel, ProfileMetadata, ProfileVaultRecord};
+use crate::*;
 use claims::model::*;
-use did::vault::{ProfileLabel, ProfileMetadata, ProfileVaultRecord};
+use mercury_home_protocol::AsyncFallible;
+
+pub trait MessageApi {
+    fn send_message(&self, to: &ProfileId, message: &MessageContent) -> AsyncFallible<()>;
+    fn list_messages(&self, with: &ProfileId) -> AsyncFallible<Vec<Message>>;
+}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum ProfileRepositoryKind {

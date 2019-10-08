@@ -294,7 +294,7 @@ before trying to restore another vault."#,
         profile_id: Option<ProfileId>,
         kind: ProfileRepositoryKind,
     ) -> Fallible<PrivateProfileData> {
-        use crate::vault_api::ProfileRepositoryKind::*;
+        use crate::api::ProfileRepositoryKind::*;
         // NOTE must also work with a profile that is not ours
         let profile_id = self.selected_profile_id(profile_id)?;
         let repo = match kind {

@@ -6,7 +6,7 @@ use structopt::StructOpt;
 
 use crate::seed::{read_phrase, show_generated_phrase};
 use claims::model::*;
-use prometheus::vault_api::*;
+use prometheus::api::*;
 
 #[derive(Debug, StructOpt)]
 #[structopt(

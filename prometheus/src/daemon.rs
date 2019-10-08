@@ -1,6 +1,6 @@
 use tokio::runtime::current_thread;
 
-use crate::vault_api_imp::VaultApiImpl;
+use crate::vault_imp::VaultApiImpl;
 use crate::*;
 
 pub struct Daemon {
