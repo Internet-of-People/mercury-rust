@@ -1,10 +1,11 @@
 pub mod api;
 pub mod api_data;
 pub mod daemon;
+pub mod dapp_session;
 pub mod http;
-pub mod messaging;
 pub mod names;
 pub mod options;
+pub mod user_interactor;
 pub mod vault_imp;
 
 use std::sync::Mutex;

@@ -1,5 +1,5 @@
 use std::cell::RefCell;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 //use std::fmt::Display;
 use std::rc::Rc;
 
@@ -10,15 +10,10 @@ use log::*;
 use tokio_core::reactor;
 
 use super::*;
+use did::vault::ProfileVault;
 use mercury_home_protocol::net::HomeConnector;
 use profile::{MyProfile, MyProfileImpl};
 use sdk::DAppSessionImpl;
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct DAppAction(Vec<u8>);
-
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct DeviceAuthorization(Vec<u8>);
 
 pub trait AdminSession {
     fn profiles(&self) -> AsyncResult<Vec<Rc<dyn MyProfile>>, Error>;
@@ -93,22 +88,20 @@ impl MyProfileFactory {
 }
 
 pub struct AdminSessionImpl {
-    //    keyvault:   Rc<KeyVault>,
-    //    pathmap:    Rc<Bip32PathMapper>,
-    //    accessman:  Rc<AccessManager>,
-    my_profile_ids: Rc<HashSet<ProfileId>>,
-    profile_store: Rc<RefCell<dyn PrivateProfileRepository>>,
+    profile_vault: Rc<dyn ProfileVault>,
+    profile_repo: Rc<RefCell<dyn PrivateProfileRepository>>,
     profile_factory: Rc<MyProfileFactory>,
     //    handle:         reactor::Handle,
 }
 
 impl AdminSessionImpl {
+    #[deprecated]
     pub fn new(
-        my_profile_ids: Rc<HashSet<ProfileId>>,
-        profile_store: Rc<RefCell<dyn PrivateProfileRepository>>,
+        profile_vault: Rc<dyn ProfileVault>,
+        profile_repo: Rc<RefCell<dyn PrivateProfileRepository>>,
         profile_factory: Rc<MyProfileFactory>,
     ) -> Rc<dyn AdminSession> {
-        let this = Self { profile_store, my_profile_ids, profile_factory }; //, handle };
+        let this = Self { profile_vault, profile_repo, profile_factory }; //, handle };
         Rc::new(this)
     }
 }
@@ -116,16 +109,20 @@ impl AdminSessionImpl {
 impl AdminSession for AdminSessionImpl {
     fn profiles(&self) -> AsyncResult<Vec<Rc<dyn MyProfile>>, Error> {
         // TODO consider delegating implementation to profile(id)
-        let store = self.profile_store.clone();
+        let store = self.profile_repo.clone();
         let prof_factory = self.profile_factory.clone();
-        let profile_futs = self
-            .my_profile_ids
+        let profiles = match self.profile_vault.profiles() {
+            Ok(profiles) => profiles,
+            Err(_e) => return Box::new(future::err(ErrorKind::FailedToLoadProfile.into())),
+        };
+
+        let profile_futs = profiles
             .iter()
-            .map(|prof_id| {
+            .map(|profile| {
                 let prof_factory = prof_factory.clone();
                 store
                     .borrow()
-                    .get(prof_id)
+                    .get(&profile.id())
                     .map_err(|e| e.context(ErrorKind::FailedToLoadProfile).into())
                     .and_then(move |own_profile| prof_factory.create(own_profile))
             })
@@ -137,7 +134,7 @@ impl AdminSession for AdminSessionImpl {
     fn profile(&self, id: ProfileId) -> AsyncResult<Rc<dyn MyProfile>, Error> {
         let profile_factory = self.profile_factory.clone();
         let fut = self
-            .profile_store
+            .profile_repo
             .borrow()
             .get(&id)
             .map_err(|e| e.context(ErrorKind::FailedToLoadProfile).into())
@@ -167,22 +164,19 @@ impl AdminSession for AdminSessionImpl {
 }
 
 pub struct ConnectService {
-    //    keyvault:       Rc<KeyVault>,
-    //    pathmap:        Rc<Bip32PathMapper>,
-    //    accessman:      Rc<AccessManager>,
-    my_profile_ids: Rc<HashSet<ProfileId>>,
-    profile_store: Rc<RefCell<dyn PrivateProfileRepository>>,
+    profile_vault: Rc<dyn ProfileVault>,
+    profile_repo: Rc<RefCell<dyn PrivateProfileRepository>>,
     profile_factory: Rc<MyProfileFactory>,
     //    handle:         reactor::Handle,
 }
 
 impl ConnectService {
     pub fn new(
-        my_profile_ids: Rc<HashSet<ProfileId>>,
-        profile_store: Rc<RefCell<dyn PrivateProfileRepository>>,
+        profile_vault: Rc<dyn ProfileVault>,
+        profile_repo: Rc<RefCell<dyn PrivateProfileRepository>>,
         profile_factory: Rc<MyProfileFactory>,
     ) -> Self {
-        Self { my_profile_ids, profile_store, profile_factory }
+        Self { profile_vault, profile_repo, profile_factory }
     } //, handle: handle.clone() } }
 
     pub fn admin_session(
@@ -190,8 +184,8 @@ impl ConnectService {
         _authorization: Option<DAppPermission>,
     ) -> AsyncResult<Rc<dyn AdminSession>, Error> {
         let adm = AdminSessionImpl::new(
-            self.my_profile_ids.clone(),
-            self.profile_store.clone(),
+            self.profile_vault.clone(),
+            self.profile_repo.clone(),
             self.profile_factory.clone(),
         ); //, self.handle.clone() );
 
@@ -206,15 +200,14 @@ impl DAppEndpoint for ConnectService {
         _authorization: Option<DAppPermission>,
     ) -> AsyncResult<Rc<dyn DAppSession>, Error> {
         let app = app.to_owned();
-        let profile_store = self.profile_store.clone();
+        let profile_store = self.profile_repo.clone();
         let profile_factory = self.profile_factory.clone();
-        // TODO user should be able to pair a profile with the app
+        // TODO user should be able to manually pair a profile with the app
         let profile_id_res = self
-            .my_profile_ids
-            .iter()
-            .next()
-            .cloned()
-            .ok_or(ErrorKind::FailedToGetSession.into())
+            .profile_vault
+            .get_active()
+            .map_err(|_e| ErrorKind::FailedToGetSession.into())
+            .and_then(|profile_id_opt| profile_id_opt.ok_or(ErrorKind::FailedToGetSession.into()))
             .into_future();
         let fut = profile_id_res
             .and_then(move |profile_id| {

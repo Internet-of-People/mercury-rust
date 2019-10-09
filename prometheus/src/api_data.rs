@@ -9,7 +9,7 @@ pub use claims::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
 use claims::model::*;
 use did::vault::*;
 
-pub type MessageContent = String;
+pub type MessageContent = Vec<u8>;
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct Message {

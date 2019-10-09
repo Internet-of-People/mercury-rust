@@ -6,12 +6,6 @@ use serde_derive::{Deserialize, Serialize};
 
 use crate::*;
 use claims::model::*;
-use mercury_home_protocol::AsyncFallible;
-
-pub trait MessageApi {
-    fn send_message(&self, to: &ProfileId, message: &MessageContent) -> AsyncFallible<()>;
-    fn list_messages(&self, with: &ProfileId) -> AsyncFallible<Vec<Message>>;
-}
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum ProfileRepositoryKind {
