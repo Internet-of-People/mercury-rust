@@ -16,7 +16,7 @@ pub fn init_connect_service(
     use std::time::Duration;
 
     use claims::repo::InMemoryProfileRepository;
-    use mercury_connect::service::{DummyUserInterface, MyProfileFactory, SignerFactory};
+    use mercury_connect::service::{MyProfileFactory, SignerFactory};
     use osg_rpc_storage::RpcProfileRepository;
 
     debug!("Initializing service instance");
@@ -62,11 +62,10 @@ pub fn init_connect_service(
         reactor.handle(),
     ));
 
-    let ui = Rc::new(DummyUserInterface::new(my_profiles.clone()));
     let mut own_profile_store = InMemoryProfileRepository::new();
     reactor.run(own_profile_store.set(my_own_profile)).unwrap();
     let profile_store = Rc::new(RefCell::new(own_profile_store));
-    let service = Rc::new(ConnectService::new(ui, my_profiles, profile_store, gateways)); //, &reactor.handle() ) );
+    let service = Rc::new(ConnectService::new(my_profiles, profile_store, gateways)); //, &reactor.handle() ) );
 
     Ok((service, my_profile_id, home_id))
 }

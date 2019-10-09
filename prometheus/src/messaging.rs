@@ -1,11 +1,20 @@
 use claims::model::*;
-use mercury_home_protocol::AsyncFallible;
+use mercury_connect::service::ConnectService;
+use mercury_connect::*;
+//use mercury_home_protocol::AsyncFallible;
 
 use crate::api::*;
 use crate::*;
 
 pub struct MessagingImpl {
-    // ???
+    //    connect_service: ConnectService,
+}
+
+impl MessagingImpl {
+    pub fn new() -> Self {
+        //        let connect_service = ConnectService::new();
+        Self {}
+    }
 }
 
 impl MessageApi for MessagingImpl {

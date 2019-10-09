@@ -76,13 +76,11 @@ pub fn init_connect_service(
         reactor.handle(),
     ));
 
-    let ui = Rc::new(DummyUserInterface::new(my_profiles.clone()));
     let mut own_profile_store =
         FileProfileRepository::new(&PathBuf::from("/tmp/mercury/connect/my-profiles")).unwrap();
     reactor.run(own_profile_store.set(my_own_profile)).unwrap();
     let profile_store = Rc::new(RefCell::new(own_profile_store));
-    let service =
-        Rc::new(ConnectService::new(ui, my_profiles, profile_store, profile_client_factory)); //, &reactor.handle() ) );
+    let service = Rc::new(ConnectService::new(my_profiles, profile_store, profile_client_factory)); //, &reactor.handle() ) );
 
     Ok((service, my_profile_id, home_id))
 }

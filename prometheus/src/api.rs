@@ -4,7 +4,6 @@ use std::str::FromStr;
 use failure::{err_msg, Fallible};
 use serde_derive::{Deserialize, Serialize};
 
-//use did::vault::{ProfileLabel, ProfileMetadata, ProfileVaultRecord};
 use crate::*;
 use claims::model::*;
 use mercury_home_protocol::AsyncFallible;

@@ -14,6 +14,7 @@ base64 = "*"
 blockies = "*"
 bytes = "*"
 claims = { path="../claims" }
+mercury-connect = { path="../connect" }
 did = { path="../did" }
 failure = "*"
 futures = "0.1"

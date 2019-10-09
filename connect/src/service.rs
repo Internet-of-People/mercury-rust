@@ -20,70 +20,6 @@ pub struct DAppAction(Vec<u8>);
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct DeviceAuthorization(Vec<u8>);
 
-// TODO should be used in parsed version as something like Vec<(bool,uint16)>
-#[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
-pub struct Bip32Path(String);
-
-// Hierarchical deterministic seed for identity handling to generate profiles
-pub trait KeyVault {
-    // Get the next hierarchical path to generate a new profile with
-    fn next(&self) -> Bip32Path;
-
-    // TODO what do we need here to unlock the private key? Maybe a password?
-    // Get or create an empty profile for a path returned by next()
-    fn unlock_profile(&self, bip32_path: &Bip32Path) -> Rc<dyn Signer>;
-}
-
-// Usage of Bip32 hierarchy, format: path => data stored with that key
-pub trait Bip32PathMapper {
-    // master_seed/purpose_mercury => last_profile_number and profile {id: number} map
-    fn root_path(&self) -> Bip32Path;
-
-    // m/mercury/profile_number => list of relations, apps, etc
-    fn profile_path(&self, profile_id: &ProfileId) -> Bip32Path;
-
-    // m/mercury/profile/app_id => application-specific data
-    fn app_path(&self, profile_id: &ProfileId, app_id: &ApplicationId) -> Bip32Path;
-}
-
-pub trait AccessManager {
-    fn ask_read_access(&self, resource: &Bip32Path) -> AsyncResult<PublicKey, Error>;
-    fn ask_write_access(&self, resource: &Bip32Path) -> AsyncResult<Rc<dyn Signer>, Error>;
-}
-
-// User interface (probably implemented with platform-native GUI) for actions
-// that are initiated by the SDK and require some kind of user interaction
-pub trait UserInterface {
-    // Initialize system components and configuration where user interaction is needed,
-    // e.g. HD wallets need manually saving generated new seed or entering old one
-    fn initialize(&self) -> AsyncResult<(), Error>;
-
-    // An action requested by a distributed application needs
-    // explicit user confirmation.
-    // TODO how to show a human-readable summary of the action (i.e. binary to be signed)
-    //      making sure it's not a fake/misinterpreted description?
-    fn confirm_dappaction(&self, action: &DAppAction) -> AsyncResult<(), Error>;
-
-    fn confirm_pairing(&self, request: &RelationHalfProof) -> AsyncResult<(), Error>;
-
-    fn notify_pairing(&self, response: &RelationProof) -> AsyncResult<(), Error>;
-
-    // Select a profile to be used by a dApp. It can be either an existing one
-    // or the user can create a new one (using a KeyVault) to be selected.
-    // TODO this should open something nearly identical to manage_profiles()
-    fn select_profile(&self) -> AsyncResult<ProfileId, Error>;
-
-    // Open profiles with new, delete and edit (e.g. homes, contacts, apps, etc) options.
-    // Specific profiles can also be set online/offline.
-    // TODO it could look something like:
-    //      Profiles
-    //      [x]ON  business (edit) (delete)
-    //      [ ]off family   (edit) (delete)
-    //      [x]ON  hobby    (edit) (delete)
-    //      (new profile)
-    fn manage_profiles(&self) -> AsyncResult<(), Error>;
-}
-
 pub trait AdminSession {
     fn profiles(&self) -> AsyncResult<Vec<Rc<dyn MyProfile>>, Error>;
     fn profile(&self, id: ProfileId) -> AsyncResult<Rc<dyn MyProfile>, Error>;
@@ -160,7 +96,6 @@ pub struct AdminSessionImpl {
     //    keyvault:   Rc<KeyVault>,
     //    pathmap:    Rc<Bip32PathMapper>,
     //    accessman:  Rc<AccessManager>,
-    ui: Rc<dyn UserInterface>,
     my_profile_ids: Rc<HashSet<ProfileId>>,
     profile_store: Rc<RefCell<dyn PrivateProfileRepository>>,
     profile_factory: Rc<MyProfileFactory>,
@@ -169,12 +104,11 @@ pub struct AdminSessionImpl {
 
 impl AdminSessionImpl {
     pub fn new(
-        ui: Rc<dyn UserInterface>,
         my_profile_ids: Rc<HashSet<ProfileId>>,
         profile_store: Rc<RefCell<dyn PrivateProfileRepository>>,
         profile_factory: Rc<MyProfileFactory>,
     ) -> Rc<dyn AdminSession> {
-        let this = Self { ui, profile_store, my_profile_ids, profile_factory }; //, handle };
+        let this = Self { profile_store, my_profile_ids, profile_factory }; //, handle };
         Rc::new(this)
     }
 }
@@ -236,7 +170,6 @@ pub struct ConnectService {
     //    keyvault:       Rc<KeyVault>,
     //    pathmap:        Rc<Bip32PathMapper>,
     //    accessman:      Rc<AccessManager>,
-    ui: Rc<dyn UserInterface>,
     my_profile_ids: Rc<HashSet<ProfileId>>,
     profile_store: Rc<RefCell<dyn PrivateProfileRepository>>,
     profile_factory: Rc<MyProfileFactory>,
@@ -245,12 +178,11 @@ pub struct ConnectService {
 
 impl ConnectService {
     pub fn new(
-        ui: Rc<dyn UserInterface>,
         my_profile_ids: Rc<HashSet<ProfileId>>,
         profile_store: Rc<RefCell<dyn PrivateProfileRepository>>,
         profile_factory: Rc<MyProfileFactory>,
     ) -> Self {
-        Self { ui, my_profile_ids, profile_store, profile_factory }
+        Self { my_profile_ids, profile_store, profile_factory }
     } //, handle: handle.clone() } }
 
     pub fn admin_session(
@@ -258,7 +190,6 @@ impl ConnectService {
         _authorization: Option<DAppPermission>,
     ) -> AsyncResult<Rc<dyn AdminSession>, Error> {
         let adm = AdminSessionImpl::new(
-            self.ui.clone(),
             self.my_profile_ids.clone(),
             self.profile_store.clone(),
             self.profile_factory.clone(),
@@ -277,9 +208,15 @@ impl DAppEndpoint for ConnectService {
         let app = app.to_owned();
         let profile_store = self.profile_store.clone();
         let profile_factory = self.profile_factory.clone();
-        let fut = self
-            .ui
-            .select_profile()
+        // TODO user should be able to pair a profile with the app
+        let profile_id_res = self
+            .my_profile_ids
+            .iter()
+            .next()
+            .cloned()
+            .ok_or(ErrorKind::FailedToGetSession.into())
+            .into_future();
+        let fut = profile_id_res
             .and_then(move |profile_id| {
                 let store = profile_store.borrow();
                 store
@@ -293,47 +230,5 @@ impl DAppEndpoint for ConnectService {
                 err
             });
         Box::new(fut)
-    }
-}
-
-pub struct DummyUserInterface {
-    my_profiles: Rc<HashSet<ProfileId>>,
-}
-
-impl DummyUserInterface {
-    pub fn new(my_profiles: Rc<HashSet<ProfileId>>) -> Self {
-        Self { my_profiles }
-    }
-}
-
-impl UserInterface for DummyUserInterface {
-    fn initialize(&self) -> AsyncResult<(), Error> {
-        Box::new(Ok(()).into_future())
-    }
-
-    fn confirm_dappaction(&self, _action: &DAppAction) -> AsyncResult<(), Error> {
-        Box::new(Ok(()).into_future())
-    }
-
-    fn confirm_pairing(&self, _request: &RelationHalfProof) -> AsyncResult<(), Error> {
-        Box::new(Ok(()).into_future())
-    }
-
-    fn notify_pairing(&self, _response: &RelationProof) -> AsyncResult<(), Error> {
-        Box::new(Ok(()).into_future())
-    }
-
-    fn select_profile(&self) -> AsyncResult<ProfileId, Error> {
-        let first_profile_res = self
-            .my_profiles
-            .iter()
-            .cloned()
-            .nth(0)
-            .ok_or(Error::from(ErrorKind::FailedToAuthorize));
-        Box::new(first_profile_res.into_future())
-    }
-
-    fn manage_profiles(&self) -> AsyncResult<(), Error> {
-        Box::new(Ok(()).into_future())
     }
 }
