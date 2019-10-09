@@ -6,7 +6,7 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::options::{Command, Options};
-use prometheus::http::http_client_service::HttpClientServiceImpl;
+use prometheus::http::client::VaultClient;
 
 fn main() {
     match run() {
@@ -22,9 +22,9 @@ fn run() -> Fallible<()> {
     let command = options.command;
     debug!("Got command {:?}", command);
 
-    let mut ctx = HttpClientServiceImpl::new(&format!("http://{}", options.prometheus_address));
+    let mut client = VaultClient::new(&format!("http://{}", options.prometheus_address));
     let command = Box::new(command);
-    command.execute(&mut ctx)
+    command.execute(&mut client)
 }
 
 fn init_logger(options: &Options) -> Fallible<()> {

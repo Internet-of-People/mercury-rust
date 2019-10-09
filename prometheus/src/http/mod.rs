@@ -1,2 +1,2 @@
-pub mod http_client_service;
+pub mod client;
 pub mod server;

@@ -4,7 +4,7 @@ use structopt::StructOpt;
 use claims::model::*;
 use prometheus::api::{ProfileRepositoryKind as RepoKind, VaultApi};
 use prometheus::daemon::Daemon;
-use prometheus::http::http_client_service::HttpClientServiceImpl;
+use prometheus::http::client::VaultClient;
 use prometheus::options::Options;
 
 #[test]
@@ -17,7 +17,7 @@ fn test_http_api() {
     log4rs::init_file(&options.logger_config, Default::default()).unwrap();
 
     let mut daemon = Daemon::start(options).unwrap();
-    let mut api = HttpClientServiceImpl::new(&url);
+    let mut api = VaultClient::new(&url);
 
     // TODO get this demo phrase from a single constant in some crate
     api.restore_vault("include pear escape sail spy orange cute despair witness trouble sleep torch wire burst unable brass expose fiction drift clock duck oxygen aerobic already".to_owned()).unwrap();

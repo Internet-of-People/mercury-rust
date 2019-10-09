@@ -11,7 +11,7 @@ use did::model::*;
 )]
 pub struct Options {
     #[structopt(long = "repository", default_value = "127.0.0.1:6161", value_name = "IP:PORT")]
-    /// IPv4/6 address of the remote profile repository.
+    /// IPv4/6 address of the remote profile repository. Temporary solution until proper routing is in place.
     pub profile_repo_address: SocketAddr,
 
     #[structopt(long, default_value = "127.0.0.1:2077", value_name = "IP:PORT")]
@@ -53,9 +53,11 @@ pub struct ServerConfig {
         value_name = "FILE",
         parse(from_os_str)
     )]
+    /// File to load ed25519 server private key from. Temporary solution until keyvault is used here.
     pub private_key_file: PathBuf,
 
     #[structopt(long, value_name = "SECS")]
+    /// Automatically push button periodically with this given time interval
     pub event_timer_secs: Option<u64>,
 }
 
@@ -67,6 +69,7 @@ pub struct ClientConfig {
         value_name = "FILE",
         parse(from_os_str)
     )]
+    /// File to load ed25519 client private key from. Temporary solution until keyvault is used here.
     pub private_key_file: PathBuf,
 
     #[structopt(long, value_name = "DID")]

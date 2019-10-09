@@ -494,7 +494,6 @@ before trying to restore another vault."#,
         profile.mut_public_data().remove_link(&peer_profile_id);
         profile.mut_public_data().increase_version();
         self.local_repo.set(profile).wait()?;
-        self.save_vault()?;
-        Ok(())
+        self.save_vault()
     }
 }
