@@ -1,7 +1,7 @@
 use tokio::runtime::current_thread;
 
-use crate::vault::api_impl::VaultApiImpl;
-use crate::vault::http::server::routes::init_url_mapping;
+use crate::dapp::dapp_session::DAppSessionServiceImpl;
+use crate::vault::api_impl::VaultState;
 use crate::*;
 
 pub struct Daemon {
@@ -75,7 +75,7 @@ fn start_daemon(options: Options) -> Fallible<Server> {
     let timeout = Duration::from_secs(options.network_timeout_secs);
     let rpc_repo = RpcProfileRepository::new(&options.remote_repo_address, timeout)?;
 
-    let ctx = VaultApiImpl::new(
+    let ctx = VaultState::new(
         vault_path.clone(),
         schema_path.clone(),
         vault,
@@ -96,7 +96,8 @@ fn start_daemon(options: Options) -> Fallible<Server> {
             .wrap(Cors::default())
             .data(web::JsonConfig::default().limit(16_777_216))
             .register_data(daemon_state.clone())
-            .configure(init_url_mapping)
+            .configure(vault::http::server::routes::init_url_mapping)
+            .configure(dapp::websocket::routes::init_url_mapping)
             .default_service(web::to(HttpResponse::NotFound))
     })
     .workers(1) // default is a thread on each CPU core, but we're serving on localhost only

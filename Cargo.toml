@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "claims",
-    "connect",
+#    "connect",
     "did",
     "home-protocol",
     "home-node",
@@ -12,6 +12,7 @@ members = [
     "prometheus-cli",
     "prometheus-tester",
     "storage",
-    "test",
+# TODO put this back after refactoring
+#    "test",
     "examples/TheButton"
 ]

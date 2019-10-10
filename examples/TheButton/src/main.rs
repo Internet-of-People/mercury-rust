@@ -32,32 +32,35 @@ pub struct AppContext {
     dapp_service: Rc<dyn DAppSessionService>,
     dapp_profile_id: ProfileId,
     home_id: ProfileId,
-    app_id: ApplicationId,
+    dapp_id: ApplicationId,
     handle: reactor::Handle,
 }
 
 impl AppContext {
     pub fn new(
         profile_privatekey_file: &PathBuf,
-        node_pubkey: &PublicKey,
-        node_addr: &SocketAddr,
+        home_pubkey: &PublicKey,
+        home_addr: &SocketAddr,
         reactor: &mut reactor::Core,
     ) -> Fallible<Self> {
         let dapp_service = Rc::new(websocket::client::ServiceClient::new());
 
+        // TODO private key must never be exposed directly, only a Signer (just like hardware wallets)
         let private_key_bytes = std::fs::read(profile_privatekey_file)?;
         let private_key_ed = ed25519::EdPrivateKey::from_bytes(private_key_bytes)?;
         let private_key = PrivateKey::from(private_key_ed);
         let dapp_profile_id = private_key.public_key().key_id();
 
-        let home_id = node_pubkey.key_id();
-        Ok(Self {
+        let home_id = home_pubkey.key_id();
+        let this = Self {
             dapp_service,
             dapp_profile_id,
             home_id,
             handle: reactor.handle(),
-            app_id: ApplicationId("TheButton-dApp-Sample".into()),
-        })
+            dapp_id: ApplicationId("TheButton-dApp-Sample".into()),
+        };
+        init::ensure_registered_to_home(reactor, private_key, home_addr, &this)?;
+        Ok(this)
     }
 }
 

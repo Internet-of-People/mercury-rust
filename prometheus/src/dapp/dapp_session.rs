@@ -100,7 +100,7 @@ pub trait DAppSessionService {
     fn dapp_session(&self, app: ApplicationId) -> AsyncFallible<Rc<dyn DAppSession>>;
 }
 
-struct DAppSessionServiceImpl {
+pub struct DAppSessionServiceImpl {
     interactor: Rc<dyn UserInteractor>,
     home_connector: Rc<dyn HomeConnector>,
     profile_repo: Rc<dyn DistributedPublicProfileRepository>,

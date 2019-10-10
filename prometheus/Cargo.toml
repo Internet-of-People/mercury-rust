@@ -5,16 +5,17 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 edition = "2018"
 
 [dependencies]
-actix-rt = "*"
+actix = "*"
+actix-rt = ""
 actix-cors = "*"
 actix-http = { version = "*", features = ["rust-tls"] }
 actix-server = "0.6" # Concrete version to fix currently conflicting includes from other actix components from latest versions from crates.io
 actix-web = "*"
+actix-web-actors = "*"
 base64 = "*"
 blockies = "*"
 bytes = "*"
 claims = { path="../claims" }
-mercury-connect = { path="../connect" }
 did = { path="../did" }
 failure = "*"
 futures = "0.1"
@@ -22,6 +23,7 @@ mercury-home-protocol = { path="../home-protocol" }
 keyvault = { path="../keyvault" }
 log = "*"
 log4rs = "*"
+multiaddr = "*"
 multibase = "*"
 osg-rpc-storage = { path="../osg-rpc-storage" }
 rand = "*"
@@ -32,6 +34,7 @@ serde_derive = "*"
 serde_json = "*"
 structopt = "*"
 tokio = "*"
+tokio-core = "*"
 
 [dev-dependencies]
 tempfile = "*"

@@ -1,7 +1,9 @@
 pub mod daemon;
 pub mod dapp;
+pub mod home;
 pub mod names;
 pub mod options;
+pub mod test;
 pub mod vault;
 
 use std::sync::Mutex;

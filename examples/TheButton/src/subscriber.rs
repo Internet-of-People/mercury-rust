@@ -1,7 +1,6 @@
 use futures::prelude::*;
 use log::*;
 
-use crate::init::init_app_common;
 use crate::options::SubscriberConfig;
 use crate::*;
 use mercury_home_protocol::*;
@@ -64,7 +63,6 @@ impl Client {
         let callee_profile_id = self.cfg.server_id.clone();
         let contact_fut = dapp_session.relation(&callee_profile_id).and_then({
             let peer_id = self.cfg.server_id.clone();
-            let client_id = self.appctx.dapp_profile_id.clone();
             let handle = self.appctx.handle.clone();
             move |relation| {
                 let init_rel_fut = dapp_session.initiate_relation(&peer_id);
@@ -72,12 +70,13 @@ impl Client {
                     Some(relation) => Box::new(Ok(relation).into_future()) as AsyncResult<_, _>,
                     None => {
                         debug!("No signed relation to server is available, initiate pairing");
+                        let persona_id = dapp_session.selected_profile().to_owned();
                         let rel_fut = dapp_session
                             .checkin()
                             .and_then(|events| init_rel_fut.map(|()| events))
                             .and_then(|events| {
                                 debug!("Pairing request sent, start waiting for response");
-                                Self::wait_for_pairing_response(events, client_id, handle)
+                                Self::wait_for_pairing_response(events, persona_id, handle)
                             });
                         Box::new(rel_fut)
                     }
@@ -97,7 +96,7 @@ impl IntoFuture for Client {
         let client_fut = self
             .appctx
             .dapp_service
-            .dapp_session(self.appctx.app_id.to_owned())
+            .dapp_session(self.appctx.dapp_id.to_owned())
             .and_then({
                 let client = self.clone();
                 move |dapp_session| client.get_or_create_contact(dapp_session)
@@ -119,6 +118,6 @@ impl IntoFuture for Client {
                     .map_err(|()| err_msg("Failed to get next event from publisher"))
             });
 
-        Box::new(init_app_common(&self.appctx).then(|_res| client_fut))
+        Box::new(client_fut)
     }
 }

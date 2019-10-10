@@ -1,11 +1,6 @@
-use std::rc::Rc;
-
-use failure::{err_msg, Fallible};
-use futures::future::IntoFuture;
 use serde::{Deserialize, Serialize};
 
 use did::model::ProfileId;
-use did::vault::ProfileVault;
 use mercury_home_protocol::{AsyncFallible, RelationHalfProof, RelationProof};
 
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
@@ -35,40 +30,4 @@ pub trait UserInteractor {
     // or the user can create a new one (using a KeyVault) to be selected.
     // TODO this should open something nearly identical to manage_profiles()
     fn select_profile(&self) -> AsyncFallible<ProfileId>;
-}
-
-pub struct DummyUserInteractor {
-    profile_vault: Rc<dyn ProfileVault>,
-}
-
-impl DummyUserInteractor {
-    pub fn new(profile_vault: Rc<dyn ProfileVault>) -> Self {
-        Self { profile_vault }
-    }
-
-    fn select_profile_sync(&self) -> Fallible<ProfileId> {
-        self.profile_vault.get_active()?.ok_or(err_msg("No default active profile selected"))
-    }
-}
-
-impl UserInteractor for DummyUserInteractor {
-    fn initialize(&self) -> AsyncFallible<()> {
-        Box::new(Ok(()).into_future())
-    }
-
-    fn confirm_dappaction(&self, _action: &DAppAction) -> AsyncFallible<()> {
-        Box::new(Ok(()).into_future())
-    }
-
-    fn confirm_pairing(&self, _request: &RelationHalfProof) -> AsyncFallible<()> {
-        Box::new(Ok(()).into_future())
-    }
-
-    fn notify_pairing(&self, _response: &RelationProof) -> AsyncFallible<()> {
-        Box::new(Ok(()).into_future())
-    }
-
-    fn select_profile(&self) -> AsyncFallible<ProfileId> {
-        Box::new(self.select_profile_sync().into_future())
-    }
 }

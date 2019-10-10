@@ -16,7 +16,7 @@ use keyvault::PublicKey as KeyVaultPublicKey;
 
 const ERR_MSG_VAULT_UNINITIALIZED: &str = "Vault is uninitialized, `restore vault` first";
 
-pub struct VaultApiImpl {
+pub struct VaultState {
     vault_path: PathBuf,
     schema_path: PathBuf, // TODO Re-reading all schemas each time might be expensive
     vault: Option<Box<dyn ProfileVault + Send>>,
@@ -31,7 +31,7 @@ pub struct VaultApiImpl {
 //      For real asynchronous repositories this implementation has to be changed,
 //      likely by changing the API itself to be async, or maybe somehow making sure that
 //      the wait() calls below run on a different thread and don't block the running reactor tasks.
-impl VaultApiImpl {
+impl VaultState {
     pub fn new(
         vault_path: PathBuf,
         schema_path: PathBuf,
@@ -170,7 +170,7 @@ impl VaultApiImpl {
     }
 }
 
-impl VaultApi for VaultApiImpl {
+impl VaultApi for VaultState {
     fn restore_vault(&mut self, phrase: String) -> Fallible<()> {
         ensure!(
             self.vault.is_none(),

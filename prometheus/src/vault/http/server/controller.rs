@@ -6,7 +6,7 @@ use failure::{err_msg, format_err, Fallible};
 use log::*;
 
 use crate::names::DeterministicNameGenerator;
-use crate::vault::api_impl::VaultApiImpl;
+use crate::vault::api_impl::VaultState;
 use crate::*;
 use claims::model::*;
 use keyvault::Seed;
@@ -31,7 +31,7 @@ pub fn validate_bip39_word(word: web::Json<String>) -> impl Responder {
 // TODO this Fallible -> Responder mapping + logging should be less manual,
 //      at least parts should be generated, e.g. using macros
 pub fn init_vault(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     words: web::Json<Vec<String>>,
 ) -> impl Responder {
     let mut state = match lock_state(&state) {
@@ -52,7 +52,7 @@ pub fn init_vault(
     }
 }
 
-pub fn restore_all_dids(state: web::Data<Mutex<VaultApiImpl>>) -> impl Responder {
+pub fn restore_all_dids(state: web::Data<Mutex<VaultState>>) -> impl Responder {
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
@@ -70,7 +70,7 @@ pub fn restore_all_dids(state: web::Data<Mutex<VaultApiImpl>>) -> impl Responder
     }
 }
 
-pub fn get_default_did(state: web::Data<Mutex<VaultApiImpl>>) -> impl Responder {
+pub fn get_default_did(state: web::Data<Mutex<VaultState>>) -> impl Responder {
     let state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
@@ -85,7 +85,7 @@ pub fn get_default_did(state: web::Data<Mutex<VaultApiImpl>>) -> impl Responder 
 }
 
 pub fn set_default_did(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     did_str: web::Json<String>,
 ) -> impl Responder {
     let did = match did_str.parse::<ProfileId>() {
@@ -105,7 +105,7 @@ pub fn set_default_did(
     }
 }
 
-pub fn list_did(state: web::Data<Mutex<VaultApiImpl>>) -> impl Responder {
+pub fn list_did(state: web::Data<Mutex<VaultState>>) -> impl Responder {
     let state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
@@ -122,7 +122,7 @@ pub fn list_did(state: web::Data<Mutex<VaultApiImpl>>) -> impl Responder {
     }
 }
 
-pub fn list_dids_from_state(state: &VaultApiImpl) -> Fallible<Vec<VaultEntry>> {
+pub fn list_dids_from_state(state: &VaultState) -> Fallible<Vec<VaultEntry>> {
     let recs = state.list_vault_records()?;
     let entries = recs
         .iter()
@@ -138,7 +138,7 @@ pub fn list_dids_from_state(state: &VaultApiImpl) -> Fallible<Vec<VaultEntry>> {
 }
 
 pub fn create_did(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     mut label: web::Json<ProfileLabel>,
 ) -> impl Responder {
     let mut state = match lock_state(&state) {
@@ -157,7 +157,7 @@ pub fn create_did(
     }
 }
 
-pub fn create_dids_to_state(state: &mut VaultApiImpl, label: &mut String) -> Fallible<VaultEntry> {
+pub fn create_dids_to_state(state: &mut VaultState, label: &mut String) -> Fallible<VaultEntry> {
     debug!("Creating profile with label '{}'", label);
     let profile = state.create_profile(Some(label.clone()))?;
     let did = profile.id();
@@ -185,10 +185,7 @@ pub fn create_dids_to_state(state: &mut VaultApiImpl, label: &mut String) -> Fal
     })
 }
 
-pub fn get_did(
-    state: web::Data<Mutex<VaultApiImpl>>,
-    did_path: web::Path<String>,
-) -> impl Responder {
+pub fn get_did(state: web::Data<Mutex<VaultState>>, did_path: web::Path<String>) -> impl Responder {
     let did = match did_opt(&did_path) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -211,7 +208,7 @@ pub fn get_did(
 }
 
 pub fn restore(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     did_path: web::Path<String>,
     force: web::Json<bool>,
 ) -> impl Responder {
@@ -235,10 +232,7 @@ pub fn restore(
     }
 }
 
-pub fn revert(
-    state: web::Data<Mutex<VaultApiImpl>>,
-    did_path: web::Path<String>,
-) -> impl Responder {
+pub fn revert(state: web::Data<Mutex<VaultState>>, did_path: web::Path<String>) -> impl Responder {
     let did = match did_opt(&did_path) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -260,7 +254,7 @@ pub fn revert(
 }
 
 pub fn publish(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     did_path: web::Path<String>,
     force: web::Json<bool>,
 ) -> impl Responder {
@@ -285,7 +279,7 @@ pub fn publish(
 }
 
 pub fn rename_did(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     did_path: web::Path<String>,
     mut label: web::Json<ProfileLabel>,
 ) -> impl Responder {
@@ -312,7 +306,7 @@ pub fn rename_did(
 }
 
 pub fn get_profile(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     did_path: web::Path<String>,
 ) -> impl Responder {
     let did = match did_opt(&did_path) {
@@ -336,7 +330,7 @@ pub fn get_profile(
 }
 
 pub fn set_avatar(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     did_path: web::Path<String>,
     avatar: web::Json<DataUri>,
 ) -> impl Responder {
@@ -357,7 +351,7 @@ pub fn set_avatar(
 }
 
 fn set_avatar_in_state(
-    state: &mut VaultApiImpl,
+    state: &mut VaultState,
     did_str: &String,
     avatar_datauri: &DataUri,
 ) -> Fallible<()> {
@@ -371,7 +365,7 @@ fn set_avatar_in_state(
 }
 
 pub fn set_did_attribute(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     attr_path: web::Path<AttributePath>,
     attr_val: web::Json<String>,
 ) -> impl Responder {
@@ -396,7 +390,7 @@ pub fn set_did_attribute(
 }
 
 pub fn clear_did_attribute(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     attr_path: web::Path<AttributePath>,
 ) -> impl Responder {
     let did = match did_opt(&attr_path.did) {
@@ -420,7 +414,7 @@ pub fn clear_did_attribute(
 }
 
 pub fn sign_claim(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     did_path: web::Path<String>,
     claim: String,
 ) -> impl Responder {
@@ -449,7 +443,7 @@ pub fn sign_claim(
 }
 
 pub fn list_did_claims(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     did_path: web::Path<String>,
 ) -> impl Responder {
     let did = match did_opt(&did_path) {
@@ -473,7 +467,7 @@ pub fn list_did_claims(
 }
 
 // TODO consider changing state operation return types to ApiClaim
-fn list_did_claims_impl(state: &VaultApiImpl, did: Option<ProfileId>) -> Fallible<Vec<ApiClaim>> {
+fn list_did_claims_impl(state: &VaultState, did: Option<ProfileId>) -> Fallible<Vec<ApiClaim>> {
     let claims = state.claims(did.clone())?;
     let rec = state.get_vault_record(did)?;
     let schema_registry = state.claim_schemas()?;
@@ -490,7 +484,7 @@ fn list_did_claims_impl(state: &VaultApiImpl, did: Option<ProfileId>) -> Fallibl
     Ok(claims)
 }
 
-pub fn list_vault_claims(state: web::Data<Mutex<VaultApiImpl>>) -> impl Responder {
+pub fn list_vault_claims(state: web::Data<Mutex<VaultState>>) -> impl Responder {
     let state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
@@ -507,7 +501,7 @@ pub fn list_vault_claims(state: web::Data<Mutex<VaultApiImpl>>) -> impl Responde
     }
 }
 
-fn list_vault_claims_from_state(state: &VaultApiImpl) -> Fallible<Vec<ApiClaim>> {
+fn list_vault_claims_from_state(state: &VaultState) -> Fallible<Vec<ApiClaim>> {
     let schema_registry = state.claim_schemas()?;
 
     let mut claims = Vec::new();
@@ -522,7 +516,7 @@ fn list_vault_claims_from_state(state: &VaultApiImpl) -> Fallible<Vec<ApiClaim>>
 }
 
 pub fn create_did_claim(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     did_path: web::Path<String>,
     claim_details: web::Json<CreateClaim>,
 ) -> impl Responder {
@@ -554,7 +548,7 @@ pub fn create_did_claim(
 }
 
 pub fn delete_claim(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     claim_path: web::Path<ClaimPath>,
 ) -> impl Responder {
     let did = match did_opt(&claim_path.did) {
@@ -579,7 +573,7 @@ pub fn delete_claim(
 }
 
 pub fn request_claim_signature(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     claim_path: web::Path<ClaimPath>,
 ) -> impl Responder {
     let did = match did_opt(&claim_path.did) {
@@ -612,7 +606,7 @@ pub fn request_claim_signature(
 }
 
 pub fn add_claim_proof(
-    state: web::Data<Mutex<VaultApiImpl>>,
+    state: web::Data<Mutex<VaultState>>,
     claim_path: web::Path<ClaimPath>,
     proof: String,
 ) -> impl Responder {
@@ -633,7 +627,7 @@ pub fn add_claim_proof(
 }
 
 pub fn add_claim_proof_to_state(
-    state: &mut VaultApiImpl,
+    state: &mut VaultState,
     claim_path: &ClaimPath,
     proof_str: &String,
 ) -> Fallible<()> {
@@ -648,7 +642,7 @@ pub fn add_claim_proof_to_state(
     state.add_claim_proof(did, claim_id, proof)
 }
 
-pub fn list_schemas(state: web::Data<Mutex<VaultApiImpl>>) -> impl Responder {
+pub fn list_schemas(state: web::Data<Mutex<VaultState>>) -> impl Responder {
     let state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
@@ -675,19 +669,19 @@ fn did_opt(did_str: &str) -> Fallible<Option<ProfileId>> {
     Ok(Some(did))
 }
 
-fn did_res(state: &VaultApiImpl, did_str: &str) -> Fallible<ProfileId> {
+fn did_res(state: &VaultState, did_str: &str) -> Fallible<ProfileId> {
     did_opt(did_str)?
         .or(state.get_active_profile()?)
         .ok_or_else(|| err_msg("No profile specified and no active profile set in vault"))
 }
 
-fn lock_state(state: &web::Data<Mutex<VaultApiImpl>>) -> Fallible<MutexGuard<VaultApiImpl>> {
+fn lock_state(state: &web::Data<Mutex<VaultState>>) -> Fallible<MutexGuard<VaultState>> {
     state.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))
 }
 
 // TODO consider moving this to the state
 fn reset_label_if_empty(
-    state: &mut VaultApiImpl,
+    state: &mut VaultState,
     label: &mut String,
     did: &ProfileId,
 ) -> Fallible<()> {

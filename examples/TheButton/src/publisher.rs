@@ -7,7 +7,7 @@ use log::*;
 use tokio_signal::unix::SIGUSR1;
 
 use super::*;
-use crate::init::init_server;
+use crate::init::init_publisher;
 use crate::options::PublisherConfig;
 
 pub struct Server {
@@ -31,7 +31,7 @@ impl IntoFuture for Server {
         // Create dApp session with Mercury Connect and listen for incoming events, automatically accept calls
         let active_calls_rc = self.active_calls.clone();
 
-        let dapp_events_fut = self.appctx.dapp_service.dapp_session(self.appctx.app_id.to_owned())
+        let dapp_events_fut = self.appctx.dapp_service.dapp_session(self.appctx.dapp_id.to_owned())
             .inspect( |_| debug!("dApp session was initialized, checking in") )
             .map_err( |err| { error!("Failed to create dApp session: {:?}", err); err } )
             .and_then(|dapp_session| dapp_session.checkin() )
@@ -120,6 +120,6 @@ impl IntoFuture for Server {
             }
         };
 
-        Box::new(init_server(&self).then(|_| server_fut))
+        Box::new(init_publisher(&self).then(|_| server_fut))
     }
 }
