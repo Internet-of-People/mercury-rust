@@ -1,7 +1,7 @@
 use actix_web::web;
 //use log::*;
 
-use crate::http::server::controller::*;
+use crate::vault::http::server::controller::*;
 
 // TODO make URLs const variables and share them between server and client
 pub fn init_url_mapping(service: &mut web::ServiceConfig) {

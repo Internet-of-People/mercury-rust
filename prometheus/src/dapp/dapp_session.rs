@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use futures::{Future, Stream};
 
-use crate::user_interactor::UserInteractor;
+use crate::dapp::user_interactor::UserInteractor;
 use crate::*;
 use claims::model::*;
 use mercury_home_protocol::net::HomeConnector;

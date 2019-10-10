@@ -6,7 +6,7 @@ use failure::{bail, ensure, err_msg, format_err, Fallible};
 use futures::prelude::*;
 use log::*;
 
-use crate::*;
+use crate::vault::api::*;
 use claims::claim_schema::ClaimSchemaRegistry;
 pub use claims::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
 use claims::model::*;
@@ -294,7 +294,7 @@ before trying to restore another vault."#,
         profile_id: Option<ProfileId>,
         kind: ProfileRepositoryKind,
     ) -> Fallible<PrivateProfileData> {
-        use crate::api::ProfileRepositoryKind::*;
+        use ProfileRepositoryKind::*;
         // NOTE must also work with a profile that is not ours
         let profile_id = self.selected_profile_id(profile_id)?;
         let repo = match kind {

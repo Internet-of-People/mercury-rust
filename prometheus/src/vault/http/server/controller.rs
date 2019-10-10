@@ -6,7 +6,7 @@ use failure::{err_msg, format_err, Fallible};
 use log::*;
 
 use crate::names::DeterministicNameGenerator;
-use crate::vault_imp::VaultApiImpl;
+use crate::vault::api_impl::VaultApiImpl;
 use crate::*;
 use claims::model::*;
 use keyvault::Seed;

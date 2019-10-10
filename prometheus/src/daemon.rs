@@ -1,6 +1,7 @@
 use tokio::runtime::current_thread;
 
-use crate::vault_imp::VaultApiImpl;
+use crate::vault::api_impl::VaultApiImpl;
+use crate::vault::http::server::routes::init_url_mapping;
 use crate::*;
 
 pub struct Daemon {
@@ -95,7 +96,7 @@ fn start_daemon(options: Options) -> Fallible<Server> {
             .wrap(Cors::default())
             .data(web::JsonConfig::default().limit(16_777_216))
             .register_data(daemon_state.clone())
-            .configure(http::server::routes::init_url_mapping)
+            .configure(init_url_mapping)
             .default_service(web::to(HttpResponse::NotFound))
     })
     .workers(1) // default is a thread on each CPU core, but we're serving on localhost only

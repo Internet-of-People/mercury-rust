@@ -6,7 +6,7 @@ use log::*;
 use structopt::StructOpt;
 
 use crate::options::{Command, Options};
-use prometheus::http::client::VaultClient;
+use prometheus::vault::http::client::VaultClient;
 
 fn main() {
     match run() {
