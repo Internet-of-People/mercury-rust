@@ -1,43 +1,36 @@
-pub mod client;
-mod init_hack;
+mod init;
 pub mod options;
-pub mod server;
+pub mod publisher;
+pub mod subscriber;
 
-use std::cell::RefCell;
-use std::collections::HashSet;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::rc::Rc;
 
-use failure::Fail;
+use failure::{err_msg, format_err, Fallible};
 use futures::prelude::*;
 use log::*;
 use structopt::StructOpt;
 use tokio_core::reactor;
 use tokio_signal::unix::{Signal, SIGINT};
 
-use client::Client;
-use init_hack::init_connect_service;
-use mercury_connect::net::SimpleTcpHomeConnector;
-use mercury_connect::profile::MyProfile;
-use mercury_connect::service::ConnectService;
-use mercury_connect::*;
+use keyvault::{PrivateKey as KeyVaultPrivateKey, PublicKey as KeyVaultPublicKey};
 use mercury_home_protocol::*;
 use options::*;
-use server::Server;
+use prometheus::dapp::{dapp_session::*, websocket};
+use publisher::Server;
+use subscriber::Client;
 
-pub fn signal_recv(sig: i32) -> Box<dyn Stream<Item = i32, Error = Error>> {
+pub fn signal_recv(sig: i32) -> Box<dyn Stream<Item = i32, Error = failure::Error>> {
     Box::new(
-        Signal::new(sig)
-            .flatten_stream()
-            .map_err(|e| e.context(ErrorKind::ImplementationError).into()),
+        Signal::new(sig).flatten_stream().map_err(|e| format_err!("Failed to get signal: {}", e)),
     )
 }
 
 #[derive(Clone)]
 pub struct AppContext {
-    service: Rc<ConnectService>,
-    client_id: ProfileId,
+    dapp_service: Rc<dyn DAppSessionService>,
+    dapp_profile_id: ProfileId,
     home_id: ProfileId,
     app_id: ApplicationId,
     handle: reactor::Handle,
@@ -45,18 +38,22 @@ pub struct AppContext {
 
 impl AppContext {
     pub fn new(
-        priv_key: &PathBuf,
+        profile_privatekey_file: &PathBuf,
         node_pubkey: &PublicKey,
         node_addr: &SocketAddr,
         reactor: &mut reactor::Core,
-    ) -> Result<Self, Error> {
-        // TODO when we'll have a standalone service with proper IPC/RPC interface,
-        //      this must be changed into a simple connect() call instead of building a service instance
-        let (service, client_id, home_id) =
-            init_connect_service(priv_key, node_pubkey, node_addr, reactor)?;
+    ) -> Fallible<Self> {
+        let dapp_service = Rc::new(websocket::client::ServiceClient::new());
+
+        let private_key_bytes = std::fs::read(profile_privatekey_file)?;
+        let private_key_ed = ed25519::EdPrivateKey::from_bytes(private_key_bytes)?;
+        let private_key = PrivateKey::from(private_key_ed);
+        let dapp_profile_id = private_key.public_key().key_id();
+
+        let home_id = node_pubkey.key_id();
         Ok(Self {
-            service,
-            client_id,
+            dapp_service,
+            dapp_profile_id,
             home_id,
             handle: reactor.handle(),
             app_id: ApplicationId("TheButton-dApp-Sample".into()),
@@ -70,7 +67,7 @@ pub enum OnFail {
     Retry,
 }
 
-fn main() -> Result<(), Error> {
+fn main() -> Fallible<()> {
     let options = Options::from_args();
     log4rs::init_file(&options.logger_config, Default::default()).unwrap();
 
@@ -80,8 +77,8 @@ fn main() -> Result<(), Error> {
     debug!("Parsed options, initializing application");
 
     let priv_key_file = match options.command {
-        Command::Server(ref cfg) => &cfg.private_key_file,
-        Command::Client(ref cfg) => &cfg.private_key_file,
+        Command::Pubhlisher(ref cfg) => &cfg.private_key_file,
+        Command::Subscriber(ref cfg) => &cfg.private_key_file,
     };
 
     // Constructing application context from command line args
@@ -90,8 +87,8 @@ fn main() -> Result<(), Error> {
 
     // Creating application object
     let app_fut = match options.command {
-        Command::Server(cfg) => Server::new(cfg, appcx).into_future(),
-        Command::Client(cfg) => Client::new(cfg, appcx).into_future(),
+        Command::Pubhlisher(cfg) => Server::new(cfg, appcx).into_future(),
+        Command::Subscriber(cfg) => Client::new(cfg, appcx).into_future(),
     };
 
     debug!("Initialized application, running");

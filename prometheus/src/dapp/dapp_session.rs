@@ -42,6 +42,7 @@ pub trait DAppSession {
 
     fn relations(&self) -> AsyncFallible<Vec<Box<dyn Relation>>>;
     fn relation(&self, id: &ProfileId) -> AsyncFallible<Option<Box<dyn Relation>>>;
+    fn initiate_relation(&self, with_profile: &ProfileId) -> AsyncFallible<()>;
 
     fn checkin(&self) -> AsyncFallible<Box<dyn Stream<Item = DAppEvent, Error = ()>>>;
 }
@@ -82,6 +83,10 @@ impl DAppSession for DAppSessionImpl {
     }
 
     fn relation(&self, _id: &ProfileId) -> AsyncFallible<Option<Box<dyn Relation>>> {
+        unimplemented!()
+    }
+
+    fn initiate_relation(&self, with_profile: &ProfileId) -> AsyncFallible<()> {
         unimplemented!()
     }
 

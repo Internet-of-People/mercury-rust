@@ -15,10 +15,10 @@ futures = "0.1"
 log = "*"
 log4rs = "*"
 mercury-home-protocol = { path="../../home-protocol" }
-mercury-connect = { path="../../connect" }
 multiaddr = "*"
 multibase = "*"
 osg-rpc-storage = { path="../../osg-rpc-storage" }
+prometheus = { path="../../prometheus" }
 structopt = "*"
 tempdir = "*"
 tokio-signal = "*"

@@ -36,17 +36,17 @@ pub struct Options {
 
 #[derive(Debug, StructOpt)]
 pub enum Command {
-    #[structopt(name = "server")]
+    #[structopt(name = "publisher")]
     /// Generate a phraselist needed to create a profile vault
-    Server(ServerConfig),
+    Pubhlisher(PublisherConfig),
 
-    #[structopt(name = "client")]
+    #[structopt(name = "subscriber")]
     /// Restore profile vault from a phraselist or profile from remote repository
-    Client(ClientConfig),
+    Subscriber(SubscriberConfig),
 }
 
 #[derive(Clone, Debug, StructOpt)]
-pub struct ServerConfig {
+pub struct PublisherConfig {
     #[structopt(
         long,
         default_value = "../../etc/server.id",
@@ -62,7 +62,7 @@ pub struct ServerConfig {
 }
 
 #[derive(Clone, Debug, StructOpt)]
-pub struct ClientConfig {
+pub struct SubscriberConfig {
     #[structopt(
         long,
         default_value = "../../etc/client.id",

@@ -7,31 +7,31 @@ use log::*;
 use tokio_signal::unix::SIGUSR1;
 
 use super::*;
-use crate::init_hack::init_server;
-use crate::options::ServerConfig;
+use crate::init::init_server;
+use crate::options::PublisherConfig;
 
 pub struct Server {
-    pub cfg: ServerConfig,
+    pub cfg: PublisherConfig,
     pub appctx: AppContext,
     active_calls: Rc<RefCell<Vec<DAppCall>>>,
 }
 
 impl Server {
-    pub fn new(cfg: ServerConfig, appctx: AppContext) -> Self {
+    pub fn new(cfg: PublisherConfig, appctx: AppContext) -> Self {
         Self { cfg, appctx, active_calls: Default::default() }
     }
 }
 
 impl IntoFuture for Server {
     type Item = ();
-    type Error = Error;
+    type Error = failure::Error;
     type Future = AsyncResult<Self::Item, Self::Error>;
 
     fn into_future(self) -> Self::Future {
         // Create dApp session with Mercury Connect and listen for incoming events, automatically accept calls
         let active_calls_rc = self.active_calls.clone();
 
-        let dapp_events_fut = self.appctx.service.dapp_session(&self.appctx.app_id, None)
+        let dapp_events_fut = self.appctx.dapp_service.dapp_session(self.appctx.app_id.to_owned())
             .inspect( |_| debug!("dApp session was initialized, checking in") )
             .map_err( |err| { error!("Failed to create dApp session: {:?}", err); err } )
             .and_then(|dapp_session| dapp_session.checkin() )
@@ -39,7 +39,7 @@ impl IntoFuture for Server {
             .and_then(move |dapp_events|
             {
                 dapp_events
-                    .map_err( |()| Error::from(ErrorKind::ConnectionFailed) )
+                    .map_err( |()| err_msg("Failed to get events") )
                     .for_each( move |event|
                     {
                         match event
@@ -77,7 +77,7 @@ impl IntoFuture for Server {
                 }
                 Ok(())
             })
-            .map_err(|_err| Error::from(ErrorKind::ImplementationError));
+            .map_err(|e| format_err!("Failed to detect next button pressed event: {:?}", e));
 
         // Receiving a SIGUSR1 signal generates an event
         let button_press_generator = generate_button_press.clone();
@@ -87,7 +87,7 @@ impl IntoFuture for Server {
                 .clone()
                 .send(())
                 .map(|_| ())
-                .map_err(|_err| Error::from(ErrorKind::ImplementationError))
+                .map_err(|e| format_err!("Failed to fetch next interrupt event: {}", e))
         });
 
         // Combine all three for_each() tasks to be run in "parallel" on the reactor
@@ -108,11 +108,11 @@ impl IntoFuture for Server {
                 let press_on_timer_fut =
                     reactor::Interval::new(Duration::from_secs(interval_secs), &self.appctx.handle)
                         .unwrap()
-                        .map_err(|err| Error::from(err.context(ErrorKind::ImplementationError)))
+                        .map_err(|e| format_err!("Failed to set button pressed timer: {}", e))
                         .for_each(move |_| {
                             info!("interval timer fired, generating event");
-                            generate_button_press.clone().send(()).map(|_| ()).map_err(|err| {
-                                Error::from(err.context(ErrorKind::ImplementationError))
+                            generate_button_press.clone().send(()).map(|_| ()).map_err(|e| {
+                                format_err!("Failed to send event to subscriber: {}", e)
                             })
                         });
 

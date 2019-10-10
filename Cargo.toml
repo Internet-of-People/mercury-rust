@@ -13,5 +13,5 @@ members = [
     "prometheus-tester",
     "storage",
     "test",
-#    "examples/TheButton"
+    "examples/TheButton"
 ]

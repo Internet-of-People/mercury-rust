@@ -1,19 +1,19 @@
 use futures::prelude::*;
 use log::*;
 
-use crate::init_hack::init_app_common;
-use crate::options::ClientConfig;
+use crate::init::init_app_common;
+use crate::options::SubscriberConfig;
 use crate::*;
 use mercury_home_protocol::*;
 
 #[derive(Clone)]
 pub struct Client {
-    pub cfg: ClientConfig,
+    pub cfg: SubscriberConfig,
     pub appctx: AppContext,
 }
 
 impl Client {
-    pub fn new(cfg: ClientConfig, appctx: AppContext) -> Self {
+    pub fn new(cfg: SubscriberConfig, appctx: AppContext) -> Self {
         Self { appctx, cfg }
     }
 
@@ -21,7 +21,7 @@ impl Client {
         events: Box<dyn Stream<Item = DAppEvent, Error = ()>>,
         my_profile_id: ProfileId,
         handle: reactor::Handle,
-    ) -> AsyncResult<Box<dyn Contact>, Error> {
+    ) -> AsyncFallible<Box<dyn Relation>> {
         let fut = events
             .filter_map(move |event| {
                 debug!("TheButton got event");
@@ -40,19 +40,19 @@ impl Client {
             .into_future() // NOTE transforms stream into a future of an (item,stream) pair
             .map_err(|((), _stream)| {
                 debug!("Pairing failed");
-                Error::from(ErrorKind::LookupFailed)
+                err_msg("Pairing failed")
             })
             .and_then(|(proof, _stream)| {
                 proof.ok_or_else(|| {
                     debug!("Profile event stream ended without proper response");
-                    Error::from(ErrorKind::LookupFailed)
+                    err_msg("Profile event stream ended without proper response")
                 })
             })
             .and_then(move |proof| {
                 reactor::Timeout::new(std::time::Duration::from_millis(10), &handle)
                     .unwrap()
                     .map(|_| proof)
-                    .map_err(|e| e.context(ErrorKind::ImplementationError).into())
+                    .map_err(|e| e.into())
             });
         Box::new(fut)
     }
@@ -60,15 +60,15 @@ impl Client {
     fn get_or_create_contact(
         self,
         dapp_session: Rc<dyn DAppSession>,
-    ) -> AsyncResult<Box<dyn Contact>, Error> {
+    ) -> AsyncFallible<Box<dyn Relation>> {
         let callee_profile_id = self.cfg.server_id.clone();
-        let contact_fut = dapp_session.contacts_with_profile(&callee_profile_id, None).and_then({
+        let contact_fut = dapp_session.relation(&callee_profile_id).and_then({
             let peer_id = self.cfg.server_id.clone();
-            let client_id = self.appctx.client_id.clone();
+            let client_id = self.appctx.dapp_profile_id.clone();
             let handle = self.appctx.handle.clone();
-            move |mut relations| {
-                let init_rel_fut = dapp_session.initiate_contact(&peer_id);
-                match relations.pop() {
+            move |relation| {
+                let init_rel_fut = dapp_session.initiate_relation(&peer_id);
+                match relation {
                     Some(relation) => Box::new(Ok(relation).into_future()) as AsyncResult<_, _>,
                     None => {
                         debug!("No signed relation to server is available, initiate pairing");
@@ -91,13 +91,13 @@ impl Client {
 impl IntoFuture for Client {
     type Future = AsyncResult<Self::Item, Self::Error>;
     type Item = ();
-    type Error = Error;
+    type Error = failure::Error;
 
     fn into_future(self) -> Self::Future {
         let client_fut = self
             .appctx
-            .service
-            .dapp_session(&self.appctx.app_id, None)
+            .dapp_service
+            .dapp_session(self.appctx.app_id.to_owned())
             .and_then({
                 let client = self.clone();
                 move |dapp_session| client.get_or_create_contact(dapp_session)
@@ -116,7 +116,7 @@ impl IntoFuture for Client {
                         msg.map(|frame| info!("Client received server message {:?}", frame))
                             .map_err(|err| warn!("Client got server error {:?}", err))
                     })
-                    .map_err(|()| Error::from(ErrorKind::CallFailed))
+                    .map_err(|()| err_msg("Failed to get next event from publisher"))
             });
 
         Box::new(init_app_common(&self.appctx).then(|_res| client_fut))
