@@ -4,26 +4,26 @@ use std::rc::Rc;
 use capnp::capability::Promise;
 use capnp_rpc::pry;
 use futures::{Future, Stream};
-use tokio_core::net::TcpStream;
-use tokio_core::reactor;
+use tokio::io::AsyncRead;
+use tokio::net::tcp::TcpStream;
+use tokio_current_thread as reactor;
 
 use super::*;
 use crate::mercury_capnp::{capnp_err, FillFrom};
 
 pub struct HomeDispatcherCapnProto {
     home: Rc<dyn Home>,
-    handle: reactor::Handle,
     // TODO probably we should have a SessionFactory here instead of instantiating sessions "manually"
 }
 
 impl HomeDispatcherCapnProto {
     // TODO how to access PeerContext in the Home implementation?
-    pub fn dispatch<R, W>(home: Rc<dyn Home>, reader: R, writer: W, handle: reactor::Handle)
+    pub fn dispatch<R, W>(home: Rc<dyn Home>, reader: R, writer: W)
     where
         R: std::io::Read + 'static,
         W: std::io::Write + 'static,
     {
-        let dispatcher = Self { home, handle: handle.clone() };
+        let dispatcher = Self { home };
 
         let home_capnp =
             mercury_capnp::home::ToClient::new(dispatcher).into_client::<::capnp_rpc::Server>();
@@ -37,15 +37,13 @@ impl HomeDispatcherCapnProto {
         let rpc_system =
             capnp_rpc::RpcSystem::new(Box::new(network), Some(home_capnp.clone().client));
 
-        handle.spawn(rpc_system.map_err(|e| warn!("Capnp RPC failed: {}", e)));
+        reactor::spawn(rpc_system.map_err(|e| warn!("Capnp RPC failed: {}", e)));
     }
 
-    pub fn dispatch_tcp(home: Rc<dyn Home>, tcp_stream: TcpStream, handle: reactor::Handle) {
-        use tokio_io::AsyncRead;
-
+    pub fn dispatch_tcp(home: Rc<dyn Home>, tcp_stream: TcpStream) {
         tcp_stream.set_nodelay(true).unwrap();
         let (reader, writer) = tcp_stream.split();
-        HomeDispatcherCapnProto::dispatch(home, reader, writer, handle)
+        HomeDispatcherCapnProto::dispatch(home, reader, writer)
     }
 }
 
@@ -120,7 +118,6 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto {
         params: mercury_capnp::home::LoginParams,
         mut results: mercury_capnp::home::LoginResults,
     ) -> Promise<(), capnp::Error> {
-        let handle_clone = self.handle.clone();
         //let profile_id = pry!( pry!( params.get() ).get_profile_id() );
         let proof_of_home_capnp = pry!(pry!(params.get()).get_proof_of_home());
         let proof_of_home = pry!(RelationProof::try_from(proof_of_home_capnp));
@@ -128,8 +125,7 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto {
             .home
             .login(&proof_of_home)
             .map(move |session_impl| {
-                let session_dispatcher =
-                    HomeSessionDispatcherCapnProto::new(session_impl, handle_clone);
+                let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl);
                 let session = mercury_capnp::home_session::ToClient::new(session_dispatcher)
                     .into_client::<capnp_rpc::Server>();
                 results.get().set_session(session);
@@ -184,7 +180,7 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto {
 
         let to_caller = opts
             .get_to_caller()
-            .map(|to_caller_capnp| mercury_capnp::fwd_appmsg(to_caller_capnp, self.handle.clone()))
+            .map(|to_caller_capnp| mercury_capnp::fwd_appmsg(to_caller_capnp))
             .ok();
 
         let relation = pry!(RelationProof::try_from(rel_capnp));
@@ -213,12 +209,11 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto {
 
 pub struct HomeSessionDispatcherCapnProto {
     session: Rc<dyn HomeSession>,
-    handle: reactor::Handle,
 }
 
 impl HomeSessionDispatcherCapnProto {
-    pub fn new(session: Rc<dyn HomeSession>, handle: reactor::Handle) -> Self {
-        Self { session, handle }
+    pub fn new(session: Rc<dyn HomeSession>) -> Self {
+        Self { session }
     }
 }
 
@@ -321,12 +316,10 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto {
         let call_listener = pry!(params.get_call_listener());
 
         // Forward incoming calls from business logic into capnp proxy stub of client
-        let handle_clone = self.handle.clone();
         let calls_fut = self.session.checkin_app( &app_id.into() )
             .map_err( | e| capnp::Error::failed( format!("Failed to checkin app: {:?}", e) ) )
             .for_each( move |item|
             {
-                let handle_clone = handle_clone.clone();
                 match item
                 {
                     Ok(incoming_call) =>
@@ -350,8 +343,7 @@ impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto {
                             {
                                 let answer = resp.get()
                                     .and_then( |res| res.get_to_callee() )
-                                    .map( |to_callee_capnp|
-                                        mercury_capnp::fwd_appmsg( to_callee_capnp, handle_clone ) )
+                                    .map( |to_callee_capnp| mercury_capnp::fwd_appmsg(to_callee_capnp) )
                                     .map_err( |e| e ) // TODO should we something about errors here?
                                     .ok();
                                 incoming_call.answer(answer);

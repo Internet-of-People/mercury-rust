@@ -5,14 +5,14 @@
 use std::cell::RefCell;
 
 use multiaddr::ToMultiaddr;
-use tokio_core::reactor;
+use tokio_current_thread as reactor;
 
 use super::*;
 use prometheus::dapp::user_interactor::UserInteractor;
 use prometheus::home::{connection::ConnectionFactory, net::TcpHomeConnector};
 
 pub fn ensure_registered_to_home(
-    reactor: &mut reactor::Core,
+    reactor: &mut reactor::CurrentThread,
     private_profilekey: PrivateKey,
     home_addr: &SocketAddr,
     app_context: &AppContext,
@@ -27,15 +27,15 @@ pub fn ensure_registered_to_home(
 
     //let my_profile = Profile::new(my_signer.public_key(), 1, vec![], Default::default());
     let profile_repo = Rc::new(RefCell::new(InMemoryProfileRepository::new()));
-    let home_connector =
-        Rc::new(TcpHomeConnector::new(app_context.handle.to_owned(), profile_repo));
+    let home_connector = Rc::new(TcpHomeConnector::new(profile_repo));
     let conn_factory = ConnectionFactory::new(home_connector, my_signer);
 
     let home_conn_fut = conn_factory.open(&app_context.home_id, Some(home_addr.to_multiaddr()?));
-    let home_conn = reactor.run(home_conn_fut)?;
+    let home_conn = reactor.block_on(home_conn_fut)?;
 
     let reg_fut = home_conn.register();
-    reactor.run(reg_fut)
+    reactor.block_on(reg_fut)?;
+    Ok(())
 }
 
 pub fn init_publisher(_server: &Server) -> AsyncFallible<()> {

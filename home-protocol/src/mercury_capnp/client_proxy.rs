@@ -3,8 +3,10 @@ use std::convert::TryFrom;
 use capnp::capability::Promise;
 use capnp_rpc::pry;
 use failure::Fail;
-use tokio_core::net::TcpStream;
-use tokio_core::reactor;
+use tokio::io::AsyncRead;
+use tokio::net::tcp::TcpStream;
+use tokio::prelude::*;
+use tokio_current_thread as reactor;
 
 use super::*;
 use crate::mercury_capnp::{FillFrom, PromiseUtil};
@@ -14,11 +16,10 @@ use claims::repo::ProfileExplorer;
 pub struct HomeClientCapnProto {
     repo: mercury_capnp::profile_repo::Client,
     home: mercury_capnp::home::Client,
-    handle: reactor::Handle,
 }
 
 impl HomeClientCapnProto {
-    pub fn new<R, W>(reader: R, writer: W, handle: reactor::Handle) -> Self
+    pub fn new<R, W>(reader: R, writer: W) -> Self
     where
         R: std::io::Read + 'static,
         W: std::io::Write + 'static,
@@ -38,18 +39,16 @@ impl HomeClientCapnProto {
         let repo: mercury_capnp::profile_repo::Client =
             rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
 
-        handle.spawn(rpc_system.map_err(|e| warn!("Capnp RPC failed: {}", e)));
+        reactor::spawn(rpc_system.map_err(|e| warn!("Capnp RPC failed: {}", e)));
 
-        Self { home, repo, handle }
+        Self { home, repo }
     }
 
-    pub fn new_tcp(tcp_stream: TcpStream, handle: reactor::Handle) -> Self {
-        use tokio_io::AsyncRead;
-
+    pub fn new_tcp(tcp_stream: TcpStream) -> Self {
         // TODO consider if this unwrap() is acceptable here
         tcp_stream.set_nodelay(true).unwrap();
         let (reader, writer) = tcp_stream.split();
-        HomeClientCapnProto::new(reader, writer, handle)
+        HomeClientCapnProto::new(reader, writer)
     }
 }
 
@@ -125,14 +124,12 @@ impl Home for HomeClientCapnProto {
         let mut request = self.home.login_request();
         request.get().init_proof_of_home().fill_from(proof_of_home);
 
-        let handle_clone = self.handle.clone();
         let resp_fut = request
             .send()
             .promise
             .and_then(|resp| {
                 resp.get().and_then(|res| res.get_session()).map(|session_client| {
-                    Rc::new(HomeSessionClientCapnProto::new(session_client, handle_clone))
-                        as Rc<dyn HomeSession>
+                    Rc::new(HomeSessionClientCapnProto::new(session_client)) as Rc<dyn HomeSession>
                 })
             })
             .map_err(|e| e.context(ErrorKind::FailedToCreateSession).into());
@@ -186,16 +183,13 @@ impl Home for HomeClientCapnProto {
             request.get().set_to_caller(to_caller_capnp);
         }
 
-        let handle_clone = self.handle.clone();
         let resp_fut = request
             .send()
             .promise
             .and_then(|resp| {
                 resp.get().map(|res| {
                     res.get_to_callee()
-                        .map(|to_callee_capnp| {
-                            mercury_capnp::fwd_appmsg(to_callee_capnp, handle_clone)
-                        })
+                        .map(|to_callee_capnp| mercury_capnp::fwd_appmsg(to_callee_capnp))
                         .ok()
                 })
             })
@@ -249,12 +243,11 @@ impl mercury_capnp::profile_event_listener::Server for ProfileEventDispatcherCap
 
 pub struct HomeSessionClientCapnProto {
     session: mercury_capnp::home_session::Client,
-    handle: reactor::Handle,
 }
 
 impl HomeSessionClientCapnProto {
-    pub fn new(session: mercury_capnp::home_session::Client, handle: reactor::Handle) -> Self {
-        Self { session, handle }
+    pub fn new(session: mercury_capnp::home_session::Client) -> Self {
+        Self { session }
     }
 }
 
@@ -301,7 +294,7 @@ impl HomeSession for HomeSessionClientCapnProto {
         let mut request = self.session.events_request();
         request.get().set_event_listener(listener_capnp);
 
-        self.handle.spawn(request.send().promise.map(|_resp| ()).or_else(move |e| {
+        reactor::spawn(request.send().promise.map(|_resp| ()).or_else(move |e| {
             send.send(Err(format!("Events delegation failed: {}", e)))
                     .map(|_sink| ())
                     // TODO what to do if failed to send error?
@@ -314,7 +307,7 @@ impl HomeSession for HomeSessionClientCapnProto {
     fn checkin_app(&self, app: &ApplicationId) -> AsyncStream<Box<dyn IncomingCall>, String> {
         // Send a call dispatcher proxy to remote home through which we'll accept incoming calls
         let (send, recv) = mpsc::channel(1);
-        let listener = CallDispatcherCapnProto::new(send.clone(), self.handle.clone());
+        let listener = CallDispatcherCapnProto::new(send.clone());
         // TODO consider how to drop/unregister this object from capnp if the stream is dropped
         let listener_capnp = mercury_capnp::call_listener::ToClient::new(listener)
             .into_client::<::capnp_rpc::Server>();
@@ -325,7 +318,7 @@ impl HomeSession for HomeSessionClientCapnProto {
 
         // We can either return Future<Stream> or
         // return the stream directly and spawn sending the request in another fiber
-        self.handle.spawn(request.send().promise.map(|_resp| ()).or_else(move |e| {
+        reactor::spawn(request.send().promise.map(|_resp| ()).or_else(move |e| {
             send.send(Err(format!("Call delegation failed: {}", e)))
                     .map(|_sink| ())
                     // TODO what to do if failed to send error?
@@ -349,19 +342,15 @@ impl HomeSession for HomeSessionClientCapnProto {
     }
 }
 
-const CALL_TIMEOUT_SECS: u32 = 30;
+const CALL_TIMEOUT_SECS: u64 = 30;
 
 struct CallDispatcherCapnProto {
     sender: mpsc::Sender<Result<Box<dyn IncomingCall>, String>>,
-    handle: reactor::Handle,
 }
 
 impl CallDispatcherCapnProto {
-    fn new(
-        sender: mpsc::Sender<Result<Box<dyn IncomingCall>, String>>,
-        handle: reactor::Handle,
-    ) -> Self {
-        Self { sender, handle }
+    fn new(sender: mpsc::Sender<Result<Box<dyn IncomingCall>, String>>) -> Self {
+        Self { sender }
     }
 }
 
@@ -381,7 +370,7 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto {
         // If received a to_caller channel, setup an in-memory sink for easier sending
         call.to_caller = call_capnp
             .get_to_caller()
-            .map(|to_caller_capnp| mercury_capnp::fwd_appmsg(to_caller_capnp, self.handle.clone()))
+            .map(|to_caller_capnp| mercury_capnp::fwd_appmsg(to_caller_capnp))
             .ok();
 
         let (one_send, one_recv) = oneshot::channel();
@@ -402,16 +391,8 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto {
             }); // TODO should we send an error back to the caller?
 
         // TODO make this timeout period user-configurable
-        let timeout_res =
-            reactor::Timeout::new(Duration::from_secs(CALL_TIMEOUT_SECS.into()), &self.handle);
-        let timeout_fut = pry!(timeout_res)
-            .map_err(|e| capnp::Error::failed(format!("Call timed out without answer: {:?}", e))); // TODO should we send an error back to the caller?
-
         // Call will time out if not answered in a given period
-        let answer_or_timeout_fut = answer_fut
-            .select(timeout_fut)
-            .map(|(completed_item, _pending_fut)| completed_item)
-            .map_err(|(completed_err, _pending_err)| completed_err);
+        let answer_or_timeout_fut = answer_fut.timeout(Duration::from_secs(CALL_TIMEOUT_SECS));
 
         // Set up an IncomingCall object allowing to decide answering or refusing the call
         // TODO consider error handling: should we send error and close the sink in case of errors above?
@@ -423,7 +404,8 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto {
             .map(|_sink| ())
             .map_err(|e| capnp::Error::failed(format!("Failed to dispatch call: {:?}", e))) // TODO should we send an error back to the caller?
             // and require the call to be answered or dropped
-            .and_then(|()| answer_or_timeout_fut);
+            .and_then(|()| answer_or_timeout_fut.map_err(|e|
+                capnp::Error::failed(format!("Failed to answer call: {:?}", e))));
 
         // TODO consider if the call (e.g. channels and capnp server objects) is dropped after a timeout
         //      but lives after properly accepted

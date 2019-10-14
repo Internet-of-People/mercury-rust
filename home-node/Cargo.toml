@@ -19,6 +19,6 @@ mercury-home-protocol = { path="../home-protocol" }
 osg-rpc-storage = { path="../osg-rpc-storage" }
 multiaddr = "*"
 structopt = "*"
-tokio-core = "0.1"
-tokio-io = "*"
+tokio = "0.1"
+tokio-current-thread = "0.1"
 toml = "*"

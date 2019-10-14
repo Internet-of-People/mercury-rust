@@ -4,8 +4,8 @@ use std::mem;
 //bincode::{deserialize, serialize};
 use failure::Fail;
 use serde_json::{from_slice, to_vec};
-use tokio_core::net::TcpStream;
-use tokio_io::io;
+use tokio::io::{self, AsyncRead, AsyncWrite};
+use tokio::net::tcp::TcpStream;
 //use x25519_dalek::diffie_hellman;
 
 use crate::*;
@@ -23,8 +23,8 @@ fn exchange_identities<R, W>(
     signer: Rc<dyn Signer>,
 ) -> Box<dyn Future<Item = (R, W, AuthenticationInfo), Error = Error>>
 where
-    R: std::io::Read + tokio_io::AsyncRead + 'static,
-    W: std::io::Write + tokio_io::AsyncWrite + 'static,
+    R: std::io::Read + AsyncRead + 'static,
+    W: std::io::Write + AsyncWrite + 'static,
 {
     debug!("Starting handshake with peer");
     let auth_info = AuthenticationInfo {
@@ -80,11 +80,7 @@ where
 
 pub fn tcpstream_to_reader_writer(
     socket: TcpStream,
-) -> Result<
-    (impl std::io::Read + tokio_io::AsyncRead, impl std::io::Write + tokio_io::AsyncWrite),
-    std::io::Error,
-> {
-    use tokio_io::AsyncRead;
+) -> Result<(impl std::io::Read + AsyncRead, impl std::io::Write + AsyncWrite), std::io::Error> {
     socket.set_nodelay(true)?;
     Ok(socket.split())
 }
@@ -95,8 +91,8 @@ pub fn ecdh_handshake<R, W>(
     signer: Rc<dyn Signer>,
 ) -> Box<dyn Future<Item = (R, W, PeerContext), Error = Error>>
 where
-    R: std::io::Read + tokio_io::AsyncRead + 'static,
-    W: std::io::Write + tokio_io::AsyncWrite + 'static,
+    R: std::io::Read + AsyncRead + 'static,
+    W: std::io::Write + AsyncWrite + 'static,
 {
     let ecdh_fut = exchange_identities(reader, writer, signer.clone()).and_then(
         |(reader, writer, peer_auth)| {
@@ -122,8 +118,8 @@ pub fn temporary_unsafe_handshake_until_diffie_hellman_done<R, W>(
     signer: Rc<dyn Signer>,
 ) -> Box<dyn Future<Item = (R, W, PeerContext), Error = Error>>
 where
-    R: std::io::Read + tokio_io::AsyncRead + 'static,
-    W: std::io::Write + tokio_io::AsyncWrite + 'static,
+    R: std::io::Read + AsyncRead + 'static,
+    W: std::io::Write + AsyncWrite + 'static,
 {
     let handshake_fut = exchange_identities(reader, writer, signer.clone())
         .map_err(|err| err.context(ErrorKind::DiffieHellmanHandshakeFailed).into())
@@ -141,11 +137,7 @@ pub fn tcp_ecdh_handshake(
     signer: Rc<dyn Signer>,
 ) -> Box<
     dyn Future<
-        Item = (
-            impl std::io::Read + tokio_io::AsyncRead,
-            impl std::io::Write + tokio_io::AsyncWrite,
-            PeerContext,
-        ),
+        Item = (impl std::io::Read + AsyncRead, impl std::io::Write + AsyncWrite, PeerContext),
         Error = Error,
     >,
 > {
@@ -161,11 +153,7 @@ pub fn temporary_unsafe_tcp_handshake_until_diffie_hellman_done(
     signer: Rc<dyn Signer>,
 ) -> Box<
     dyn Future<
-        Item = (
-            impl std::io::Read + tokio_io::AsyncRead,
-            impl std::io::Write + tokio_io::AsyncWrite,
-            PeerContext,
-        ),
+        Item = (impl std::io::Read + AsyncRead, impl std::io::Write + AsyncWrite, PeerContext),
         Error = Error,
     >,
 > {

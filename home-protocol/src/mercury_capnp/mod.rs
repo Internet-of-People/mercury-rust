@@ -10,7 +10,7 @@ use capnp::capability::Promise;
 use capnp_rpc::pry;
 use futures::prelude::*;
 use futures::{future, sync::mpsc, Sink};
-use tokio_core::reactor;
+use tokio_current_thread as reactor;
 
 use crate::*;
 
@@ -170,7 +170,6 @@ impl<'a> FillFrom<ProfileEvent> for profile_event::Builder<'a> {
 impl<'a> TryFrom<call_request::Reader<'a>> for CallRequestDetails {
     type Error = capnp::Error;
 
-    // NOTE this cannot fill in streams here without outer context (e.g. reactor::Handle)
     fn try_from(src: call_request::Reader) -> Result<Self, Self::Error> {
         let relation = RelationProof::try_from(src.get_relation()?)?;
         let init_payload = src.get_init_payload()?.into();
@@ -231,10 +230,10 @@ impl app_message_listener::Server for AppMessageDispatcherCapnProto {
     }
 }
 
-pub fn fwd_appmsg(to_callee: app_message_listener::Client, handle: reactor::Handle) -> AppMsgSink {
+pub fn fwd_appmsg(to_callee: app_message_listener::Client) -> AppMsgSink {
     let (send, recv) = mpsc::channel::<Result<AppMessageFrame, String>>(1);
 
-    handle.spawn(recv.for_each(move |message| {
+    reactor::spawn(recv.for_each(move |message| {
         let capnp_fut = match message {
             Ok(msg) => {
                 let mut request = to_callee.receive_request();

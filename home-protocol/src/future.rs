@@ -1,12 +1,14 @@
 use std::iter;
-use std::time::Duration;
+//use std::time::Duration;
 
 use futures::future::{self, loop_fn, poll_fn, Loop};
-use futures::stream::StreamFuture;
-use tokio_core::reactor;
+//use futures::stream::StreamFuture;
+//use tokio_current_thread as reactor;
 
 use crate::*;
 
+// NOTE recent tokio versions already provide deadlines with implicit default timer
+/*
 pub struct StreamWithDeadline<S: Stream> {
     inner: StreamFuture<S>,
     timeout: Duration,
@@ -53,6 +55,7 @@ impl<S: Stream> Stream for StreamWithDeadline<S> {
         }
     }
 }
+*/
 
 //// Run futures until one is ready, then ignore remaining pending ones and return the first result
 //pub fn select_first<I>(futures_iterator: I)
@@ -194,36 +197,36 @@ where
 mod test {
     use super::*;
     use futures::sync::mpsc;
-    use tokio_core::reactor;
+    use tokio_current_thread as reactor;
 
     #[test]
     fn test_collect_empty() {
-        let mut reactor = reactor::Core::new().unwrap();
+        let mut reactor = reactor::CurrentThread::new();
         let collect_empty = collect_results(iter::empty::<Result<(), ()>>());
-        let result = reactor.run(collect_empty).unwrap();
+        let result = reactor.block_on(collect_empty).unwrap();
         assert_eq!(result, Vec::new());
     }
 
     #[test]
     fn test_collect_few() {
-        let mut reactor = reactor::Core::new().unwrap();
+        let mut reactor = reactor::CurrentThread::new();
         let futs = [Ok(1), Err(2), Ok(3), Err(4)];
         let collect_fut = collect_results(futs.iter().cloned());
-        let result = reactor.run(collect_fut).unwrap();
+        let result = reactor.block_on(collect_fut).unwrap();
         assert_eq!(result, futs);
     }
 
     #[test]
     fn test_collect_order() {
         let (sink, stream) = mpsc::channel(1);
-        let mut reactor = reactor::Core::new().unwrap();
+        let mut reactor = reactor::CurrentThread::new();
         let mut futs = vec![
             Box::new(stream.map(|_| (1)).collect().map(|vec| *vec.first().unwrap()))
                 as AsyncResult<i32, ()>,
             Box::new(sink.send(42).map(|_| (2)).map_err(|_| ())),
         ];
         let collect_fut = collect_results(futs.drain(..));
-        let result = reactor.run(collect_fut).unwrap();
+        let result = reactor.block_on(collect_fut).unwrap();
         assert_eq!(result, [Ok(1), Ok(2)]);
     }
 }

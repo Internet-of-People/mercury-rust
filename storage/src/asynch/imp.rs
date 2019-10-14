@@ -10,7 +10,7 @@ use futures::future;
 use futures::prelude::*;
 use futures_state_stream::StateStream;
 use serde_derive::{Deserialize, Serialize};
-use tokio_core::reactor;
+use tokio_current_thread as reactor;
 
 use crate::asynch::*;
 
@@ -237,7 +237,6 @@ where
 #[cfg(test)]
 mod tests {
     use multihash;
-    use tokio_core::reactor;
 
     use super::*;
     use crate::common::imp::*;
@@ -301,8 +300,7 @@ mod tests {
             Box::new(MultiBaseHashCoder::new(multibase::Base64)),
         );
 
-        let mut reactor =
-            reactor::Core::new().expect("Failed to initialize the reactor event loop");
+        let mut reactor = reactor::CurrentThread::new();
 
         let default_space = "cache".to_owned();
         let mut spaces: HashMap<String, Box<dyn HashSpace<Vec<u8>, String>>> = HashMap::new();
@@ -312,12 +310,12 @@ mod tests {
 
         let content = b"There's over a dozen netrunners Netwatch Cops would love to brain burn and Rache Bartmoss is at least two of them".to_vec();
         let link_future = hashweb.store(content.clone());
-        let link = reactor.run(link_future).unwrap();
+        let link = reactor.block_on(link_future).unwrap();
         //assert_eq!( *link.hashspace(), default_space );
         assert!(link.starts_with((default_space + HashWebLink_HashSpaceId_Separator).as_str()));
 
         let bytes_future = hashweb.resolve(&link);
-        let bytes = reactor.run(bytes_future).unwrap();
+        let bytes = reactor.block_on(bytes_future).unwrap();
         assert_eq!(bytes, content);
     }
 }

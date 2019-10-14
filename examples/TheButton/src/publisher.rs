@@ -1,9 +1,10 @@
 use std::cell::RefCell;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use futures::prelude::*;
 use futures::sync::mpsc;
 use log::*;
+use tokio::timer::Interval;
 use tokio_signal::unix::SIGUSR1;
 
 use super::*;
@@ -60,18 +61,17 @@ impl IntoFuture for Server {
             } );
 
         // Forward button press events to all interested clients
-        let handle = self.appctx.handle.clone();
         let active_calls_rc = self.active_calls.clone();
         let (generate_button_press, got_button_press) = mpsc::channel(CHANNEL_CAPACITY);
         let fwd_pressed_fut = got_button_press
             .for_each(move |()| {
-                // TODO use something better here then handle.spawn() for all clients,
+                // TODO use something better here then spawn() for all clients,
                 //      we should also detect and remove failing senders
                 let calls = active_calls_rc.borrow();
                 debug!("Notifying {} connected clients", calls.len());
                 for call in calls.iter() {
                     let to_client = call.outgoing.clone();
-                    handle.spawn(
+                    reactor::spawn(
                         to_client.send(Ok(AppMessageFrame(vec![42]))).map(|_| ()).map_err(|_| ()),
                     );
                 }
@@ -106,8 +106,7 @@ impl IntoFuture for Server {
             // Repeatedly generate an event with the given interval
             Some(interval_secs) => {
                 let press_on_timer_fut =
-                    reactor::Interval::new(Duration::from_secs(interval_secs), &self.appctx.handle)
-                        .unwrap()
+                    Interval::new(Instant::now(), Duration::from_secs(interval_secs))
                         .map_err(|e| format_err!("Failed to set button pressed timer: {}", e))
                         .for_each(move |_| {
                             info!("interval timer fired, generating event");

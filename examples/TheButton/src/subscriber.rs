@@ -19,7 +19,6 @@ impl Client {
     pub fn wait_for_pairing_response(
         events: Box<dyn Stream<Item = DAppEvent, Error = ()>>,
         my_profile_id: ProfileId,
-        handle: reactor::Handle,
     ) -> AsyncFallible<Box<dyn Relation>> {
         let fut = events
             .filter_map(move |event| {
@@ -46,12 +45,6 @@ impl Client {
                     debug!("Profile event stream ended without proper response");
                     err_msg("Profile event stream ended without proper response")
                 })
-            })
-            .and_then(move |proof| {
-                reactor::Timeout::new(std::time::Duration::from_millis(10), &handle)
-                    .unwrap()
-                    .map(|_| proof)
-                    .map_err(|e| e.into())
             });
         Box::new(fut)
     }
@@ -63,7 +56,6 @@ impl Client {
         let callee_profile_id = self.cfg.server_id.clone();
         let contact_fut = dapp_session.relation(&callee_profile_id).and_then({
             let peer_id = self.cfg.server_id.clone();
-            let handle = self.appctx.handle.clone();
             move |relation| {
                 let init_rel_fut = dapp_session.initiate_relation(&peer_id);
                 match relation {
@@ -76,7 +68,7 @@ impl Client {
                             .and_then(|events| init_rel_fut.map(|()| events))
                             .and_then(|events| {
                                 debug!("Pairing request sent, start waiting for response");
-                                Self::wait_for_pairing_response(events, persona_id, handle)
+                                Self::wait_for_pairing_response(events, persona_id)
                             });
                         Box::new(rel_fut)
                     }

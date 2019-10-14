@@ -6,8 +6,7 @@ use failure::{bail, format_err, Fail};
 use futures::{future, Future, IntoFuture};
 use log::*;
 use multiaddr::{AddrComponent, Multiaddr};
-use tokio_core::net::TcpStream;
-use tokio_core::reactor;
+use tokio::net::tcp::TcpStream;
 
 use crate::*;
 use mercury_home_protocol::net::HomeConnector;
@@ -42,18 +41,14 @@ pub struct TcpHomeConnector {
     // TODO consider tearing down and rebuilding the whole connection in case of a network error
     // TODO change key to pair(persona_profile_id, home_profile_id) instead on the long term
     addr_cache: Rc<RefCell<HashMap<Multiaddr, Rc<dyn Home>>>>,
-    handle: reactor::Handle,
 }
 
 impl TcpHomeConnector {
-    pub fn new(
-        handle: reactor::Handle,
-        profile_repo: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
-    ) -> Self {
-        Self { handle, profile_repo, addr_cache: Default::default() }
+    pub fn new(profile_repo: Rc<RefCell<dyn DistributedPublicProfileRepository>>) -> Self {
+        Self { profile_repo, addr_cache: Default::default() }
     }
 
-    pub fn connect_addr(addr: &Multiaddr, handle: &reactor::Handle) -> AsyncFallible<TcpStream> {
+    pub fn connect_addr(addr: &Multiaddr) -> AsyncFallible<TcpStream> {
         // TODO handle other multiaddresses, not only TCP
         let tcp_addr = match multiaddr_to_socketaddr(addr) {
             Ok(res) => res,
@@ -61,7 +56,7 @@ impl TcpHomeConnector {
         };
 
         debug!("Connecting to socket address {}", tcp_addr);
-        let tcp_str = TcpStream::connect(&tcp_addr, handle)
+        let tcp_str = TcpStream::connect(&tcp_addr)
             .map_err(|e| format_err!("Failed to connect to home node: {}", e));
         Box::new(tcp_str)
     }
@@ -79,10 +74,9 @@ impl TcpHomeConnector {
         }
 
         debug!("Home address {:?} not found in cache, connecting", addresses);
-        let handle_clone = self.handle.clone();
         let tcp_conns = addresses.iter().map(move |addr| {
             let addr_clone = addr.to_owned();
-            TcpHomeConnector::connect_addr(&addr, &handle_clone)
+            TcpHomeConnector::connect_addr(&addr)
                 .map_err(|err| {
                     err.context(mercury_home_protocol::error::ErrorKind::ConnectionToHomeFailed)
                         .into()
@@ -90,7 +84,6 @@ impl TcpHomeConnector {
                 .map(move |tcp_stream| (addr_clone, tcp_stream))
         });
 
-        let handle_clone = self.handle.clone();
         let addr_cache_clone = self.addr_cache.clone();
         let capnp_home = future::select_ok(tcp_conns)
             .and_then( move |((addr, tcp_stream), _pending_futs)|
@@ -100,7 +93,7 @@ impl TcpHomeConnector {
                     .map_err(|err| err.context(mercury_home_protocol::error::ErrorKind::DiffieHellmanHandshakeFailed).into())
                     .map( move |(reader, writer, _peer_ctx)| {
                         use mercury_home_protocol::mercury_capnp::client_proxy::HomeClientCapnProto;
-                        let home = Rc::new( HomeClientCapnProto::new(reader, writer, handle_clone) ) as Rc<dyn Home>;
+                        let home = Rc::new( HomeClientCapnProto::new(reader, writer) ) as Rc<dyn Home>;
                         debug!("Save home {:?} client into cache for reuse", addr);
                         addr_cache_clone.borrow_mut().insert(addr, home.clone());
                         home

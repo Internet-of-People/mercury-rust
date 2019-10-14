@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use rand::rngs::OsRng;
-use tokio_core::reactor;
+use tokio_current_thread as reactor;
 
 use claims::repo::InMemoryProfileRepository;
 use mercury_home_node::server::HomeServer;

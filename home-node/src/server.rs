@@ -6,7 +6,8 @@ use failure::Fail;
 use futures::sync::{mpsc, oneshot};
 use futures::{future, stream, Future, Sink};
 use log::*;
-use tokio_core::reactor::{self, Timeout};
+use tokio::prelude::*;
+use tokio_current_thread as reactor;
 
 use claims::model::Link;
 use mercury_home_protocol::api::AsyncSink; // TODO this should normally work with protocol::*, why is this needed?
@@ -17,7 +18,6 @@ use mercury_home_protocol::*;
 const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
 
 pub struct HomeServer {
-    handle: reactor::Handle,
     validator: Rc<dyn Validator>,
     public_profile_dht: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
     hosted_profile_db: Rc<RefCell<dyn PrivateProfileRepository>>,
@@ -26,13 +26,11 @@ pub struct HomeServer {
 
 impl HomeServer {
     pub fn new(
-        handle: &reactor::Handle,
         validator: Rc<dyn Validator>,
         public_dht: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
         private_db: Rc<RefCell<dyn PrivateProfileRepository>>,
     ) -> Self {
         Self {
-            handle: handle.clone(),
             validator,
             public_profile_dht: public_dht,
             hosted_profile_db: private_db,
@@ -384,14 +382,6 @@ impl Home for HomeConnectionServer {
         let relation = call_req.relation.clone();
         let (send, recv) = oneshot::channel();
         let call = Box::new(Call::new(call_req, send));
-        let handle = self.server.handle.clone();
-
-        let timeout_fut = match Timeout::new(CFG_CALL_ANSWER_TIMEOUT, &handle) {
-            Ok(timeout_fut) => {
-                timeout_fut.map(|_| None).map_err(|e| e.context(ErrorKind::TimeoutFailed).into())
-            }
-            Err(err) => return Box::new(future::err(err.context(ErrorKind::TimeoutFailed).into())),
-        };
 
         let answer_fut = self
             .server
@@ -420,10 +410,12 @@ impl Home for HomeConnectionServer {
                     recv.map_err(|e| e.context(ErrorKind::FailedToReadResponse).into());
 
                 // Wait for answer with specified timeout
-                answer_fut
-                    .select(timeout_fut)
-                    .map(|(done, _pending)| done)
-                    .map_err(|(e, _pending)| e)
+                answer_fut.timeout(CFG_CALL_ANSWER_TIMEOUT).map_err(
+                    |e: tokio::timer::timeout::Error<Error>| {
+                        info!("No response for call until timeout: {}", e);
+                        ErrorKind::FailedToReadResponse.into()
+                    },
+                )
             });
         Box::new(answer_fut)
     }
@@ -614,7 +606,7 @@ impl HomeSession for HomeSessionServer {
         match self.apps.borrow_mut().insert(app.to_owned(), ServerSink::Sender(sender.clone())) {
             Some(ServerSink::Sender(old_sender)) => {
                 // NOTE consuming the calls stream multiple times is likely a client implementation error
-                self.server.handle.spawn(
+                reactor::spawn(
                     old_sender.send( Err( "WARNING: Repeated call of HomeSession::checkin_app() detected, this channel is dropped, using the new one".to_owned() ) )
                         .map( |_sender| () )
                         .map_err( |_e| () )
@@ -623,7 +615,7 @@ impl HomeSession for HomeSessionServer {
             Some(ServerSink::Buffer(call_vec)) => {
                 // Send all collected calls from buffer as we now finally have a channel to the app
                 // TODO use persistent storage for calls when profile is offline and delegate them here
-                self.server.handle.spawn(
+                reactor::spawn(
                     sender.send_all(stream::iter_ok(call_vec)).map(|_sender| ()).map_err(|_e| ()),
                 )
             }
@@ -645,7 +637,7 @@ impl HomeSession for HomeSessionServer {
             // We already had another channel properly set up
             ServerSink::Sender(old_sender) => {
                 // NOTE consuming the events stream multiple times is likely a client implementation error
-                self.server.handle.spawn(
+                reactor::spawn(
                     old_sender.send( Err( "WARNING: Repeated call of HomeSession::events() detected, this channel is dropped, using the new one".to_owned() ) )
                         .map( |_sender| () )
                         .map_err( |_e| () )
@@ -655,7 +647,7 @@ impl HomeSession for HomeSessionServer {
             ServerSink::Buffer(msg_vec) => {
                 // Send all collected messages from buffer as we now finally have a channel to the user
                 // TODO use persistent storage for events when profile is offline and delegate them here
-                self.server.handle.spawn(
+                reactor::spawn(
                     sender.send_all(stream::iter_ok(msg_vec)).map(|_sender| ()).map_err(|_e| ()),
                 )
             }

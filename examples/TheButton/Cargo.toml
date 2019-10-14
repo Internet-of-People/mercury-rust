@@ -21,6 +21,6 @@ osg-rpc-storage = { path="../../osg-rpc-storage" }
 prometheus = { path="../../prometheus" }
 structopt = "*"
 tempdir = "*"
-tokio-signal = "*"
-tokio-core = "*"
-tokio-uds = "*"
+tokio = "0.1"
+tokio-current-thread = "0.1"
+tokio-signal = "0.2"

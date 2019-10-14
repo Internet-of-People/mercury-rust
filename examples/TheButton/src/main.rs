@@ -11,7 +11,7 @@ use failure::{err_msg, format_err, Fallible};
 use futures::prelude::*;
 use log::*;
 use structopt::StructOpt;
-use tokio_core::reactor;
+use tokio_current_thread as reactor;
 use tokio_signal::unix::{Signal, SIGINT};
 
 use keyvault::{PrivateKey as KeyVaultPrivateKey, PublicKey as KeyVaultPublicKey};
@@ -33,7 +33,6 @@ pub struct AppContext {
     dapp_profile_id: ProfileId,
     home_id: ProfileId,
     dapp_id: ApplicationId,
-    handle: reactor::Handle,
 }
 
 impl AppContext {
@@ -41,7 +40,7 @@ impl AppContext {
         profile_privatekey_file: &PathBuf,
         home_pubkey: &PublicKey,
         home_addr: &SocketAddr,
-        reactor: &mut reactor::Core,
+        reactor: &mut reactor::CurrentThread,
     ) -> Fallible<Self> {
         let dapp_service = Rc::new(websocket::client::ServiceClient::new());
 
@@ -56,7 +55,6 @@ impl AppContext {
             dapp_service,
             dapp_profile_id,
             home_id,
-            handle: reactor.handle(),
             dapp_id: ApplicationId("TheButton-dApp-Sample".into()),
         };
         init::ensure_registered_to_home(reactor, private_key, home_addr, &this)?;
@@ -75,7 +73,7 @@ fn main() -> Fallible<()> {
     log4rs::init_file(&options.logger_config, Default::default()).unwrap();
 
     // Creating a reactor
-    let mut reactor = reactor::Core::new().unwrap();
+    let mut reactor = reactor::CurrentThread::new();
 
     debug!("Parsed options, initializing application");
 
@@ -102,6 +100,6 @@ fn main() -> Fallible<()> {
         .map(|_| info!("received SIGINT, terminating application"))
         .map_err(|(err, _)| err);
 
-    // reactor.run(app_fut)
-    reactor.run(app_fut.select(sigint_fut).map(|(item, _)| item).map_err(|(err, _)| err))
+    reactor.block_on(app_fut.select(sigint_fut).map(|(item, _)| item).map_err(|(err, _)| err))?;
+    Ok(())
 }
