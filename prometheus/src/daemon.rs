@@ -1,29 +1,33 @@
-use tokio::runtime::current_thread;
+use tokio_current_thread as reactor;
 
 use crate::dapp::dapp_session::DAppSessionServiceImpl;
 use crate::vault::api_impl::VaultState;
 use crate::*;
+use futures::Future;
 
 pub struct Daemon {
-    rt: current_thread::Runtime,
+    handle: reactor::Handle,
     server: actix_server::Server,
     join_handle: std::thread::JoinHandle<Fallible<()>>,
 }
 
 impl Daemon {
-    fn run(options: Options, tx: futures::sync::oneshot::Sender<Server>) -> Fallible<()> {
-        let runner = actix_rt::System::builder().name("http-server").build();
+    fn run(
+        options: Options,
+        tx: futures::sync::oneshot::Sender<(reactor::Handle, Server)>,
+    ) -> Fallible<()> {
+        let mut reactor = reactor::CurrentThread::new();
+        let handle = reactor.handle();
+        let actix_runner = actix_rt::System::run_in_executor("http-server", reactor.handle());
         let server = start_daemon(options)?;
-        tx.send(server).map_err(|_tx| err_msg("Could not initialize runtime"))?;
-
-        runner.run()?;
+        tx.send((handle, server)).map_err(|_tx| err_msg("Could not initialize runtime"))?;
+        reactor.block_on(actix_runner)?;
         Ok(())
     }
 
     pub fn start(options: Options) -> Fallible<Self> {
         let (tx, rx) = futures::sync::oneshot::channel();
 
-        let mut rt = current_thread::Runtime::new()?;
         let join_handle =
             std::thread::Builder::new().name("actix-system".to_owned()).spawn(move || {
                 let daemon_res = Daemon::run(options, tx);
@@ -33,16 +37,16 @@ impl Daemon {
                 };
                 daemon_res
             })?;
-        let server = rt.block_on(rx)?;
+        let (handle, server) = rx.wait()?;
 
-        Ok(Self { rt, server, join_handle })
+        Ok(Self { handle, server, join_handle })
     }
 
     pub fn stop(&mut self) -> Fallible<()> {
         trace!("before stop");
-        self.rt
-            .block_on(self.server.stop(true))
-            .map_err(|()| err_msg("Could not stop server gracefully"))?;
+        let stop_fut =
+            self.server.stop(true).map_err(|()| error!("Could not stop server gracefully"));
+        self.handle.spawn(stop_fut)?;
         trace!("after stop");
         Ok(())
     }
