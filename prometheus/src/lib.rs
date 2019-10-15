@@ -6,7 +6,7 @@ pub mod options;
 pub mod test;
 pub mod vault;
 
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex, MutexGuard, RwLock};
 use std::time::Duration;
 
 use actix_cors::Cors;
@@ -15,7 +15,7 @@ use actix_web::{middleware, web, App, HttpResponse, HttpServer};
 use failure::{err_msg, Fallible};
 use log::*;
 
-pub use crate::daemon::Daemon;
+pub use crate::daemon::{Daemon, DaemonState};
 pub use crate::options::Options;
 use crate::vault::api::*;
 pub use crate::vault::api_data::*;

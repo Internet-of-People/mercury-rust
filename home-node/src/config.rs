@@ -1,6 +1,6 @@
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
-use std::rc::Rc;
+use std::sync::Arc;
 
 use log::*;
 use structopt::StructOpt;
@@ -57,7 +57,7 @@ impl CliConfig {
 pub struct Config {
     private_storage_path: PathBuf,
     distributed_storage_address: SocketAddr,
-    signer: Rc<dyn Signer>,
+    signer: Arc<dyn Signer>,
     listen_socket: SocketAddr, // TODO consider using Vec if listening on several network devices is needed
 }
 
@@ -84,7 +84,7 @@ impl Config {
         let private_key =
             private_keys.private_key(key_idx as i32).expect("Failed to get private key");
         let signer =
-            Rc::new(crypto::PrivateKeySigner::new(private_key).expect("Failed to create signer"));
+            Arc::new(crypto::PrivateKeySigner::new(private_key).expect("Failed to create signer"));
 
         info!("homenode profile id: {}", signer.profile_id());
         info!("homenode public key: {}", signer.public_key());
@@ -117,7 +117,7 @@ impl Config {
     pub fn distributed_storage_address(&self) -> &SocketAddr {
         &self.distributed_storage_address
     }
-    pub fn signer(&self) -> Rc<dyn Signer> {
+    pub fn signer(&self) -> Arc<dyn Signer> {
         self.signer.clone()
     }
     pub fn listen_socket(&self) -> &SocketAddr {

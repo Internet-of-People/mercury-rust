@@ -1,6 +1,7 @@
 use std::cell::RefCell;
 use std::net::{IpAddr, SocketAddr};
 use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 use failure::{bail, format_err, Fail};
 use futures::{future, Future, IntoFuture};
@@ -9,10 +10,18 @@ use multiaddr::{AddrComponent, Multiaddr};
 use tokio::net::tcp::TcpStream;
 
 use crate::*;
-use mercury_home_protocol::net::HomeConnector;
 use mercury_home_protocol::primitives::FacetExtractor;
-use mercury_home_protocol::{AsyncFallible, AsyncResult, Home, Profile, ProfileId, Signer};
+use mercury_home_protocol::{AsyncFallible, Home, Profile, ProfileId, Signer};
 use std::collections::HashMap;
+
+pub trait HomeConnector {
+    fn connect(
+        self: Arc<Self>,
+        home_profile_id: &ProfileId,
+        addr_hint: Option<Multiaddr>,
+        signer: Arc<dyn Signer>,
+    ) -> AsyncFallible<Rc<dyn Home>>;
+}
 
 /// Convert a TCP/IP multiaddr to a SocketAddr. For multiaddr instances that are not TCP or IP, error is returned.
 pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Fallible<SocketAddr> {
@@ -36,16 +45,20 @@ pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Fallible<SocketAddr> {
     Ok(SocketAddr::new(ip_address, ip_port))
 }
 
+// TODO consider tearing down and rebuilding the whole connection in case of a network error
+// TODO change key to pair<client_profile_id, home_profile_id> instead on the long term
+// Map of pair<client_profile_id, home_address> => Home instance
+thread_local!(static HOME_CACHE: RefCell<HashMap<(ProfileId, Multiaddr), Rc<dyn Home>>> = Default::default());
+
 pub struct TcpHomeConnector {
-    profile_repo: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
-    // TODO consider tearing down and rebuilding the whole connection in case of a network error
-    // TODO change key to pair(persona_profile_id, home_profile_id) instead on the long term
-    addr_cache: Rc<RefCell<HashMap<Multiaddr, Rc<dyn Home>>>>,
+    profile_repo: Arc<RwLock<dyn DistributedPublicProfileRepository + Send + Sync>>,
 }
 
 impl TcpHomeConnector {
-    pub fn new(profile_repo: Rc<RefCell<dyn DistributedPublicProfileRepository>>) -> Self {
-        Self { profile_repo, addr_cache: Default::default() }
+    pub fn new(
+        profile_repo: Arc<RwLock<dyn DistributedPublicProfileRepository + Send + Sync>>,
+    ) -> Self {
+        Self { profile_repo }
     }
 
     pub fn connect_addr(addr: &Multiaddr) -> AsyncFallible<TcpStream> {
@@ -64,38 +77,43 @@ impl TcpHomeConnector {
     fn connect_to_addrs(
         &self,
         addresses: &[Multiaddr],
-        signer: Rc<dyn Signer>,
-    ) -> AsyncResult<Rc<dyn Home>, mercury_home_protocol::error::Error> {
-        let first_cached =
-            addresses.iter().filter_map(|addr| self.addr_cache.borrow().get(addr).cloned()).next();
-        if let Some(home) = first_cached {
-            debug!("Home address {:?} found in cache, reuse connection", addresses);
+        signer: Arc<dyn Signer>,
+    ) -> AsyncFallible<Rc<dyn Home>> {
+        let mut cache_hit = None;
+        HOME_CACHE.with(|cache| {
+            cache_hit = addresses
+                .iter()
+                .filter_map(|addr| {
+                    let key = (signer.profile_id(), addr.to_owned());
+                    cache.borrow().get(&key).cloned()
+                })
+                .next();
+        });
+        if let Some(home) = cache_hit {
+            debug!("Home with addresses {:?} found in cache, reuse connection", addresses);
             return Box::new(Ok(home).into_future());
         }
 
         debug!("Home address {:?} not found in cache, connecting", addresses);
         let tcp_conns = addresses.iter().map(move |addr| {
             let addr_clone = addr.to_owned();
-            TcpHomeConnector::connect_addr(&addr)
-                .map_err(|err| {
-                    err.context(mercury_home_protocol::error::ErrorKind::ConnectionToHomeFailed)
-                        .into()
-                })
-                .map(move |tcp_stream| (addr_clone, tcp_stream))
+            TcpHomeConnector::connect_addr(&addr).map(move |tcp_stream| (addr_clone, tcp_stream))
         });
 
-        let addr_cache_clone = self.addr_cache.clone();
         let capnp_home = future::select_ok(tcp_conns)
             .and_then( move |((addr, tcp_stream), _pending_futs)|
             {
                 use mercury_home_protocol::handshake::temporary_unsafe_tcp_handshake_until_diffie_hellman_done;
-                temporary_unsafe_tcp_handshake_until_diffie_hellman_done(tcp_stream, signer)
+                temporary_unsafe_tcp_handshake_until_diffie_hellman_done(tcp_stream, signer.clone())
                     .map_err(|err| err.context(mercury_home_protocol::error::ErrorKind::DiffieHellmanHandshakeFailed).into())
                     .map( move |(reader, writer, _peer_ctx)| {
                         use mercury_home_protocol::mercury_capnp::client_proxy::HomeClientCapnProto;
                         let home = Rc::new( HomeClientCapnProto::new(reader, writer) ) as Rc<dyn Home>;
+
                         debug!("Save home {:?} client into cache for reuse", addr);
-                        addr_cache_clone.borrow_mut().insert(addr, home.clone());
+                        HOME_CACHE.with(|cache| {
+                            cache.borrow_mut().insert((signer.profile_id(), addr), home.clone());
+                        });
                         home
                     })
             });
@@ -106,14 +124,12 @@ impl TcpHomeConnector {
     fn connect_to_home_profile(
         &self,
         home_profile: &Profile,
-        signer: Rc<dyn Signer>,
-    ) -> AsyncResult<Rc<dyn Home>, mercury_home_protocol::error::Error> {
+        signer: Arc<dyn Signer>,
+    ) -> AsyncFallible<Rc<dyn Home>> {
         let addrs = match home_profile.as_home() {
             Some(ref home_facet) => home_facet.addrs.clone(),
             None => {
-                return Box::new(future::err(
-                    mercury_home_protocol::error::ErrorKind::ProfileMismatch.into(),
-                ));
+                return Box::new(future::err(err_msg("Profile is not a Home node")));
             }
         };
 
@@ -123,31 +139,28 @@ impl TcpHomeConnector {
 
 impl HomeConnector for TcpHomeConnector {
     fn connect(
-        self: Rc<Self>,
+        self: Arc<Self>,
         home_profile_id: &ProfileId,
         addr_hint: Option<Multiaddr>,
-        signer: Rc<dyn Signer>,
-    ) -> AsyncResult<Rc<dyn Home>, mercury_home_protocol::error::Error> {
+        signer: Arc<dyn Signer>,
+    ) -> AsyncFallible<Rc<dyn Home>> {
         // TODO logic should first try connecting with addr_hint first, then if failed,
         //      also try the full home profile loading and connecting path as well
         if let Some(addr) = addr_hint {
-            return Box::new(self.connect_to_addrs(&[addr], signer));
+            return self.connect_to_addrs(&[addr], signer);
         }
 
-        use mercury_home_protocol::error::ErrorKind;
+        let profile_repo = match self.profile_repo.try_read() {
+            Ok(repo) => repo,
+            Err(e) => unreachable!(),
+        };
         let this = self.clone();
-        let home_conn_fut = self
-            .profile_repo
-            .borrow()
+        let home_conn_fut = profile_repo
             .get_public(home_profile_id)
             .inspect(move |home_profile| {
                 debug!("Finished loading details for home {}", home_profile.id())
             })
-            .map_err(|err| err.context(ErrorKind::FailedToLoadProfile).into())
-            .and_then(move |home_profile| {
-                this.connect_to_home_profile(&home_profile, signer)
-                    .map_err(|err| err.context(ErrorKind::ConnectionToHomeFailed).into())
-            });
+            .and_then(move |home_profile| this.connect_to_home_profile(&home_profile, signer));
         Box::new(home_conn_fut)
     }
 }

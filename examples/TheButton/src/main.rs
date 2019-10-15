@@ -6,6 +6,7 @@ pub mod subscriber;
 use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 
 use failure::{err_msg, format_err, Fallible};
 use futures::prelude::*;

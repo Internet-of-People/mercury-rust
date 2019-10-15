@@ -9,7 +9,7 @@ use tokio_current_thread as reactor;
 
 use super::*;
 use prometheus::dapp::user_interactor::UserInteractor;
-use prometheus::home::{connection::ConnectionFactory, net::TcpHomeConnector};
+//use prometheus::home::{connection::ConnectionFactory, net::TcpHomeConnector};
 
 pub fn ensure_registered_to_home(
     reactor: &mut reactor::CurrentThread,
@@ -27,14 +27,16 @@ pub fn ensure_registered_to_home(
 
     //let my_profile = Profile::new(my_signer.public_key(), 1, vec![], Default::default());
     let profile_repo = Rc::new(RefCell::new(InMemoryProfileRepository::new()));
-    let home_connector = Rc::new(TcpHomeConnector::new(profile_repo));
-    let conn_factory = ConnectionFactory::new(home_connector, my_signer);
 
-    let home_conn_fut = conn_factory.open(&app_context.home_id, Some(home_addr.to_multiaddr()?));
-    let home_conn = reactor.block_on(home_conn_fut)?;
-
-    let reg_fut = home_conn.register();
-    reactor.block_on(reg_fut)?;
+    //    unimplemented!()
+    //    let home_connector = Rc::new(TcpHomeConnector::new(profile_repo));
+    //    let conn_factory = ConnectionFactory::new(home_connector, my_signer);
+    //
+    //    let home_conn_fut = conn_factory.open(&app_context.home_id, Some(home_addr.to_multiaddr()?));
+    //    let home_conn = reactor.block_on(home_conn_fut)?;
+    //
+    //    let reg_fut = home_conn.register();
+    //    reactor.block_on(reg_fut)?;
     Ok(())
 }
 

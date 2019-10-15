@@ -1,13 +1,17 @@
+use futures::Future;
 use tokio_current_thread as reactor;
 
 use crate::dapp::dapp_session::DAppSessionServiceImpl;
+use crate::dapp::user_interactor::UserInteractor;
+use crate::home::net::TcpHomeConnector;
+use crate::test::FakeUserInteractor;
 use crate::vault::api_impl::VaultState;
 use crate::*;
-use futures::Future;
+use claims::repo::DistributedPublicProfileRepository;
 
 pub struct Daemon {
     handle: reactor::Handle,
-    server: actix_server::Server,
+    http_server: Server,
     join_handle: std::thread::JoinHandle<Fallible<()>>,
 }
 
@@ -39,13 +43,13 @@ impl Daemon {
             })?;
         let (handle, server) = rx.wait()?;
 
-        Ok(Self { handle, server, join_handle })
+        Ok(Self { handle, http_server: server, join_handle })
     }
 
     pub fn stop(&mut self) -> Fallible<()> {
         trace!("before stop");
         let stop_fut =
-            self.server.stop(true).map_err(|()| error!("Could not stop server gracefully"));
+            self.http_server.stop(true).map_err(|()| error!("Could not stop server gracefully"));
         self.handle.spawn(stop_fut)?;
         trace!("after stop");
         Ok(())
@@ -59,17 +63,36 @@ impl Daemon {
     }
 }
 
+pub struct DaemonState {
+    vault: Mutex<VaultState>,
+    dapp: Mutex<DAppSessionServiceImpl>,
+}
+
+impl DaemonState {
+    fn new(vault: Mutex<VaultState>, dapp: Mutex<DAppSessionServiceImpl>) -> Self {
+        Self { vault, dapp }
+    }
+
+    pub fn lock_vault(&self) -> Fallible<MutexGuard<VaultState>> {
+        self.vault.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))
+    }
+}
+
 fn start_daemon(options: Options) -> Fallible<Server> {
     let vault_path = did::paths::vault_path(options.config_dir.clone())?;
     let repo_path = did::paths::profile_repo_path(options.config_dir.clone())?;
     let base_path = did::paths::base_repo_path(options.config_dir.clone())?;
     let schema_path = did::paths::schemas_path(options.schemas_dir.clone())?;
 
+    let mut interactor = FakeUserInteractor::new();
+
     let vault_exists = vault_path.exists();
     let mut vault: Option<Box<dyn ProfileVault + Send>> = None;
     if vault_exists {
         info!("Found profile vault, loading {}", vault_path.to_string_lossy());
-        vault = Some(Box::new(HdProfileVault::load(&vault_path)?))
+        let hd_vault = HdProfileVault::load(&vault_path)?;
+        interactor.set_active_profile(hd_vault.get_active()?);
+        vault = Some(Box::new(hd_vault));
     } else {
         info!("No profile vault found in {}, restore it first", vault_path.to_string_lossy());
     }
@@ -79,7 +102,7 @@ fn start_daemon(options: Options) -> Fallible<Server> {
     let timeout = Duration::from_secs(options.network_timeout_secs);
     let rpc_repo = RpcProfileRepository::new(&options.remote_repo_address, timeout)?;
 
-    let ctx = VaultState::new(
+    let vault_state = VaultState::new(
         vault_path.clone(),
         schema_path.clone(),
         vault,
@@ -89,7 +112,12 @@ fn start_daemon(options: Options) -> Fallible<Server> {
         Box::new(rpc_repo),
     );
 
-    let daemon_state = web::Data::new(Mutex::new(ctx));
+    let profile_repo = Arc::new(RwLock::new(FileProfileRepository::new(&repo_path)?));
+    let connector = Arc::new(RwLock::new(TcpHomeConnector::new(profile_repo.clone())));
+    let dapp_state =
+        DAppSessionServiceImpl::new(Arc::new(RwLock::new(interactor)), connector, profile_repo);
+    let daemon_state =
+        web::Data::new(DaemonState::new(Mutex::new(vault_state), Mutex::new(dapp_state)));
 
     // TODO The current implementation is not known to ever panic. However,
     //      if it was then the Arbiter thread would stop but not the whole server.

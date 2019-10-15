@@ -1,7 +1,8 @@
-use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use std::mem;
+use std::sync::Arc;
 
 //bincode::{deserialize, serialize};
+use bytes::{Buf, BufMut, BytesMut, IntoBuf};
 use failure::Fail;
 use serde_json::{from_slice, to_vec};
 use tokio::io::{self, AsyncRead, AsyncWrite};
@@ -20,7 +21,7 @@ struct AuthenticationInfo {
 fn exchange_identities<R, W>(
     reader: R,
     writer: W,
-    signer: Rc<dyn Signer>,
+    signer: Arc<dyn Signer>,
 ) -> Box<dyn Future<Item = (R, W, AuthenticationInfo), Error = Error>>
 where
     R: std::io::Read + AsyncRead + 'static,
@@ -88,7 +89,7 @@ pub fn tcpstream_to_reader_writer(
 pub fn ecdh_handshake<R, W>(
     reader: R,
     writer: W,
-    signer: Rc<dyn Signer>,
+    signer: Arc<dyn Signer>,
 ) -> Box<dyn Future<Item = (R, W, PeerContext), Error = Error>>
 where
     R: std::io::Read + AsyncRead + 'static,
@@ -115,7 +116,7 @@ where
 pub fn temporary_unsafe_handshake_until_diffie_hellman_done<R, W>(
     reader: R,
     writer: W,
-    signer: Rc<dyn Signer>,
+    signer: Arc<dyn Signer>,
 ) -> Box<dyn Future<Item = (R, W, PeerContext), Error = Error>>
 where
     R: std::io::Read + AsyncRead + 'static,
@@ -134,7 +135,7 @@ where
 
 pub fn tcp_ecdh_handshake(
     socket: TcpStream,
-    signer: Rc<dyn Signer>,
+    signer: Arc<dyn Signer>,
 ) -> Box<
     dyn Future<
         Item = (impl std::io::Read + AsyncRead, impl std::io::Write + AsyncWrite, PeerContext),
@@ -150,7 +151,7 @@ pub fn tcp_ecdh_handshake(
 
 pub fn temporary_unsafe_tcp_handshake_until_diffie_hellman_done(
     socket: TcpStream,
-    signer: Rc<dyn Signer>,
+    signer: Arc<dyn Signer>,
 ) -> Box<
     dyn Future<
         Item = (impl std::io::Read + AsyncRead, impl std::io::Write + AsyncWrite, PeerContext),

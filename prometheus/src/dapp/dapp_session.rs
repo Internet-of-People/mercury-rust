@@ -1,11 +1,11 @@
-use std::rc::Rc;
+use std::sync::{Arc, RwLock};
 
 use futures::{Future, Stream};
 
 use crate::dapp::user_interactor::UserInteractor;
+use crate::home::net::HomeConnector;
 use crate::*;
 use claims::model::*;
-use mercury_home_protocol::net::HomeConnector;
 use mercury_home_protocol::{
     AppMessageFrame, AppMsgSink, AppMsgStream, ApplicationId, IncomingCall, RelationProof,
 };
@@ -50,16 +50,16 @@ pub trait DAppSession {
 pub struct DAppSessionImpl {
     dapp_id: ApplicationId,
     profile_id: ProfileId,
-    home_connector: Rc<dyn HomeConnector>,
-    profile_repo: Rc<dyn DistributedPublicProfileRepository>,
+    home_connector: Arc<RwLock<dyn HomeConnector>>,
+    profile_repo: Arc<RwLock<dyn DistributedPublicProfileRepository>>,
 }
 
 impl DAppSessionImpl {
     pub fn new(
         dapp_id: ApplicationId,
         profile_id: ProfileId,
-        home_connector: Rc<dyn HomeConnector>,
-        profile_repo: Rc<dyn DistributedPublicProfileRepository>,
+        home_connector: Arc<RwLock<dyn HomeConnector>>,
+        profile_repo: Arc<RwLock<dyn DistributedPublicProfileRepository>>,
     ) -> Self {
         Self { profile_id, dapp_id, home_connector, profile_repo }
     }
@@ -97,32 +97,36 @@ impl DAppSession for DAppSessionImpl {
 
 pub trait DAppSessionService {
     // NOTE this implicitly asks for user interaction (through UI) selecting a profile to be used with the app
-    fn dapp_session(&self, app: ApplicationId) -> AsyncFallible<Rc<dyn DAppSession>>;
+    fn dapp_session(&self, app: ApplicationId) -> AsyncFallible<Arc<dyn DAppSession>>;
 }
 
 pub struct DAppSessionServiceImpl {
-    interactor: Rc<dyn UserInteractor>,
-    home_connector: Rc<dyn HomeConnector>,
-    profile_repo: Rc<dyn DistributedPublicProfileRepository>,
+    interactor: Arc<RwLock<dyn UserInteractor + Send + Sync>>,
+    home_connector: Arc<RwLock<dyn HomeConnector + Send + Sync>>,
+    profile_repo: Arc<RwLock<dyn DistributedPublicProfileRepository + Send + Sync>>,
 }
 
 impl DAppSessionServiceImpl {
     pub fn new(
-        interactor: Rc<dyn UserInteractor>,
-        home_connector: Rc<dyn HomeConnector>,
-        profile_repo: Rc<dyn DistributedPublicProfileRepository>,
+        interactor: Arc<RwLock<dyn UserInteractor + Send + Sync>>,
+        home_connector: Arc<RwLock<dyn HomeConnector + Send + Sync>>,
+        profile_repo: Arc<RwLock<dyn DistributedPublicProfileRepository + Send + Sync>>,
     ) -> Self {
         Self { interactor, home_connector, profile_repo }
     }
 }
 
 impl DAppSessionService for DAppSessionServiceImpl {
-    fn dapp_session(&self, app: ApplicationId) -> AsyncFallible<Rc<dyn DAppSession>> {
+    fn dapp_session(&self, app: ApplicationId) -> AsyncFallible<Arc<dyn DAppSession>> {
         let home_conn = self.home_connector.clone();
         let profile_repo = self.profile_repo.clone();
-        let session_fut = self.interactor.select_profile().map(move |profile| {
-            Rc::new(DAppSessionImpl::new(app, profile, home_conn, profile_repo))
-                as Rc<dyn DAppSession>
+        let interactor = match self.interactor.try_read() {
+            Ok(interactor) => interactor,
+            Err(e) => unreachable!(),
+        };
+        let session_fut = interactor.select_profile().map(move |profile| {
+            Arc::new(DAppSessionImpl::new(app, profile, home_conn, profile_repo))
+                as Arc<dyn DAppSession>
         });
         Box::new(session_fut)
     }

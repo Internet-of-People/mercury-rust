@@ -4,8 +4,8 @@ use std::time::Duration;
 
 use futures::{Future, Stream};
 use log::*;
-use tokio::executor::current_thread as reactor;
 use tokio::net::tcp::TcpListener;
+use tokio_current_thread as reactor;
 
 use claims::repo::{DistributedPublicProfileRepository, FileProfileRepository};
 use mercury_home_node::{config::*, server::*};

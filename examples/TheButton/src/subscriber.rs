@@ -51,7 +51,7 @@ impl Client {
 
     fn get_or_create_contact(
         self,
-        dapp_session: Rc<dyn DAppSession>,
+        dapp_session: Arc<dyn DAppSession>,
     ) -> AsyncFallible<Box<dyn Relation>> {
         let callee_profile_id = self.cfg.server_id.clone();
         let contact_fut = dapp_session.relation(&callee_profile_id).and_then({

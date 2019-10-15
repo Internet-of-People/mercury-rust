@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::sync::Arc;
 
 use futures::{future::ok, Stream};
 
@@ -16,9 +16,9 @@ impl ServiceServer {
 }
 
 impl DAppSessionService for ServiceServer {
-    fn dapp_session(&self, app: ApplicationId) -> AsyncFallible<Rc<dyn DAppSession>> {
+    fn dapp_session(&self, app: ApplicationId) -> AsyncFallible<Arc<dyn DAppSession>> {
         // TODO
-        Box::new(ok(Rc::new(SessionServer {}) as Rc<dyn DAppSession>))
+        Box::new(ok(Arc::new(SessionServer {}) as Arc<dyn DAppSession>))
     }
 }
 

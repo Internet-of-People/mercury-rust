@@ -1,24 +1,21 @@
-use std::rc::Rc;
-
-use failure::{err_msg, Fallible};
+use failure::err_msg;
 use futures::IntoFuture;
 
 use crate::dapp::user_interactor::{DAppAction, UserInteractor};
 use did::model::{AsyncFallible, ProfileId};
-use did::vault::ProfileVault;
 use mercury_home_protocol::{RelationHalfProof, RelationProof};
 
 pub struct FakeUserInteractor {
-    profile_vault: Rc<dyn ProfileVault>,
+    active_profile: Option<ProfileId>,
 }
 
 impl FakeUserInteractor {
-    pub fn new(profile_vault: Rc<dyn ProfileVault>) -> Self {
-        Self { profile_vault }
+    pub fn new() -> Self {
+        Self { active_profile: Default::default() }
     }
 
-    fn select_profile_sync(&self) -> Fallible<ProfileId> {
-        self.profile_vault.get_active()?.ok_or(err_msg("No default active profile selected"))
+    pub fn set_active_profile(&mut self, profile_id: Option<ProfileId>) {
+        self.active_profile = profile_id;
     }
 }
 
@@ -40,6 +37,7 @@ impl UserInteractor for FakeUserInteractor {
     }
 
     fn select_profile(&self) -> AsyncFallible<ProfileId> {
-        Box::new(self.select_profile_sync().into_future())
+        let profile_id = self.active_profile.to_owned().ok_or(err_msg("No profile was selected"));
+        Box::new(profile_id.into_future())
     }
 }
