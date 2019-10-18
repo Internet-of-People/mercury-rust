@@ -84,7 +84,7 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto {
             .home
             .claim(profile_id)
             .map_err(|e| capnp::Error::failed(format!("Failed to claim profile: {:?}", e)))
-            .map(move |own_profile| results.get().init_own_profile().fill_from(&own_profile));
+            .map(move |hosting_proof| results.get().init_hosting_proof().fill_from(&hosting_proof));
 
         Promise::from_future(claim_fut)
     }
@@ -94,9 +94,6 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto {
         params: mercury_capnp::home::RegisterParams,
         mut results: mercury_capnp::home::RegisterResults,
     ) -> Promise<(), capnp::Error> {
-        let own_prof_capnp = pry!(pry!(params.get()).get_own_profile());
-        let own_prof = pry!(OwnProfile::try_from(own_prof_capnp));
-
         let half_proof_capnp = pry!(pry!(params.get()).get_half_proof());
         let half_proof = pry!(RelationHalfProof::try_from(half_proof_capnp));
 
@@ -106,9 +103,9 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto {
 
         let reg_fut = self
             .home
-            .register(own_prof, half_proof) //, invite_opt)
+            .register(half_proof) //, invite_opt)
             .map_err(|e| capnp::Error::failed(format!("Failed to register profile: {:?}", e)))
-            .map(move |own_profile| results.get().init_own_profile().fill_from(&own_profile));
+            .map(move |proof| results.get().init_hosting_proof().fill_from(&proof));
 
         Promise::from_future(reg_fut)
     }
@@ -119,11 +116,11 @@ impl mercury_capnp::home::Server for HomeDispatcherCapnProto {
         mut results: mercury_capnp::home::LoginResults,
     ) -> Promise<(), capnp::Error> {
         //let profile_id = pry!( pry!( params.get() ).get_profile_id() );
-        let proof_of_home_capnp = pry!(pry!(params.get()).get_proof_of_home());
-        let proof_of_home = pry!(RelationProof::try_from(proof_of_home_capnp));
+        let host_proof_capnp = pry!(pry!(params.get()).get_hosting_proof());
+        let host_proof = pry!(RelationProof::try_from(host_proof_capnp));
         let session_fut = self
             .home
-            .login(&proof_of_home)
+            .login(&host_proof)
             .map(move |session_impl| {
                 let session_dispatcher = HomeSessionDispatcherCapnProto::new(session_impl);
                 let session = mercury_capnp::home_session::ToClient::new(session_dispatcher)
@@ -225,17 +222,32 @@ impl Drop for HomeSessionDispatcherCapnProto {
 }
 
 impl mercury_capnp::home_session::Server for HomeSessionDispatcherCapnProto {
-    fn update(
+    fn backup(
         &mut self,
-        params: mercury_capnp::home_session::UpdateParams,
-        mut _results: mercury_capnp::home_session::UpdateResults,
+        params: mercury_capnp::home_session::BackupParams,
+        mut _results: mercury_capnp::home_session::BackupResults,
     ) -> Promise<(), capnp::Error> {
         let own_profile_capnp = pry!(pry!(params.get()).get_own_profile());
-        let own_profile = pry!(OwnProfile::try_from(own_profile_capnp));
+        let own_profile = pry!(bytes_to_own_profile(own_profile_capnp));
 
         let upd_fut = self
             .session
-            .update(own_profile)
+            .backup(own_profile)
+            .map_err(|e| capnp::Error::failed(format!("Failed to update profile: {:?}", e)));
+
+        Promise::from_future(upd_fut)
+    }
+
+    fn restore(
+        &mut self,
+        _params: mercury_capnp::home_session::RestoreParams,
+        mut results: mercury_capnp::home_session::RestoreResults,
+    ) -> Promise<(), capnp::Error> {
+        let upd_fut = self
+            .session
+            .restore()
+            .map(|own_prof| own_profile_to_bytes(&own_prof))
+            .map(move |own_bytes| results.get().set_own_profile(&own_bytes))
             .map_err(|e| capnp::Error::failed(format!("Failed to update profile: {:?}", e)));
 
         Promise::from_future(upd_fut)

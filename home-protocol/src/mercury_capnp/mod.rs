@@ -68,21 +68,14 @@ fn profile_to_bytes(src: &Profile) -> Vec<u8> {
         .expect("Implementation error: serialization can fail only if Serialize implementation returns error or with non-string keys in the type")
 }
 
-impl<'a> TryFrom<own_profile::Reader<'a>> for OwnProfile {
-    type Error = capnp::Error;
-
-    fn try_from(src: own_profile::Reader) -> Result<Self, Self::Error> {
-        let profile = bytes_to_profile(src.get_profile()?)?;
-        let private_data = src.get_private_data()?;
-        Ok(OwnProfile::without_morpheus_claims(profile, private_data.to_owned()))
-    }
+fn bytes_to_own_profile(src: &[u8]) -> Result<OwnProfile, capnp::Error> {
+    serde_json::from_slice(&src).map_err(|e| capnp::Error::failed(e.to_string()))
 }
 
-impl<'a> FillFrom<OwnProfile> for own_profile::Builder<'a> {
-    fn fill_from(mut self, src: &OwnProfile) {
-        self.set_private_data(&src.private_data());
-        self.set_profile(&profile_to_bytes(&src.public_data()));
-    }
+fn own_profile_to_bytes(src: &OwnProfile) -> Vec<u8> {
+    // TODO how to return error here without changing the signature of fill_from()?
+    serde_json::to_vec(src)
+        .expect("Implementation error: serialization can fail only if Serialize implementation returns error or with non-string keys in the type")
 }
 
 impl<'a> TryFrom<relation_half_proof::Reader<'a>> for RelationHalfProof {
@@ -92,6 +85,8 @@ impl<'a> TryFrom<relation_half_proof::Reader<'a>> for RelationHalfProof {
         Ok(RelationHalfProof {
             relation_type: String::from(src.get_relation_type()?),
             signer_id: ProfileId::from_bytes(src.get_signer_id()?).map_err(|e| capnp_err(e))?,
+            signer_pubkey: PublicKey::from_bytes(src.get_signer_pub_key()?)
+                .map_err(|e| capnp_err(e))?,
             peer_id: ProfileId::from_bytes(src.get_peer_id()?).map_err(|e| capnp_err(e))?,
             signature: Signature::from_bytes(src.get_signature()?).map_err(|e| capnp_err(e))?,
         })
@@ -102,6 +97,7 @@ impl<'a> FillFrom<RelationHalfProof> for relation_half_proof::Builder<'a> {
     fn fill_from(mut self, src: &RelationHalfProof) {
         self.set_relation_type(&src.relation_type);
         self.set_signer_id(&src.signer_id.to_bytes());
+        self.set_signer_pub_key(&src.signer_pubkey.to_bytes());
         self.set_peer_id(&src.peer_id.to_bytes());
         self.set_signature(&src.signature.to_bytes());
     }
@@ -114,8 +110,10 @@ impl<'a> TryFrom<relation_proof::Reader<'a>> for RelationProof {
         Ok(RelationProof {
             relation_type: String::from(src.get_relation_type()?),
             a_id: ProfileId::from_bytes(src.get_a_id()?).map_err(|e| capnp_err(e))?,
+            a_pub_key: PublicKey::from_bytes(src.get_a_pub_key()?).map_err(|e| capnp_err(e))?,
             a_signature: Signature::from_bytes(src.get_a_signature()?).map_err(|e| capnp_err(e))?,
             b_id: ProfileId::from_bytes(src.get_b_id()?).map_err(|e| capnp_err(e))?,
+            b_pub_key: PublicKey::from_bytes(src.get_b_pub_key()?).map_err(|e| capnp_err(e))?,
             b_signature: Signature::from_bytes(src.get_b_signature()?).map_err(|e| capnp_err(e))?,
         })
     }
@@ -125,8 +123,10 @@ impl<'a> FillFrom<RelationProof> for relation_proof::Builder<'a> {
     fn fill_from(mut self, src: &RelationProof) {
         self.set_relation_type(&src.relation_type);
         self.set_a_id(&src.a_id.to_bytes());
+        self.set_a_pub_key(&src.a_pub_key.to_bytes());
         self.set_a_signature(&src.a_signature.to_bytes());
         self.set_b_id(&src.b_id.to_bytes());
+        self.set_b_pub_key(&src.b_pub_key.to_bytes());
         self.set_b_signature(&src.b_signature.to_bytes());
     }
 }

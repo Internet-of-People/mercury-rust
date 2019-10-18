@@ -25,13 +25,22 @@ struct CliConfig {
     pub profile_id: Option<ProfileId>,
 
     #[structopt(
-        long = "private-storage",
-        default_value = "/tmp/mercury/home/hosted-profiles",
+        long = "profile-backup",
+        default_value = "/tmp/mercury/home/profile-backups",
+        parse(from_os_str),
+        value_name = "PATH"
+    )]
+    /// Directory path to store profile backups
+    profile_backup_path: PathBuf,
+
+    #[structopt(
+        long = "host-relations",
+        default_value = "/tmp/mercury/home/host-relations",
         parse(from_os_str),
         value_name = "PATH"
     )]
     /// Directory path to store hosted profiles in
-    private_storage_path: PathBuf,
+    host_relations_path: PathBuf,
 
     #[structopt(
         long = "distributed-storage",
@@ -56,6 +65,7 @@ impl CliConfig {
 
 pub struct Config {
     private_storage_path: PathBuf,
+    host_relations_path: PathBuf,
     distributed_storage_address: SocketAddr,
     signer: Arc<dyn Signer>,
     listen_socket: SocketAddr, // TODO consider using Vec if listening on several network devices is needed
@@ -104,15 +114,19 @@ impl Config {
             .expect("Failed to parse socket address for distributed storage");
 
         Self {
-            private_storage_path: cli.private_storage_path,
+            private_storage_path: cli.profile_backup_path,
+            host_relations_path: cli.host_relations_path,
             distributed_storage_address,
             signer,
             listen_socket,
         }
     }
 
-    pub fn private_storage_path(&self) -> &PathBuf {
+    pub fn profile_backup_path(&self) -> &PathBuf {
         &self.private_storage_path
+    }
+    pub fn host_relations_path(&self) -> &PathBuf {
+        &self.host_relations_path
     }
     pub fn distributed_storage_address(&self) -> &SocketAddr {
         &self.distributed_storage_address

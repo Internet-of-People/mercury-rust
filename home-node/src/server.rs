@@ -13,6 +13,7 @@ use claims::model::Link;
 use mercury_home_protocol::api::AsyncSink; // TODO this should normally work with protocol::*, why is this needed?
 use mercury_home_protocol::error::*;
 use mercury_home_protocol::*;
+use mercury_storage::asynch::KeyValueStore;
 
 // TODO this should come from user configuration with a reasonable default value close to this
 const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
@@ -20,7 +21,8 @@ const CFG_CALL_ANSWER_TIMEOUT: Duration = Duration::from_secs(30);
 pub struct HomeServer {
     validator: Rc<dyn Validator>,
     public_profile_dht: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
-    hosted_profile_db: Rc<RefCell<dyn PrivateProfileRepository>>,
+    private_backup_db: Rc<RefCell<dyn PrivateProfileRepository>>,
+    host_relations_db: Rc<RefCell<dyn KeyValueStore<ProfileId, RelationProof>>>,
     sessions: Rc<RefCell<HashMap<ProfileId, Weak<HomeSessionServer>>>>,
 }
 
@@ -29,11 +31,13 @@ impl HomeServer {
         validator: Rc<dyn Validator>,
         public_dht: Rc<RefCell<dyn DistributedPublicProfileRepository>>,
         private_db: Rc<RefCell<dyn PrivateProfileRepository>>,
+        host_relations_db: Rc<RefCell<dyn KeyValueStore<ProfileId, RelationProof>>>,
     ) -> Self {
         Self {
             validator,
             public_profile_dht: public_dht,
-            hosted_profile_db: private_db,
+            private_backup_db: private_db,
+            host_relations_db,
             sessions: Rc::new(RefCell::new(HashMap::new())),
         }
     }
@@ -62,7 +66,7 @@ impl HomeConnectionServer {
 
         // Check if this profile is hosted on this server
         let session_fut = server
-            .hosted_profile_db
+            .private_backup_db
             .borrow()
             .get(&to_profile)
             .and_then(move |_profile_data| {
@@ -137,36 +141,30 @@ impl ProfileExplorer for HomeConnectionServer {
 }
 
 impl Home for HomeConnectionServer {
-    fn claim(&self, profile: ProfileId) -> Box<dyn Future<Item = OwnProfile, Error = Error>> {
-        if profile != self.context.peer_id() {
+    fn claim(&self, profile_id: ProfileId) -> Box<dyn Future<Item = RelationProof, Error = Error>> {
+        if profile_id != self.context.peer_id() {
             return Box::new(future::err(ErrorKind::FailedToClaimProfile.into()));
         }
 
         let claim_fut = self
             .server
-            .hosted_profile_db
+            .host_relations_db
             .borrow()
-            .get(&profile)
+            .get(profile_id)
             .map_err(|e| e.context(ErrorKind::FailedToClaimProfile).into());
         Box::new(claim_fut)
     }
 
     fn register(
         &self,
-        own_prof: OwnProfile,
         half_proof: RelationHalfProof,
         //_invite: Option<HomeInvitation>,
-    ) -> Box<dyn Future<Item = OwnProfile, Error = (OwnProfile, Error)>> {
-        if own_prof.id() != self.context.peer_id() {
-            return Box::new(future::err((own_prof, ErrorKind::ProfileMismatch.into())));
-        }
-
-        if own_prof.public_key() != self.context.peer_pubkey() {
-            return Box::new(future::err((own_prof, ErrorKind::PublicKeyMismatch.into())));
-        }
-
+    ) -> Box<dyn Future<Item = RelationProof, Error = Error>> {
         if half_proof.signer_id != self.context.peer_id() {
-            return Box::new(future::err((own_prof, ErrorKind::SignerMismatch.into())));
+            return Box::new(future::err(ErrorKind::SignerMismatch.into()));
+        }
+        if half_proof.signer_pubkey != self.context.peer_pubkey() {
+            return Box::new(future::err(ErrorKind::PublicKeyMismatch.into()));
         }
 
         trace!(
@@ -175,11 +173,11 @@ impl Home for HomeConnectionServer {
             self.context.my_signer().profile_id()
         );
         if half_proof.peer_id != self.context.my_signer().profile_id() {
-            return Box::new(future::err((own_prof, ErrorKind::HomeIdMismatch.into())));
+            return Box::new(future::err(ErrorKind::HomeIdMismatch.into()));
         }
 
         if half_proof.relation_type != RelationProof::RELATION_TYPE_HOSTED_ON_HOME {
-            return Box::new(future::err((own_prof, ErrorKind::RelationTypeMismatch.into())));
+            return Box::new(future::err(ErrorKind::RelationTypeMismatch.into()));
         }
 
         if self
@@ -188,53 +186,27 @@ impl Home for HomeConnectionServer {
             .validate_half_proof(&half_proof, &self.context.peer_pubkey())
             .is_err()
         {
-            return Box::new(future::err((own_prof, ErrorKind::InvalidSignature.into())));
+            return Box::new(future::err(ErrorKind::InvalidSignature.into()));
         }
 
-        let own_prof_clone = own_prof.clone();
-        let error_mapper =
-            move |_e: failure::Error| (own_prof_clone, ErrorKind::StorageFailed.into());
-        let error_mapper_clone = error_mapper.clone();
-
-        let home_proof =
+        let host_proof =
             match RelationProof::sign_remaining_half(&half_proof, self.context.my_signer()) {
-                Err(e) => return Box::new(future::err((own_prof, e))),
+                Err(e) => return Box::new(future::err(e)),
                 Ok(proof) => proof,
             };
 
-        let pub_prof = own_prof.public_data();
-        let own_prof_modified = match pub_prof.as_persona() {
-            // TODO the registration request (including adding the new home and increasing version)
-            //      will have to be signed by the client on the long run,
-            //      thus cannot be done by the server here, to be migrated to the client code.
-            Some(ref mut persona_facet) => {
-                // TODO this should be shorter, just adds a new home but rebuilds a lot of data structure
-                persona_facet.homes.push(home_proof);
-                let attributes = persona_facet.to_attributes();
-                let profile = Profile::new(
-                    pub_prof.public_key(),
-                    pub_prof.version() + 1,
-                    pub_prof.links().to_owned(),
-                    attributes,
-                );
-                OwnProfile::without_morpheus_claims(profile, own_prof.private_data())
-            }
-            None => return Box::new(future::err((own_prof, ErrorKind::PersonaExpected.into()))),
-        };
-
-        let pub_prof_modified = own_prof_modified.public_data();
-        let local_store = self.server.hosted_profile_db.clone();
-        let distributed_store = self.server.public_profile_dht.clone();
+        let profile_id = half_proof.signer_id.to_owned();
+        let host_relations_store = self.server.host_relations_db.clone();
         let reg_fut = self
             .server
-            .hosted_profile_db
+            .host_relations_db
             .borrow()
-            .get(&own_prof.id())
+            .get(profile_id.clone())
             .then(|get_res| {
                 match get_res {
-                    Ok(_stored_prof) => {
+                    Ok(_stored_proof) => {
                         debug!("Profile was already registered");
-                        Err((own_prof, ErrorKind::AlreadyRegistered.into()))
+                        Err(ErrorKind::AlreadyRegistered.into())
                     }
                     // TODO only errors like NotFound should be accepted here but other (e.g. I/O) errors should be delegated
                     Err(_e) => Ok(()),
@@ -242,21 +214,13 @@ impl Home for HomeConnectionServer {
             })
             // NOTE Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
             .and_then(move |_| {
-                // Store public profile parts in distributed storage (e.g. DHT)
-                debug!("Saving public profile info into distributed storage");
-                return distributed_store
-                    .borrow_mut()
-                    .set_public(pub_prof_modified)
-                    .map_err(error_mapper_clone);
-            })
-            .and_then(move |_| {
                 // Store private profile info in local storage only (e.g. SQL)
                 debug!("Saving private profile info into local storage");
-                return local_store
+                return host_relations_store
                     .borrow_mut()
-                    .set(own_prof_modified.clone())
-                    .map(|_| own_prof_modified)
-                    .map_err(error_mapper);
+                    .set(profile_id, host_proof.clone())
+                    .map(|_| host_proof)
+                    .map_err(|_e| ErrorKind::StorageFailed.into());
             });
 
         Box::new(reg_fut)
@@ -277,7 +241,7 @@ impl Home for HomeConnectionServer {
 
         let val_fut = self
             .server
-            .hosted_profile_db
+            .private_backup_db
             .borrow()
             .get(&profile_id)
             .map({
@@ -337,7 +301,7 @@ impl Home for HomeConnectionServer {
         // We need to look up the public key to be able to validate the proof
         let fut = self
             .server
-            .hosted_profile_db
+            .private_backup_db
             .borrow()
             .get(&to_profile)
             .map_err(|err| err.context(ErrorKind::PeerNotHostedHere).into())
@@ -385,7 +349,7 @@ impl Home for HomeConnectionServer {
 
         let answer_fut = self
             .server
-            .hosted_profile_db
+            .private_backup_db
             .borrow()
             .get(&to_profile)
             .map_err(|e| e.context(ErrorKind::PeerNotHostedHere).into())
@@ -531,7 +495,7 @@ impl Drop for HomeSessionServer {
 }
 
 impl HomeSession for HomeSessionServer {
-    fn update(&self, own_prof: OwnProfile) -> Box<dyn Future<Item = (), Error = Error>> {
+    fn backup(&self, own_prof: OwnProfile) -> Box<dyn Future<Item = (), Error = Error>> {
         if own_prof.id() != self.context.peer_id() {
             return Box::new(future::err(ErrorKind::ProfileMismatch.into()));
         }
@@ -542,7 +506,7 @@ impl HomeSession for HomeSessionServer {
 
         let upd_fut = self
             .server
-            .hosted_profile_db
+            .private_backup_db
             .borrow()
             .get(&own_prof.id())
             // NOTE Block with "return" is needed, see https://stackoverflow.com/questions/50391668/running-asynchronous-mutable-operations-with-rust-futures
@@ -557,7 +521,7 @@ impl HomeSession for HomeSessionServer {
                 }
             })
             .and_then({
-                let local_store = self.server.hosted_profile_db.clone();
+                let local_store = self.server.private_backup_db.clone();
                 move |_| {
                     // Update private profile info in local storage only (e.g. SQL)
                     return local_store
@@ -569,6 +533,10 @@ impl HomeSession for HomeSessionServer {
             .map_err(|_e| ErrorKind::ProfileUpdateFailed.into());
 
         Box::new(upd_fut)
+    }
+
+    fn restore(&self) -> Box<dyn Future<Item = OwnProfile, Error = Error>> {
+        unimplemented!()
     }
 
     // TODO is the ID of the new home enough here or do we need the whole profile?
@@ -587,7 +555,7 @@ impl HomeSession for HomeSessionServer {
         // TODO force close/drop session connection after successful unregister().
         //      Ideally self would be consumed here, but that'd require binding to self: Box<Self> or Rc<Self> to compile within a trait.
 
-        let local_fut = self.server.hosted_profile_db.borrow_mut().clear(&profile_key);
+        let local_fut = self.server.private_backup_db.borrow_mut().clear(&profile_key);
         let unreg_fut = self
             .server
             .public_profile_dht

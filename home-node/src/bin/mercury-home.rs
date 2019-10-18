@@ -12,6 +12,8 @@ use mercury_home_node::{config::*, server::*};
 use mercury_home_protocol::{
     crypto::*, handshake, mercury_capnp::server_dispatcher::HomeDispatcherCapnProto, *,
 };
+use mercury_storage::asynch::fs::FileStore;
+use mercury_storage::asynch::KeyAdapter;
 use osg_rpc_storage::RpcProfileRepository;
 
 fn main() {
@@ -24,7 +26,7 @@ fn main() {
     let mut reactor = reactor::CurrentThread::new();
 
     let local_storage =
-        Rc::new(RefCell::new(FileProfileRepository::new(config.private_storage_path()).unwrap()));
+        Rc::new(RefCell::new(FileProfileRepository::new(config.profile_backup_path()).unwrap()));
 
     // TODO use some kind of real distributed storage here
     //let distributed_storage = Rc::new(RefCell::new(InMemoryProfileRepository::new()));
@@ -43,8 +45,11 @@ fn main() {
         info!("Home node profile is already available on distributed public storage");
     }
 
+    let host_db = Rc::new(RefCell::new(KeyAdapter::new(
+        FileStore::new(config.host_relations_path()).unwrap(),
+    )));
     let distributed_storage = Rc::new(RefCell::new(distributed_storage));
-    let server = Rc::new(HomeServer::new(validator, distributed_storage, local_storage));
+    let server = Rc::new(HomeServer::new(validator, distributed_storage, local_storage, host_db));
 
     info!("Opening socket {} for incoming TCP clients", config.listen_socket());
     let socket = TcpListener::bind(config.listen_socket()).expect("Failed to bind socket");

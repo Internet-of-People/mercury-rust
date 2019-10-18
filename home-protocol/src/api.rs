@@ -71,19 +71,18 @@ pub struct CallRequestDetails {
 // TODO Home should be derived from DistributedPublicProfileRepository instead on the long run
 pub trait Home: ProfileExplorer {
     // NOTE because we support multihash, the id cannot be guessed from the public key
-    fn claim(&self, profile: ProfileId) -> AsyncResult<OwnProfile, Error>;
+    fn claim(&self, profile_id: ProfileId) -> AsyncResult<RelationProof, Error>;
 
     // TODO this should return only the signed RelationProof of the home hosting the profile
     //      because in this form the home can return malicious changes in the profile
     fn register(
         &self,
-        own_prof: OwnProfile,
         half_proof: RelationHalfProof,
         // invite: Option<HomeInvitation>,
-    ) -> AsyncResult<OwnProfile, (OwnProfile, Error)>;
+    ) -> AsyncResult<RelationProof, Error>;
 
     /// By calling this method, any active session of the same profile is closed.
-    fn login(&self, proof_of_home: &RelationProof) -> AsyncResult<Rc<dyn HomeSession>, Error>;
+    fn login(&self, hosting_proof: &RelationProof) -> AsyncResult<Rc<dyn HomeSession>, Error>;
 
     /// The peer in `half_proof` must be hosted on this home server.
     /// Returns Error if the peer is not hosted on this home server or an empty result if it is.
@@ -135,11 +134,11 @@ pub trait IncomingCall {
 }
 
 pub trait HomeSession {
-    fn update(&self, own_prof: OwnProfile) -> AsyncResult<(), Error>;
+    fn backup(&self, own_profile: OwnProfile) -> AsyncResult<(), Error>;
+    fn restore(&self) -> AsyncResult<OwnProfile, Error>;
 
     // NOTE newhome is a profile that contains at least one HomeFacet different than this home
-    // TODO should we return a modified OwnProfile here with this home removed from the homes of persona facet in profile?
-    fn unregister(&self, newhome: Option<Profile>) -> AsyncResult<(), Error>;
+    fn unregister(&self, new_home: Option<Profile>) -> AsyncResult<(), Error>;
 
     fn events(&self) -> AsyncStream<ProfileEvent, String>;
 

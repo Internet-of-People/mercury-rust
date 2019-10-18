@@ -16,6 +16,7 @@ futures = "0.1"
 log = "*"
 log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }
+mercury-storage = { path="../storage" }
 osg-rpc-storage = { path="../osg-rpc-storage" }
 multiaddr = "*"
 structopt = "*"

@@ -106,8 +106,10 @@ pub struct RelationSignablePart {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RelationHalfProof {
+    // TODO consider renaming this to payload as it might contain structured semantic information
     pub relation_type: String,
     pub signer_id: ProfileId,
+    pub signer_pubkey: PublicKey,
     pub peer_id: ProfileId,
     pub signature: Signature,
     // TODO is a nonce needed?
@@ -119,6 +121,7 @@ impl RelationHalfProof {
         Self {
             relation_type: relation_type.to_owned(),
             signer_id: signer.profile_id().to_owned(),
+            signer_pubkey: signer.public_key(),
             peer_id: peer_id.to_owned(),
             signature: signable.sign(signer),
         }
@@ -129,8 +132,10 @@ impl RelationHalfProof {
 pub struct RelationProof {
     pub relation_type: String, // TODO inline halfproof fields with macro, if possible at all
     pub a_id: ProfileId,
+    pub a_pub_key: PublicKey,
     pub a_signature: Signature,
     pub b_id: ProfileId,
+    pub b_pub_key: PublicKey,
     pub b_signature: Signature,
     // TODO is a nonce needed?
 }
@@ -199,6 +204,7 @@ where
     Ok(res)
 }
 
+// TODO use the same kind of ContentId/Hash as in mercury_claims::model::content_id()
 impl RelationSignablePart {
     pub(crate) fn new(relation_type: &str, signer_id: &ProfileId, peer_id: &ProfileId) -> Self {
         Self {
@@ -235,19 +241,23 @@ impl RelationProof {
     pub const RELATION_TYPE_HOSTED_ON_HOME: &'static str = "hosted_on_home";
     pub const RELATION_TYPE_ENABLE_CALLS_BETWEEN: &'static str = "enable_call_between";
 
-    pub fn new(
+    fn new(
         relation_type: &str,
         a_id: &ProfileId,
+        a_pubkey: &PublicKey,
         a_signature: &Signature,
         b_id: &ProfileId,
+        b_pubkey: &PublicKey,
         b_signature: &Signature,
     ) -> Self {
         if a_id < b_id {
             Self {
                 relation_type: relation_type.to_owned(),
                 a_id: a_id.to_owned(),
+                a_pub_key: a_pubkey.to_owned(),
                 a_signature: a_signature.to_owned(),
                 b_id: b_id.to_owned(),
+                b_pub_key: b_pubkey.to_owned(),
                 b_signature: b_signature.to_owned(),
             }
         }
@@ -256,8 +266,10 @@ impl RelationProof {
             Self {
                 relation_type: relation_type.to_owned(),
                 a_id: b_id.to_owned(),
+                a_pub_key: b_pubkey.to_owned(),
                 a_signature: b_signature.to_owned(),
                 b_id: a_id.to_owned(),
+                b_pub_key: a_pubkey.to_owned(),
                 b_signature: a_signature.to_owned(),
             }
         }
@@ -280,8 +292,10 @@ impl RelationProof {
         Ok(Self::new(
             &half_proof.relation_type,
             &half_proof.signer_id,
+            &half_proof.signer_pubkey,
             &half_proof.signature,
             &my_profile_id,
+            &signer.public_key(),
             &signable.sign(signer),
         ))
     }

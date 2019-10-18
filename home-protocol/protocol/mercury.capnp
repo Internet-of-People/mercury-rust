@@ -14,6 +14,7 @@ using ApplicationId = Text;
 using AppMessageFrame = Data;
 using HomeInvitation = Data;
 using Profile = Data;
+using OwnProfile = Data;
 
 
 
@@ -31,23 +32,20 @@ struct RelationHalfProof
 {
     relationType    @0 : Text;
     signerId        @1 : ProfileId;
-    peerId          @2 : ProfileId;
-    signature       @3 : Signature;
+    signerPubKey    @2 : PublicKey;
+    peerId          @3 : ProfileId;
+    signature       @4 : Signature;
 }
 
 struct RelationProof
 {
     relationType    @0 : Text;
     aId             @1 : ProfileId;
-    aSignature      @2 : Signature;
-    bId             @3 : ProfileId;
-    bSignature      @4 : Signature;
-}
-
-struct OwnProfile
-{
-    profile     @0 : Profile;
-    privateData @1 : Data;
+    aPubKey         @2 : PublicKey;
+    aSignature      @3 : Signature;
+    bId             @4 : ProfileId;
+    bPubKey         @5 : PublicKey;
+    bSignature      @6 : Signature;
 }
 
 
@@ -62,9 +60,9 @@ interface AppMessageListener
 
 interface Home extends (ProfileRepo)
 {
-    claim @0 (profileId: ProfileId) -> (ownProfile: OwnProfile);
-    register @1 (ownProfile: OwnProfile, halfProof: RelationHalfProof, invite: HomeInvitation) -> (ownProfile: OwnProfile);
-    login @2 (proofOfHome : RelationProof) -> (session : HomeSession);
+    claim @0 (profileId: ProfileId) -> (hostingProof: RelationProof); # consider returning List(RelationProof)
+    register @1 (halfProof: RelationHalfProof, invite: HomeInvitation) -> (hostingProof: RelationProof);
+    login @2 (hostingProof : RelationProof) -> (session : HomeSession);
 
     pairRequest @3 (halfProof: RelationHalfProof);  # NOTE called on acceptor's home
     pairResponse @4 (relation: RelationProof); # NOTE called on requestor's home
@@ -109,12 +107,13 @@ interface ProfileEventListener
 
 interface HomeSession
 {
-    update @0 (ownProfile: OwnProfile);
-    unregister @1 (newHome: Profile); # NOTE closes session after successful call
+    backup @0 (ownProfile: OwnProfile);
+    restore @1 () -> (ownProfile: OwnProfile);
+    unregister @2 (newHome: Profile); # NOTE closes session after successful call
 
-    events @2 (eventListener: ProfileEventListener);
-    checkinApp @3 (app: ApplicationId, callListener: CallListener);
+    events @3 (eventListener: ProfileEventListener);
+    checkinApp @4 (app: ApplicationId, callListener: CallListener);
 
     # TODO consider removing this, used mostly for testing
-    ping @4 (txt : Text) -> (pong : Text);
+    ping @5 (txt : Text) -> (pong : Text);
 }

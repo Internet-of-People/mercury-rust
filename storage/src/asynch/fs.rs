@@ -21,8 +21,8 @@ pub struct BlockingFileStore {
 }
 
 impl BlockingFileStore {
-    pub fn new(base_path_str: &str) -> Fallible<Self> {
-        Ok(Self { base_path: base_path_str.into() })
+    pub fn new(base_path_str: &Path) -> Fallible<Self> {
+        Ok(Self { base_path: base_path_str.to_owned() })
     }
 
     fn set_bytes(&self, key: String, value: &[u8]) -> Result<(), ::std::io::Error> {
@@ -85,9 +85,9 @@ pub struct AsyncFileStore {
 }
 
 impl AsyncFileStore {
-    pub fn new(base_path_str: &str) -> Fallible<Self> {
+    pub fn new(base_path_str: &Path) -> Fallible<Self> {
         let runtime = tokio::runtime::Runtime::new()?;
-        Ok(Self { base_path: base_path_str.into(), runtime: RefCell::new(runtime) })
+        Ok(Self { base_path: base_path_str.to_owned(), runtime: RefCell::new(runtime) })
     }
 
     fn schedule<T, F>(
@@ -168,7 +168,7 @@ fn test_file_store() {
     let mut reactor = reactor::CurrentThread::new();
     // let mut runtime = tokio::runtime::Runtime::new().unwrap();
     let mut storage: Box<dyn KeyValueStore<String, String>> =
-        Box::new(FileStore::new("./filetest/store/").unwrap());
+        Box::new(FileStore::new(&PathBuf::from("./filetest/store/")).unwrap());
     let count = 100;
     let content = "my_application".to_string();
     for i in 0..count {

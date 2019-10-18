@@ -77,7 +77,7 @@ impl ProfileExplorer for HomeClientCapnProto {
 }
 
 impl Home for HomeClientCapnProto {
-    fn claim(&self, profile_id: ProfileId) -> AsyncResult<OwnProfile, Error> {
+    fn claim(&self, profile_id: ProfileId) -> AsyncResult<RelationProof, Error> {
         let mut request = self.home.claim_request();
         request.get().set_profile_id(&profile_id.to_bytes());
 
@@ -86,8 +86,8 @@ impl Home for HomeClientCapnProto {
             .promise
             .and_then(|resp| {
                 resp.get()
-                    .and_then(|res| res.get_own_profile())
-                    .and_then(|own_prof_capnp| OwnProfile::try_from(own_prof_capnp))
+                    .and_then(|res| res.get_hosting_proof())
+                    .and_then(|host_proof_capnp| RelationProof::try_from(host_proof_capnp))
             })
             .map_err(|e| e.context(ErrorKind::FailedToClaimProfile).into());
 
@@ -96,12 +96,10 @@ impl Home for HomeClientCapnProto {
 
     fn register(
         &self,
-        own_profile: OwnProfile,
         half_proof: RelationHalfProof,
         //invite: Option<HomeInvitation>,
-    ) -> AsyncResult<OwnProfile, (OwnProfile, Error)> {
+    ) -> AsyncResult<RelationProof, Error> {
         let mut request = self.home.register_request();
-        request.get().init_own_profile().fill_from(&own_profile);
         request.get().init_half_proof().fill_from(&half_proof);
         //if let Some(inv) = invite {
         //    request.get().init_invite().fill_from(&inv);
@@ -112,17 +110,17 @@ impl Home for HomeClientCapnProto {
             .promise
             .and_then(|resp| {
                 resp.get()
-                    .and_then(|res| res.get_own_profile())
-                    .and_then(|own_prof_capnp| OwnProfile::try_from(own_prof_capnp))
+                    .and_then(|res| res.get_hosting_proof())
+                    .and_then(|host_proof_capnp| RelationProof::try_from(host_proof_capnp))
             })
-            .map_err(move |e| (own_profile, e.context(ErrorKind::RegisterFailed).into()));
+            .map_err(move |e| e.context(ErrorKind::RegisterFailed).into());
 
         Box::new(resp_fut)
     }
 
-    fn login(&self, proof_of_home: &RelationProof) -> AsyncResult<Rc<dyn HomeSession>, Error> {
+    fn login(&self, hosting_proof: &RelationProof) -> AsyncResult<Rc<dyn HomeSession>, Error> {
         let mut request = self.home.login_request();
-        request.get().init_proof_of_home().fill_from(proof_of_home);
+        request.get().init_hosting_proof().fill_from(hosting_proof);
 
         let resp_fut = request
             .send()
@@ -252,17 +250,29 @@ impl HomeSessionClientCapnProto {
 }
 
 impl HomeSession for HomeSessionClientCapnProto {
-    // TODO consider if we should notify an open session about an updated profile
-    // TODO consider if an OwnProfile return value is needed or how to force updating
-    //      the currently active profile in all PeerContext/Session/etc instances
-    fn update(&self, own_prof: OwnProfile) -> AsyncResult<(), Error> {
-        let mut request = self.session.update_request();
-        request.get().init_own_profile().fill_from(&own_prof);
+    fn backup(&self, own_prof: OwnProfile) -> AsyncResult<(), Error> {
+        let mut request = self.session.backup_request();
+        request.get().set_own_profile(&own_profile_to_bytes(&own_prof));
 
         let resp_fut = request
             .send()
             .promise
             .map(|_resp| ())
+            .map_err(|e| e.context(ErrorKind::ProfileUpdateFailed).into());
+
+        Box::new(resp_fut)
+    }
+
+    fn restore(&self) -> AsyncResult<OwnProfile, Error> {
+        let mut request = self.session.restore_request();
+        let resp_fut = request
+            .send()
+            .promise
+            .and_then(|resp| {
+                resp.get().and_then(|res| {
+                    res.get_own_profile().and_then(|own_bytes| bytes_to_own_profile(own_bytes))
+                })
+            })
             .map_err(|e| e.context(ErrorKind::ProfileUpdateFailed).into());
 
         Box::new(resp_fut)
