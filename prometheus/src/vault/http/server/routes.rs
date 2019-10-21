@@ -77,5 +77,6 @@ pub fn init_url_mapping(service: &mut web::ServiceConfig) {
                 )
                 .service(web::resource("/claims").route(web::get().to(list_vault_claims))),
         )
+        .service(web::resource("/homes").route(web::get().to(list_homes)))
         .service(web::resource("/claim-schemas").route(web::get().to(list_schemas)));
 }

@@ -2,12 +2,11 @@ use futures::Future;
 use tokio_current_thread as reactor;
 
 use crate::dapp::dapp_session::DAppSessionServiceImpl;
-use crate::dapp::user_interactor::UserInteractor;
+use crate::home::discovery::HomeNodeCrawler;
 use crate::home::net::TcpHomeConnector;
 use crate::test::FakeUserInteractor;
 use crate::vault::api_impl::VaultState;
 use crate::*;
-use claims::repo::DistributedPublicProfileRepository;
 
 pub struct Daemon {
     handle: reactor::Handle,
@@ -101,6 +100,7 @@ fn start_daemon(options: Options) -> Fallible<Server> {
     let base_repo = FileProfileRepository::new(&base_path)?;
     let timeout = Duration::from_secs(options.network_timeout_secs);
     let rpc_repo = RpcProfileRepository::new(&options.remote_repo_address, timeout)?;
+    let home_node_crawler = HomeNodeCrawler::default();
 
     let vault_state = VaultState::new(
         vault_path.clone(),
@@ -110,6 +110,7 @@ fn start_daemon(options: Options) -> Fallible<Server> {
         Box::new(base_repo),
         Box::new(rpc_repo.clone()),
         Box::new(rpc_repo),
+        home_node_crawler,
     );
 
     let profile_repo = Arc::new(RwLock::new(FileProfileRepository::new(&repo_path)?));

@@ -655,6 +655,24 @@ pub fn list_schemas(state: web::Data<DaemonState>) -> impl Responder {
     }
 }
 
+pub fn list_homes(state: web::Data<DaemonState>) -> impl Responder {
+    let state = match state.lock_vault() {
+        Err(e) => return HttpResponse::Conflict().body(e.to_string()),
+        Ok(state) => state,
+    };
+
+    match state.homes() {
+        Ok(homes) => {
+            debug!("Fetched list of home nodes");
+            HttpResponse::Ok().json(homes)
+        }
+        Err(e) => {
+            error!("Failed to fetch list of home nodes: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
 fn did_opt(did_str: &str) -> Fallible<Option<ProfileId>> {
     if did_str == "_" {
         return Ok(None);

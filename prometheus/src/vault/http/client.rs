@@ -379,6 +379,10 @@ impl VaultApi for VaultClient {
     ) -> Fallible<()> {
         unimplemented!()
     }
+
+    fn homes(&self) -> Fallible<Vec<HomeNode>> {
+        unimplemented!()
+    }
 }
 
 struct InMemoryClaimSchemas {

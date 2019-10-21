@@ -88,8 +88,6 @@ pub trait VaultApi {
         key: &AttributeId,
     ) -> Fallible<()>;
 
-    fn claim_schemas(&self) -> Fallible<Rc<dyn ClaimSchemas>>;
-
     fn claims(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Claim>>;
     fn add_claim(&mut self, my_profile_id: Option<ProfileId>, claim: Claim) -> Fallible<()>;
     fn remove_claim(&mut self, my_profile_id: Option<ProfileId>, claim: ClaimId) -> Fallible<()>;
@@ -123,4 +121,10 @@ pub trait VaultApi {
         my_profile_id: Option<ProfileId>,
         peer_profile_id: &ProfileId,
     ) -> Fallible<()>;
+
+    // TODO: This is related to add_claim and other calls, but does not conceptually belong here.
+    fn claim_schemas(&self) -> Fallible<Rc<dyn ClaimSchemas>>;
+
+    // TODO: This is related to did_homes and other calls, but does not conceptually belong here.
+    fn homes(&self) -> Fallible<Vec<HomeNode>>;
 }

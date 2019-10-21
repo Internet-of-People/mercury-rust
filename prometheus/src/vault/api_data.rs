@@ -2,12 +2,15 @@ use std::convert::{TryFrom, TryInto};
 use std::str::FromStr;
 
 use failure::{err_msg, Fallible};
+use multiaddr::Multiaddr;
 use serde::{Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
+use crate::home::discovery::KnownHomeNode;
 pub use claims::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
 use claims::model::*;
 use did::vault::*;
+use mercury_home_protocol::primitives::{deserialize_multiaddr_vec, serialize_multiaddr_vec};
 
 pub type MessageContent = Vec<u8>;
 
@@ -324,5 +327,26 @@ impl TryFrom<Claim> for CreateClaim {
             schema: signable.typed_content.schema_id().to_owned(),
             content: signable.typed_content.content().to_owned(),
         })
+    }
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct HomeNode {
+    pub home_did: String,
+    pub latency_ms: u32,
+    #[serde(serialize_with = "serialize_multiaddr_vec")]
+    #[serde(deserialize_with = "deserialize_multiaddr_vec")]
+    pub underlay_addrs: Vec<Multiaddr>,
+    pub public: serde_json::Value,
+}
+
+impl From<&KnownHomeNode> for HomeNode {
+    fn from(n: &KnownHomeNode) -> Self {
+        Self {
+            home_did: n.profile.id().to_string(),
+            latency_ms: n.latency.map(|d| d.as_millis() as u32).unwrap_or(u32::max_value()),
+            underlay_addrs: n.addrs(),
+            public: serde_json::Value::Null,
+        }
     }
 }

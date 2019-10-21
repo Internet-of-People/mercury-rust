@@ -58,7 +58,7 @@ pub struct HomeFacet {
 }
 
 impl HomeFacet {
-    const HOME_FACET_ATTRIBUTE: &'static str = "osg_home_addresses";
+    const ATTRIBUTE_ID: &'static str = "osg_home_addresses";
 
     pub fn new(addrs: Vec<Multiaddr>, data: Vec<u8>) -> Self {
         Self { addrs, data }
@@ -68,13 +68,13 @@ impl HomeFacet {
         let mut attributes = AttributeMap::new();
         let facet_str = serde_json::to_string(&self)
             .expect("This can fail only with failing custom Serialize() or having non-string keys");
-        attributes.insert(Self::HOME_FACET_ATTRIBUTE.to_string(), facet_str);
+        attributes.insert(Self::ATTRIBUTE_ID.to_string(), facet_str);
         attributes
     }
 
     fn as_home(attributes: &AttributeMap) -> Option<Self> {
         attributes
-            .get(Self::HOME_FACET_ATTRIBUTE)
+            .get(Self::ATTRIBUTE_ID)
             .and_then(|facet_str| serde_json::from_str(facet_str).ok())
     }
 }
@@ -165,7 +165,7 @@ pub struct RelationProof {
 //    }
 //}
 
-fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> std::result::Result<S::Ok, S::Error>
+pub fn serialize_multiaddr_vec<S>(x: &Vec<Multiaddr>, s: S) -> std::result::Result<S::Ok, S::Error>
 where
     S: Serializer,
 {
@@ -183,7 +183,7 @@ where
     seq.end()
 }
 
-fn deserialize_multiaddr_vec<'de, D>(
+pub fn deserialize_multiaddr_vec<'de, D>(
     deserializer: D,
 ) -> std::result::Result<Vec<Multiaddr>, D::Error>
 where

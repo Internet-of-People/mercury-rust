@@ -6,7 +6,9 @@ use failure::{bail, ensure, err_msg, format_err, Fallible};
 use futures::prelude::*;
 use log::*;
 
+use crate::home::discovery::HomeNodeCrawler;
 use crate::vault::api::*;
+use crate::HomeNode;
 use claims::claim_schema::ClaimSchemaRegistry;
 pub use claims::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
 use claims::model::*;
@@ -24,6 +26,7 @@ pub struct VaultState {
     base_repo: Box<dyn PrivateProfileRepository + Send>,
     remote_repo: Box<dyn PrivateProfileRepository + Send>,
     explorer: Box<dyn ProfileExplorer + Send>,
+    home_node_crawler: HomeNodeCrawler,
 }
 
 // TODO !!! The current implementation assumes that though the ProfileRepository
@@ -40,8 +43,18 @@ impl VaultState {
         base_repo: Box<dyn PrivateProfileRepository + Send>,
         remote_repo: Box<dyn PrivateProfileRepository + Send>,
         explorer: Box<dyn ProfileExplorer + Send>,
+        home_node_crawler: HomeNodeCrawler,
     ) -> Self {
-        Self { vault_path, schema_path, vault, local_repo, base_repo, remote_repo, explorer }
+        Self {
+            vault_path,
+            schema_path,
+            vault,
+            local_repo,
+            base_repo,
+            remote_repo,
+            explorer,
+            home_node_crawler,
+        }
     }
 
     fn vault(&self) -> Fallible<&dyn ProfileVault> {
@@ -495,5 +508,9 @@ before trying to restore another vault."#,
         profile.mut_public_data().increase_version();
         self.local_repo.set(profile).wait()?;
         self.save_vault()
+    }
+
+    fn homes(&self) -> Fallible<Vec<HomeNode>> {
+        Ok(self.home_node_crawler.iter().map(|known_home_node| known_home_node.into()).collect())
     }
 }
