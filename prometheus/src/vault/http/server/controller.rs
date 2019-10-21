@@ -1,5 +1,4 @@
 use std::convert::{TryFrom, TryInto};
-use std::sync::{Mutex, MutexGuard};
 
 use actix_web::{web, HttpResponse, Responder};
 use failure::{err_msg, format_err, Fallible};
@@ -671,6 +670,76 @@ pub fn list_homes(state: web::Data<DaemonState>) -> impl Responder {
             HttpResponse::Conflict().body(e.to_string())
         }
     }
+}
+
+pub fn list_did_homes(
+    state: web::Data<DaemonState>,
+    did_path: web::Path<String>,
+) -> impl Responder {
+    let did = match did_opt(&did_path) {
+        Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
+        Ok(did) => did,
+    };
+    let state = match state.lock_vault() {
+        Err(e) => return HttpResponse::Conflict().body(e.to_string()),
+        Ok(state) => state,
+    };
+
+    match state.did_homes(did) {
+        Ok(homes) => {
+            debug!("Fetched list of home nodes");
+            HttpResponse::Ok().json(homes)
+        }
+        Err(e) => {
+            error!("Failed to fetch list of home nodes: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
+}
+
+pub fn register_did_home(
+    state: web::Data<DaemonState>,
+    did_path: web::Path<String>,
+) -> impl Responder {
+    let did = match did_opt(&did_path) {
+        Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
+        Ok(did) => did,
+    };
+    let mut state = match state.lock_vault() {
+        Err(e) => return HttpResponse::Conflict().body(e.to_string()),
+        Ok(state) => state,
+    };
+    unimplemented!()
+}
+
+pub fn leave_did_home(
+    state: web::Data<DaemonState>,
+    did_path: web::Path<String>,
+) -> impl Responder {
+    let did = match did_opt(&did_path) {
+        Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
+        Ok(did) => did,
+    };
+    let mut state = match state.lock_vault() {
+        Err(e) => return HttpResponse::Conflict().body(e.to_string()),
+        Ok(state) => state,
+    };
+    unimplemented!()
+}
+
+pub fn set_did_home_status(
+    state: web::Data<DaemonState>,
+    did_path: web::Path<String>,
+) -> impl Responder {
+    let did = match did_opt(&did_path) {
+        Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
+        Ok(did) => did,
+    };
+    let mut state = match state.lock_vault() {
+        Err(e) => return HttpResponse::Conflict().body(e.to_string()),
+        Ok(state) => state,
+    };
+    unimplemented!()
 }
 
 fn did_opt(did_str: &str) -> Fallible<Option<ProfileId>> {

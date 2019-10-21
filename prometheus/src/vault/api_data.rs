@@ -331,6 +331,12 @@ impl TryFrom<Claim> for CreateClaim {
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
+pub struct DidHomeStatus {
+    pub home_did: String,
+    pub online: bool,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct HomeNode {
     pub home_did: String,
     pub latency_ms: u32,

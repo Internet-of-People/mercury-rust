@@ -16,7 +16,7 @@ impl ServiceServer {
 }
 
 impl DAppSessionService for ServiceServer {
-    fn dapp_session(&self, app: ApplicationId) -> AsyncFallible<Arc<dyn DAppSession>> {
+    fn dapp_session(&self, _app: ApplicationId) -> AsyncFallible<Arc<dyn DAppSession>> {
         // TODO
         Box::new(ok(Arc::new(SessionServer {}) as Arc<dyn DAppSession>))
     }
@@ -37,11 +37,11 @@ impl DAppSession for SessionServer {
         unimplemented!()
     }
 
-    fn relation(&self, id: &MKeyId) -> AsyncFallible<Option<Box<dyn Relation>>> {
+    fn relation(&self, _id: &MKeyId) -> AsyncFallible<Option<Box<dyn Relation>>> {
         unimplemented!()
     }
 
-    fn initiate_relation(&self, with_profile: &ProfileId) -> AsyncFallible<()> {
+    fn initiate_relation(&self, _with_profile: &ProfileId) -> AsyncFallible<()> {
         unimplemented!()
     }
 

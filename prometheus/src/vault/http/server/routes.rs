@@ -72,6 +72,20 @@ pub fn init_url_mapping(service: &mut web::ServiceConfig) {
                                                     .route(web::put().to(add_claim_proof))
                                                 )
                                         ),
+                                )
+                                .service(web::scope("/homes")
+                                    .service(web::resource("")
+                                        .route(web::get().to(list_did_homes))
+                                        .route(web::post().to(register_did_home))
+                                    )
+                                    .service(web::scope("{home_did}")
+                                        .service(web::resource("")
+                                            .route(web::delete().to(leave_did_home))
+                                        )
+                                        .service(web::resource("status")
+                                            .route(web::put().to(set_did_home_status))
+                                        )
+                                    )
                                 ),
                         ),
                 )

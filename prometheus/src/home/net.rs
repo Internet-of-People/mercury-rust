@@ -152,7 +152,10 @@ impl HomeConnector for TcpHomeConnector {
 
         let profile_repo = match self.profile_repo.try_read() {
             Ok(repo) => repo,
-            Err(e) => unreachable!(),
+            Err(e) => {
+                error!("BUG: failed to lock profile repository: {}", e);
+                unreachable!()
+            }
         };
         let this = self.clone();
         let home_conn_fut = profile_repo

@@ -37,8 +37,6 @@ pub enum ErrorKind {
     PeerIdRetreivalFailed,
     #[fail(display = "profile claim failed")]
     FailedToClaimProfile,
-    #[fail(display = "persona expected")]
-    PersonaExpected,
     #[fail(display = "already registered")]
     AlreadyRegistered,
     #[fail(display = "home id mismatch")]

@@ -1,5 +1,5 @@
 use actix::{Actor, StreamHandler};
-use actix_web::{web, Error, HttpRequest, HttpResponse, Responder};
+use actix_web::{web, Error, HttpRequest, HttpResponse};
 use actix_web_actors::ws;
 
 pub fn init_url_mapping(service: &mut web::ServiceConfig) {

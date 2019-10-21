@@ -122,6 +122,8 @@ pub trait VaultApi {
         peer_profile_id: &ProfileId,
     ) -> Fallible<()>;
 
+    fn did_homes(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<DidHomeStatus>>;
+
     // TODO: This is related to add_claim and other calls, but does not conceptually belong here.
     fn claim_schemas(&self) -> Fallible<Rc<dyn ClaimSchemas>>;
 

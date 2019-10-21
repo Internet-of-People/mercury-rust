@@ -383,6 +383,10 @@ impl VaultApi for VaultClient {
     fn homes(&self) -> Fallible<Vec<HomeNode>> {
         unimplemented!()
     }
+
+    fn did_homes(&self, _my_profile_id: Option<ProfileId>) -> Fallible<Vec<DidHomeStatus>> {
+        unimplemented!()
+    }
 }
 
 struct InMemoryClaimSchemas {

@@ -17,7 +17,7 @@ pub type OwnProfile = claims::model::PrivateProfileData;
 pub struct ApplicationId(pub String);
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct PersonaFacet {
+pub struct HostedFacet {
     /// `homes` contain items with `relation_type` "home", with proofs included.
     /// Current implementation supports only a single home stored in `homes[0]`,
     /// Support for multiple homes will be implemented in a future release.
@@ -25,8 +25,8 @@ pub struct PersonaFacet {
     pub data: Vec<u8>,
 }
 
-impl PersonaFacet {
-    const PERSONA_FACET_ATTRIBUTE: &'static str = "osg_persona_homes";
+impl HostedFacet {
+    const ATTRIBUTE_ID: &'static str = "osg_hosted";
 
     pub fn new(homes: Vec<RelationProof>, data: Vec<u8>) -> Self {
         Self { homes, data }
@@ -36,13 +36,13 @@ impl PersonaFacet {
         let mut attributes = AttributeMap::new();
         let facet_str = serde_json::to_string(&self)
             .expect("This can fail only with failing custom Serialize() or having non-string keys");
-        attributes.insert(Self::PERSONA_FACET_ATTRIBUTE.to_string(), facet_str);
+        attributes.insert(Self::ATTRIBUTE_ID.to_string(), facet_str);
         attributes
     }
 
-    fn as_persona(attributes: &AttributeMap) -> Option<Self> {
+    fn as_hosted(attributes: &AttributeMap) -> Option<Self> {
         attributes
-            .get(Self::PERSONA_FACET_ATTRIBUTE)
+            .get(Self::ATTRIBUTE_ID)
             .and_then(|facet_str| serde_json::from_str(facet_str).ok())
     }
 }
@@ -81,7 +81,7 @@ impl HomeFacet {
 
 pub trait FacetExtractor {
     fn as_home(&self) -> Option<HomeFacet>;
-    fn as_persona(&self) -> Option<PersonaFacet>;
+    fn as_hosted(&self) -> Option<HostedFacet>;
 }
 
 impl FacetExtractor for Profile {
@@ -89,8 +89,8 @@ impl FacetExtractor for Profile {
         HomeFacet::as_home(self.attributes())
     }
 
-    fn as_persona(&self) -> Option<PersonaFacet> {
-        PersonaFacet::as_persona(self.attributes())
+    fn as_hosted(&self) -> Option<HostedFacet> {
+        HostedFacet::as_hosted(self.attributes())
     }
 }
 

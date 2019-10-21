@@ -86,7 +86,7 @@ impl DAppSession for DAppSessionImpl {
         unimplemented!()
     }
 
-    fn initiate_relation(&self, with_profile: &ProfileId) -> AsyncFallible<()> {
+    fn initiate_relation(&self, _with_profile: &ProfileId) -> AsyncFallible<()> {
         unimplemented!()
     }
 
@@ -122,7 +122,10 @@ impl DAppSessionService for DAppSessionServiceImpl {
         let profile_repo = self.profile_repo.clone();
         let interactor = match self.interactor.try_read() {
             Ok(interactor) => interactor,
-            Err(e) => unreachable!(),
+            Err(e) => {
+                error!("BUG: failed to lock user interactor: {}", e);
+                unreachable!()
+            }
         };
         let session_fut = interactor.select_profile().map(move |profile| {
             Arc::new(DAppSessionImpl::new(app, profile, home_conn, profile_repo))

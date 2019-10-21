@@ -8,13 +8,14 @@ use log::*;
 
 use crate::home::discovery::HomeNodeCrawler;
 use crate::vault::api::*;
-use crate::HomeNode;
+use crate::{DidHomeStatus, HomeNode};
 use claims::claim_schema::ClaimSchemaRegistry;
 pub use claims::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
 use claims::model::*;
 use claims::repo::*;
 use did::vault::{self, ProfileLabel, ProfileMetadata, ProfileVault, ProfileVaultRecord};
 use keyvault::PublicKey as KeyVaultPublicKey;
+use mercury_home_protocol::FacetExtractor;
 
 const ERR_MSG_VAULT_UNINITIALIZED: &str = "Vault is uninitialized, `restore vault` first";
 
@@ -512,5 +513,25 @@ before trying to restore another vault."#,
 
     fn homes(&self) -> Fallible<Vec<HomeNode>> {
         Ok(self.home_node_crawler.iter().map(|known_home_node| known_home_node.into()).collect())
+    }
+
+    fn did_homes(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<DidHomeStatus>> {
+        let profile = self.selected_profile(my_profile_id)?;
+        let hosted_facet = profile.public_data().as_hosted().ok_or_else(|| {
+            format_err!("Profile {} lacks hosting details (like homes) filled", profile.id())
+        })?;
+        Ok(hosted_facet
+            .homes
+            .iter()
+            .filter_map(|rel| {
+                let home_id_opt = rel.peer_id(&profile.id()).ok();
+                if let None = home_id_opt {
+                    warn!("BUG: found relation of two other peers in profile as hosting proof")
+                }
+                home_id_opt
+            })
+            // TODO online status is not gathered yet
+            .map(|home_did| DidHomeStatus { home_did: home_did.to_string(), online: false })
+            .collect())
     }
 }

@@ -264,7 +264,7 @@ impl HomeSession for HomeSessionClientCapnProto {
     }
 
     fn restore(&self) -> AsyncResult<OwnProfile, Error> {
-        let mut request = self.session.restore_request();
+        let request = self.session.restore_request();
         let resp_fut = request
             .send()
             .promise

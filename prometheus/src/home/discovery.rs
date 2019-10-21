@@ -8,6 +8,7 @@ use multiaddr::Multiaddr;
 use mercury_home_protocol::{FacetExtractor, HomeFacet, Profile, ProfileId};
 
 pub struct KnownHomeNode {
+    // TODO should we store HomeFacet or the whole Profile here?
     pub profile: Profile,
     pub latency: Option<Duration>,
 }
