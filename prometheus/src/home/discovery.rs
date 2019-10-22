@@ -5,7 +5,7 @@ use failure::{bail, Fallible};
 use log::*;
 use multiaddr::Multiaddr;
 
-use mercury_home_protocol::{FacetExtractor, HomeFacet, Profile, ProfileId};
+use mercury_home_protocol::{HomeFacet, Profile, ProfileFacets, ProfileId};
 
 pub struct KnownHomeNode {
     // TODO should we store HomeFacet or the whole Profile here?
@@ -15,7 +15,7 @@ pub struct KnownHomeNode {
 
 impl KnownHomeNode {
     pub fn addrs(&self) -> Vec<Multiaddr> {
-        match self.profile.as_home() {
+        match self.profile.to_home() {
             None => vec![],
             Some(home_facet) => home_facet.addrs.to_owned(),
         }
@@ -30,7 +30,7 @@ impl Default for HomeNodeCrawler {
     fn default() -> Self {
         let mut result = Self { home_profiles: Default::default() };
         let facet = HomeFacet::new(vec!["/ip4/127.0.0.1/tcp/2077".parse().unwrap()], vec![]);
-        let attributes = facet.to_attributes();
+        let attributes = facet.to_attribute_map();
         result
             .add(&Profile::new(
                 "Pez3dKiKa6QCs1yq2BGJirUuJubupXNXPmVsh5G2GHWmZig".parse().unwrap(),
@@ -45,7 +45,7 @@ impl Default for HomeNodeCrawler {
 
 impl HomeNodeCrawler {
     pub fn add(&mut self, home: &Profile) -> Fallible<()> {
-        let home_facet = match home.as_home() {
+        let home_facet = match home.to_home() {
             None => bail!("Not a profile of a home node"),
             Some(facet) => facet,
         };

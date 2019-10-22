@@ -3,7 +3,7 @@ use tokio_current_thread as reactor;
 
 use crate::dapp::dapp_session::DAppSessionServiceImpl;
 use crate::home::discovery::HomeNodeCrawler;
-use crate::home::net::TcpHomeConnector;
+use crate::home::net::{HomeConnector, TcpHomeConnector};
 use crate::test::FakeUserInteractor;
 use crate::vault::api_impl::VaultState;
 use crate::*;
@@ -62,18 +62,35 @@ impl Daemon {
     }
 }
 
+pub struct NetworkState {
+    pub home_connector: Arc<RwLock<dyn HomeConnector + Send + Sync>>,
+    explorer: Box<dyn ProfileExplorer + Send>,
+    home_node_crawler: HomeNodeCrawler,
+}
+
+impl NetworkState {
+    pub fn new(
+        home_connector: Arc<RwLock<dyn HomeConnector + Send + Sync>>,
+        explorer: Box<dyn ProfileExplorer + Send>,
+        home_node_crawler: HomeNodeCrawler,
+    ) -> Self {
+        Self { home_connector, explorer, home_node_crawler }
+    }
+
+    pub fn homes(&self) -> Fallible<Vec<HomeNode>> {
+        Ok(self.home_node_crawler.iter().map(|known_home_node| known_home_node.into()).collect())
+    }
+}
+
 pub struct DaemonState {
-    vault: Mutex<VaultState>,
-    dapp: Mutex<DAppSessionServiceImpl>,
+    pub vault: VaultState,
+    pub dapp: DAppSessionServiceImpl,
+    pub network: NetworkState,
 }
 
 impl DaemonState {
-    fn new(vault: Mutex<VaultState>, dapp: Mutex<DAppSessionServiceImpl>) -> Self {
-        Self { vault, dapp }
-    }
-
-    pub fn lock_vault(&self) -> Fallible<MutexGuard<VaultState>> {
-        self.vault.lock().map_err(|e| err_msg(format!("Failed to lock state: {}", e)))
+    fn new(vault: VaultState, dapp: DAppSessionServiceImpl, network: NetworkState) -> Self {
+        Self { vault, dapp, network }
     }
 }
 
@@ -109,16 +126,17 @@ fn start_daemon(options: Options) -> Fallible<Server> {
         local_repo,
         Box::new(base_repo),
         Box::new(rpc_repo.clone()),
-        Box::new(rpc_repo),
-        home_node_crawler,
     );
 
+    // TODO We use this here for DHT caching, but the same file is used for own profiles in the VaultState
     let profile_repo = Arc::new(RwLock::new(FileProfileRepository::new(&repo_path)?));
     let connector = Arc::new(RwLock::new(TcpHomeConnector::new(profile_repo.clone())));
-    let dapp_state =
-        DAppSessionServiceImpl::new(Arc::new(RwLock::new(interactor)), connector, profile_repo);
+    let dapp_state = DAppSessionServiceImpl::new(Arc::new(RwLock::new(interactor)));
+
+    let network_state = NetworkState::new(connector, Box::new(rpc_repo), home_node_crawler);
+
     let daemon_state =
-        web::Data::new(DaemonState::new(Mutex::new(vault_state), Mutex::new(dapp_state)));
+        web::Data::new(Mutex::new(DaemonState::new(vault_state, dapp_state, network_state)));
 
     // TODO The current implementation is not known to ever panic. However,
     //      if it was then the Arbiter thread would stop but not the whole server.

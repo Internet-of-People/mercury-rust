@@ -50,18 +50,11 @@ pub trait DAppSession {
 pub struct DAppSessionImpl {
     dapp_id: ApplicationId,
     profile_id: ProfileId,
-    home_connector: Arc<RwLock<dyn HomeConnector>>,
-    profile_repo: Arc<RwLock<dyn DistributedPublicProfileRepository>>,
 }
 
 impl DAppSessionImpl {
-    pub fn new(
-        dapp_id: ApplicationId,
-        profile_id: ProfileId,
-        home_connector: Arc<RwLock<dyn HomeConnector>>,
-        profile_repo: Arc<RwLock<dyn DistributedPublicProfileRepository>>,
-    ) -> Self {
-        Self { profile_id, dapp_id, home_connector, profile_repo }
+    pub fn new(dapp_id: ApplicationId, profile_id: ProfileId) -> Self {
+        Self { profile_id, dapp_id }
     }
 }
 
@@ -102,24 +95,16 @@ pub trait DAppSessionService {
 
 pub struct DAppSessionServiceImpl {
     interactor: Arc<RwLock<dyn UserInteractor + Send + Sync>>,
-    home_connector: Arc<RwLock<dyn HomeConnector + Send + Sync>>,
-    profile_repo: Arc<RwLock<dyn DistributedPublicProfileRepository + Send + Sync>>,
 }
 
 impl DAppSessionServiceImpl {
-    pub fn new(
-        interactor: Arc<RwLock<dyn UserInteractor + Send + Sync>>,
-        home_connector: Arc<RwLock<dyn HomeConnector + Send + Sync>>,
-        profile_repo: Arc<RwLock<dyn DistributedPublicProfileRepository + Send + Sync>>,
-    ) -> Self {
-        Self { interactor, home_connector, profile_repo }
+    pub fn new(interactor: Arc<RwLock<dyn UserInteractor + Send + Sync>>) -> Self {
+        Self { interactor }
     }
 }
 
 impl DAppSessionService for DAppSessionServiceImpl {
     fn dapp_session(&self, app: ApplicationId) -> AsyncFallible<Arc<dyn DAppSession>> {
-        let home_conn = self.home_connector.clone();
-        let profile_repo = self.profile_repo.clone();
         let interactor = match self.interactor.try_read() {
             Ok(interactor) => interactor,
             Err(e) => {
@@ -128,8 +113,7 @@ impl DAppSessionService for DAppSessionServiceImpl {
             }
         };
         let session_fut = interactor.select_profile().map(move |profile| {
-            Arc::new(DAppSessionImpl::new(app, profile, home_conn, profile_repo))
-                as Arc<dyn DAppSession>
+            Arc::new(DAppSessionImpl::new(app, profile)) as Arc<dyn DAppSession>
         });
         Box::new(session_fut)
     }

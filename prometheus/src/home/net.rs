@@ -10,7 +10,7 @@ use multiaddr::{AddrComponent, Multiaddr};
 use tokio::net::tcp::TcpStream;
 
 use crate::*;
-use mercury_home_protocol::primitives::FacetExtractor;
+use mercury_home_protocol::primitives::ProfileFacets;
 use mercury_home_protocol::{AsyncFallible, Home, Profile, ProfileId, Signer};
 use std::collections::HashMap;
 
@@ -18,8 +18,8 @@ pub trait HomeConnector {
     fn connect(
         self: Arc<Self>,
         home_profile_id: &ProfileId,
-        addr_hint: Option<Multiaddr>,
-        signer: Arc<dyn Signer>,
+        addr_hints: &[Multiaddr],
+        signer: Rc<dyn Signer>,
     ) -> AsyncFallible<Rc<dyn Home>>;
 }
 
@@ -46,9 +46,8 @@ pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Fallible<SocketAddr> {
 }
 
 // TODO consider tearing down and rebuilding the whole connection in case of a network error
-// TODO change key to pair<client_profile_id, home_profile_id> instead on the long term
-// Map of pair<client_profile_id, home_address> => Home instance
-thread_local!(static HOME_CACHE: RefCell<HashMap<(ProfileId, Multiaddr), Rc<dyn Home>>> = Default::default());
+// Map of pair<client_profile_id, home_profile_id> => pair<multiaddr, Home instance>
+thread_local!(static HOME_CACHE: RefCell<HashMap<(ProfileId, ProfileId), (Multiaddr, Rc<dyn Home>)>> = Default::default());
 
 pub struct TcpHomeConnector {
     profile_repo: Arc<RwLock<dyn DistributedPublicProfileRepository + Send + Sync>>,
@@ -76,21 +75,17 @@ impl TcpHomeConnector {
 
     fn connect_to_addrs(
         &self,
+        home_profile_id: &ProfileId,
         addresses: &[Multiaddr],
-        signer: Arc<dyn Signer>,
+        signer: Rc<dyn Signer>,
     ) -> AsyncFallible<Rc<dyn Home>> {
-        let mut cache_hit = None;
-        HOME_CACHE.with(|cache| {
-            cache_hit = addresses
-                .iter()
-                .filter_map(|addr| {
-                    let key = (signer.profile_id(), addr.to_owned());
-                    cache.borrow().get(&key).cloned()
-                })
-                .next();
-        });
-        if let Some(home) = cache_hit {
-            debug!("Home with addresses {:?} found in cache, reuse connection", addresses);
+        let key = (signer.profile_id().to_owned(), home_profile_id.to_owned());
+        let cache_hit = HOME_CACHE.with(|cache| cache.borrow().get(&key).cloned());
+        if let Some((addr, home)) = cache_hit {
+            debug!(
+                "Home {} with address {:?} found in cache, reusing connection",
+                home_profile_id, addr
+            );
             return Box::new(Ok(home).into_future());
         }
 
@@ -100,6 +95,9 @@ impl TcpHomeConnector {
             TcpHomeConnector::connect_addr(&addr).map(move |tcp_stream| (addr_clone, tcp_stream))
         });
 
+        let home_profile_id = home_profile_id.to_owned();
+        // TODO We have to find the first successful connection **that could authenticate itself as a home node
+        //      that has the given ProfileId**. At the moment the first successful TCP connection already wins.
         let capnp_home = future::select_ok(tcp_conns)
             .and_then( move |((addr, tcp_stream), _pending_futs)|
             {
@@ -112,7 +110,7 @@ impl TcpHomeConnector {
 
                         debug!("Save home {:?} client into cache for reuse", addr);
                         HOME_CACHE.with(|cache| {
-                            cache.borrow_mut().insert((signer.profile_id(), addr), home.clone());
+                            cache.borrow_mut().insert((signer.profile_id().to_owned(), home_profile_id), (addr, home.clone()));
                         });
                         home
                     })
@@ -124,16 +122,16 @@ impl TcpHomeConnector {
     fn connect_to_home_profile(
         &self,
         home_profile: &Profile,
-        signer: Arc<dyn Signer>,
+        signer: Rc<dyn Signer>,
     ) -> AsyncFallible<Rc<dyn Home>> {
-        let addrs = match home_profile.as_home() {
+        let addrs = match home_profile.to_home() {
             Some(ref home_facet) => home_facet.addrs.clone(),
             None => {
                 return Box::new(future::err(err_msg("Profile is not a Home node")));
             }
         };
 
-        self.connect_to_addrs(&addrs, signer)
+        self.connect_to_addrs(&home_profile.id(), &addrs, signer)
     }
 }
 
@@ -141,13 +139,13 @@ impl HomeConnector for TcpHomeConnector {
     fn connect(
         self: Arc<Self>,
         home_profile_id: &ProfileId,
-        addr_hint: Option<Multiaddr>,
-        signer: Arc<dyn Signer>,
+        addr_hints: &[Multiaddr],
+        signer: Rc<dyn Signer>,
     ) -> AsyncFallible<Rc<dyn Home>> {
         // TODO logic should first try connecting with addr_hint first, then if failed,
         //      also try the full home profile loading and connecting path as well
-        if let Some(addr) = addr_hint {
-            return self.connect_to_addrs(&[addr], signer);
+        if !addr_hints.is_empty() {
+            return self.connect_to_addrs(home_profile_id, addr_hints, signer);
         }
 
         let profile_repo = match self.profile_repo.try_read() {

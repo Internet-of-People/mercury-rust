@@ -134,7 +134,7 @@ impl TestSetup {
         let (home_profile, home_signer) = generate_home();
         let home_signer = Rc::new(home_signer);
 
-        let (testclient_ownprofile, testclient_signer) = generate_persona();
+        let (testclient_ownprofile, testclient_signer) = generate_hosted();
 
         let testclient = TestClient::new(
             mode.clone(),
@@ -169,7 +169,7 @@ fn register_client_from_setup(setup: &mut TestSetup) -> OwnProfile {
 fn test_home_events(mut setup: TestSetup) {
     let ownprofile1 = register_client_from_setup(&mut setup);
 
-    let (ownprofile2, signer2) = generate_persona();
+    let (ownprofile2, signer2) = generate_hosted();
     let signer2 = Rc::new(signer2);
 
     let home_server_clone = setup.home_server.clone();
@@ -285,7 +285,7 @@ fn test_home_register(mut setup: TestSetup) {
 fn test_home_call(mut setup: TestSetup) {
     let callee_ownprofile = register_client_from_setup(&mut setup);
 
-    let (caller_ownprofile, caller_signer) = generate_persona();
+    let (caller_ownprofile, caller_signer) = generate_hosted();
     let caller_signer = Rc::new(caller_signer);
     let caller_testclient = TestClient::new(
         setup.mode.clone(),

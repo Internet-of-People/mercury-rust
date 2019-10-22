@@ -38,7 +38,7 @@ fn main() {
         info!("Home node profile is not found on distributed public storage, saving node profile");
         use multiaddr::ToMultiaddr;
         let home_multiaddr = config.listen_socket().to_multiaddr().unwrap();
-        let home_attrs = HomeFacet::new(vec![home_multiaddr], vec![]).to_attributes();
+        let home_attrs = HomeFacet::new(vec![home_multiaddr], vec![]).to_attribute_map();
         let home_profile = Profile::new(signer.public_key(), 1, vec![], home_attrs);
         reactor.block_on(distributed_storage.set_public(home_profile)).unwrap();
     } else {

@@ -103,14 +103,13 @@ pub enum ListCommand {
     #[structopt(name = "profiles")]
     /// List profiles
     Profiles,
-
-    #[structopt(name = "followers")]
-    /// List followers
-    IncomingLinks {
-        #[structopt()]
-        /// List public followers of this profile of yours if other than the active one
-        my_profile_id: Option<ProfileId>,
-    },
+    // #[structopt(name = "followers")]
+    // /// List followers
+    // IncomingLinks {
+    //     #[structopt()]
+    //     /// List public followers of this profile of yours if other than the active one
+    //     my_profile_id: Option<ProfileId>,
+    // },
 }
 
 impl Command for ListCommand {
@@ -134,14 +133,13 @@ impl Command for ListCommand {
                     };
                     info!("  {}: {}{}", profile_record.label(), profile_record.id(), status);
                 }
-            }
-            IncomingLinks { my_profile_id } => {
-                let followers = api.list_incoming_links(my_profile_id)?;
-                info!("You have {} followers", followers.len());
-                for (idx, follower) in followers.iter().enumerate() {
-                    info!("  {}: {:?}", idx, follower);
-                }
-            }
+            } // IncomingLinks { my_profile_id } => {
+              //     let followers = api.list_incoming_links(my_profile_id)?;
+              //     info!("You have {} followers", followers.len());
+              //     for (idx, follower) in followers.iter().enumerate() {
+              //         info!("  {}: {:?}", idx, follower);
+              //     }
+              // }
         };
         Ok(())
     }

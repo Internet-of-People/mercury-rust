@@ -333,6 +333,10 @@ impl PublicProfileData {
         &self.attributes
     }
 
+    pub fn mut_attributes(&mut self) -> &mut AttributeMap {
+        &mut self.attributes
+    }
+
     pub fn set_attribute(&mut self, key: AttributeId, value: AttributeValue) {
         self.attributes.insert(key, value);
     }

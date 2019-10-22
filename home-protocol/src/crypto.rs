@@ -1,14 +1,5 @@
 use crate::*;
-use did::model::PrivateKey;
-use keyvault::{PrivateKey as KeyVaultPrivateKey, PublicKey as KeyVaultPublicKey};
-
-/// Something that can sign data, but cannot give out the private key.
-/// Usually implemented using a private key internally, but also enables hardware wallets.
-pub trait Signer {
-    fn profile_id(&self) -> ProfileId;
-    fn public_key(&self) -> PublicKey;
-    fn sign(&self, data: &[u8]) -> Signature;
-}
+use keyvault::PublicKey as KeyVaultPublicKey;
 
 pub trait ProfileIdValidator {
     fn validate_profile_auth(
@@ -112,28 +103,6 @@ impl ProfileIdValidator for MultiHashProfileValidator {
         profile_id: &ProfileId,
     ) -> Result<bool, Error> {
         Ok(public_key.key_id() == *profile_id)
-    }
-}
-
-pub struct PrivateKeySigner {
-    private_key: PrivateKey,
-}
-
-impl PrivateKeySigner {
-    pub fn new(private_key: PrivateKey) -> Result<Self, Error> {
-        Ok(Self { private_key })
-    }
-}
-
-impl Signer for PrivateKeySigner {
-    fn profile_id(&self) -> ProfileId {
-        self.public_key().key_id()
-    }
-    fn public_key(&self) -> PublicKey {
-        self.private_key.public_key()
-    }
-    fn sign(&self, data: &[u8]) -> Signature {
-        self.private_key.sign(data)
     }
 }
 

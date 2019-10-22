@@ -44,6 +44,7 @@ pub trait LocalProfileRepository: PrivateProfileRepository {
 
 pub trait ProfileExplorer {
     fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData>;
+    #[deprecated]
     fn followers(&self, id: &ProfileId) -> AsyncFallible<Vec<Link>>;
     // fn list(&self, /* TODO what filter criteria should we have here? */ ) -> AsyncFallible<Profile>;
 }

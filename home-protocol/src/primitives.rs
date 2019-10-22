@@ -3,6 +3,7 @@ use serde::{Deserialize as DeSer, Deserializer, Serializer};
 use serde_derive::{Deserialize, Serialize};
 
 use bincode::serialize;
+use failure::Fallible;
 use multiaddr::{Multiaddr, ToMultiaddr};
 
 use crate::*;
@@ -16,7 +17,7 @@ pub type OwnProfile = claims::model::PrivateProfileData;
 #[derive(Clone, Debug, Deserialize, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub struct ApplicationId(pub String);
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct HostedFacet {
     /// `homes` contain items with `relation_type` "home", with proofs included.
     /// Current implementation supports only a single home stored in `homes[0]`,
@@ -32,22 +33,26 @@ impl HostedFacet {
         Self { homes, data }
     }
 
-    pub fn to_attributes(&self) -> AttributeMap {
-        let mut attributes = AttributeMap::new();
+    fn set_attribute(&self, attributes: &mut AttributeMap) {
         let facet_str = serde_json::to_string(&self)
             .expect("This can fail only with failing custom Serialize() or having non-string keys");
         attributes.insert(Self::ATTRIBUTE_ID.to_string(), facet_str);
+    }
+
+    pub fn to_attribute_map(&self) -> AttributeMap {
+        let mut attributes = AttributeMap::new();
+        self.set_attribute(&mut attributes);
         attributes
     }
 
-    fn as_hosted(attributes: &AttributeMap) -> Option<Self> {
+    fn to_hosted(attributes: &AttributeMap) -> Option<Self> {
         attributes
             .get(Self::ATTRIBUTE_ID)
             .and_then(|facet_str| serde_json::from_str(facet_str).ok())
     }
 }
 
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct HomeFacet {
     /// Addresses of the same home server. A typical scenario of multiple addresses is when there is
     /// one IPv4 address/port, one onion address/port and some IPv6 address/port pairs.
@@ -64,33 +69,67 @@ impl HomeFacet {
         Self { addrs, data }
     }
 
-    pub fn to_attributes(&self) -> AttributeMap {
-        let mut attributes = AttributeMap::new();
+    fn set_attributes(&self, attributes: &mut AttributeMap) {
         let facet_str = serde_json::to_string(&self)
             .expect("This can fail only with failing custom Serialize() or having non-string keys");
         attributes.insert(Self::ATTRIBUTE_ID.to_string(), facet_str);
+    }
+
+    pub fn to_attribute_map(&self) -> AttributeMap {
+        let mut attributes = AttributeMap::new();
+        self.set_attributes(&mut attributes);
         attributes
     }
 
-    fn as_home(attributes: &AttributeMap) -> Option<Self> {
+    fn to_home(attributes: &AttributeMap) -> Option<Self> {
         attributes
             .get(Self::ATTRIBUTE_ID)
             .and_then(|facet_str| serde_json::from_str(facet_str).ok())
     }
 }
 
-pub trait FacetExtractor {
-    fn as_home(&self) -> Option<HomeFacet>;
-    fn as_hosted(&self) -> Option<HostedFacet>;
+pub trait ProfileFacets {
+    fn to_home(&self) -> Option<HomeFacet>;
+    fn set_home(&mut self, home: &HomeFacet);
+
+    fn to_hosted(&self) -> Option<HostedFacet>;
+    fn set_hosted(&mut self, hosted: &HostedFacet);
+    fn is_hosted_on(&self, home_id: &ProfileId) -> bool;
+    fn add_hosted_on(&mut self, host_proof: &RelationProof) -> Result<(), Error>;
 }
 
-impl FacetExtractor for Profile {
-    fn as_home(&self) -> Option<HomeFacet> {
-        HomeFacet::as_home(self.attributes())
+impl ProfileFacets for Profile {
+    fn to_home(&self) -> Option<HomeFacet> {
+        HomeFacet::to_home(self.attributes())
+    }
+    fn set_home(&mut self, home: &HomeFacet) {
+        home.set_attributes(self.mut_attributes())
     }
 
-    fn as_hosted(&self) -> Option<HostedFacet> {
-        HostedFacet::as_hosted(self.attributes())
+    fn to_hosted(&self) -> Option<HostedFacet> {
+        HostedFacet::to_hosted(self.attributes())
+    }
+    fn set_hosted(&mut self, hosted: &HostedFacet) {
+        hosted.set_attribute(self.mut_attributes())
+    }
+
+    fn is_hosted_on(&self, home_id: &ProfileId) -> bool {
+        if let Some(hosted) = self.to_hosted() {
+            hosted.homes.iter().any(|host_proof| host_proof.peer_id(&self.id()) == Ok(home_id))
+        } else {
+            false
+        }
+    }
+
+    fn add_hosted_on(&mut self, host_proof: &RelationProof) -> Result<(), Error> {
+        let mut hosted = self.to_hosted().unwrap_or_default();
+        if self.is_hosted_on(host_proof.peer_id(&self.id())?) {
+            return Err(ErrorKind::AlreadyRegistered.into());
+        }
+
+        hosted.homes.push(host_proof.to_owned());
+        self.set_hosted(&hosted);
+        Ok(())
     }
 }
 
@@ -116,15 +155,15 @@ pub struct RelationHalfProof {
 }
 
 impl RelationHalfProof {
-    pub fn new(relation_type: &str, peer_id: &ProfileId, signer: &dyn Signer) -> Self {
-        let signable = RelationSignablePart::new(relation_type, &signer.profile_id(), peer_id);
-        Self {
+    pub fn new(relation_type: &str, peer_id: &ProfileId, signer: &dyn Signer) -> Fallible<Self> {
+        let signable = RelationSignablePart::new(relation_type, signer.profile_id(), peer_id);
+        Ok(Self {
             relation_type: relation_type.to_owned(),
             signer_id: signer.profile_id().to_owned(),
             signer_pubkey: signer.public_key(),
             peer_id: peer_id.to_owned(),
-            signature: signable.sign(signer),
-        }
+            signature: signable.sign(signer)?,
+        })
     }
 }
 
@@ -222,7 +261,7 @@ impl RelationSignablePart {
         serialize(self).unwrap()
     }
 
-    fn sign(&self, signer: &dyn Signer) -> Signature {
+    fn sign(&self, signer: &dyn Signer) -> Fallible<Signature> {
         signer.sign(&self.serialized())
     }
 }
@@ -279,14 +318,14 @@ impl RelationProof {
         half_proof: &RelationHalfProof,
         signer: &dyn Signer,
     ) -> Result<Self, Error> {
-        let my_profile_id = signer.profile_id().to_owned();
-        if half_proof.peer_id != my_profile_id {
+        let my_profile_id = signer.profile_id();
+        if half_proof.peer_id != *my_profile_id {
             Err(ErrorKind::RelationSigningFailed)?
         }
 
         let signable = RelationSignablePart::new(
             &half_proof.relation_type,
-            &my_profile_id,
+            my_profile_id,
             &half_proof.signer_id,
         );
         Ok(Self::new(
@@ -294,9 +333,11 @@ impl RelationProof {
             &half_proof.signer_id,
             &half_proof.signer_pubkey,
             &half_proof.signature,
-            &my_profile_id,
+            my_profile_id,
             &signer.public_key(),
-            &signable.sign(signer),
+            &signable
+                .sign(signer)
+                .map_err(|e| e.context(ErrorKind::RelationSigningFailed.into()))?,
         ))
     }
 

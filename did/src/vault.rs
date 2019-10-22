@@ -1,5 +1,7 @@
 use std::fs::File;
 use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::{Arc, Weak};
 
 use failure::{bail, ensure, err_msg, format_err, Fallible};
 use log::*;
@@ -51,7 +53,7 @@ pub struct ProfileVaultRecord {
     label: ProfileLabel,
     metadata: ProfileMetadata,
     // TODO these might be needed as well soon
-    // pub bip32: String,
+    // pub bip32_idx: String,
     // pub pubkey: PublicKey,
 }
 
@@ -90,8 +92,8 @@ pub trait ProfileVault {
     fn profiles(&self) -> Fallible<Vec<ProfileVaultRecord>>;
     fn profile(&self, id: &ProfileId) -> Fallible<ProfileVaultRecord>;
 
-    // fn sign<T: AsRef<[u8]>>(&self, id: &ProfileId, message: T) -> Fallible<SignedMessage<T>>;
-    // fn validate<T: AsRef<[u8]>>(&self, signer: &ProfileId, signed_msg: &SignedMessage<T>) -> bool;
+    fn signer(self: Arc<Self>, profile_id: &ProfileId) -> Fallible<Rc<dyn Signer>>;
+    // TODO sign() should be removed and done only via signer(), but that requires using Arc<> or finding another solution
     fn sign(&self, id: &ProfileId, message: &[u8]) -> Fallible<SignedMessage>;
     fn validate(&self, signer: &ProfileId, signed_msg: &SignedMessage) -> bool;
 
@@ -141,11 +143,11 @@ impl HdProfileVault {
         Ok(vault)
     }
 
-    // TODO this should not be exposed, it's more like an implementation detail
-    pub fn index_of_id(&self, id: &ProfileId) -> Option<usize> {
+    fn index_of_id(&self, id: &ProfileId) -> Option<usize> {
         let profiles = self.keys().ok()?;
         for idx in 0..self.next_idx {
-            if profiles.id(idx).ok()? == *id {
+            // TODO consider if we should really validate() here or should directly check id equality only
+            if profiles.public_key(idx).ok()?.validate_id(id) {
                 return Some(idx as usize);
             }
         }
@@ -155,16 +157,14 @@ impl HdProfileVault {
     fn profile_by_id(&self, id: &ProfileId) -> Fallible<&ProfileVaultRecord> {
         self.profiles
             .iter()
-            .filter_map(|rec| if rec.id == *id { Some(rec) } else { None })
-            .nth(0)
+            .find(|rec| rec.id == *id)
             .ok_or_else(|| err_msg("profile is not found in vault"))
     }
 
     fn mut_profile_by_id(&mut self, id: &ProfileId) -> Fallible<&mut ProfileVaultRecord> {
         self.profiles
             .iter_mut()
-            .filter_map(|rec| if rec.id == *id { Some(rec) } else { None })
-            .nth(0)
+            .find(|rec| rec.id == *id)
             .ok_or_else(|| err_msg("profile is not found in vault"))
     }
 
@@ -173,9 +173,20 @@ impl HdProfileVault {
         master.derive_hardened_child(BIP43_PURPOSE_MERCURY)
     }
 
-    // TODO this should be exposed in a safer way, at least protected by some password
-    pub fn secrets(&self) -> Fallible<HdSecrets> {
+    // TODO this should be protected by some password
+    fn secrets(&self) -> Fallible<HdSecrets> {
         Ok(HdSecrets { mercury_xsk: self.mercury_xsk()? })
+    }
+
+    fn get_bip32_idx(&self, profile_id: &ProfileId) -> Fallible<i32> {
+        let idx = self
+            .index_of_id(profile_id)
+            .ok_or(format_err!("Profile {} is not found in vault", profile_id))?;
+        Ok(idx as i32)
+    }
+
+    fn get_public_key(&self, idx: i32) -> Fallible<PublicKey> {
+        self.keys()?.public_key(idx)
     }
 }
 
@@ -185,7 +196,7 @@ impl ProfileVault for HdProfileVault {
         ensure!(self.id_by_label(&label).is_err(), "the specified label must be unique");
         ensure!(self.profiles.len() == self.next_idx as usize, "a record must exist for each id");
 
-        let key = self.keys()?.public_key(self.next_idx)?;
+        let key = self.get_public_key(self.next_idx)?;
         self.profiles.push(ProfileVaultRecord::new(key.key_id(), label, "".to_owned()));
 
         debug!("Active profile was set to {}", key.key_id());
@@ -273,16 +284,22 @@ impl ProfileVault for HdProfileVault {
         Ok(self.profile_by_id(id)?.to_owned())
     }
 
+    fn signer(self: Arc<Self>, profile_id: &ProfileId) -> Fallible<Rc<dyn Signer>> {
+        let idx = Self::get_bip32_idx(self.as_ref(), profile_id)?;
+        let public_key = self.get_public_key(idx)?;
+        Ok(Rc::new(VaultSigner {
+            vault: Arc::downgrade(&self),
+            profile_id: profile_id.to_owned(),
+            idx,
+            public_key,
+        }))
+    }
+
     fn sign(&self, id: &ProfileId, message: &[u8]) -> Fallible<SignedMessage> {
-        let idx =
-            self.index_of_id(id).ok_or_else(|| format_err!("Profile {} not found in vault", id))?;
-        let private_key = self.mercury_xsk()?.derive_hardened_child(idx as i32)?.as_private_key();
+        let idx = self.get_bip32_idx(id)?;
+        let private_key = self.secrets()?.private_key(idx)?;
         let signature = private_key.sign(message.as_ref());
-        Ok(SignedMessage::new(
-            PublicKey::from(private_key.public_key()),
-            message.to_owned(),
-            Signature::from(signature),
-        ))
+        Ok(SignedMessage::new(private_key.public_key(), message.to_owned(), signature))
     }
 
     //fn validate(&self, signer_id: &ProfileId, signed_msg: &SignedMessage) -> bool {
@@ -310,5 +327,28 @@ impl ProfileVault for HdProfileVault {
         serde_json::to_writer_pretty(&vault_file, self)?;
         //bincode::serialize_into(vault_file, self)?;
         Ok(())
+    }
+}
+
+pub struct VaultSigner {
+    vault: Weak<HdProfileVault>,
+    profile_id: ProfileId,
+    idx: i32,
+    public_key: PublicKey,
+}
+
+impl Signer for VaultSigner {
+    fn profile_id(&self) -> &ProfileId {
+        &self.profile_id
+    }
+
+    fn public_key(&self) -> PublicKey {
+        self.public_key.to_owned()
+    }
+
+    fn sign(&self, data: &[u8]) -> Fallible<Signature> {
+        let vault = self.vault.upgrade().ok_or(err_msg("BUG: failed to access ProfileVault"))?;
+        let private_key = vault.secrets()?.private_key(self.idx)?;
+        Ok(private_key.sign(data))
     }
 }

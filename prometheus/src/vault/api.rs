@@ -4,8 +4,10 @@ use std::str::FromStr;
 use failure::{err_msg, Fallible};
 use serde_derive::{Deserialize, Serialize};
 
+use crate::daemon::NetworkState;
 use crate::*;
 use claims::model::*;
+use multiaddr::Multiaddr;
 
 #[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum ProfileRepositoryKind {
@@ -110,7 +112,6 @@ pub trait VaultApi {
     ) -> Fallible<ClaimLicense>;
 
     // NOTE links are derived as a special kind of claims. Maybe they could be removed from here on the long term.
-    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>>;
     fn create_link(
         &mut self,
         my_profile_id: Option<ProfileId>,
@@ -123,10 +124,14 @@ pub trait VaultApi {
     ) -> Fallible<()>;
 
     fn did_homes(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<DidHomeStatus>>;
+    fn register_home(
+        &mut self,
+        my_id: Option<ProfileId>,
+        home_id: &ProfileId,
+        addr_hints: &[Multiaddr],
+        network: &NetworkState,
+    ) -> AsyncFallible<()>;
 
     // TODO: This is related to add_claim and other calls, but does not conceptually belong here.
     fn claim_schemas(&self) -> Fallible<Rc<dyn ClaimSchemas>>;
-
-    // TODO: This is related to did_homes and other calls, but does not conceptually belong here.
-    fn homes(&self) -> Fallible<Vec<HomeNode>>;
 }

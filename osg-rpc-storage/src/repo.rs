@@ -16,6 +16,7 @@ use claims::repo::{DistributedPublicProfileRepository, PrivateProfileRepository,
 use keyvault::PublicKey as KeyVaultPublicKey;
 
 #[derive(Clone)]
+#[deprecated]
 pub struct RpcProfileRepository {
     address: SocketAddr,
     network_timeout: Duration,

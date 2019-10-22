@@ -8,6 +8,7 @@ use multiaddr::ToMultiaddr;
 use tokio_current_thread as reactor;
 
 use super::*;
+use did::*;
 use prometheus::dapp::user_interactor::UserInteractor;
 //use prometheus::home::{connection::ConnectionFactory, net::TcpHomeConnector};
 
@@ -19,11 +20,11 @@ pub fn ensure_registered_to_home(
 ) -> Fallible<()> {
     use claims::repo::InMemoryProfileRepository;
 
-    let my_signer = Rc::new(crypto::PrivateKeySigner::new(private_profilekey)?);
-    let my_profile_id = my_signer.profile_id().to_owned();
+    let my_profile_id = private_profilekey.public_key().key_id();
+    let my_signer = Rc::new(PrivateKeySigner::new(private_profilekey, my_profile_id)?);
 
     info!("dApp public key: {}", my_signer.public_key());
-    info!("dApp profile id: {}", my_profile_id);
+    info!("dApp profile id: {}", my_signer.profile_id());
 
     //let my_profile = Profile::new(my_signer.public_key(), 1, vec![], Default::default());
     let profile_repo = Rc::new(RefCell::new(InMemoryProfileRepository::new()));

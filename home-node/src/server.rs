@@ -172,7 +172,7 @@ impl Home for HomeConnectionServer {
             half_proof.peer_id,
             self.context.my_signer().profile_id()
         );
-        if half_proof.peer_id != self.context.my_signer().profile_id() {
+        if half_proof.peer_id != *self.context.my_signer().profile_id() {
             return Box::new(future::err(ErrorKind::HomeIdMismatch.into()));
         }
 

@@ -16,13 +16,13 @@ use log::*;
 use serde_derive::{Deserialize, Serialize};
 
 pub use crate::api::*;
-pub use crate::crypto::{Signer, Validator};
+pub use crate::crypto::Validator;
 pub(crate) use crate::error::*;
 pub use crate::primitives::*;
 pub use claims::repo::{
     DistributedPublicProfileRepository, PrivateProfileRepository, ProfileExplorer,
 };
-pub use did::model::{AsyncFallible, AsyncResult};
+pub use did::*;
 pub use keyvault;
 pub use keyvault::ed25519;
 

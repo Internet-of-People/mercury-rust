@@ -1,5 +1,5 @@
 use std::mem;
-use std::sync::Arc;
+use std::rc::Rc;
 
 //bincode::{deserialize, serialize};
 use bytes::{Buf, BufMut, BytesMut, IntoBuf};
@@ -18,21 +18,23 @@ struct AuthenticationInfo {
     profile_id: ProfileId,
 }
 
+impl AuthenticationInfo {
+    fn new(signer: &dyn Signer) -> Self {
+        Self { profile_id: signer.profile_id().to_owned(), public_key: signer.public_key() }
+    }
+}
+
 fn exchange_identities<R, W>(
     reader: R,
     writer: W,
-    signer: Arc<dyn Signer>,
-) -> Box<dyn Future<Item = (R, W, AuthenticationInfo), Error = Error>>
+    signer: Rc<dyn Signer>,
+) -> AsyncResult<(R, W, AuthenticationInfo), Error>
 where
     R: std::io::Read + AsyncRead + 'static,
     W: std::io::Write + AsyncWrite + 'static,
 {
     debug!("Starting handshake with peer");
-    let auth_info = AuthenticationInfo {
-        profile_id: signer.profile_id().to_owned(),
-        public_key: signer.public_key().to_owned(),
-    };
-
+    let auth_info = AuthenticationInfo::new(signer.as_ref());
     let out_bytes = match to_vec(&auth_info) {
         Ok(data) => data,
         Err(e) => {
@@ -89,7 +91,7 @@ pub fn tcpstream_to_reader_writer(
 pub fn ecdh_handshake<R, W>(
     reader: R,
     writer: W,
-    signer: Arc<dyn Signer>,
+    signer: Rc<dyn Signer>,
 ) -> Box<dyn Future<Item = (R, W, PeerContext), Error = Error>>
 where
     R: std::io::Read + AsyncRead + 'static,
@@ -116,7 +118,7 @@ where
 pub fn temporary_unsafe_handshake_until_diffie_hellman_done<R, W>(
     reader: R,
     writer: W,
-    signer: Arc<dyn Signer>,
+    signer: Rc<dyn Signer>,
 ) -> Box<dyn Future<Item = (R, W, PeerContext), Error = Error>>
 where
     R: std::io::Read + AsyncRead + 'static,
@@ -135,7 +137,7 @@ where
 
 pub fn tcp_ecdh_handshake(
     socket: TcpStream,
-    signer: Arc<dyn Signer>,
+    signer: Rc<dyn Signer>,
 ) -> Box<
     dyn Future<
         Item = (impl std::io::Read + AsyncRead, impl std::io::Write + AsyncWrite, PeerContext),
@@ -151,7 +153,7 @@ pub fn tcp_ecdh_handshake(
 
 pub fn temporary_unsafe_tcp_handshake_until_diffie_hellman_done(
     socket: TcpStream,
-    signer: Arc<dyn Signer>,
+    signer: Rc<dyn Signer>,
 ) -> Box<
     dyn Future<
         Item = (impl std::io::Read + AsyncRead, impl std::io::Write + AsyncWrite, PeerContext),

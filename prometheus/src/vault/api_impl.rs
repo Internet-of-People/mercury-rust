@@ -1,11 +1,14 @@
 use std::path::PathBuf;
 use std::rc::Rc;
+use std::sync::Arc;
 use std::time::Duration;
 
 use failure::{bail, ensure, err_msg, format_err, Fallible};
 use futures::prelude::*;
 use log::*;
+use multiaddr::Multiaddr;
 
+use crate::daemon::NetworkState;
 use crate::home::discovery::HomeNodeCrawler;
 use crate::vault::api::*;
 use crate::{DidHomeStatus, HomeNode};
@@ -13,9 +16,11 @@ use claims::claim_schema::ClaimSchemaRegistry;
 pub use claims::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
 use claims::model::*;
 use claims::repo::*;
-use did::vault::{self, ProfileLabel, ProfileMetadata, ProfileVault, ProfileVaultRecord};
+use did::vault::{
+    self, ProfileLabel, ProfileMetadata, ProfileVault, ProfileVaultRecord, VaultSigner,
+};
 use keyvault::PublicKey as KeyVaultPublicKey;
-use mercury_home_protocol::FacetExtractor;
+use mercury_home_protocol::{HostedFacet, ProfileFacets, RelationProof};
 
 const ERR_MSG_VAULT_UNINITIALIZED: &str = "Vault is uninitialized, `restore vault` first";
 
@@ -26,8 +31,6 @@ pub struct VaultState {
     local_repo: FileProfileRepository, // NOTE match arms of get_profile() conflicts with Box<LocalProfileRepository>
     base_repo: Box<dyn PrivateProfileRepository + Send>,
     remote_repo: Box<dyn PrivateProfileRepository + Send>,
-    explorer: Box<dyn ProfileExplorer + Send>,
-    home_node_crawler: HomeNodeCrawler,
 }
 
 // TODO !!! The current implementation assumes that though the ProfileRepository
@@ -43,19 +46,8 @@ impl VaultState {
         local_repo: FileProfileRepository,
         base_repo: Box<dyn PrivateProfileRepository + Send>,
         remote_repo: Box<dyn PrivateProfileRepository + Send>,
-        explorer: Box<dyn ProfileExplorer + Send>,
-        home_node_crawler: HomeNodeCrawler,
     ) -> Self {
-        Self {
-            vault_path,
-            schema_path,
-            vault,
-            local_repo,
-            base_repo,
-            remote_repo,
-            explorer,
-            home_node_crawler,
-        }
+        Self { vault_path, schema_path, vault, local_repo, base_repo, remote_repo }
     }
 
     fn vault(&self) -> Fallible<&dyn ProfileVault> {
@@ -479,12 +471,6 @@ before trying to restore another vault."#,
         unimplemented!()
     }
 
-    fn list_incoming_links(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>> {
-        let profile = self.selected_profile(my_profile_id)?;
-        let followers = self.explorer.followers(&profile.id()).wait()?;
-        Ok(followers)
-    }
-
     fn create_link(
         &mut self,
         my_profile_id: Option<ProfileId>,
@@ -511,15 +497,12 @@ before trying to restore another vault."#,
         self.save_vault()
     }
 
-    fn homes(&self) -> Fallible<Vec<HomeNode>> {
-        Ok(self.home_node_crawler.iter().map(|known_home_node| known_home_node.into()).collect())
-    }
-
     fn did_homes(&self, my_profile_id: Option<ProfileId>) -> Fallible<Vec<DidHomeStatus>> {
         let profile = self.selected_profile(my_profile_id)?;
-        let hosted_facet = profile.public_data().as_hosted().ok_or_else(|| {
+        let hosted_facet = profile.public_data().to_hosted().ok_or_else(|| {
             format_err!("Profile {} lacks hosting details (like homes) filled", profile.id())
         })?;
+
         Ok(hosted_facet
             .homes
             .iter()
@@ -533,5 +516,52 @@ before trying to restore another vault."#,
             // TODO online status is not gathered yet
             .map(|home_did| DidHomeStatus { home_did: home_did.to_string(), online: false })
             .collect())
+    }
+
+    // TODO functions that communicate on the network must be async, and probably implemented on a different trait
+    fn register_home(
+        &mut self,
+        my_id: Option<ProfileId>,
+        home_id: &ProfileId,
+        addr_hints: &[Multiaddr],
+        network: &NetworkState,
+    ) -> AsyncFallible<()> {
+        let init_fn = || {
+            let profile = self.selected_profile(my_id)?;
+            ensure!(
+                !profile.public_data().is_hosted_on(home_id),
+                "Profile {} is already registered to home {}",
+                profile.id(),
+                home_id
+            );
+            //let signer = self.vault()?.signer(&profile.id())?;
+            let network = network
+                .home_connector
+                .try_read()
+                .map_err(|e| err_msg("Failed to access home connector"))?;
+            Ok((profile, 0u8, network))
+        };
+
+        let (profile, signer, network) = match init_fn() {
+            Ok(v) => v,
+            Err(e) => return Box::new(Err(e).into_future()),
+        };
+
+        // 1. contact selected home node
+        // 2. get proof of hosting with registration
+        // 3. report home node to crawler
+
+        //let fut = network.connect(home_id, addr_hints, &signer).and_then(|home| Ok(()));
+
+        // self.home_node_crawler.add()
+
+        //let host_proof: RelationProof;
+        //profile.mut_public_data().add_hosted_on(&host_proof);
+        //        self.local_repo.set(profile).and_then(|()| {
+        //            debug!("Registered home: {:?}", home_id);
+        //            self.save_vault()?;
+        //        });
+        // Box::new(fut)
+        Box::new(Ok(()).into_future())
     }
 }

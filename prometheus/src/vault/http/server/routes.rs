@@ -82,8 +82,8 @@ pub fn init_url_mapping(service: &mut web::ServiceConfig) {
                                         .service(web::resource("")
                                             .route(web::delete().to(leave_did_home))
                                         )
-                                        .service(web::resource("status")
-                                            .route(web::put().to(set_did_home_status))
+                                        .service(web::resource("online")
+                                            .route(web::put().to(set_did_home_online))
                                         )
                                     )
                                 ),

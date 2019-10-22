@@ -1,5 +1,4 @@
 use std::str;
-use std::sync::Arc;
 
 use crate::*;
 use keyvault::PublicKey as KeyVaultPublicKey;
@@ -9,17 +8,17 @@ pub const CHANNEL_CAPACITY: usize = 1;
 /// Represents a connection to another Profile (Home <-> Persona), (Persona <-> Persona)
 #[derive(Clone)]
 pub struct PeerContext {
-    my_signer: Arc<dyn Signer>,
+    my_signer: Rc<dyn Signer>,
     peer_pubkey: PublicKey,
 }
 
 impl PeerContext {
-    pub fn new(my_signer: Arc<dyn Signer>, peer_pubkey: PublicKey) -> Self {
+    pub fn new(my_signer: Rc<dyn Signer>, peer_pubkey: PublicKey) -> Self {
         Self { my_signer, peer_pubkey }
     }
 
     pub fn my_signer(&self) -> &dyn Signer {
-        &*self.my_signer
+        self.my_signer.as_ref()
     }
     pub fn peer_pubkey(&self) -> PublicKey {
         self.peer_pubkey.clone()

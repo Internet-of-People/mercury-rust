@@ -12,10 +12,12 @@ use failure::{format_err, Fallible};
 use futures::{Future, IntoFuture};
 //use log::*;
 
+use crate::daemon::NetworkState;
 use crate::*;
 use actix_http::error::PayloadError;
 use claims::model::*;
 use did::vault::{ProfileLabel, ProfileMetadata, ProfileVaultRecord};
+use multiaddr::Multiaddr;
 
 pub struct VaultClient {
     root_url: String,
@@ -360,9 +362,13 @@ impl VaultApi for VaultClient {
         unimplemented!()
     }
 
-    fn list_incoming_links(&self, _my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>> {
-        unimplemented!()
-    }
+    //fn list_incoming_links(&self, _my_profile_id: Option<ProfileId>) -> Fallible<Vec<Link>> {
+    //    unimplemented!()
+    // NOTE this has to consult an explorer, not the Vault
+    // let profile = self.selected_profile(my_profile_id)?;
+    // let followers = self.explorer.followers(&profile.id()).wait()?;
+    // Ok(followers)
+    //}
 
     fn create_link(
         &mut self,
@@ -380,11 +386,17 @@ impl VaultApi for VaultClient {
         unimplemented!()
     }
 
-    fn homes(&self) -> Fallible<Vec<HomeNode>> {
+    fn did_homes(&self, _my_profile_id: Option<ProfileId>) -> Fallible<Vec<DidHomeStatus>> {
         unimplemented!()
     }
 
-    fn did_homes(&self, _my_profile_id: Option<ProfileId>) -> Fallible<Vec<DidHomeStatus>> {
+    fn register_home(
+        &mut self,
+        _my_id: Option<ProfileId>,
+        _home_id: &ProfileId,
+        _addr_hints: &[Multiaddr],
+        _network: &NetworkState,
+    ) -> AsyncFallible<()> {
         unimplemented!()
     }
 }

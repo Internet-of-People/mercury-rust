@@ -1,11 +1,13 @@
 use std::net::{SocketAddr, ToSocketAddrs};
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::Arc;
 
 use log::*;
 use structopt::StructOpt;
 
 use did::vault::{HdProfileVault, ProfileVault};
+use did::*;
 use mercury_home_protocol::*;
 
 #[derive(Debug, StructOpt)]
@@ -67,7 +69,8 @@ pub struct Config {
     private_storage_path: PathBuf,
     host_relations_path: PathBuf,
     distributed_storage_address: SocketAddr,
-    signer: Arc<dyn Signer>,
+    _vault: Arc<HdProfileVault>,
+    signer: Rc<dyn Signer>,
     listen_socket: SocketAddr, // TODO consider using Vec if listening on several network devices is needed
 }
 
@@ -77,24 +80,14 @@ impl Config {
 
         let vault_path =
             did::paths::vault_path(cli.keyvault_dir).expect("Failed to get keyvault path");
-        let vault = HdProfileVault::load(&vault_path).expect(&format!(
+        let vault = Arc::new(HdProfileVault::load(&vault_path).expect(&format!(
             "Profile vault is required but failed to load from {}",
             vault_path.to_string_lossy()
-        ));
-        let private_keys = vault.secrets().expect("failed to get list of owned keys");
+        )));
 
         let profile_id = cli.profile_id.or_else(|| vault.get_active().expect("Failed to get active profile") )
             .expect("Profile id is needed for authenticating the node, but neither command line argument is specified, nor active profile is set in vault");
-
-        // TODO signer should be implemented on top of vault's sign/verify, not on private key directly
-        let key_idx = vault
-            // TODO should use an operation publicly available on ProfileVault, not of a specific implementation
-            .index_of_id(&profile_id)
-            .expect(&format!("Specified id is not found in vault: {}", profile_id));
-        let private_key =
-            private_keys.private_key(key_idx as i32).expect("Failed to get private key");
-        let signer =
-            Arc::new(crypto::PrivateKeySigner::new(private_key).expect("Failed to create signer"));
+        let signer = vault.clone().signer(&profile_id).unwrap();
 
         info!("homenode profile id: {}", signer.profile_id());
         info!("homenode public key: {}", signer.public_key());
@@ -117,6 +110,7 @@ impl Config {
             private_storage_path: cli.profile_backup_path,
             host_relations_path: cli.host_relations_path,
             distributed_storage_address,
+            _vault: vault,
             signer,
             listen_socket,
         }
@@ -131,7 +125,7 @@ impl Config {
     pub fn distributed_storage_address(&self) -> &SocketAddr {
         &self.distributed_storage_address
     }
-    pub fn signer(&self) -> Arc<dyn Signer> {
+    pub fn signer(&self) -> Rc<dyn Signer> {
         self.signer.clone()
     }
     pub fn listen_socket(&self) -> &SocketAddr {

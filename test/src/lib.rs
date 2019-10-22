@@ -33,13 +33,13 @@ pub fn generate_profile(attributes: AttributeMap) -> (Profile, PrivateKeySigner)
     (own_profile.public_data(), signer)
 }
 
-pub fn generate_persona() -> (OwnProfile, PrivateKeySigner) {
-    let attributes = PersonaFacet::new(vec![], vec![]).to_attributes();
+pub fn generate_hosted() -> (OwnProfile, PrivateKeySigner) {
+    let attributes = HostedFacet::default().to_attributes();
     generate_ownprofile(attributes)
 }
 
 pub fn generate_home() -> (Profile, PrivateKeySigner) {
-    let attributes = HomeFacet::new(vec![], vec![]).to_attributes();
+    let attributes = HomeFacet::default().to_attributes();
     generate_profile(attributes)
 }
 

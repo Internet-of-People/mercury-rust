@@ -1,7 +1,8 @@
+use failure::{ensure, Fallible};
 use futures::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
-use keyvault::PublicKey as KeyVaultPublicKey;
+use keyvault::{PrivateKey as KeyVaultPrivateKey, PublicKey as KeyVaultPublicKey};
 
 pub type AsyncResult<T, E> = Box<dyn Future<Item = T, Error = E>>;
 pub type AsyncFallible<T> = Box<dyn Future<Item = T, Error = failure::Error>>;
@@ -15,6 +16,14 @@ pub type Signature = keyvault::multicipher::MSignature;
 
 // NOTE a.k.a DID
 pub type ProfileId = KeyId;
+
+/// Something that can sign data, but cannot give out the private key.
+/// Usually implemented using a private key internally, but also enables hardware wallets.
+pub trait Signer {
+    fn profile_id(&self) -> &ProfileId;
+    fn public_key(&self) -> PublicKey;
+    fn sign(&self, data: &[u8]) -> Fallible<Signature>;
+}
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct SignedMessage {
@@ -41,5 +50,32 @@ impl SignedMessage {
 
     pub fn validate(&self) -> bool {
         self.public_key.verify(&self.message, &self.signature)
+    }
+}
+
+pub struct PrivateKeySigner {
+    private_key: PrivateKey,
+    profile_id: ProfileId,
+}
+
+impl PrivateKeySigner {
+    pub fn new(private_key: PrivateKey, profile_id: ProfileId) -> Fallible<Self> {
+        ensure!(
+            private_key.public_key().validate_id(&profile_id),
+            "Given private key and DID do not match"
+        );
+        Ok(Self { private_key, profile_id })
+    }
+}
+
+impl Signer for PrivateKeySigner {
+    fn profile_id(&self) -> &ProfileId {
+        &self.profile_id
+    }
+    fn public_key(&self) -> PublicKey {
+        self.private_key.public_key()
+    }
+    fn sign(&self, data: &[u8]) -> Fallible<Signature> {
+        Ok(self.private_key.sign(data))
     }
 }
