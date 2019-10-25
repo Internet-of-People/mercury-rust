@@ -1,3 +1,4 @@
+use failure::format_err;
 use futures::Future;
 use tokio_current_thread as reactor;
 
@@ -63,22 +64,27 @@ impl Daemon {
 }
 
 pub struct NetworkState {
-    pub home_connector: Arc<RwLock<dyn HomeConnector + Send + Sync>>,
-    explorer: Box<dyn ProfileExplorer + Send>,
-    home_node_crawler: HomeNodeCrawler,
+    pub home_connector: Arc<dyn HomeConnector + Send + Sync>,
+    //pub explorer: Box<dyn ProfileExplorer + Send>,
+    pub home_node_crawler: Arc<RwLock<HomeNodeCrawler>>,
 }
 
 impl NetworkState {
     pub fn new(
-        home_connector: Arc<RwLock<dyn HomeConnector + Send + Sync>>,
-        explorer: Box<dyn ProfileExplorer + Send>,
-        home_node_crawler: HomeNodeCrawler,
+        home_connector: Arc<dyn HomeConnector + Send + Sync>,
+        //explorer: Box<dyn ProfileExplorer + Send>,
+        home_node_crawler: Arc<RwLock<HomeNodeCrawler>>,
     ) -> Self {
-        Self { home_connector, explorer, home_node_crawler }
+        Self { home_connector, home_node_crawler }
     }
 
     pub fn homes(&self) -> Fallible<Vec<HomeNode>> {
-        Ok(self.home_node_crawler.iter().map(|known_home_node| known_home_node.into()).collect())
+        let crawler = self
+            .home_node_crawler
+            .try_read()
+            .map_err(|e| format_err!("Failed to lock crawler: {}", e))?;
+        let homes = crawler.iter().map(|known_home_node| known_home_node.into()).collect();
+        Ok(homes)
     }
 }
 
@@ -103,12 +109,12 @@ fn start_daemon(options: Options) -> Fallible<Server> {
     let mut interactor = FakeUserInteractor::new();
 
     let vault_exists = vault_path.exists();
-    let mut vault: Option<Box<dyn ProfileVault + Send>> = None;
+    let mut vault: Option<Arc<dyn ProfileVault + Send + Sync>> = None;
     if vault_exists {
         info!("Found profile vault, loading {}", vault_path.to_string_lossy());
         let hd_vault = HdProfileVault::load(&vault_path)?;
         interactor.set_active_profile(hd_vault.get_active()?);
-        vault = Some(Box::new(hd_vault));
+        vault = Some(Arc::new(hd_vault));
     } else {
         info!("No profile vault found in {}, restore it first", vault_path.to_string_lossy());
     }
@@ -116,24 +122,29 @@ fn start_daemon(options: Options) -> Fallible<Server> {
     let local_repo = FileProfileRepository::new(&repo_path)?;
     let base_repo = FileProfileRepository::new(&base_path)?;
     let timeout = Duration::from_secs(options.network_timeout_secs);
-    let rpc_repo = RpcProfileRepository::new(&options.remote_repo_address, timeout)?;
-    let home_node_crawler = HomeNodeCrawler::default();
+    // TODO use some kind of real storage here on the long run
+    let remote_repo =
+        FileProfileRepository::new(&std::path::PathBuf::from("/tmp/mercury/home/profile-backups"))?;
+    let home_node_crawler = Default::default();
 
     let vault_state = VaultState::new(
         vault_path.clone(),
         schema_path.clone(),
         vault,
-        local_repo,
+        Arc::new(RwLock::new(local_repo)),
         Box::new(base_repo),
-        Box::new(rpc_repo.clone()),
+        Box::new(remote_repo),
     );
 
-    // TODO We use this here for DHT caching, but the same file is used for own profiles in the VaultState
-    let profile_repo = Arc::new(RwLock::new(FileProfileRepository::new(&repo_path)?));
-    let connector = Arc::new(RwLock::new(TcpHomeConnector::new(profile_repo.clone())));
+    // TODO make file path configurable, check config parameters for potential outdated repo path
+    // TODO use crawler and connected home nodes for distributed storage on the long run
+    let profile_repo = Arc::new(RwLock::new(FileProfileRepository::new(
+        &std::path::PathBuf::from("/tmp/cuccos"),
+    )?));
+    let connector = Arc::new(TcpHomeConnector::new(profile_repo.clone()));
     let dapp_state = DAppSessionServiceImpl::new(Arc::new(RwLock::new(interactor)));
 
-    let network_state = NetworkState::new(connector, Box::new(rpc_repo), home_node_crawler);
+    let network_state = NetworkState::new(connector, home_node_crawler);
 
     let daemon_state =
         web::Data::new(Mutex::new(DaemonState::new(vault_state, dapp_state, network_state)));

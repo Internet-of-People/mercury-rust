@@ -3,7 +3,6 @@ use std::sync::{Arc, RwLock};
 use futures::{Future, Stream};
 
 use crate::dapp::user_interactor::UserInteractor;
-use crate::home::net::HomeConnector;
 use crate::*;
 use claims::model::*;
 use mercury_home_protocol::{

@@ -360,5 +360,5 @@ impl From<&KnownHomeNode> for HomeNode {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 pub struct HomeRegistration {
     pub home_did: String,
-    pub addr_hints: Vec<String>,
+    pub addr_hints: Option<Vec<String>>,
 }

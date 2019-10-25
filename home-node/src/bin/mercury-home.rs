@@ -14,7 +14,6 @@ use mercury_home_protocol::{
 };
 use mercury_storage::asynch::fs::FileStore;
 use mercury_storage::asynch::KeyAdapter;
-use osg_rpc_storage::RpcProfileRepository;
 
 fn main() {
     log4rs::init_file("log4rs.yml", Default::default()).unwrap();
@@ -28,11 +27,10 @@ fn main() {
     let local_storage =
         Rc::new(RefCell::new(FileProfileRepository::new(config.profile_backup_path()).unwrap()));
 
-    // TODO use some kind of real distributed storage here
-    //let distributed_storage = Rc::new(RefCell::new(InMemoryProfileRepository::new()));
+    // TODO make file path configurable, remove rpc_storage address config parameter
+    // TODO use some kind of real distributed storage here on the long run
     let mut distributed_storage =
-        RpcProfileRepository::new(config.distributed_storage_address(), Duration::from_secs(5))
-            .unwrap();
+        FileProfileRepository::new(&std::path::PathBuf::from("/tmp/cuccos")).unwrap();
     let avail_prof_res = reactor.block_on(distributed_storage.get_public(&signer.profile_id()));
     if avail_prof_res.is_err() {
         info!("Home node profile is not found on distributed public storage, saving node profile");

@@ -7,10 +7,8 @@ members = [
     "home-node",
 #    "forgetfulfuse", # causes compilation problems on Mac, still experimental
     "keyvault",
-    "osg-rpc-storage",
     "prometheus",
     "prometheus-cli",
-    "prometheus-tester",
     "storage",
 # TODO put this back after refactoring
 #    "test",

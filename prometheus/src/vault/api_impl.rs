@@ -1,34 +1,39 @@
 use std::path::PathBuf;
 use std::rc::Rc;
-use std::sync::Arc;
+use std::sync::{Arc, RwLock, RwLockReadGuard, RwLockWriteGuard};
 use std::time::Duration;
 
 use failure::{bail, ensure, err_msg, format_err, Fallible};
-use futures::prelude::*;
+use futures::{future::Either, prelude::*};
 use log::*;
 use multiaddr::Multiaddr;
 
 use crate::daemon::NetworkState;
-use crate::home::discovery::HomeNodeCrawler;
 use crate::vault::api::*;
 use crate::{DidHomeStatus, HomeNode};
 use claims::claim_schema::ClaimSchemaRegistry;
 pub use claims::claim_schema::{ClaimSchemas, SchemaId, SchemaVersion};
 use claims::model::*;
 use claims::repo::*;
-use did::vault::{
-    self, ProfileLabel, ProfileMetadata, ProfileVault, ProfileVaultRecord, VaultSigner,
-};
+use did::vault::{self, ProfileLabel, ProfileMetadata, ProfileVault, ProfileVaultRecord};
 use keyvault::PublicKey as KeyVaultPublicKey;
-use mercury_home_protocol::{HostedFacet, ProfileFacets, RelationProof};
+use mercury_home_protocol::{ProfileFacets, RelationHalfProof, RelationProof};
 
 const ERR_MSG_VAULT_UNINITIALIZED: &str = "Vault is uninitialized, `restore vault` first";
+
+fn lock_r<T>(lock: &RwLock<T>) -> Fallible<RwLockReadGuard<'_, T>> {
+    lock.try_read().map_err(|e| format_err!("Failed to lock crawler: {}", e))
+}
+
+fn lock_w<T>(lock: &RwLock<T>) -> Fallible<RwLockWriteGuard<'_, T>> {
+    lock.try_write().map_err(|e| format_err!("Failed to lock crawler: {}", e))
+}
 
 pub struct VaultState {
     vault_path: PathBuf,
     schema_path: PathBuf, // TODO Re-reading all schemas each time might be expensive
-    vault: Option<Box<dyn ProfileVault + Send>>,
-    local_repo: FileProfileRepository, // NOTE match arms of get_profile() conflicts with Box<LocalProfileRepository>
+    vault: Option<Arc<dyn ProfileVault + Send + Sync>>,
+    local_repo: Arc<RwLock<FileProfileRepository>>, // NOTE match arms of get_profile() conflicts with Box<LocalProfileRepository>
     base_repo: Box<dyn PrivateProfileRepository + Send>,
     remote_repo: Box<dyn PrivateProfileRepository + Send>,
 }
@@ -42,25 +47,27 @@ impl VaultState {
     pub fn new(
         vault_path: PathBuf,
         schema_path: PathBuf,
-        vault: Option<Box<dyn ProfileVault + Send>>,
-        local_repo: FileProfileRepository,
+        vault: Option<Arc<dyn ProfileVault + Send + Sync>>,
+        local_repo: Arc<RwLock<FileProfileRepository>>,
         base_repo: Box<dyn PrivateProfileRepository + Send>,
         remote_repo: Box<dyn PrivateProfileRepository + Send>,
     ) -> Self {
         Self { vault_path, schema_path, vault, local_repo, base_repo, remote_repo }
     }
 
-    fn vault(&self) -> Fallible<&dyn ProfileVault> {
+    fn vault(&self) -> Fallible<Arc<dyn ProfileVault>> {
         self.vault
             .as_ref()
-            .map(|v| v.as_ref() as &dyn ProfileVault)
+            .cloned()
+            .map(|v| v as Arc<dyn ProfileVault>)
             .ok_or_else(|| err_msg(ERR_MSG_VAULT_UNINITIALIZED))
     }
 
     fn mut_vault(&mut self) -> Fallible<&mut dyn ProfileVault> {
         self.vault
             .as_mut()
-            .map(|v| v.as_mut() as &mut dyn ProfileVault)
+            .and_then(|v| Arc::get_mut(v))
+            .map(|v| v as &mut dyn ProfileVault)
             .ok_or_else(|| err_msg(ERR_MSG_VAULT_UNINITIALIZED))
     }
 
@@ -89,7 +96,7 @@ impl VaultState {
         my_profile_option: Option<ProfileId>,
     ) -> Fallible<PrivateProfileData> {
         let profile_id = self.selected_profile_id(my_profile_option)?;
-        let profile = self.local_repo.get(&profile_id).wait()?;
+        let profile = lock_r(self.local_repo.as_ref())?.get(&profile_id).wait()?;
         Ok(profile)
     }
 
@@ -99,7 +106,7 @@ impl VaultState {
     ) -> Fallible<PrivateProfileData> {
         self.mut_vault()?.restore_id(&profile_id)?;
         let profile = self.base_repo.get(&profile_id).wait()?;
-        self.local_repo.restore(profile.clone())?;
+        lock_w(self.local_repo.as_ref())?.restore(profile.clone())?;
         Ok(profile)
     }
 
@@ -116,7 +123,7 @@ impl VaultState {
     // (local)
     fn ensure_no_local_changes(&self, profile_id: &ProfileId) -> Fallible<()> {
         let base_profile_res = self.base_repo.get(&profile_id).wait();
-        let local_profile_res = self.local_repo.get(&profile_id).wait();
+        let local_profile_res = lock_r(self.local_repo.as_ref())?.get(&profile_id).wait();
 
         let implementation_error = base_profile_res.is_ok() && local_profile_res.is_err();
         if implementation_error {
@@ -200,7 +207,7 @@ before trying to restore another vault."#,
             }
         }?;
         let new_vault = vault::HdProfileVault::create(seed);
-        self.vault.replace(Box::new(new_vault));
+        self.vault.replace(Arc::new(new_vault));
         self.save_vault()
     }
 
@@ -259,7 +266,7 @@ before trying to restore another vault."#,
         // TODO label should not be parameter of create_key()
         let new_profile_key = self.mut_vault()?.create_key(label)?;
         let empty_profile = PrivateProfileData::empty(&new_profile_key);
-        self.local_repo.set(empty_profile).wait()?;
+        lock_w(self.local_repo.as_ref())?.set(empty_profile).wait()?;
         self.vault()?.profile(&new_profile_key.key_id())
     }
 
@@ -303,13 +310,12 @@ before trying to restore another vault."#,
         use ProfileRepositoryKind::*;
         // NOTE must also work with a profile that is not ours
         let profile_id = self.selected_profile_id(profile_id)?;
-        let repo = match kind {
-            Local => &self.local_repo,
-            Base => self.base_repo.as_ref(),
-            Remote => self.remote_repo.as_ref(),
+        let profile = match kind {
+            Local => lock_r(self.local_repo.as_ref())?.get(&profile_id),
+            Base => self.base_repo.get(&profile_id),
+            Remote => self.remote_repo.get(&profile_id),
         };
-        let profile = repo.get(&profile_id).wait()?;
-        Ok(profile)
+        profile.wait()
     }
 
     fn revert_profile(&mut self, my_profile_id: Option<ProfileId>) -> Fallible<PrivateProfileData> {
@@ -333,7 +339,7 @@ before trying to restore another vault."#,
             if remote_profile.version() >= profile.version() {
                 info!("Conflicting profile version found on remote server, forcing overwrite");
                 profile.mut_public_data().set_version(remote_profile.version() + 1);
-                self.local_repo.set(profile.clone()).wait()?;
+                lock_w(self.local_repo.as_ref())?.set(profile.clone()).wait()?;
             }
         } else {
             debug!("Publishing local profile version with conflict detection");
@@ -366,7 +372,7 @@ before trying to restore another vault."#,
         let mut profile = self.selected_profile(my_profile_id)?;
         profile.mut_public_data().set_attribute(key.to_owned(), value.to_owned());
         profile.mut_public_data().increase_version();
-        self.local_repo.set(profile).wait()?;
+        lock_w(self.local_repo.as_ref())?.set(profile).wait()?;
         self.save_vault()
     }
 
@@ -378,7 +384,7 @@ before trying to restore another vault."#,
         let mut profile = self.selected_profile(my_profile_id)?;
         profile.mut_public_data().clear_attribute(key);
         profile.mut_public_data().increase_version();
-        self.local_repo.set(profile).wait()?;
+        lock_w(self.local_repo.as_ref())?.set(profile).wait()?;
         self.save_vault()
     }
 
@@ -412,7 +418,7 @@ before trying to restore another vault."#,
         profile.mut_claims().push(claim);
         // TODO this is not public data, should not affect public version
         // profile.mut_public_data().increase_version();
-        self.local_repo.set(profile).wait()?;
+        lock_w(self.local_repo.as_ref())?.set(profile).wait()?;
         debug!("Added claim: {:?}", claim_id);
         self.save_vault()
     }
@@ -427,7 +433,7 @@ before trying to restore another vault."#,
             bail!("Claim {} not found", id);
         }
 
-        self.local_repo.set(profile).wait()?;
+        lock_w(self.local_repo.as_ref())?.set(profile).wait()?;
         debug!("Removed claim: {:?}", id);
         self.save_vault()
     }
@@ -457,7 +463,7 @@ before trying to restore another vault."#,
             .mut_claim(claim_id)
             .ok_or_else(|| format_err!("Claim {} not found", claim_id))?;
         claim.add_proof(proof);
-        self.local_repo.set(profile).wait()?;
+        lock_w(self.local_repo.as_ref())?.set(profile).wait()?;
         debug!("Added proof to claim: {:?}", claim_id);
         self.save_vault()
     }
@@ -479,7 +485,7 @@ before trying to restore another vault."#,
         let mut profile = self.selected_profile(my_profile_id)?;
         let link = profile.mut_public_data().create_link(peer_profile_id);
         profile.mut_public_data().increase_version();
-        self.local_repo.set(profile).wait()?;
+        lock_w(self.local_repo.as_ref())?.set(profile).wait()?;
         debug!("Created link: {:?}", link);
         self.save_vault()?;
         Ok(link)
@@ -493,7 +499,7 @@ before trying to restore another vault."#,
         let mut profile = self.selected_profile(my_profile_id)?;
         profile.mut_public_data().remove_link(&peer_profile_id);
         profile.mut_public_data().increase_version();
-        self.local_repo.set(profile).wait()?;
+        lock_w(self.local_repo.as_ref())?.set(profile).wait()?;
         self.save_vault()
     }
 
@@ -534,34 +540,49 @@ before trying to restore another vault."#,
                 profile.id(),
                 home_id
             );
-            //let signer = self.vault()?.signer(&profile.id())?;
-            let network = network
-                .home_connector
-                .try_read()
-                .map_err(|e| err_msg("Failed to access home connector"))?;
-            Ok((profile, 0u8, network))
+            let signer = self.vault()?.signer(&profile.id())?;
+            let crawler = network.home_node_crawler.clone();
+            let network = network.home_connector.to_owned();
+            let host_half = RelationHalfProof::new(
+                RelationProof::RELATION_TYPE_HOSTED_ON_HOME,
+                home_id,
+                signer.as_ref(),
+            )?;
+            Ok((profile, signer, network, crawler, host_half))
         };
 
-        let (profile, signer, network) = match init_fn() {
+        let (mut profile, signer, network, crawler, host_half_proof) = match init_fn() {
             Ok(v) => v,
             Err(e) => return Box::new(Err(e).into_future()),
         };
 
-        // 1. contact selected home node
-        // 2. get proof of hosting with registration
-        // 3. report home node to crawler
+        let local_repo = self.local_repo.clone();
+        let home_id_copy = home_id.to_owned();
+        let fut = network
+            .connect(home_id, addr_hints, signer)
+            // TODO report home node to crawler
+            .and_then(move |home| { home.fetch(&home_id_copy).map(|prof| (home, prof))})
+            .and_then(move|(home, prof)| {
+                let mut crawler_lock = crawler.try_write()
+                    .map_err(|e| format_err!("Failed to lock crawler: {}", e))?;
+                crawler_lock.add(&prof).map(|()| home)
+            } )
+            .and_then(move |home| home.register(host_half_proof).map_err(|e| e.into()))
+            .and_then(move |host_proof| {
+                profile.mut_public_data().add_hosted_on(&host_proof)?;
+                profile.mut_public_data().increase_version();
+                Ok(profile)
+            } )
+            .and_then(move |profile|
+                match lock_w(local_repo.as_ref()) {
+                    Ok(mut repo) => {
+                        Either::A(repo.set(profile))
+                        // TODO publish profile data with new home to remote distributed repository
+                    }
+                    Err(e) => Either::B(Err(e).into_future()),
+                }
+            );
 
-        //let fut = network.connect(home_id, addr_hints, &signer).and_then(|home| Ok(()));
-
-        // self.home_node_crawler.add()
-
-        //let host_proof: RelationProof;
-        //profile.mut_public_data().add_hosted_on(&host_proof);
-        //        self.local_repo.set(profile).and_then(|()| {
-        //            debug!("Registered home: {:?}", home_id);
-        //            self.save_vault()?;
-        //        });
-        // Box::new(fut)
-        Box::new(Ok(()).into_future())
+        Box::new(fut)
     }
 }

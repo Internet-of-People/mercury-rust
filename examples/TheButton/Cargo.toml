@@ -17,7 +17,6 @@ log4rs = "*"
 mercury-home-protocol = { path="../../home-protocol" }
 multiaddr = "*"
 multibase = "*"
-osg-rpc-storage = { path="../../osg-rpc-storage" }
 prometheus = { path="../../prometheus" }
 structopt = "*"
 tempdir = "*"

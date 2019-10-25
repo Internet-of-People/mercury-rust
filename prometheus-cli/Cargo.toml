@@ -11,7 +11,6 @@ failure = "*"
 keyvault = { path="../keyvault" }
 log = "*"
 log4rs = "*"
-osg-rpc-storage = { path="../osg-rpc-storage" }
 prometheus = { path="../prometheus" }
 serde = "*"
 serde_derive = "*"

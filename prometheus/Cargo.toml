@@ -25,7 +25,6 @@ log = "*"
 log4rs = "*"
 multiaddr = "*"
 multibase = "*"
-osg-rpc-storage = { path="../osg-rpc-storage" }
 rand = "*"
 rand_chacha = "*"
 regex = "*"

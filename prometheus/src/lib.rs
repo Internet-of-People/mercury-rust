@@ -21,7 +21,6 @@ use crate::vault::api::*;
 pub use crate::vault::api_data::*;
 use claims::repo::*;
 use did::vault::*;
-use osg_rpc_storage::RpcProfileRepository;
 
 pub fn init_logger(options: &Options) -> Fallible<()> {
     if log4rs::init_file(&options.logger_config, Default::default()).is_err() {

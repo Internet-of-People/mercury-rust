@@ -713,7 +713,7 @@ pub fn list_did_homes(
 pub fn register_did_home(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
-    reg_data: web::Data<HomeRegistration>,
+    reg_data: web::Json<HomeRegistration>,
 ) -> impl Responder {
     let did = match did_opt(&did_path) {
         Err(e) => return actix_web::Either::A(HttpResponse::BadRequest().body(e.to_string())),
@@ -727,8 +727,10 @@ pub fn register_did_home(
         Ok(id) => id,
         Err(e) => return actix_web::Either::A(HttpResponse::BadRequest().body(e.to_string())),
     };
-    let addr_hints: Vec<Multiaddr> =
-        reg_data.addr_hints.iter().filter_map(|s| s.parse().ok()).collect();
+    let addr_hints: Vec<Multiaddr> = match &reg_data.addr_hints {
+        None => vec![],
+        Some(v) => v.iter().filter_map(|s| s.parse().ok()).collect(),
+    };
 
     let state = &mut *state;
     let fut = state.vault.register_home(did.clone(), &home_id, &addr_hints, &state.network).then(
