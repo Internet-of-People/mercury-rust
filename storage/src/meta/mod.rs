@@ -183,7 +183,7 @@ pub mod tests {
             let fame_attrval = metadata.first_attrval_by_name("famous");
             match fame_attrval.unwrap() {
                 AttributeValue::Array(v) => {
-                    let arr: Vec<AttributeValue> = v.collect();
+                    let arr: Vec<AttributeValue<'_>> = v.collect();
                     assert_eq!(arr.len(), 3);
                     match arr[0] {
                         AttributeValue::String(val) => assert_eq!(val, spoon),

@@ -1,7 +1,9 @@
-use std::rc::Rc;
+use std::marker::PhantomData;
+use std::pin::Pin;
+use std::sync::Arc;
 
-use failure::{err_msg, format_err, Fallible};
-use futures::future;
+use async_trait::async_trait;
+use failure::{err_msg, Fallible};
 use futures::prelude::*;
 
 use crate::common::*;
@@ -9,10 +11,15 @@ use crate::common::*;
 pub mod fs;
 pub mod imp;
 
-pub type AsyncResult<T, E> = Box<dyn Future<Item = T, Error = E>>;
-pub type AsyncFallible<T> = AsyncResult<T, failure::Error>;
+pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
+pub type AsyncFallible<'a, T> = AsyncResult<'a, T, failure::Error>;
 
-type StorageResult<T> = AsyncFallible<T>;
+pub type AsyncLocalResult<'a, T, E> = future::LocalBoxFuture<'a, Result<T, E>>;
+pub type AsyncLocalFallible<'a, T> = AsyncLocalResult<'a, T, failure::Error>;
+
+pub type AsyncResult01<'a, T, E> =
+    Pin<Box<dyn futures01::future::Future<Item = T, Error = E> + Send + 'a>>;
+pub type AsyncFallible01<'a, T> = AsyncResult01<'a, T, failure::Error>;
 
 // TODO probably we should have references (e.g. maybe use AsRef) to keys whenever possible
 // NOTE this interface can be potentially implemented using a simple local in-memory storage
@@ -21,13 +28,19 @@ type StorageResult<T> = AsyncFallible<T>;
 //      consider e.g. bittorrent. Consequently we do not provide an operation which removes
 //      an entry completely from the whole (distributed) store.
 //      Instead, we clear all *local* data and let remaining nodes expire the data if unused.
+#[async_trait]
 pub trait KeyValueStore<KeyType, ValueType> {
-    fn set(&mut self, key: KeyType, value: ValueType) -> StorageResult<()>;
-    fn get(&self, key: KeyType) -> StorageResult<ValueType>;
-    fn clear_local(&mut self, key: KeyType) -> StorageResult<()>;
+    async fn set(&mut self, key: KeyType, value: ValueType) -> Fallible<()>;
+    async fn get(&self, key: KeyType) -> Fallible<ValueType>;
+    async fn clear_local(&mut self, key: KeyType) -> Fallible<()>;
 }
 
-use std::marker::PhantomData;
+pub trait KeyValueStore01<KeyType, ValueType> {
+    fn set(&mut self, key: KeyType, value: ValueType) -> AsyncFallible01<'_, ()>;
+    fn get(&self, key: KeyType) -> AsyncFallible01<'_, ValueType>;
+    fn clear_local(&mut self, key: KeyType) -> AsyncFallible01<'_, ()>;
+}
+
 pub struct KeyAdapter<K, V, T: KeyValueStore<K, V>> {
     store: T,
     _k: PhantomData<K>,
@@ -40,44 +53,67 @@ impl<K, V, T: KeyValueStore<K, V>> KeyAdapter<K, V, T> {
     }
 }
 
-impl<PreferredKeyType, AvailableKeyType, ValueType, T> KeyValueStore<PreferredKeyType, ValueType>
-    for KeyAdapter<AvailableKeyType, ValueType, T>
+#[async_trait]
+impl<
+        PreferredKeyType: Send + Sync + 'static,
+        AvailableKeyType: Send + Sync,
+        ValueType: Send + Sync,
+        T: Send + Sync,
+    > KeyValueStore<PreferredKeyType, ValueType> for KeyAdapter<AvailableKeyType, ValueType, T>
 where
     T: KeyValueStore<AvailableKeyType, ValueType>,
     PreferredKeyType: Into<AvailableKeyType>,
 {
-    fn set(&mut self, key: PreferredKeyType, value: ValueType) -> StorageResult<()> {
-        self.store.set(key.into(), value)
+    async fn set(&mut self, key: PreferredKeyType, value: ValueType) -> Fallible<()> {
+        self.store.set(key.into(), value).await
     }
 
-    fn get(&self, key: PreferredKeyType) -> StorageResult<ValueType> {
-        self.store.get(key.into())
+    async fn get(&self, key: PreferredKeyType) -> Fallible<ValueType> {
+        self.store.get(key.into()).await
     }
 
-    fn clear_local(&mut self, key: PreferredKeyType) -> StorageResult<()> {
-        self.store.clear_local(key.into())
+    async fn clear_local(&mut self, key: PreferredKeyType) -> Fallible<()> {
+        self.store.clear_local(key.into()).await
     }
 }
 
+impl<K: 'static, V: 'static, T: KeyValueStore<K, V>> KeyValueStore01<K, V> for T {
+    fn set(&mut self, key: K, value: V) -> AsyncFallible01<'_, ()> {
+        Box::pin(KeyValueStore::set(self, key, value).compat())
+    }
+
+    fn get(&self, key: K) -> AsyncFallible01<'_, V> {
+        Box::pin(KeyValueStore::get(self, key).compat())
+    }
+
+    fn clear_local(&mut self, key: K) -> AsyncFallible01<'_, ()> {
+        Box::pin(KeyValueStore::clear_local(self, key).compat())
+    }
+}
+
+#[async_trait]
 pub trait HashSpace<ObjectType, ReadableHashType> {
-    fn store(&mut self, object: ObjectType) -> AsyncFallible<ReadableHashType>;
-    fn resolve(&self, hash: &ReadableHashType) -> AsyncFallible<ObjectType>;
-    fn validate(&self, object: &ObjectType, hash: &ReadableHashType) -> AsyncFallible<bool>;
+    async fn store(&mut self, object: ObjectType) -> Fallible<ReadableHashType>;
+    async fn resolve(&self, hash: &ReadableHashType) -> Fallible<ObjectType>;
+    async fn validate(&self, object: &ObjectType, hash: &ReadableHashType) -> Fallible<bool>;
 }
 
 pub struct ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType> {
-    hasher: Rc<dyn Hasher<SerializedType, BinaryHashType>>,
-    storage: Box<dyn KeyValueStore<BinaryHashType, SerializedType>>,
-    hash_coder: Box<dyn HashCoder<BinaryHashType, ReadableHashType>>,
+    hasher: Arc<dyn Hasher<SerializedType, BinaryHashType> + Send + Sync>,
+    storage: Box<dyn KeyValueStore<BinaryHashType, SerializedType> + Send + Sync>,
+    hash_coder: Box<dyn HashCoder<BinaryHashType, ReadableHashType> + Send + Sync>,
 }
 
-impl<SerializedType, BinaryHashType, ReadableHashType>
-    ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
+impl<
+        SerializedType: 'static + Send + Sync,
+        BinaryHashType: 'static + Send + Sync + Clone,
+        ReadableHashType: 'static + Send + Sync,
+    > ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
 {
     pub fn new(
-        hasher: Rc<dyn Hasher<SerializedType, BinaryHashType>>,
-        storage: Box<dyn KeyValueStore<BinaryHashType, SerializedType>>,
-        hash_coder: Box<dyn HashCoder<BinaryHashType, ReadableHashType>>,
+        hasher: Arc<dyn Hasher<SerializedType, BinaryHashType> + Send + Sync>,
+        storage: Box<dyn KeyValueStore<BinaryHashType, SerializedType> + Send + Sync>,
+        hash_coder: Box<dyn HashCoder<BinaryHashType, ReadableHashType> + Send + Sync>,
     ) -> Self {
         Self { hasher, storage, hash_coder }
     }
@@ -93,62 +129,37 @@ impl<SerializedType, BinaryHashType, ReadableHashType>
     }
 }
 
-impl<SerializedType, BinaryHashType, ReadableHashType> HashSpace<SerializedType, ReadableHashType>
+#[async_trait]
+impl<
+        SerializedType: 'static + Send + Sync,
+        BinaryHashType: 'static + Send + Sync + Clone,
+        ReadableHashType: 'static + Send + Sync,
+    > HashSpace<SerializedType, ReadableHashType>
     for ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
-where
-    SerializedType: 'static,
-    BinaryHashType: 'static + Clone,
-    ReadableHashType: 'static,
 {
-    fn store(&mut self, serialized_obj: SerializedType) -> AsyncFallible<ReadableHashType> {
-        let hash_bytes_result =
-            self.hasher.get_hash(&serialized_obj).map(|obj_hash| (serialized_obj, obj_hash));
-
-        if let Err(e) = hash_bytes_result {
-            return Box::new(future::err(e));
-        }
-        let (serialized_obj, hash_bytes) = hash_bytes_result.unwrap();
-
-        let hash_str_result = self.hash_coder.encode(&hash_bytes);
-        if let Err(e) = hash_str_result {
-            return Box::new(future::err(e));
-        }
-        let hash_str = hash_str_result.unwrap();
-
-        let result = self.storage.set(hash_bytes, serialized_obj).map(|_| hash_str);
-        Box::new(result)
+    async fn store(&mut self, serialized_obj: SerializedType) -> Fallible<ReadableHashType> {
+        let hash_bytes = self.hasher.get_hash(&serialized_obj)?;
+        let hash_str = self.hash_coder.encode(&hash_bytes)?;
+        self.storage.set(hash_bytes, serialized_obj).await?;
+        Ok(hash_str)
     }
 
-    fn resolve(&self, hash_str: &ReadableHashType) -> AsyncFallible<SerializedType> {
-        let hash_bytes_result = self.hash_coder.decode(&hash_str);
-        let hash_bytes = match hash_bytes_result {
-            Err(e) => return Box::new(future::err(e)),
-            Ok(val) => val,
-        };
-
-        let hash_bytes_clone = hash_bytes.clone();
-        let hasher_clone = self.hasher.clone();
-        let result = self.storage.get(hash_bytes).and_then(move |serialized_obj| {
-            match hasher_clone.validate(&serialized_obj, &hash_bytes_clone) {
-                Err(e) => Err(e),
-                Ok(v) => {
-                    if v {
-                        Ok(serialized_obj)
-                    } else {
-                        // TODO consider using a different error code
-                        Err(err_msg("Invalid key"))
-                    }
-                }
-            }
-        });
-        Box::new(result)
+    async fn resolve(&self, hash_str: &ReadableHashType) -> Fallible<SerializedType> {
+        let hash_bytes = self.hash_coder.decode(&hash_str)?;
+        let serialized_obj = self.storage.get(hash_bytes.clone()).await?;
+        if self.hasher.validate(&serialized_obj, &hash_bytes)? {
+            Ok(serialized_obj)
+        } else {
+            // TODO consider using a different error code
+            Err(err_msg("Invalid key"))
+        }
     }
 
-    fn validate(
+    async fn validate(
         &self,
         object: &SerializedType,
         hash_str: &ReadableHashType,
-    ) -> AsyncFallible<bool> {
-        Box::new(future::result(self.sync_validate(&object, &hash_str)))
+    ) -> Fallible<bool> {
+        self.sync_validate(&object, &hash_str)
     }
 }

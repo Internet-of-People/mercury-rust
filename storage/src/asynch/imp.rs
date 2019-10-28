@@ -2,8 +2,6 @@ use std::collections::HashMap;
 use std::hash::Hash;
 
 use failure::{err_msg, format_err, Fallible};
-use futures::future;
-use futures::prelude::*;
 use serde_derive::{Deserialize, Serialize};
 
 use crate::asynch::*;
@@ -12,7 +10,7 @@ pub type HashSpaceId = String;
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct HashWebLink {
-    hashspace: HashSpaceId,
+    hash_space: HashSpaceId,
     hash: String,
 }
 
@@ -22,11 +20,11 @@ impl HashWebLink {
 
     // TODO solve using &str instead of &String
     pub fn new(hashspace: &HashSpaceId, hash: &str) -> Self {
-        Self { hashspace: hashspace.to_owned(), hash: hash.to_owned() }
+        Self { hash_space: hashspace.to_owned(), hash: hash.to_owned() }
     }
 
     pub fn hashspace(&self) -> &HashSpaceId {
-        &self.hashspace
+        &self.hash_space
     }
     pub fn hash(&self) -> &str {
         self.hash.as_ref()
@@ -49,74 +47,54 @@ impl HashWebLink {
 }
 
 pub struct HashWeb<ObjectType> {
-    hashspaces: HashMap<HashSpaceId, Box<dyn HashSpace<ObjectType, String>>>,
+    hashspaces:
+        HashMap<HashSpaceId, Box<dyn HashSpace<ObjectType, String> + Send + Sync + 'static>>,
     default: HashSpaceId,
 }
 
 impl<ObjectType: 'static> HashWeb<ObjectType> {
     pub fn new(
-        hashspaces: HashMap<HashSpaceId, Box<dyn HashSpace<ObjectType, String>>>,
+        hashspaces: HashMap<
+            HashSpaceId,
+            Box<dyn HashSpace<ObjectType, String> + Send + Sync + 'static>,
+        >,
         default: HashSpaceId,
     ) -> Self {
         HashWeb { hashspaces, default }
     }
 }
 
-impl<ObjectType> HashSpace<ObjectType, String> for HashWeb<ObjectType>
-where
-    ObjectType: 'static,
-{
-    fn store(&mut self, object: ObjectType) -> AsyncFallible<String> {
-        let mut hashspace_res = self
+#[async_trait]
+impl<ObjectType: Send + Sync + 'static> HashSpace<ObjectType, String> for HashWeb<ObjectType> {
+    async fn store(&mut self, object: ObjectType) -> Fallible<String> {
+        let hash_space = self
             .hashspaces
             .get_mut(&self.default)
-            .ok_or(format_err!("Unsupported hash space: {}", self.default));
-        let hashspace = match hashspace_res {
-            Ok(ref mut space) => space,
-            Err(e) => return Box::new(future::err(e)),
-        };
-        let default_hashspace_clone = self.default.clone();
-        let result = hashspace.store(object).map(move |hash| {
-            default_hashspace_clone + HashWebLink::HASH_SPACE_ID_SEPARATOR + &hash
-        });
-        Box::new(result)
+            .ok_or(format_err!("Unsupported hash space: {}", self.default))?;
+        let hash = hash_space.store(object).await?;
+        Ok(self.default.clone() + HashWebLink::HASH_SPACE_ID_SEPARATOR + &hash)
     }
 
-    fn resolve(&self, hashlink_str: &String) -> AsyncFallible<ObjectType> {
-        let hashlink = match HashWebLink::parse(hashlink_str) {
-            Ok(link) => link,
-            Err(e) => return Box::new(future::err(e)),
-        };
-
-        let hashspace_res = self
+    async fn resolve(&self, hashlink_str: &String) -> Fallible<ObjectType> {
+        let hash_link = HashWebLink::parse(hashlink_str)?;
+        let hash_space = self
             .hashspaces
-            .get(hashlink.hashspace())
-            .ok_or(format_err!("Unsupported hash space: {}", hashlink.hashspace()));
-        let hashspace = match hashspace_res {
-            Ok(space) => space,
-            Err(e) => return Box::new(future::err(e)),
-        };
-        let data = hashspace.resolve(&hashlink.hash().to_owned());
-        Box::new(data)
+            .get(hash_link.hashspace())
+            .ok_or(format_err!("Unsupported hash space: {}", hash_link.hashspace()))?;
+        let data = hash_space.resolve(&hash_link.hash().to_owned()).await?;
+        Ok(data)
     }
 
-    fn validate(&self, object: &ObjectType, hashlink_str: &String) -> AsyncFallible<bool> {
-        let hashlink = match HashWebLink::parse(hashlink_str) {
-            Ok(link) => link,
-            Err(e) => return Box::new(future::err(e)),
-        };
+    async fn validate(&self, object: &ObjectType, hash_link_str: &String) -> Fallible<bool> {
+        let hash_link = HashWebLink::parse(hash_link_str)?;
 
-        let hashspace_res = self
+        let hash_space = self
             .hashspaces
-            .get(hashlink.hashspace())
-            .ok_or(format_err!("Unsupported hash space: {}", hashlink.hashspace()));
-        let hashspace = match hashspace_res {
-            Ok(ref space) => space,
-            Err(e) => return Box::new(future::err(e)),
-        };
+            .get(hash_link.hashspace())
+            .ok_or(format_err!("Unsupported hash space: {}", hash_link.hashspace()))?;
         // TODO to_string() is unnecessary below, find out how to transform signatures so as it's not needed
-        let result = hashspace.validate(object, &hashlink.hash().to_string());
-        Box::new(result)
+        let result = hash_space.validate(object, &hash_link.hash().to_owned()).await?;
+        Ok(result)
     }
 }
 
@@ -133,36 +111,41 @@ where
     }
 }
 
+#[async_trait]
 impl<KeyType, ValueType> KeyValueStore<KeyType, ValueType> for InMemoryStore<KeyType, ValueType>
 where
-    KeyType: Eq + Hash,
-    ValueType: Clone + Send + 'static,
+    KeyType: Eq + Hash + Send + Sync + 'static,
+    ValueType: Clone + Send + Sync + 'static,
 {
-    fn set(&mut self, key: KeyType, object: ValueType) -> StorageResult<()> {
+    async fn set(&mut self, key: KeyType, object: ValueType) -> Fallible<()> {
         self.map.insert(key, object);
-        Box::new(Ok(()).into_future())
+        Ok(())
     }
 
-    fn get(&self, key: KeyType) -> StorageResult<ValueType> {
-        let result = match self.map.get(&key) {
+    async fn get(&self, key: KeyType) -> Fallible<ValueType> {
+        match self.map.get(&key) {
             Some(val) => Ok(val.to_owned()),
             None => Err(err_msg("invalid key")),
-        };
-        Box::new(result.into_future())
+        }
     }
 
-    fn clear_local(&mut self, key: KeyType) -> StorageResult<()> {
-        let result = self.map.remove(&key).map(|_| ()).ok_or(err_msg("invalid key"));
-        Box::new(result.into_future())
+    async fn clear_local(&mut self, key: KeyType) -> Fallible<()> {
+        match self.map.remove(&key) {
+            Some(_val) => Ok(()),
+            None => Err(err_msg("invalid key")),
+        }
     }
 }
+
 #[cfg(test)]
 mod tests {
+    use std::sync::Arc;
+
     use multihash;
+    use tokio::runtime::current_thread::Runtime;
 
     use super::*;
     use crate::common::imp::*;
-    use tokio_current_thread as reactor;
 
     #[derive(Debug, Serialize, Deserialize, Clone, PartialEq)]
     struct Person {
@@ -172,40 +155,41 @@ mod tests {
     }
 
     #[test]
-    fn test_inmemory_storage() {
-        // NOTE this works without a tokio::reactor::Core only because
-        //      the storage always returns an already completed future::ok/err result
+    fn test_in_memory_store() {
+        let mut reactor = Runtime::new().unwrap();
+
         let object =
             Person { name: "Aladar".to_string(), phone: "+36202020202".to_string(), age: 28 };
         let hash = "key".to_string();
         let mut storage: InMemoryStore<String, Person> = InMemoryStore::new();
-        let store_res = storage.set(hash.clone(), object.clone()).wait();
+        let store_res =
+            reactor.block_on(KeyValueStore::set(&mut storage, hash.clone(), object.clone()));
         assert!(store_res.is_ok());
-        let lookup_res = storage.get(hash).wait();
+        let lookup_res = reactor.block_on(KeyValueStore::get(&storage, hash));
         assert!(lookup_res.is_ok());
         assert_eq!(lookup_res.unwrap(), object);
     }
 
     #[test]
-    fn test_hashspace() {
-        // NOTE this works without a tokio::reactor::Core only because
-        //      all plugins always return an already completed ok/err result
+    fn test_modular_hash_space() {
+        let mut reactor = Runtime::new().unwrap();
+
         let store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
         let mut hashspace: ModularHashSpace<Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
             //            Rc::new( SerdeJsonSerializer{} ),
-            Rc::new(MultiHasher::new(multihash::Hash::Keccak512)),
+            Arc::new(MultiHasher::new(multihash::Hash::Keccak512)),
             Box::new(store),
             Box::new(MultiBaseHashCoder::new(multibase::Base64)),
         );
 
         let object = b"What do you get if you multiply six by nine?".to_vec();
-        let store_res = hashspace.store(object.clone()).wait();
+        let store_res = reactor.block_on(hashspace.store(object.clone()));
         assert!(store_res.is_ok());
         let hash = store_res.unwrap();
-        let lookup_res = hashspace.resolve(&hash).wait();
+        let lookup_res = reactor.block_on(hashspace.resolve(&hash));
         assert!(lookup_res.is_ok());
         assert_eq!(lookup_res.unwrap(), object);
-        let validate_res = hashspace.validate(&object, &hash).wait();
+        let validate_res = reactor.block_on(hashspace.validate(&object, &hash));
         assert!(validate_res.is_ok());
         assert!(validate_res.unwrap());
     }
@@ -215,15 +199,18 @@ mod tests {
         let cache_store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
         let cache_space: ModularHashSpace<Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
             //            Rc::new( IdentitySerializer{} ),
-            Rc::new(MultiHasher::new(multihash::Hash::Keccak512)),
+            Arc::new(MultiHasher::new(multihash::Hash::Keccak512)),
             Box::new(cache_store),
             Box::new(MultiBaseHashCoder::new(multibase::Base64)),
         );
 
-        let mut reactor = reactor::CurrentThread::new();
+        let mut reactor = Runtime::new().unwrap();
 
         let default_space = "cache".to_owned();
-        let mut spaces: HashMap<String, Box<dyn HashSpace<Vec<u8>, String>>> = HashMap::new();
+        let mut spaces: HashMap<
+            String,
+            Box<dyn HashSpace<Vec<u8>, String> + Send + Sync + 'static>,
+        > = HashMap::new();
         spaces.insert(default_space.clone(), Box::new(cache_space));
         let mut hashweb = HashWeb::new(spaces, default_space.clone());
 

@@ -10,11 +10,11 @@ pub trait Data {
     fn attributes<'a>(&'a self) -> Box<dyn 'a + Iterator<Item = &dyn Attribute>>;
 
     // Convenience function to access attributes by name/path
-    fn first_attrval_by_name(&self, name: &str) -> Option<AttributeValue> {
+    fn first_attrval_by_name(&self, name: &str) -> Option<AttributeValue<'_>> {
         meta::iter_first_attrval_by_name(self.attributes(), name)
     }
 
-    fn first_attrval_by_path(&self, path: &[&str]) -> Option<AttributeValue> {
+    fn first_attrval_by_path(&self, path: &[&str]) -> Option<AttributeValue<'_>> {
         meta::iter_first_attrval_by_path(self.attributes(), path)
     }
 }
