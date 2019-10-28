@@ -1,5 +1,3 @@
-#![allow(unused, non_snake_case, non_upper_case_globals)]
-
 use std::rc::Rc;
 
 use failure::{err_msg, format_err, Fallible};
@@ -7,11 +5,12 @@ use futures::future;
 use futures::prelude::*;
 
 use crate::common::*;
-use mercury_home_protocol::AsyncFallible;
 
 pub mod fs;
 pub mod imp;
-pub mod router_service;
+
+pub type AsyncResult<T, E> = Box<dyn Future<Item = T, Error = E>>;
+pub type AsyncFallible<T> = AsyncResult<T, failure::Error>;
 
 type StorageResult<T> = AsyncFallible<T>;
 
@@ -67,7 +66,6 @@ pub trait HashSpace<ObjectType, ReadableHashType> {
 }
 
 pub struct ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType> {
-    //    serializer: Rc< Serializer<ObjectType, SerializedType> >,
     hasher: Rc<dyn Hasher<SerializedType, BinaryHashType>>,
     storage: Box<dyn KeyValueStore<BinaryHashType, SerializedType>>,
     hash_coder: Box<dyn HashCoder<BinaryHashType, ReadableHashType>>,
@@ -77,17 +75,11 @@ impl<SerializedType, BinaryHashType, ReadableHashType>
     ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
 {
     pub fn new(
-        // serializer: Rc< Serializer<ObjectType, SerializedType> >,
         hasher: Rc<dyn Hasher<SerializedType, BinaryHashType>>,
         storage: Box<dyn KeyValueStore<BinaryHashType, SerializedType>>,
         hash_coder: Box<dyn HashCoder<BinaryHashType, ReadableHashType>>,
     ) -> Self {
-        Self {
-            // serializer:   serializer,
-            hasher,
-            storage,
-            hash_coder,
-        }
+        Self { hasher, storage, hash_coder }
     }
 
     fn sync_validate(
@@ -104,19 +96,11 @@ impl<SerializedType, BinaryHashType, ReadableHashType>
 impl<SerializedType, BinaryHashType, ReadableHashType> HashSpace<SerializedType, ReadableHashType>
     for ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
 where
-    // ObjectType: 'static,
     SerializedType: 'static,
     BinaryHashType: 'static + Clone,
     ReadableHashType: 'static,
 {
     fn store(&mut self, serialized_obj: SerializedType) -> AsyncFallible<ReadableHashType> {
-        //        let hash_bytes_result = self.serializer.serialize(object)
-        //            .map_err( |e| HashSpaceError::SerializerError(e) )
-        //            .and_then( |serialized_obj|
-        //                self.hasher.get_hash(&serialized_obj)
-        //                    .map( |obj_hash| (serialized_obj, obj_hash) )
-        //                    .map_err( |e| HashSpaceError::HashError(e) )
-        //            );
         let hash_bytes_result =
             self.hasher.get_hash(&serialized_obj).map(|obj_hash| (serialized_obj, obj_hash));
 
@@ -144,7 +128,6 @@ where
 
         let hash_bytes_clone = hash_bytes.clone();
         let hasher_clone = self.hasher.clone();
-        // let serializer_clone = self.serializer.clone();
         let result = self.storage.get(hash_bytes).and_then(move |serialized_obj| {
             match hasher_clone.validate(&serialized_obj, &hash_bytes_clone) {
                 Err(e) => Err(e),
@@ -158,9 +141,6 @@ where
                 }
             }
         });
-        //            .and_then( move |serialized_obj|
-        //                serializer_clone.deserialize(serialized_obj)
-        //                    .map_err(  |e| HashSpaceError::SerializerError(e) ) );
         Box::new(result)
     }
 

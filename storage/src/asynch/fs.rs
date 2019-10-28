@@ -1,7 +1,5 @@
 use std::cell::RefCell;
-use std::error::Error;
 use std::path::{Path, PathBuf};
-use std::rc::Rc;
 
 use failure::{err_msg, Fallible};
 use futures::prelude::*;
@@ -9,10 +7,10 @@ use log::*;
 use serde::de::DeserializeOwned;
 use serde::Serialize;
 use serde_json;
-use tokio_current_thread as reactor;
 
 use crate::asynch::*;
 
+// NOTE The idea is that choosing between different implementations is possible here. We will see.
 //pub type FileStore = AsyncFileStore;
 pub type FileStore = BlockingFileStore;
 
@@ -163,26 +161,28 @@ where
     }
 }
 
-#[test]
-fn test_file_store() {
-    let mut reactor = reactor::CurrentThread::new();
-    // let mut runtime = tokio::runtime::Runtime::new().unwrap();
-    let mut storage: Box<dyn KeyValueStore<String, String>> =
-        Box::new(FileStore::new(&PathBuf::from("./filetest/store/")).unwrap());
-    let count = 100;
-    let content = "my_application".to_string();
-    for i in 0..count {
-        //        let write = runtime.block_on(storage.set( i.to_string(), content.clone() ) ).unwrap();
-        //        let read  = runtime.block_on( storage.get( i.to_string() ) ).unwrap();
-        let write = reactor.block_on(storage.set(i.to_string(), content.clone())).unwrap();
-        let read = reactor.block_on(storage.get(i.to_string())).unwrap();
-        assert_eq!(read, content);
-    }
-    for i in 0..count {
-        //        let read = runtime.block_on( storage.get( i.to_string() ) ).unwrap();
-        //        let del  = runtime.block_on( storage.clear_local( i.to_string() ) ).unwrap();
-        let read = reactor.block_on(storage.get(i.to_string())).unwrap();
-        let del = reactor.block_on(storage.clear_local(i.to_string())).unwrap();
-        assert_eq!(read, content);
+#[cfg(test)]
+mod test {
+
+    use super::*;
+    use tokio_current_thread as reactor;
+
+    #[test]
+    fn test_file_store() {
+        let mut reactor = reactor::CurrentThread::new();
+        let mut storage: Box<dyn KeyValueStore<String, String>> =
+            Box::new(FileStore::new(&PathBuf::from("./filetest/store/")).unwrap());
+        let count = 100;
+        let content = "my_application".to_string();
+        for i in 0..count {
+            let _write = reactor.block_on(storage.set(i.to_string(), content.clone())).unwrap();
+            let read = reactor.block_on(storage.get(i.to_string())).unwrap();
+            assert_eq!(read, content);
+        }
+        for i in 0..count {
+            let read = reactor.block_on(storage.get(i.to_string())).unwrap();
+            let _del = reactor.block_on(storage.clear_local(i.to_string())).unwrap();
+            assert_eq!(read, content);
+        }
     }
 }
