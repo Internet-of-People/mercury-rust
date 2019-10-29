@@ -5,6 +5,8 @@ authors = ["Rache Bartmoss <bartmoss@tutanota.com>"]
 edition = "2018"
 
 [dependencies]
+async-trait = "0.1.17"
+
 actix = "*"
 actix-rt = ""
 actix-cors = "*"
@@ -12,13 +14,15 @@ actix-http = { version = "*", features = ["rust-tls"] }
 actix-server = "0.6" # Concrete version to fix currently conflicting includes from other actix components from latest versions from crates.io
 actix-web = "*"
 actix-web-actors = "*"
+awc = "*"
 base64 = "*"
 blockies = "*"
 bytes = "*"
 claims = { path="../claims" }
 did = { path="../did" }
 failure = "*"
-futures = "0.1"
+futures-preview = { version="0.3.0-alpha.19", features=["compat", "async-await"] }
+futures01 = { package="futures", version="0.1"}
 mercury-home-protocol = { path="../home-protocol" }
 keyvault = { path="../keyvault" }
 log = "*"
@@ -32,7 +36,8 @@ serde = "*"
 serde_derive = "*"
 serde_json = "*"
 structopt = "*"
-tokio = "0.1"
+tokio = { version="0.2.0-alpha.6", features=["rt-current-thread"] }
+tokio01 = { package="tokio", version="0.1"}
 tokio-current-thread = "0.1"
 
 [dev-dependencies]

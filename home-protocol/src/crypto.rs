@@ -6,7 +6,7 @@ pub trait ProfileIdValidator {
         &self,
         public_key: &PublicKey,
         profile_id: &ProfileId,
-    ) -> Result<bool, Error>;
+    ) -> Result<(), Error>;
 }
 
 impl Default for Box<dyn ProfileIdValidator> {
@@ -16,14 +16,13 @@ impl Default for Box<dyn ProfileIdValidator> {
 }
 
 pub trait SignatureValidator {
-    // TODO this probably should just return bool instead of Result<bool,E>
     fn validate_signature(
         &self,
         public_key: &PublicKey,
         // TODO add here: profile_auth: ProfileAuthData,
         data: &[u8],
         signature: &Signature,
-    ) -> Result<bool, Error>;
+    ) -> Result<(), Error>;
 }
 
 impl Default for Box<dyn SignatureValidator> {
@@ -38,12 +37,8 @@ pub trait Validator: ProfileIdValidator + SignatureValidator {
         half_proof: &RelationHalfProof,
         signer_pubkey: &PublicKey,
     ) -> Result<(), Error> {
-        self.validate_signature(
-            signer_pubkey,
-            &RelationSignablePart::from(half_proof).serialized(),
-            &half_proof.signature,
-        )?;
-        Ok(())
+        let signable = RelationSignablePart::from(half_proof).serialized();
+        self.validate_signature(signer_pubkey, &signable, &half_proof.signature)
     }
 
     fn validate_relation_proof(
@@ -74,7 +69,7 @@ pub trait Validator: ProfileIdValidator + SignatureValidator {
             Err(ErrorKind::RelationValidationFailed)?
         }
 
-        if *peer_of_id_1 == relation_proof.b_id {
+        if peer_of_id_1 == &relation_proof.b_id {
             // id_1 is 'proof.id_a'
             self.validate_signature(&public_key_1, &signable_a, &relation_proof.a_signature)?;
             self.validate_signature(&public_key_2, &signable_b, &relation_proof.b_signature)?;
@@ -101,8 +96,12 @@ impl ProfileIdValidator for MultiHashProfileValidator {
         &self,
         public_key: &PublicKey,
         profile_id: &ProfileId,
-    ) -> Result<bool, Error> {
-        Ok(public_key.key_id() == *profile_id)
+    ) -> Result<(), Error> {
+        if public_key.validate_id(profile_id) {
+            Ok(())
+        } else {
+            Err(ErrorKind::ProfileValidationFailed.into())
+        }
     }
 }
 
@@ -120,8 +119,12 @@ impl SignatureValidator for PublicKeyValidator {
         public_key: &PublicKey,
         data: &[u8],
         signature: &Signature,
-    ) -> Result<bool, Error> {
-        Ok(public_key.verify(data, signature))
+    ) -> Result<(), Error> {
+        if public_key.verify(data, signature) {
+            Ok(())
+        } else {
+            Err(ErrorKind::InvalidSignature.into())
+        }
     }
 }
 
@@ -145,7 +148,7 @@ impl ProfileIdValidator for CompositeValidator {
         &self,
         public_key: &PublicKey,
         profile_id: &ProfileId,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         self.profile_validator.validate_profile_auth(public_key, profile_id)
     }
 }
@@ -156,7 +159,7 @@ impl SignatureValidator for CompositeValidator {
         public_key: &PublicKey,
         data: &[u8],
         signature: &Signature,
-    ) -> Result<bool, Error> {
+    ) -> Result<(), Error> {
         self.signature_validator.validate_signature(public_key, data, signature)
     }
 }

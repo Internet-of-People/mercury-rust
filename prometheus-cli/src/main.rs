@@ -8,14 +8,15 @@ use structopt::StructOpt;
 use crate::options::{Command, Options};
 use prometheus::vault::http::client::VaultClient;
 
-fn main() {
-    match run() {
+#[tokio::main]
+async fn main() {
+    match run().await {
         Ok(()) => {}
         Err(e) => eprintln!("Error: {}", e),
     };
 }
 
-fn run() -> Fallible<()> {
+async fn run() -> Fallible<()> {
     let options = Options::from_args();
     init_logger(&options)?;
 
@@ -24,7 +25,7 @@ fn run() -> Fallible<()> {
 
     let mut client = VaultClient::new(&format!("http://{}", options.prometheus_address));
     let command = Box::new(command);
-    command.execute(&mut client)
+    command.execute(&mut client).await
 }
 
 fn init_logger(options: &Options) -> Fallible<()> {

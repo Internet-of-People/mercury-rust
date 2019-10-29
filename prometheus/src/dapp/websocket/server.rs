@@ -1,11 +1,12 @@
 use std::sync::Arc;
 
-use futures::{future::ok, Stream};
+use async_trait::async_trait;
+use failure::Fallible;
 
 use crate::dapp::dapp_session::*;
 use did::model::ProfileId;
 use keyvault::multicipher::MKeyId;
-use mercury_home_protocol::{ApplicationId, AsyncFallible};
+use mercury_home_protocol::ApplicationId;
 
 pub struct ServiceServer {}
 
@@ -15,37 +16,39 @@ impl ServiceServer {
     }
 }
 
+#[async_trait(?Send)]
 impl DAppSessionService for ServiceServer {
-    fn dapp_session(&self, _app: ApplicationId) -> AsyncFallible<Arc<dyn DAppSession>> {
+    async fn dapp_session(&self, _app: ApplicationId) -> Fallible<Arc<dyn DAppSession>> {
         // TODO
-        Box::new(ok(Arc::new(SessionServer {}) as Arc<dyn DAppSession>))
+        Ok(Arc::new(SessionServer {}) as Arc<dyn DAppSession>)
     }
 }
 
 pub struct SessionServer {}
 
+#[async_trait]
 impl DAppSession for SessionServer {
     fn dapp_id(&self) -> &ApplicationId {
         unimplemented!()
     }
 
-    fn selected_profile(&self) -> &MKeyId {
+    fn profile_id(&self) -> &MKeyId {
         unimplemented!()
     }
 
-    fn relations(&self) -> AsyncFallible<Vec<Box<dyn Relation>>> {
+    async fn relations(&self) -> Fallible<Vec<Box<dyn Relation>>> {
         unimplemented!()
     }
 
-    fn relation(&self, _id: &MKeyId) -> AsyncFallible<Option<Box<dyn Relation>>> {
+    async fn relation(&self, _id: &MKeyId) -> Fallible<Option<Box<dyn Relation>>> {
         unimplemented!()
     }
 
-    fn initiate_relation(&self, _with_profile: &ProfileId) -> AsyncFallible<()> {
+    async fn initiate_relation(&self, _with_profile: &ProfileId) -> Fallible<()> {
         unimplemented!()
     }
 
-    fn checkin(&self) -> AsyncFallible<Box<dyn Stream<Item = DAppEvent, Error = ()>>> {
+    async fn checkin(&self) -> Fallible<DAppEventStream> {
         unimplemented!()
     }
 }

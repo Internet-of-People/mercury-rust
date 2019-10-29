@@ -1,28 +1,28 @@
 use std::convert::TryFrom;
 
+use async_trait::async_trait;
 use capnp::capability::Promise;
-use capnp_rpc::pry;
-use failure::Fail;
-use tokio::io::AsyncRead;
+use failure::Fallible;
+use tokio::future::FutureExt;
 use tokio::net::tcp::TcpStream;
-use tokio::prelude::*;
-use tokio_current_thread as reactor;
+use tokio::runtime::current_thread as reactor;
 
 use super::*;
-use crate::mercury_capnp::{FillFrom, PromiseUtil};
+use crate::mercury_capnp::FillFrom;
 use claims::model::Link;
 use claims::repo::ProfileExplorer;
 
 pub struct HomeClientCapnProto {
+    peer_ctx: PeerContext,
     repo: mercury_capnp::profile_repo::Client,
     home: mercury_capnp::home::Client,
 }
 
 impl HomeClientCapnProto {
-    pub fn new<R, W>(reader: R, writer: W) -> Self
+    pub fn new<R, W>(peer_ctx: PeerContext, reader: R, writer: W) -> Self
     where
-        R: std::io::Read + 'static,
-        W: std::io::Write + 'static,
+        R: futures::io::AsyncRead + Unpin + 'static,
+        W: futures::io::AsyncWrite + Unpin + 'static,
     {
         debug!("Initializing Cap'n'Proto Home client");
 
@@ -39,161 +39,128 @@ impl HomeClientCapnProto {
         let repo: mercury_capnp::profile_repo::Client =
             rpc_system.bootstrap(capnp_rpc::rpc_twoparty_capnp::Side::Server);
 
-        reactor::spawn(rpc_system.map_err(|e| warn!("Capnp RPC failed: {}", e)));
+        let rpc_loop_fut = async {
+            match rpc_system.await {
+                Ok(()) => info!("Capnp RPC finished"),
+                Err(e) => warn!("Capnp RPC failed: {}", e),
+            }
+        };
+        reactor::spawn(rpc_loop_fut);
 
-        Self { home, repo }
+        Self { peer_ctx, home, repo }
     }
 
-    pub fn new_tcp(tcp_stream: TcpStream) -> Self {
+    pub fn new_tcp(peer_ctx: PeerContext, tcp_stream: TcpStream) -> Self {
         // TODO consider if this unwrap() is acceptable here
         tcp_stream.set_nodelay(true).unwrap();
-        let (reader, writer) = tcp_stream.split();
-        HomeClientCapnProto::new(reader, writer)
+
+        let x = futures_tokio_compat::Compat::new(tcp_stream);
+        let (reader, writer) = x.split();
+        HomeClientCapnProto::new(peer_ctx, reader, writer)
     }
 }
 
+#[async_trait(?Send)]
 impl ProfileExplorer for HomeClientCapnProto {
-    fn fetch(&self, id: &ProfileId) -> AsyncFallible<Profile> {
+    async fn fetch(&self, id: &ProfileId) -> Fallible<Profile> {
         let mut request = self.repo.get_request();
         request.get().set_profile_id(&id.to_bytes());
 
-        let resp_fut = request
-            .send()
-            .promise
-            .and_then(|resp| {
-                let profile_capnp = pry!(pry!(resp.get()).get_profile());
-                let profile = bytes_to_profile(profile_capnp);
-                Promise::result(profile)
-            })
-            .map_err(|e| e.context(ErrorKind::FailedToLoadProfile).into());
+        let resp = request.send().promise.await.map_err_fail(ErrorKind::FailedToLoadProfile)?;
 
-        Box::new(resp_fut)
+        let profile_capnp = resp.get()?.get_profile()?;
+        bytes_to_profile(profile_capnp).map_err_fail(ErrorKind::FailedToLoadProfile)
     }
 
-    fn followers(&self, _id: &ProfileId) -> AsyncFallible<Vec<Link>> {
+    async fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
         unimplemented!()
-        // Ok( Vec::new() ) // TODO implement this properly
     }
 }
 
+#[async_trait(?Send)]
 impl Home for HomeClientCapnProto {
-    fn claim(&self, profile_id: ProfileId) -> AsyncResult<RelationProof, Error> {
+    async fn claim(&self, profile_id: ProfileId) -> Fallible<RelationProof> {
         let mut request = self.home.claim_request();
         request.get().set_profile_id(&profile_id.to_bytes());
 
-        let resp_fut = request
-            .send()
-            .promise
-            .and_then(|resp| {
-                resp.get()
-                    .and_then(|res| res.get_hosting_proof())
-                    .and_then(|host_proof_capnp| RelationProof::try_from(host_proof_capnp))
-            })
-            .map_err(|e| e.context(ErrorKind::FailedToClaimProfile).into());
+        let resp = request.send().promise.await.map_err_fail(ErrorKind::FailedToClaimProfile)?;
 
-        Box::new(resp_fut)
+        RelationProof::try_from(resp.get()?.get_hosting_proof()?)
+            .map_err_fail(ErrorKind::FailedToClaimProfile)
     }
 
-    fn register(
+    async fn register(
         &self,
-        half_proof: RelationHalfProof,
+        half_proof: &RelationHalfProof,
         //invite: Option<HomeInvitation>,
-    ) -> AsyncResult<RelationProof, Error> {
+    ) -> Fallible<RelationProof> {
         let mut request = self.home.register_request();
-        request.get().init_half_proof().fill_from(&half_proof);
+        request.get().init_half_proof().fill_from(half_proof);
         //if let Some(inv) = invite {
-        //    request.get().init_invite().fill_from(&inv);
+        //    request.get().init_invite().fill_from(inv);
         //}
 
-        let resp_fut = request
-            .send()
-            .promise
-            .and_then(|resp| {
-                resp.get()
-                    .and_then(|res| res.get_hosting_proof())
-                    .and_then(|host_proof_capnp| RelationProof::try_from(host_proof_capnp))
-            })
-            .map_err(move |e| e.context(ErrorKind::RegisterFailed).into());
+        let resp = request.send().promise.await.map_err_fail(ErrorKind::RegisterFailed)?;
 
-        Box::new(resp_fut)
+        RelationProof::try_from(resp.get()?.get_hosting_proof()?)
+            .map_err_fail(ErrorKind::RegisterFailed)
     }
 
-    fn login(&self, hosting_proof: &RelationProof) -> AsyncResult<Rc<dyn HomeSession>, Error> {
+    async fn login(&self, hosting_proof: &RelationProof) -> Fallible<Rc<dyn HomeSession>> {
         let mut request = self.home.login_request();
         request.get().init_hosting_proof().fill_from(hosting_proof);
 
-        let resp_fut = request
-            .send()
-            .promise
-            .and_then(|resp| {
-                resp.get().and_then(|res| res.get_session()).map(|session_client| {
-                    Rc::new(HomeSessionClientCapnProto::new(session_client)) as Rc<dyn HomeSession>
-                })
-            })
-            .map_err(|e| e.context(ErrorKind::FailedToCreateSession).into());
+        let resp = request.send().promise.await.map_err_fail(ErrorKind::FailedToCreateSession)?;
 
-        Box::new(resp_fut)
+        let res = Rc::new(HomeSessionClientCapnProto::new(resp.get()?.get_session()?))
+            as Rc<dyn HomeSession>;
+        Ok(res)
     }
 
     // NOTE acceptor must have this server as its home
-    fn pair_request(&self, half_proof: RelationHalfProof) -> AsyncResult<(), Error> {
+    async fn pair_request(&self, half_proof: &RelationHalfProof) -> Fallible<()> {
         let mut request = self.home.pair_request_request();
-        request.get().init_half_proof().fill_from(&half_proof);
+        request.get().init_half_proof().fill_from(half_proof);
 
-        let resp_fut = request
-            .send()
-            .promise
-            .map(|_resp| ())
-            .map_err(|e| e.context(ErrorKind::PairRequestFailed).into());
+        request.send().promise.await.map_err_fail(ErrorKind::PairRequestFailed)?;
 
-        Box::new(resp_fut)
+        Ok(())
     }
 
     // NOTE acceptor must have this server as its home
-    fn pair_response(&self, relation_proof: RelationProof) -> AsyncResult<(), Error> {
+    async fn pair_response(&self, relation_proof: &RelationProof) -> Fallible<()> {
         let mut request = self.home.pair_response_request();
-        request.get().init_relation().fill_from(&relation_proof);
+        request.get().init_relation().fill_from(relation_proof);
 
-        let resp_fut = request
-            .send()
-            .promise
-            .map(|_resp| ())
-            .map_err(|e| e.context(ErrorKind::PairResponseFailed).into());
+        request.send().promise.await.map_err_fail(ErrorKind::PairResponseFailed)?;
 
-        Box::new(resp_fut)
+        Ok(())
     }
 
-    fn call(
+    async fn call(
         &self,
         app: ApplicationId,
-        call_req: CallRequestDetails,
-    ) -> AsyncResult<Option<AppMsgSink>, Error> {
+        call_req: &CallRequestDetails,
+    ) -> Fallible<Option<AppMsgSink>> {
         let mut request = self.home.call_request();
         request.get().init_relation().fill_from(&call_req.relation);
         request.get().set_app((&app).into());
         request.get().set_init_payload((&call_req.init_payload).into());
 
-        if let Some(send) = call_req.to_caller {
-            let to_caller_dispatch = mercury_capnp::AppMessageDispatcherCapnProto::new(send);
+        if let Some(send) = call_req.to_caller.as_ref() {
+            let to_caller_dispatch =
+                mercury_capnp::AppMessageDispatcherCapnProto::new(send.to_owned());
             let to_caller_capnp =
                 mercury_capnp::app_message_listener::ToClient::new(to_caller_dispatch)
                     .into_client::<::capnp_rpc::Server>();
             request.get().set_to_caller(to_caller_capnp);
         }
 
-        let resp_fut = request
-            .send()
-            .promise
-            .and_then(|resp| {
-                resp.get().map(|res| {
-                    res.get_to_callee()
-                        .map(|to_callee_capnp| mercury_capnp::fwd_appmsg(to_callee_capnp))
-                        .ok()
-                })
-            })
-            .map_err(|e| e.context(ErrorKind::CallFailed).into());
+        let resp = request.send().promise.await.map_err_fail(ErrorKind::CallFailed)?;
 
-        Box::new(resp_fut)
+        let to_callee: Option<_> = resp.get()?.get_to_callee().ok();
+        let res = to_callee.map(mercury_capnp::fwd_appmsg);
+        Ok(res)
     }
 }
 
@@ -213,16 +180,14 @@ impl mercury_capnp::profile_event_listener::Server for ProfileEventDispatcherCap
         params: mercury_capnp::profile_event_listener::ReceiveParams,
         _results: mercury_capnp::profile_event_listener::ReceiveResults,
     ) -> Promise<(), capnp::Error> {
-        let event_capnp = pry!(pry!(params.get()).get_event());
-        let event = pry!(ProfileEvent::try_from(event_capnp));
-        trace!("Capnp client received event: {:?}", event);
-        let recv_fut = self
-            .sender
-            .clone()
-            .send(Ok(event))
-            .map(|_sink| ())
-            .map_err(|e| capnp::Error::failed(format!("Failed to delegate event: {}", e)));
-        Promise::from_future(recv_fut)
+        let mut sender = self.sender.to_owned();
+        let f = async move {
+            let event_capnp = params.get()?.get_event()?;
+            let event = ProfileEvent::try_from(event_capnp)?;
+            trace!("Capnp client received event: {:?}", event);
+            sender.send(Ok(event)).await.map_err_capnp("Failed to delegate event")
+        };
+        Promise::from_future(f)
     }
 
     fn error(
@@ -230,12 +195,13 @@ impl mercury_capnp::profile_event_listener::Server for ProfileEventDispatcherCap
         params: mercury_capnp::profile_event_listener::ErrorParams,
         _results: mercury_capnp::profile_event_listener::ErrorResults,
     ) -> Promise<(), capnp::Error> {
-        let error = pry!(pry!(params.get()).get_error()).into();
-        let recv_fut =
-            self.sender.clone().send(Err(error)).map(|_sink| ()).map_err(|e| {
-                capnp::Error::failed(format!("Failed to delegate event error: {}", e))
-            });
-        Promise::from_future(recv_fut)
+        let mut sender = self.sender.to_owned();
+        let f = async move {
+            let error = params.get()?.get_error()?;
+            trace!("Capnp client received error: {:?}", error);
+            sender.send(Err(error.to_owned())).await.map_err_capnp("Failed to delegate error")
+        };
+        Promise::from_future(f)
     }
 }
 
@@ -249,53 +215,40 @@ impl HomeSessionClientCapnProto {
     }
 }
 
+#[async_trait(?Send)]
 impl HomeSession for HomeSessionClientCapnProto {
-    fn backup(&self, own_prof: OwnProfile) -> AsyncResult<(), Error> {
+    async fn backup(&self, own_prof: OwnProfile) -> Fallible<()> {
         let mut request = self.session.backup_request();
         request.get().set_own_profile(&own_profile_to_bytes(&own_prof));
 
-        let resp_fut = request
-            .send()
-            .promise
-            .map(|_resp| ())
-            .map_err(|e| e.context(ErrorKind::ProfileUpdateFailed).into());
+        let _resp = request.send().promise.await.map_err_fail(ErrorKind::ProfileUpdateFailed)?;
 
-        Box::new(resp_fut)
+        Ok(())
     }
 
-    fn restore(&self) -> AsyncResult<OwnProfile, Error> {
+    async fn restore(&self) -> Fallible<OwnProfile> {
         let request = self.session.restore_request();
-        let resp_fut = request
-            .send()
-            .promise
-            .and_then(|resp| {
-                resp.get().and_then(|res| {
-                    res.get_own_profile().and_then(|own_bytes| bytes_to_own_profile(own_bytes))
-                })
-            })
-            .map_err(|e| e.context(ErrorKind::ProfileUpdateFailed).into());
 
-        Box::new(resp_fut)
+        let resp = request.send().promise.await.map_err_fail(ErrorKind::ProfileLookupFailed)?;
+
+        bytes_to_own_profile(resp.get()?.get_own_profile()?)
+            .map_err_fail(ErrorKind::ProfileLookupFailed)
     }
 
-    // NOTE newhome is a profile that contains at least one HomeFacet different than this home
-    fn unregister(&self, newhome: Option<Profile>) -> AsyncResult<(), Error> {
+    // NOTE new_home is a profile that contains at least one HomeFacet different than this home
+    async fn unregister(&self, new_home: Option<Profile>) -> Fallible<()> {
         let mut request = self.session.unregister_request();
-        if let Some(new_home_profile) = newhome {
+        if let Some(new_home_profile) = new_home {
             request.get().set_new_home(&profile_to_bytes(&new_home_profile));
         }
 
-        let resp_fut = request
-            .send()
-            .promise
-            .map(|_resp| ())
-            .map_err(|e| e.context(ErrorKind::UnregisterFailed).into());
+        let _resp = request.send().promise.await.map_err_fail(ErrorKind::UnregisterFailed)?;
 
-        Box::new(resp_fut)
+        Ok(())
     }
 
     fn events(&self) -> AsyncStream<ProfileEvent, String> {
-        let (send, recv) = mpsc::channel(1);
+        let (mut send, recv) = mpsc::channel(1);
         let listener = ProfileEventDispatcherCapnProto::new(send.clone());
         // TODO consider how to drop/unregister this object from capnp if the stream is dropped
         let listener_capnp = mercury_capnp::profile_event_listener::ToClient::new(listener)
@@ -304,19 +257,25 @@ impl HomeSession for HomeSessionClientCapnProto {
         let mut request = self.session.events_request();
         request.get().set_event_listener(listener_capnp);
 
-        reactor::spawn(request.send().promise.map(|_resp| ()).or_else(move |e| {
-            send.send(Err(format!("Events delegation failed: {}", e)))
-                    .map(|_sink| ())
+        // This future translates an event registration error into a "remote error" on the same
+        // stream as is returned to the caller
+        let registration_fut = async move {
+            match request.send().promise.await {
+                Ok(_r) => {}
+                Err(e) => {
                     // TODO what to do if failed to send error?
-                    .map_err(|_err| ())
-        }));
+                    let _res = send.send(Err(format!("Events delegation failed: {}", e))).await;
+                }
+            };
+        };
+        reactor::spawn(registration_fut);
 
         recv
     }
 
     fn checkin_app(&self, app: &ApplicationId) -> AsyncStream<Box<dyn IncomingCall>, String> {
         // Send a call dispatcher proxy to remote home through which we'll accept incoming calls
-        let (send, recv) = mpsc::channel(1);
+        let (mut send, recv) = mpsc::channel(1);
         let listener = CallDispatcherCapnProto::new(send.clone());
         // TODO consider how to drop/unregister this object from capnp if the stream is dropped
         let listener_capnp = mercury_capnp::call_listener::ToClient::new(listener)
@@ -328,27 +287,28 @@ impl HomeSession for HomeSessionClientCapnProto {
 
         // We can either return Future<Stream> or
         // return the stream directly and spawn sending the request in another fiber
-        reactor::spawn(request.send().promise.map(|_resp| ()).or_else(move |e| {
-            send.send(Err(format!("Call delegation failed: {}", e)))
-                    .map(|_sink| ())
+        let registration_fut = async move {
+            match request.send().promise.await {
+                Ok(_r) => {}
+                Err(e) => {
                     // TODO what to do if failed to send error?
-                    .map_err(|_err| ())
-        }));
+                    let _res = send.send(Err(format!("Call delegation failed: {}", e))).await;
+                }
+            };
+        };
+        reactor::spawn(registration_fut);
 
         recv
     }
 
-    fn ping(&self, txt: &str) -> AsyncResult<String, Error> {
+    async fn ping(&self, txt: &str) -> Fallible<String> {
         let mut request = self.session.ping_request();
         request.get().set_txt(txt);
 
-        let resp_fut = request
-            .send()
-            .promise
-            .and_then(|resp| resp.get().and_then(|res| res.get_pong()).map(|pong| pong.to_owned()))
-            .map_err(|e| e.context(ErrorKind::PingFailed).into());
+        let resp = request.send().promise.await.map_err_fail(ErrorKind::PingFailed)?;
 
-        Box::new(resp_fut)
+        let res = resp.get()?.get_pong()?.to_owned();
+        Ok(res)
     }
 }
 
@@ -372,54 +332,41 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto {
         params: mercury_capnp::call_listener::ReceiveParams,
         mut results: mercury_capnp::call_listener::ReceiveResults,
     ) -> Promise<(), capnp::Error> {
-        // NOTE there's no way to add the i/o streams in try_from without extra context,
-        //      we have to set them manually
-        let call_capnp = pry!(pry!(params.get()).get_call());
-        let mut call = pry!(CallRequestDetails::try_from(call_capnp));
+        let mut sender = self.sender.to_owned();
 
-        // If received a to_caller channel, setup an in-memory sink for easier sending
-        call.to_caller = call_capnp
-            .get_to_caller()
-            .map(|to_caller_capnp| mercury_capnp::fwd_appmsg(to_caller_capnp))
-            .ok();
+        let f = async move {
+            // NOTE there's no way to add the i/o streams in try_from without extra context,
+            //      we have to set them manually
+            let call_capnp = params.get()?.get_call()?;
+            let mut call = CallRequestDetails::try_from(call_capnp)?;
+            // If received a to_caller channel, setup an in-memory sink for easier sending
+            call.to_caller = call_capnp.get_to_caller().ok().map(mercury_capnp::fwd_appmsg);
 
-        let (one_send, one_recv) = oneshot::channel();
-        let answer_fut = one_recv
-            .map(|to_callee_opt: Option<AppMsgSink>| {
-                // If the call is accepted then set up a to_callee channel and send it back in the response
-                to_callee_opt.map(move |to_callee| {
-                    let listener = mercury_capnp::AppMessageDispatcherCapnProto::new(to_callee);
-                    // TODO consider how to drop/unregister this object from capnp if the stream is dropped
-                    let listener_capnp =
-                        mercury_capnp::app_message_listener::ToClient::new(listener)
-                            .into_client::<::capnp_rpc::Server>();
-                    results.get().set_to_callee(listener_capnp);
-                });
-            })
-            .map_err(|e| {
-                capnp::Error::failed(format!("Failed to get answer from callee: {:?}", e))
-            }); // TODO should we send an error back to the caller?
+            let (one_send, one_recv) = oneshot::channel::<Option<AppMsgSink>>();
+            let answer_fut = async move {
+                // TODO should we send an error back to the caller?
+                let to_callee_opt =
+                    one_recv.await.map_err_capnp("Failed to get answer from callee")?;
 
-        // TODO make this timeout period user-configurable
-        // Call will time out if not answered in a given period
-        let answer_or_timeout_fut = answer_fut.timeout(Duration::from_secs(CALL_TIMEOUT_SECS));
+                to_callee_opt.map(|sink| results.get().set_to_callee(sink.into()));
+                capnp::Result::Ok(())
+            };
 
-        // Set up an IncomingCall object allowing to decide answering or refusing the call
-        // TODO consider error handling: should we send error and close the sink in case of errors above?
-        let incoming_call = Box::new(IncomingCallCapnProto::new(call, one_send));
-        let call_fut = self
-            .sender
-            .clone()
-            .send(Ok(incoming_call))
-            .map(|_sink| ())
-            .map_err(|e| capnp::Error::failed(format!("Failed to dispatch call: {:?}", e))) // TODO should we send an error back to the caller?
-            // and require the call to be answered or dropped
-            .and_then(|()| answer_or_timeout_fut.map_err(|e|
-                capnp::Error::failed(format!("Failed to answer call: {:?}", e))));
+            // TODO make this timeout period user-configurable
+            // Call will time out if not answered in a given period
+            let answer_or_timeout_fut = answer_fut.timeout(Duration::from_secs(CALL_TIMEOUT_SECS));
+
+            // Set up an IncomingCall object allowing to decide answering or refusing the call
+            // TODO consider error handling: should we send error and close the sink in case of errors above?
+            let incoming_call = Box::new(IncomingCallCapnProto::new(call, one_send));
+            sender.send(Ok(incoming_call)).await.map_err_capnp("Failed to dispatch call")?;
+            answer_or_timeout_fut.await.map_err_capnp("Failed to answer call")??; // timeout is Result<Result<_>>
+            Ok(())
+        };
 
         // TODO consider if the call (e.g. channels and capnp server objects) is dropped after a timeout
         //      but lives after properly accepted
-        Promise::from_future(call_fut)
+        Promise::from_future(f)
     }
 
     fn error(
@@ -427,14 +374,18 @@ impl mercury_capnp::call_listener::Server for CallDispatcherCapnProto {
         params: mercury_capnp::call_listener::ErrorParams,
         _results: mercury_capnp::call_listener::ErrorResults,
     ) -> Promise<(), capnp::Error> {
-        let error = pry!(pry!(params.get()).get_error()).into();
-        let recv_fut = self
-            .sender
-            .clone()
-            .send(Err(error))
-            .map(|_sink| ())
-            .map_err(|e| capnp::Error::failed(format!("Failed to dispatch call error: {}", e)));
-        Promise::from_future(recv_fut)
+        let mut sender = self.sender.to_owned();
+        let f = async move {
+            let error = params.get()?.get_error()?;
+
+            sender
+                .send(Err(error.to_owned()))
+                .await
+                .map_err_capnp("Failed to dispatch call error")?;
+
+            Ok(())
+        };
+        Promise::from_future(f)
     }
 }
 

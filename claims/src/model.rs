@@ -473,6 +473,17 @@ impl ProfileAuthData {
             .filter_map(|pg| if pg.key_id == *key_id { Some(pg.grant) } else { None })
             .collect()
     }
+
+    pub fn apply(&mut self, _ops: &[ProfileAuthOperation]) -> Fallible<()> {
+        unimplemented!()
+    }
+}
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum ProfileAuthOperation {
+    Grant(ProfileGrant),
+    Revoke(ProfileGrant),
+    Remove(ProfileId),
 }
 
 #[cfg(test)]

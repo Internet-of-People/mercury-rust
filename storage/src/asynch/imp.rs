@@ -64,7 +64,7 @@ impl<ObjectType: 'static> HashWeb<ObjectType> {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<ObjectType: Send + Sync + 'static> HashSpace<ObjectType, String> for HashWeb<ObjectType> {
     async fn store(&mut self, object: ObjectType) -> Fallible<String> {
         let hash_space = self
@@ -111,11 +111,11 @@ where
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<KeyType, ValueType> KeyValueStore<KeyType, ValueType> for InMemoryStore<KeyType, ValueType>
 where
-    KeyType: Eq + Hash + Send + Sync + 'static,
-    ValueType: Clone + Send + Sync + 'static,
+    KeyType: Eq + Hash + 'static,
+    ValueType: Clone + 'static,
 {
     async fn set(&mut self, key: KeyType, object: ValueType) -> Fallible<()> {
         self.map.insert(key, object);
@@ -194,17 +194,14 @@ mod tests {
         assert!(validate_res.unwrap());
     }
 
-    #[test]
-    fn test_hashweb() {
+    #[tokio::test]
+    async fn test_hashweb() -> Fallible<()> {
         let cache_store: InMemoryStore<Vec<u8>, Vec<u8>> = InMemoryStore::new();
         let cache_space: ModularHashSpace<Vec<u8>, Vec<u8>, String> = ModularHashSpace::new(
-            //            Rc::new( IdentitySerializer{} ),
             Arc::new(MultiHasher::new(multihash::Hash::Keccak512)),
             Box::new(cache_store),
             Box::new(MultiBaseHashCoder::new(multibase::Base64)),
         );
-
-        let mut reactor = Runtime::new().unwrap();
 
         let default_space = "cache".to_owned();
         let mut spaces: HashMap<
@@ -215,12 +212,11 @@ mod tests {
         let mut hashweb = HashWeb::new(spaces, default_space.clone());
 
         let content = b"There's over a dozen netrunners Netwatch Cops would love to brain burn and Rache Bartmoss is at least two of them".to_vec();
-        let link_future = hashweb.store(content.clone());
-        let link = reactor.block_on(link_future).unwrap();
+        let link = hashweb.store(content.clone()).await?;
         assert!(link.starts_with((default_space + HashWebLink::HASH_SPACE_ID_SEPARATOR).as_str()));
 
-        let bytes_future = hashweb.resolve(&link);
-        let bytes = reactor.block_on(bytes_future).unwrap();
+        let bytes = hashweb.resolve(&link).await?;
         assert_eq!(bytes, content);
+        Ok(())
     }
 }

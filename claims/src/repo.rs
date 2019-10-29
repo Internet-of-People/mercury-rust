@@ -2,8 +2,8 @@ use std::collections::HashMap;
 use std::fs::File;
 use std::path::PathBuf;
 
+use async_trait::async_trait;
 use failure::{bail, format_err, Fallible};
-use futures::prelude::*;
 use log::*;
 use serde_derive::{Deserialize, Serialize};
 
@@ -12,10 +12,11 @@ use keyvault::PublicKey as KeyVaultPublicKey;
 
 // TODO consider authorization: should we require signatures here or leave it to a different layer?
 /// A whole network of storage nodes, potentially with internal routing and sharding
+#[async_trait(?Send)]
 pub trait DistributedPublicProfileRepository {
-    fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData>;
-    fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()>;
-    fn clear_public_local(&mut self, key: &PublicKey) -> AsyncFallible<()>;
+    async fn get_public(&self, id: &ProfileId) -> Fallible<PublicProfileData>;
+    async fn set_public(&mut self, profile: PublicProfileData) -> Fallible<()>;
+    async fn clear_public_local(&mut self, key: &PublicKey) -> Fallible<()>;
 
     // TODO implement efficient loading based on hints
     // /// Same as load(), but also contains hints for resolution, therefore it's more efficient than load(id)
@@ -25,16 +26,17 @@ pub trait DistributedPublicProfileRepository {
     // /// * some profile metadata (for user experience enhancement) (big fat warning should be thrown if it does not match the latest info)
     // /// * ProfileID of its home server
     // /// * last known multiaddress(es) of its home server
-    // fn resolve(&self, url: &str) -> AsyncResult<Profile, Error>;
+    // async fn resolve(&self, url: &str) -> Fallible<Profile>;
 
     // TODO notifications on profile updates should be possible
 }
 
 // TODO consider authorization: should we require signatures here or leave it to a different layer?
+#[async_trait(?Send)]
 pub trait PrivateProfileRepository {
-    fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData>;
-    fn set(&mut self, profile: PrivateProfileData) -> AsyncFallible<()>;
-    fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()>;
+    async fn get(&self, id: &ProfileId) -> Fallible<PrivateProfileData>;
+    async fn set(&mut self, profile: PrivateProfileData) -> Fallible<()>;
+    async fn clear(&mut self, key: &PublicKey) -> Fallible<()>;
 }
 
 pub trait LocalProfileRepository: PrivateProfileRepository {
@@ -42,11 +44,12 @@ pub trait LocalProfileRepository: PrivateProfileRepository {
     fn restore(&mut self, profile: PrivateProfileData) -> Fallible<()>;
 }
 
+#[async_trait(?Send)]
 pub trait ProfileExplorer {
-    fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData>;
+    async fn fetch(&self, id: &ProfileId) -> Fallible<PublicProfileData>;
     #[deprecated]
-    fn followers(&self, id: &ProfileId) -> AsyncFallible<Vec<Link>>;
-    // fn list(&self, /* TODO what filter criteria should we have here? */ ) -> AsyncFallible<Profile>;
+    async fn followers(&self, id: &ProfileId) -> Fallible<Vec<Link>>;
+    // async fn list(&self, /* TODO what filter criteria should we have here? */ ) -> Fallible<Vec<Profile>>;
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Serialize)]
@@ -91,43 +94,38 @@ impl Default for InMemoryProfileRepository {
 
 // NOTE normally public and private repositories should not be mixed.
 //      We do it here because InMemoryProfileRepository is created for testing, not real usage.
+#[async_trait(?Send)]
 impl DistributedPublicProfileRepository for InMemoryProfileRepository {
-    fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
-        let res =
-            (self as &dyn PrivateProfileRepository).get(id).map(|prof_ref| prof_ref.public_data());
-        Box::new(res)
+    async fn get_public(&self, id: &ProfileId) -> Fallible<PublicProfileData> {
+        let prof_ref = PrivateProfileRepository::get(self, id).await?;
+        Ok(prof_ref.public_data())
     }
 
-    fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()> {
+    async fn set_public(&mut self, profile: PublicProfileData) -> Fallible<()> {
         let private_profile = PrivateProfileData::from_public(profile);
-        let res = (self as &mut dyn PrivateProfileRepository).set(private_profile);
-        Box::new(res)
+        PrivateProfileRepository::set(self, private_profile).await
     }
 
-    fn clear_public_local(&mut self, key: &PublicKey) -> AsyncFallible<()> {
-        let res = (self as &mut dyn PrivateProfileRepository).clear(key);
-        Box::new(res)
+    async fn clear_public_local(&mut self, key: &PublicKey) -> Fallible<()> {
+        PrivateProfileRepository::clear(self, key).await
     }
 }
 
+#[async_trait(?Send)]
 impl PrivateProfileRepository for InMemoryProfileRepository {
-    fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData> {
-        let res = self
-            .profiles
+    async fn get(&self, id: &ProfileId) -> Fallible<PrivateProfileData> {
+        self.profiles
             .get(&id.to_string())
             .map(|prof_ref| prof_ref.to_owned())
-            .ok_or_else(|| format_err!("Profile not found: {}", id));
-        Box::new(res.into_future())
+            .ok_or_else(|| format_err!("Profile not found: {}", id))
     }
 
-    fn set(&mut self, profile: PrivateProfileData) -> AsyncFallible<()> {
-        let res = self.put(profile);
-        Box::new(res.into_future())
+    async fn set(&mut self, profile: PrivateProfileData) -> Fallible<()> {
+        self.put(profile)
     }
 
-    fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()> {
-        let res = self.remove(key);
-        Box::new(res.into_future())
+    async fn clear(&mut self, key: &PublicKey) -> Fallible<()> {
+        self.remove(key)
     }
 }
 
@@ -137,11 +135,12 @@ impl LocalProfileRepository for InMemoryProfileRepository {
     }
 }
 
+#[async_trait(?Send)]
 impl ProfileExplorer for InMemoryProfileRepository {
-    fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
-        (self as &dyn DistributedPublicProfileRepository).get_public(id)
+    async fn fetch(&self, id: &ProfileId) -> Fallible<PublicProfileData> {
+        DistributedPublicProfileRepository::get_public(self, id).await
     }
-    fn followers(&self, _id: &ProfileId) -> AsyncFallible<Vec<Link>> {
+    async fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
         unimplemented!() // TODO
     }
 }
@@ -193,49 +192,43 @@ impl FileProfileRepository {
     }
 }
 
+#[async_trait(?Send)]
 impl DistributedPublicProfileRepository for FileProfileRepository {
-    fn get_public(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
-        let res = self.load().and_then(|mem_repo| mem_repo.get_public(id).wait());
-        Box::new(res.into_future())
+    async fn get_public(&self, id: &ProfileId) -> Fallible<PublicProfileData> {
+        let mem_repo = self.load()?;
+        mem_repo.get_public(id).await
     }
 
-    fn set_public(&mut self, profile: PublicProfileData) -> AsyncFallible<()> {
-        let res = self.load().and_then(|mut mem_repo| {
-            mem_repo.set_public(profile).wait()?;
-            self.save(mem_repo)
-        });
-        Box::new(res.into_future())
+    async fn set_public(&mut self, profile: PublicProfileData) -> Fallible<()> {
+        let mut mem_repo = self.load()?;
+        mem_repo.set_public(profile).await?;
+        self.save(mem_repo)
     }
 
-    fn clear_public_local(&mut self, key: &PublicKey) -> AsyncFallible<()> {
-        let res = self.load().and_then(|mut mem_repo| {
-            mem_repo.clear_public_local(key).wait()?;
-            self.save(mem_repo)
-        });
-        Box::new(res.into_future())
+    async fn clear_public_local(&mut self, key: &PublicKey) -> Fallible<()> {
+        let mut mem_repo = self.load()?;
+        mem_repo.clear_public_local(key).await?;
+        self.save(mem_repo)
     }
 }
 
+#[async_trait(?Send)]
 impl PrivateProfileRepository for FileProfileRepository {
-    fn get(&self, id: &ProfileId) -> AsyncFallible<PrivateProfileData> {
-        let res = self.load().and_then(|mem_repo| mem_repo.get(id).wait());
-        Box::new(res.into_future())
+    async fn get(&self, id: &ProfileId) -> Fallible<PrivateProfileData> {
+        let mem_repo = self.load()?;
+        mem_repo.get(id).await
     }
 
-    fn set(&mut self, profile: PrivateProfileData) -> AsyncFallible<()> {
-        let res = self.load().and_then(|mut mem_repo| {
-            mem_repo.set(profile).wait()?;
-            self.save(mem_repo)
-        });
-        Box::new(res.into_future())
+    async fn set(&mut self, profile: PrivateProfileData) -> Fallible<()> {
+        let mut mem_repo = self.load()?;
+        mem_repo.set(profile).await?;
+        self.save(mem_repo)
     }
 
-    fn clear(&mut self, key: &PublicKey) -> AsyncFallible<()> {
-        let res = self.load().and_then(|mut mem_repo| {
-            mem_repo.clear(key).wait()?;
-            self.save(mem_repo)
-        });
-        Box::new(res.into_future())
+    async fn clear(&mut self, key: &PublicKey) -> Fallible<()> {
+        let mut mem_repo = self.load()?;
+        mem_repo.clear(key).await?;
+        self.save(mem_repo)
     }
 }
 
@@ -247,12 +240,13 @@ impl LocalProfileRepository for FileProfileRepository {
     }
 }
 
+#[async_trait(?Send)]
 impl ProfileExplorer for FileProfileRepository {
-    fn fetch(&self, id: &ProfileId) -> AsyncFallible<PublicProfileData> {
-        let res = self.load().and_then(move |mem_repo| mem_repo.fetch(id).wait());
-        Box::new(res.into_future())
+    async fn fetch(&self, id: &ProfileId) -> Fallible<PublicProfileData> {
+        let mem_repo = self.load()?;
+        mem_repo.fetch(id).await
     }
-    fn followers(&self, _id: &ProfileId) -> AsyncFallible<Vec<Link>> {
+    async fn followers(&self, _id: &ProfileId) -> Fallible<Vec<Link>> {
         unimplemented!() // TODO
     }
 }
@@ -264,8 +258,8 @@ mod test {
     use super::*;
     use keyvault::PublicKey as KeyVaultPublicKey;
 
-    #[test]
-    fn test_local_repository() -> Fallible<()> {
+    #[tokio::test]
+    async fn test_local_repository() -> Fallible<()> {
         let tmp_file = std::env::temp_dir().join("local_repo_test.dat");
         let mut repo = FileProfileRepository::new(&tmp_file)?;
 
@@ -273,16 +267,16 @@ mod test {
         //let my_id = ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?;
         let my_id = my_pubkey.key_id();
         let mut my_data = PrivateProfileData::empty(&my_pubkey);
-        repo.set(my_data.clone()).wait()?;
+        repo.set(my_data.clone()).await?;
 
         let peer_pubkey = PublicKey::from_str("PezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z")?;
         //let peer_id = ProfileId::from_str("Iez25N5WZ1Q6TQpgpyYgiu9gTX")?;
         let peer_id = peer_pubkey.key_id();
         let peer_data = PrivateProfileData::empty(&peer_pubkey);
-        repo.set(peer_data.clone()).wait()?;
+        repo.set(peer_data.clone()).await?;
 
-        let mut me = repo.get(&my_id).wait()?;
-        let peer = repo.get(&peer_id).wait()?;
+        let mut me = repo.get(&my_id).await?;
+        let peer = repo.get(&peer_id).await?;
         assert_eq!(me, my_data);
         assert_eq!(peer, peer_data);
 
@@ -291,15 +285,15 @@ mod test {
         my_data.mut_public_data().set_attribute(attr_id, attr_val);
         let _link = my_data.mut_public_data().create_link(&peer_id);
         my_data.mut_public_data().increase_version();
-        repo.set(my_data.clone()).wait()?;
-        me = repo.get(&my_id).wait()?;
+        repo.set(my_data.clone()).await?;
+        me = repo.get(&my_id).await?;
         assert_eq!(me, my_data);
         assert_eq!(me.version(), 2);
         assert_eq!(me.public_data().attributes().len(), 1);
         assert_eq!(me.public_data().links().len(), 1);
 
-        repo.clear(&my_pubkey).wait()?;
-        me = repo.get(&my_id).wait()?;
+        repo.clear(&my_pubkey).await?;
+        me = repo.get(&my_id).await?;
         assert_eq!(
             me,
             PrivateProfileData::from_public(PublicProfileData::new(

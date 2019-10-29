@@ -8,7 +8,7 @@ edition = "2018"
 #bincode = "*"
 dirs = "*"
 failure = "*"
-futures = "0.1"
+futures-preview = "0.3.0-alpha.19"
 log = "*"
 keyvault = { path="../keyvault" }
 serde = "*"

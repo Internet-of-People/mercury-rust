@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 
+use async_trait::async_trait;
 use failure::Fallible;
 use log::*;
 use structopt::StructOpt;
@@ -31,8 +32,9 @@ pub struct Options {
 }
 
 pub type CmdRes = Fallible<()>;
+#[async_trait(?Send)]
 pub trait Command {
-    fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes;
+    async fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes;
 }
 
 #[derive(Debug, StructOpt)]
@@ -79,8 +81,9 @@ pub enum CommandVerb {
     Revert(RevertCommand),
 }
 
+#[async_trait(?Send)]
 impl Command for CommandVerb {
-    fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
+    async fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
         use CommandVerb::*;
         let sub: Box<dyn Command> = match *self {
             Generate(sub) => Box::new(sub),
@@ -94,7 +97,7 @@ impl Command for CommandVerb {
             Publish(sub) => Box::new(sub),
             Revert(sub) => Box::new(sub),
         };
-        sub.execute(api)
+        sub.execute(api).await
     }
 }
 
@@ -112,14 +115,15 @@ pub enum ListCommand {
     // },
 }
 
+#[async_trait(?Send)]
 impl Command for ListCommand {
-    fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
+    async fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
         use ListCommand::*;
         match *self {
             Profiles => {
-                let profiles = api.list_vault_records()?;
+                let profiles = api.list_vault_records().await?;
                 info!("You have {} profiles", profiles.len());
-                let active_profile_opt = api.get_active_profile()?;
+                let active_profile_opt = api.get_active_profile().await?;
                 for profile_record in profiles.iter() {
                     let status = match active_profile_opt {
                         Some(ref active_profile) => {
@@ -161,11 +165,12 @@ pub enum ShowCommand {
     },
 }
 
+#[async_trait(?Send)]
 impl Command for ShowCommand {
-    fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
+    async fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
         match *self {
             ShowCommand::Profile { profile_id, source } => {
-                let profile = api.get_profile_data(profile_id, source)?;
+                let profile = api.get_profile_data(profile_id, source).await?;
                 let public_profile = profile.public_data();
                 let links = public_profile.links();
                 let attributes = public_profile.attributes();
@@ -211,13 +216,14 @@ pub enum CreateCommand {
     },
 }
 
+#[async_trait(?Send)]
 impl Command for CreateCommand {
-    fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
+    async fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
         use CreateCommand::*;
         match *self {
             Profile { label } => {
                 //let profiles = api.list_vault_records()?;
-                let profile = api.create_profile(label)?;
+                let profile = api.create_profile(label).await?;
                 info!(
                     "Created and activated profile with label {}, id {}",
                     profile.label(),
@@ -225,7 +231,7 @@ impl Command for CreateCommand {
                 );
             }
             Link { my_profile_id, peer_profile_id } => {
-                api.create_link(my_profile_id, &peer_profile_id)?;
+                api.create_link(my_profile_id, &peer_profile_id).await?;
                 info!("Created link to peer profile {}", peer_profile_id);
             }
         };
@@ -248,11 +254,12 @@ pub enum RemoveCommand {
     },
 }
 
+#[async_trait(?Send)]
 impl Command for RemoveCommand {
-    fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
+    async fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
         match *self {
             RemoveCommand::Link { my_profile_id, peer_profile_id } => {
-                api.remove_link(my_profile_id, &peer_profile_id)?;
+                api.remove_link(my_profile_id, &peer_profile_id).await?;
                 info!("Removed link from profile {}", peer_profile_id);
             }
         };
@@ -288,16 +295,17 @@ pub enum SetCommand {
     },
 }
 
+#[async_trait(?Send)]
 impl Command for SetCommand {
-    fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
+    async fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
         use SetCommand::*;
         match *self {
             ActiveProfile { my_profile_id } => {
-                api.set_active_profile(&my_profile_id)?;
+                api.set_active_profile(&my_profile_id).await?;
                 info!("Active profile was set to {}", my_profile_id);
             }
             Attribute { my_profile_id, key, value } => {
-                api.set_attribute(my_profile_id, &key, &value)?;
+                api.set_attribute(my_profile_id, &key, &value).await?;
                 info!("Setting attribute {} to {}", key, value);
             }
         };
@@ -320,11 +328,12 @@ pub enum ClearCommand {
     },
 }
 
+#[async_trait(?Send)]
 impl Command for ClearCommand {
-    fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
+    async fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
         match *self {
             ClearCommand::Attribute { my_profile_id, key } => {
-                api.clear_attribute(my_profile_id, &key)?;
+                api.clear_attribute(my_profile_id, &key).await?;
                 info!("Cleared attribute: {}", key);
             }
         };
@@ -339,8 +348,9 @@ pub enum GenerateCommand {
     Vault,
 }
 
+#[async_trait(?Send)]
 impl Command for GenerateCommand {
-    fn execute(self: Box<Self>, _api: &mut dyn VaultApi) -> CmdRes {
+    async fn execute(self: Box<Self>, _api: &mut dyn VaultApi) -> CmdRes {
         match *self {
             GenerateCommand::Vault => {
                 // TODO this should probably come from the daemon instead of generating it here
@@ -375,8 +385,9 @@ pub enum RestoreCommand {
     Profiles,
 }
 
+#[async_trait(?Send)]
 impl Command for RestoreCommand {
-    fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
+    async fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
         use RestoreCommand::*;
         match *self {
             Vault { demo } => {
@@ -386,23 +397,23 @@ impl Command for RestoreCommand {
                 } else {
                     read_phrase()?
                 };
-                api.restore_vault(phrase)?;
+                api.restore_vault(phrase).await?;
                 info!("Vault successfully initialized");
-                let counts = api.restore_all_profiles()?;
+                let counts = api.restore_all_profiles().await?;
                 info!(
                     "Tried {} profiles, successfully restored {}",
                     counts.try_count, counts.restore_count
                 );
             }
             Profiles => {
-                let counts = api.restore_all_profiles()?;
+                let counts = api.restore_all_profiles().await?;
                 info!(
                     "Tried {} profiles, successfully restored {}",
                     counts.try_count, counts.restore_count
                 );
             }
             Profile { my_profile_id, force } => {
-                let profile = api.restore_profile(my_profile_id, force)?;
+                let profile = api.restore_profile(my_profile_id, force).await?;
                 info!("Successfully restored profile {}", profile.id());
             }
         };
@@ -425,11 +436,12 @@ pub enum PublishCommand {
     },
 }
 
+#[async_trait(?Send)]
 impl Command for PublishCommand {
-    fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
+    async fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
         match *self {
             PublishCommand::Profile { my_profile_id, force } => {
-                let profile_id = api.publish_profile(my_profile_id, force)?;
+                let profile_id = api.publish_profile(my_profile_id, force).await?;
                 info!("Published profile {} to remote repository", profile_id);
             }
         };
@@ -448,11 +460,12 @@ pub enum RevertCommand {
     },
 }
 
+#[async_trait(?Send)]
 impl Command for RevertCommand {
-    fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
+    async fn execute(self: Box<Self>, api: &mut dyn VaultApi) -> CmdRes {
         match *self {
             RevertCommand::Profile { my_profile_id } => {
-                let profile = api.revert_profile(my_profile_id)?;
+                let profile = api.revert_profile(my_profile_id).await?;
                 info!(
                     "Reverted profile {} to last known remote version {}",
                     profile.id(),

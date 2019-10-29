@@ -1,5 +1,8 @@
 use std::str;
 
+use async_trait::async_trait;
+use failure::Fallible;
+
 use crate::*;
 use keyvault::PublicKey as KeyVaultPublicKey;
 
@@ -28,13 +31,7 @@ impl PeerContext {
     }
 
     pub fn validate(&self, validator: &dyn Validator) -> Result<(), Error> {
-        validator.validate_profile_auth(&self.peer_pubkey(), &self.peer_id()).and_then(|valid| {
-            if valid {
-                Ok(())
-            } else {
-                Err(ErrorKind::ProfileValidationFailed)?
-            }
-        })
+        validator.validate_profile_auth(&self.peer_pubkey(), &self.peer_id())
     }
 }
 
@@ -49,7 +46,7 @@ pub type AppMsgSink = AsyncSink<AppMessageFrame, String>;
 
 /// A struct that is passed from the caller to the callee. The callee can examine this
 /// before answering the call.
-#[derive(Debug)]
+#[derive(Clone, Debug)]
 pub struct CallRequestDetails {
     /// Proof for the home server that the caller is authorized to call the callee.
     /// The callee can find out who's calling by looking at `relation`.
@@ -68,40 +65,41 @@ pub struct CallRequestDetails {
 // NOTE authentication is already done when the connection is built,
 //      authenticated profile info is available from the connection context
 // TODO Home should be derived from DistributedPublicProfileRepository instead on the long run
+#[async_trait(?Send)]
 pub trait Home: ProfileExplorer {
     // NOTE because we support multihash, the id cannot be guessed from the public key
-    fn claim(&self, profile_id: ProfileId) -> AsyncResult<RelationProof, Error>;
+    async fn claim(&self, profile_id: ProfileId) -> Fallible<RelationProof>;
 
     // TODO this should return only the signed RelationProof of the home hosting the profile
     //      because in this form the home can return malicious changes in the profile
-    fn register(
+    async fn register(
         &self,
-        half_proof: RelationHalfProof,
+        half_proof: &RelationHalfProof,
         // invite: Option<HomeInvitation>,
-    ) -> AsyncResult<RelationProof, Error>;
+    ) -> Fallible<RelationProof>;
 
     /// By calling this method, any active session of the same profile is closed.
-    fn login(&self, hosting_proof: &RelationProof) -> AsyncResult<Rc<dyn HomeSession>, Error>;
+    async fn login(&self, hosting_proof: &RelationProof) -> Fallible<Rc<dyn HomeSession>>;
 
     /// The peer in `half_proof` must be hosted on this home server.
     /// Returns Error if the peer is not hosted on this home server or an empty result if it is.
     /// Note that the peer will directly invoke `pair_response` on the initiator's home server and call pair_response to send PairingResponse event
-    fn pair_request(&self, half_proof: RelationHalfProof) -> AsyncResult<(), Error>;
+    async fn pair_request(&self, half_proof: &RelationHalfProof) -> Fallible<()>;
 
-    fn pair_response(&self, rel: RelationProof) -> AsyncResult<(), Error>;
+    async fn pair_response(&self, relation_proof: &RelationProof) -> Fallible<()>;
 
     // NOTE initiating a real P2P connection (vs a single frame push notification),
     //      the caller must fill in some message channel to itself.
     //      A successful call returns a channel to callee.
-    fn call(
+    async fn call(
         &self,
         app: ApplicationId,
-        call_req: CallRequestDetails,
-    ) -> AsyncResult<Option<AppMsgSink>, Error>;
+        call_req: &CallRequestDetails,
+    ) -> Fallible<Option<AppMsgSink>>;
 
     // TODO consider how to do this in a later milestone
-    //    fn presence(&self, rel: Relation, app: ApplicationId) ->
-    //        AsyncResult<Option<AppMessageFrame>, Error>;
+    //    async fn presence(&self, rel: Relation, app: ApplicationId) ->
+    //        Fallible<Option<AppMessageFrame>>;
 }
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -132,12 +130,13 @@ pub trait IncomingCall {
     fn answer(self: Box<Self>, to_callee: Option<AppMsgSink>) -> CallRequestDetails;
 }
 
+#[async_trait(?Send)]
 pub trait HomeSession {
-    fn backup(&self, own_profile: OwnProfile) -> AsyncResult<(), Error>;
-    fn restore(&self) -> AsyncResult<OwnProfile, Error>;
+    async fn backup(&self, own_profile: OwnProfile) -> Fallible<()>;
+    async fn restore(&self) -> Fallible<OwnProfile>;
 
-    // NOTE newhome is a profile that contains at least one HomeFacet different than this home
-    fn unregister(&self, new_home: Option<Profile>) -> AsyncResult<(), Error>;
+    // NOTE new_home is a profile that contains at least one HomeFacet different than this home
+    async fn unregister(&self, new_home: Option<Profile>) -> Fallible<()>;
 
     fn events(&self) -> AsyncStream<ProfileEvent, String>;
 
@@ -146,10 +145,10 @@ pub trait HomeSession {
     fn checkin_app(&self, app: &ApplicationId) -> AsyncStream<Box<dyn IncomingCall>, String>;
 
     // TODO remove this after testing
-    fn ping(&self, txt: &str) -> AsyncResult<String, Error>;
+    async fn ping(&self, txt: &str) -> Fallible<String>;
 
     // TODO ban features are delayed to a later milestone
-    //    fn banned_profiles(&self) -> AsyncResult<Vec<ProfileId>, Error>;
-    //    fn ban(&self, profile: &ProfileId) -> AsyncResult<(), Error>;
-    //    fn unban(&self, profile: &ProfileId) -> AsyncResult<(), Error>;
+    //    async fn banned_profiles(&self) -> Fallible<Vec<ProfileId>>;
+    //    async fn ban(&self, profile: &ProfileId) -> Fallible<()>;
+    //    async fn unban(&self, profile: &ProfileId) -> Fallible<()>;
 }

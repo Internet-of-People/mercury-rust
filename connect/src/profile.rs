@@ -526,7 +526,7 @@ impl MyProfile for MyProfileImpl {
         Box::new(call_fut)
     }
 
-    // TODO this should try connecting to ALL of our homes, using our collect_results() future util function
+    // TODO this should try connecting to ALL of our homes, using futures::future::join_all(futures)
     fn login(&self) -> AsyncResult<Rc<dyn MyHomeSession>, Error> {
         if let Some(ref session_rc) = self.session_cache.borrow().values().next() {
             return Box::new(Ok(Rc::clone(session_rc)).into_future());
@@ -667,7 +667,7 @@ impl MyHomeSessionImpl {
         let send_futs = event_listeners.drain(..).map(|listener| listener.send(event.clone()));
 
         // Collect successful senders, drop failing ones
-        let fwd_fut = fut::collect_results(send_futs)
+        let fwd_fut = futures::future::join_all(send_futs)
             .map(|mut send_results| send_results.drain(..).filter_map(|res| res.ok()).collect());
 
         Box::new(fwd_fut)

@@ -1,25 +1,20 @@
 use std::marker::PhantomData;
-use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
 use failure::{err_msg, Fallible};
-use futures::prelude::*;
+use futures::future::{BoxFuture, LocalBoxFuture};
 
 use crate::common::*;
 
 pub mod fs;
 pub mod imp;
 
-pub type AsyncResult<'a, T, E> = future::BoxFuture<'a, Result<T, E>>;
+pub type AsyncResult<'a, T, E> = BoxFuture<'a, Result<T, E>>;
 pub type AsyncFallible<'a, T> = AsyncResult<'a, T, failure::Error>;
 
-pub type AsyncLocalResult<'a, T, E> = future::LocalBoxFuture<'a, Result<T, E>>;
+pub type AsyncLocalResult<'a, T, E> = LocalBoxFuture<'a, Result<T, E>>;
 pub type AsyncLocalFallible<'a, T> = AsyncLocalResult<'a, T, failure::Error>;
-
-pub type AsyncResult01<'a, T, E> =
-    Pin<Box<dyn futures01::future::Future<Item = T, Error = E> + Send + 'a>>;
-pub type AsyncFallible01<'a, T> = AsyncResult01<'a, T, failure::Error>;
 
 // TODO probably we should have references (e.g. maybe use AsRef) to keys whenever possible
 // NOTE this interface can be potentially implemented using a simple local in-memory storage
@@ -28,17 +23,11 @@ pub type AsyncFallible01<'a, T> = AsyncResult01<'a, T, failure::Error>;
 //      consider e.g. bittorrent. Consequently we do not provide an operation which removes
 //      an entry completely from the whole (distributed) store.
 //      Instead, we clear all *local* data and let remaining nodes expire the data if unused.
-#[async_trait]
+#[async_trait(?Send)]
 pub trait KeyValueStore<KeyType, ValueType> {
     async fn set(&mut self, key: KeyType, value: ValueType) -> Fallible<()>;
     async fn get(&self, key: KeyType) -> Fallible<ValueType>;
     async fn clear_local(&mut self, key: KeyType) -> Fallible<()>;
-}
-
-pub trait KeyValueStore01<KeyType, ValueType> {
-    fn set(&mut self, key: KeyType, value: ValueType) -> AsyncFallible01<'_, ()>;
-    fn get(&self, key: KeyType) -> AsyncFallible01<'_, ValueType>;
-    fn clear_local(&mut self, key: KeyType) -> AsyncFallible01<'_, ()>;
 }
 
 pub struct KeyAdapter<K, V, T: KeyValueStore<K, V>> {
@@ -53,16 +42,12 @@ impl<K, V, T: KeyValueStore<K, V>> KeyAdapter<K, V, T> {
     }
 }
 
-#[async_trait]
-impl<
-        PreferredKeyType: Send + Sync + 'static,
-        AvailableKeyType: Send + Sync,
-        ValueType: Send + Sync,
-        T: Send + Sync,
-    > KeyValueStore<PreferredKeyType, ValueType> for KeyAdapter<AvailableKeyType, ValueType, T>
+#[async_trait(?Send)]
+impl<PreferredKeyType, AvailableKeyType, ValueType, T> KeyValueStore<PreferredKeyType, ValueType>
+    for KeyAdapter<AvailableKeyType, ValueType, T>
 where
     T: KeyValueStore<AvailableKeyType, ValueType>,
-    PreferredKeyType: Into<AvailableKeyType>,
+    PreferredKeyType: Into<AvailableKeyType> + 'static,
 {
     async fn set(&mut self, key: PreferredKeyType, value: ValueType) -> Fallible<()> {
         self.store.set(key.into(), value).await
@@ -77,21 +62,7 @@ where
     }
 }
 
-impl<K: 'static, V: 'static, T: KeyValueStore<K, V>> KeyValueStore01<K, V> for T {
-    fn set(&mut self, key: K, value: V) -> AsyncFallible01<'_, ()> {
-        Box::pin(KeyValueStore::set(self, key, value).compat())
-    }
-
-    fn get(&self, key: K) -> AsyncFallible01<'_, V> {
-        Box::pin(KeyValueStore::get(self, key).compat())
-    }
-
-    fn clear_local(&mut self, key: K) -> AsyncFallible01<'_, ()> {
-        Box::pin(KeyValueStore::clear_local(self, key).compat())
-    }
-}
-
-#[async_trait]
+#[async_trait(?Send)]
 pub trait HashSpace<ObjectType, ReadableHashType> {
     async fn store(&mut self, object: ObjectType) -> Fallible<ReadableHashType>;
     async fn resolve(&self, hash: &ReadableHashType) -> Fallible<ObjectType>;
@@ -104,11 +75,8 @@ pub struct ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType> {
     hash_coder: Box<dyn HashCoder<BinaryHashType, ReadableHashType> + Send + Sync>,
 }
 
-impl<
-        SerializedType: 'static + Send + Sync,
-        BinaryHashType: 'static + Send + Sync + Clone,
-        ReadableHashType: 'static + Send + Sync,
-    > ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
+impl<SerializedType: 'static, BinaryHashType: 'static + Clone, ReadableHashType: 'static>
+    ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
 {
     pub fn new(
         hasher: Arc<dyn Hasher<SerializedType, BinaryHashType> + Send + Sync>,
@@ -129,12 +97,9 @@ impl<
     }
 }
 
-#[async_trait]
-impl<
-        SerializedType: 'static + Send + Sync,
-        BinaryHashType: 'static + Send + Sync + Clone,
-        ReadableHashType: 'static + Send + Sync,
-    > HashSpace<SerializedType, ReadableHashType>
+#[async_trait(?Send)]
+impl<SerializedType: 'static, BinaryHashType: 'static + Clone, ReadableHashType: 'static>
+    HashSpace<SerializedType, ReadableHashType>
     for ModularHashSpace<SerializedType, BinaryHashType, ReadableHashType>
 {
     async fn store(&mut self, serialized_obj: SerializedType) -> Fallible<ReadableHashType> {

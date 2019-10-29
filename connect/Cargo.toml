@@ -12,9 +12,9 @@ clap = {version = "*", features = ["yaml"]}
 claims = { path="../claims" }
 did = { path="../did" }
 failure = "*"
-futures = "0.1"
-jsonrpc-core = { git = "https://github.com/Internet-of-People/jsonrpc" }
-jsonrpc-pubsub = { git = "https://github.com/Internet-of-People/jsonrpc" }
+futures-preview = "0.3.0-alpha.19"
+jsonrpc-core = "14.0.3"
+jsonrpc-pubsub = "14.0.3"
 log = "*"
 log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }
@@ -25,7 +25,5 @@ serde_derive = "*"
 serde_json = "*"
 state_machine_future = "*"
 structopt = "*"
-tokio-codec = "*"
-tokio-core = "*"
-tokio-io = "*"
-tokio-uds = "0.1"
+tokio = "0.2.0-alpha.6"
+

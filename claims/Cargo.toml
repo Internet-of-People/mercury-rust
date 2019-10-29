@@ -5,10 +5,11 @@ authors = ["IoP Ventures LLC <info@iop-ventures.com>", "Rache Bartmoss <bartmoss
 edition = "2018"
 
 [dependencies]
+async-trait = "0.1.17"
 did = { path="../did" }
 dirs = "*"
 failure = "*"
-futures = "0.1"
+futures-preview = "0.3.0-alpha.19"
 log = "*"
 keyvault = { path="../keyvault" }
 multibase = "*"
@@ -17,3 +18,6 @@ rand = "*"
 serde = "*"
 serde_derive = "*"
 serde_json = "*"
+
+[dev-dependencies]
+tokio = { version="0.2.0-alpha.6", features=["rt-current-thread"] }

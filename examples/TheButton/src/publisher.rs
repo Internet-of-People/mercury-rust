@@ -2,10 +2,12 @@ use std::cell::RefCell;
 use std::time::{Duration, Instant};
 
 use futures::prelude::*;
-use futures::sync::mpsc;
+use futures::select;
 use log::*;
+use tokio::runtime::current_thread as reactor;
+use tokio::sync::mpsc;
 use tokio::timer::Interval;
-use tokio_signal::unix::SIGUSR1;
+use tokio_net::signal::unix::{signal, SignalKind};
 
 use super::*;
 use crate::init::init_publisher;
@@ -21,104 +23,107 @@ impl Server {
     pub fn new(cfg: PublisherConfig, appctx: AppContext) -> Self {
         Self { cfg, appctx, active_calls: Default::default() }
     }
-}
 
-impl IntoFuture for Server {
-    type Item = ();
-    type Error = failure::Error;
-    type Future = AsyncResult<Self::Item, Self::Error>;
-
-    fn into_future(self) -> Self::Future {
+    pub async fn checkin_and_notify(&self) -> Fallible<()> {
         // Create dApp session with Mercury Connect and listen for incoming events, automatically accept calls
-        let active_calls_rc = self.active_calls.clone();
+        let dapp_session =
+            self.appctx.dapp_service.dapp_session(self.appctx.dapp_id.to_owned()).await?;
+        debug!("dApp session was initialized, checking in");
 
-        let dapp_events_fut = self.appctx.dapp_service.dapp_session(self.appctx.dapp_id.to_owned())
-            .inspect( |_| debug!("dApp session was initialized, checking in") )
-            .map_err( |err| { error!("Failed to create dApp session: {:?}", err); err } )
-            .and_then(|dapp_session| dapp_session.checkin() )
-            .inspect( |_call_stream| debug!("Call stream received with successful checkin, listening for calls") )
-            .and_then(move |dapp_events|
-            {
-                dapp_events
-                    .map_err( |()| err_msg("Failed to get events") )
-                    .for_each( move |event|
-                    {
-                        match event
-                        {
-                            DAppEvent::Call(incoming_call) => {
-                                let (to_me, from_caller) = mpsc::channel(1);
-                                let to_caller_opt = incoming_call.answer(Some(to_me)).to_caller;
-                                if let Some(to_caller) = to_caller_opt
-                                    { active_calls_rc.borrow_mut().push(
-                                        DAppCall{incoming: from_caller, outgoing: to_caller} ); }
-                                Ok( debug!("Answered incoming call, saving channel to caller") )
-                            },
+        let mut dapp_events = dapp_session.checkin().await?;
+        debug!("Call stream received with successful checkin, listening for calls");
 
-                            DAppEvent::PairingResponse(response) => Ok( debug!(
-                                "Got incoming pairing response. We do not send such requests, ignoring it {:?}", response.proof()) ),
-                        }
-                    } )
-            } );
+        while let Some(event) = dapp_events.next().await {
+            match event {
+                DAppEvent::Call(incoming_call) => {
+                    let (to_me, from_caller) = mpsc::channel(1);
+                    let to_caller_opt = incoming_call.answer(Some(to_me)).to_caller;
+                    debug!("Answered incoming call, saving channel to caller");
+                    if let Some(to_caller) = to_caller_opt {
+                        self.active_calls
+                            .borrow_mut()
+                            .push(DAppCall { incoming: from_caller, outgoing: to_caller });
+                    }
+                }
 
+                DAppEvent::PairingResponse(response) => debug!(
+                    "Got incoming pairing response. We do not send such requests, ignoring it {:?}",
+                    response.proof()
+                ),
+            }
+        }
+
+        Ok(())
+    }
+
+    pub async fn publish_button_presses(
+        &self,
+        mut press_events: impl Stream<Item = ()> + Unpin,
+    ) -> Fallible<()> {
         // Forward button press events to all interested clients
-        let active_calls_rc = self.active_calls.clone();
-        let (generate_button_press, got_button_press) = mpsc::channel(CHANNEL_CAPACITY);
-        let fwd_pressed_fut = got_button_press
-            .for_each(move |()| {
+        while let Some(()) = press_events.next().await {
+            let calls = self.active_calls.borrow();
+            debug!("Notifying {} connected clients", calls.len());
+            for call in calls.iter() {
                 // TODO use something better here then spawn() for all clients,
                 //      we should also detect and remove failing senders
-                let calls = active_calls_rc.borrow();
-                debug!("Notifying {} connected clients", calls.len());
-                for call in calls.iter() {
-                    let to_client = call.outgoing.clone();
-                    reactor::spawn(
-                        to_client.send(Ok(AppMessageFrame(vec![42]))).map(|_| ()).map_err(|_| ()),
-                    );
-                }
-                Ok(())
-            })
-            .map_err(|e| format_err!("Failed to detect next button pressed event: {:?}", e));
-
-        // Receiving a SIGUSR1 signal generates an event
-        let button_press_generator = generate_button_press.clone();
-        let press_on_sigusr1_fut = signal_recv(SIGUSR1).for_each(move |_| {
-            info!("received SIGUSR1, generating event");
-            button_press_generator
-                .clone()
-                .send(())
-                .map(|_| ())
-                .map_err(|e| format_err!("Failed to fetch next interrupt event: {}", e))
-        });
-
-        // Combine all three for_each() tasks to be run in "parallel" on the reactor
-        let server_fut = dapp_events_fut
-            .select(fwd_pressed_fut)
-            .map(|_| ())
-            .map_err(|(e, _)| e)
-            .select(press_on_sigusr1_fut)
-            .map(|_| ())
-            .map_err(|(e, _)| e);
-
-        // Combine an optional fourth one if timer option is present
-        let server_fut = match self.cfg.event_timer_secs {
-            None => Box::new(server_fut) as AsyncResult<_, _>,
-
-            // Repeatedly generate an event with the given interval
-            Some(interval_secs) => {
-                let press_on_timer_fut =
-                    Interval::new(Instant::now(), Duration::from_secs(interval_secs))
-                        .map_err(|e| format_err!("Failed to set button pressed timer: {}", e))
-                        .for_each(move |_| {
-                            info!("interval timer fired, generating event");
-                            generate_button_press.clone().send(()).map(|_| ()).map_err(|e| {
-                                format_err!("Failed to send event to subscriber: {}", e)
-                            })
-                        });
-
-                Box::new(server_fut.select(press_on_timer_fut).map(|_| ()).map_err(|(e, _)| e))
+                let mut out_sink = call.outgoing.to_owned();
+                reactor::spawn(async move {
+                    let res = out_sink.send(Ok(AppMessageFrame(vec![42]))).await;
+                    match res {
+                        Ok(()) => {}
+                        Err(e) => warn!("Failed to send: {}", e),
+                    }
+                });
             }
+        }
+        Ok(())
+    }
+
+    pub async fn timed_button_press(
+        &self,
+        mut generate_button_press: impl Sink<()> + Unpin,
+    ) -> Fallible<()> {
+        let timer_secs = match self.cfg.event_timer_secs {
+            None => return Ok(()),
+            // Repeatedly generate an event with the given interval
+            Some(interval_secs) => interval_secs,
         };
 
-        Box::new(init_publisher(&self).then(|_| server_fut))
+        let mut tick_stream = Interval::new(Instant::now(), Duration::from_secs(timer_secs));
+        while let Some(tick) = tick_stream.next().await {
+            info!("interval timer fired, generating event");
+            generate_button_press.send(()).await.map_err(|e| err_msg("Implementation error"))?;
+        }
+
+        Ok(())
     }
+
+    pub async fn run(&self) -> Fallible<()> {
+        init_publisher(self).await?;
+
+        let (generate_button_press, got_button_press) = mpsc::channel(CHANNEL_CAPACITY);
+
+        // Combine all tasks to be run in "parallel" on the reactor
+        select! {
+            _ = self.checkin_and_notify().boxed_local().fuse() => {},
+            _ = self.publish_button_presses(got_button_press).boxed_local().fuse() => {},
+            _ = self.timed_button_press(generate_button_press).boxed_local().fuse() => {},
+            // TODO handle signals to generate events
+        }
+
+        Ok(())
+    }
+
+    //    pub async fn todo() -> Fallible<()> {
+    //        // Receiving a SIGUSR1 signal generates an event
+    //        let press_on_sigusr1_fut = signal_recv(SIGUSR1).for_each(move |_| {
+    //            info!("received SIGUSR1, generating event");
+    //            button_press_generator
+    //                .clone()
+    //                .send(())
+    //                .map(|_| ())
+    //                .map_err(|e| format_err!("Failed to fetch next interrupt event: {}", e))
+    //        });
+    //    }
 }

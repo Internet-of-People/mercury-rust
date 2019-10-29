@@ -7,12 +7,21 @@ use std::convert::TryFrom;
 
 use capnp;
 use capnp::capability::Promise;
-use capnp_rpc::pry;
 use futures::prelude::*;
-use futures::{future, sync::mpsc, Sink};
-use tokio_current_thread as reactor;
+use tokio::sync::mpsc;
 
 use crate::*;
+
+trait ResultCapnpExt<T> {
+    fn map_err_capnp(self, msg: &str) -> capnp::Result<T>;
+}
+
+//Failed to send event
+impl<T, E: std::fmt::Debug> ResultCapnpExt<T> for Result<T, E> {
+    fn map_err_capnp(self, msg: &str) -> capnp::Result<T> {
+        self.map_err(|e| capnp::Error::failed(format!("{}: {:?}", msg, e)))
+    }
+}
 
 pub trait PromiseUtil<T, E> {
     fn result(result: Result<T, E>) -> Promise<T, E>
@@ -20,14 +29,17 @@ pub trait PromiseUtil<T, E> {
         T: 'static,
         E: 'static,
     {
-        Promise::from_future(future::result(result))
+        match result {
+            Ok(t) => Promise::ok(t),
+            Err(e) => Promise::err(e),
+        }
     }
 }
 
 impl<T, E> PromiseUtil<T, E> for Promise<T, E> {}
 
 pub trait FillFrom<T> {
-    fn fill_from(self, source: &T);
+    fn fill_from(self, source: T);
 }
 
 impl<'a> From<&'a [u8]> for AppMessageFrame {
@@ -54,12 +66,8 @@ impl<'a> From<&'a ApplicationId> for &'a str {
     }
 }
 
-fn capnp_err(err: failure::Error) -> capnp::Error {
-    capnp::Error::failed(err.to_string())
-}
-
-fn bytes_to_profile(src: &[u8]) -> Result<Profile, capnp::Error> {
-    serde_json::from_slice(&src).map_err(|e| capnp::Error::failed(e.to_string()))
+fn bytes_to_profile(src: &[u8]) -> serde_json::Result<Profile> {
+    serde_json::from_slice(&src)
 }
 
 fn profile_to_bytes(src: &Profile) -> Vec<u8> {
@@ -84,16 +92,18 @@ impl<'a> TryFrom<relation_half_proof::Reader<'a>> for RelationHalfProof {
     fn try_from(src: relation_half_proof::Reader) -> Result<Self, Self::Error> {
         Ok(RelationHalfProof {
             relation_type: String::from(src.get_relation_type()?),
-            signer_id: ProfileId::from_bytes(src.get_signer_id()?).map_err(|e| capnp_err(e))?,
+            signer_id: ProfileId::from_bytes(src.get_signer_id()?)
+                .map_err_capnp("Parsing signer id")?,
             signer_pubkey: PublicKey::from_bytes(src.get_signer_pub_key()?)
-                .map_err(|e| capnp_err(e))?,
-            peer_id: ProfileId::from_bytes(src.get_peer_id()?).map_err(|e| capnp_err(e))?,
-            signature: Signature::from_bytes(src.get_signature()?).map_err(|e| capnp_err(e))?,
+                .map_err_capnp("Parsing signer pubkey")?,
+            peer_id: ProfileId::from_bytes(src.get_peer_id()?).map_err_capnp("Parsing peer id")?,
+            signature: Signature::from_bytes(src.get_signature()?)
+                .map_err_capnp("Parsing signature")?,
         })
     }
 }
 
-impl<'a> FillFrom<RelationHalfProof> for relation_half_proof::Builder<'a> {
+impl<'a> FillFrom<&RelationHalfProof> for relation_half_proof::Builder<'a> {
     fn fill_from(mut self, src: &RelationHalfProof) {
         self.set_relation_type(&src.relation_type);
         self.set_signer_id(&src.signer_id.to_bytes());
@@ -109,17 +119,21 @@ impl<'a> TryFrom<relation_proof::Reader<'a>> for RelationProof {
     fn try_from(src: relation_proof::Reader) -> Result<Self, Self::Error> {
         Ok(RelationProof {
             relation_type: String::from(src.get_relation_type()?),
-            a_id: ProfileId::from_bytes(src.get_a_id()?).map_err(|e| capnp_err(e))?,
-            a_pub_key: PublicKey::from_bytes(src.get_a_pub_key()?).map_err(|e| capnp_err(e))?,
-            a_signature: Signature::from_bytes(src.get_a_signature()?).map_err(|e| capnp_err(e))?,
-            b_id: ProfileId::from_bytes(src.get_b_id()?).map_err(|e| capnp_err(e))?,
-            b_pub_key: PublicKey::from_bytes(src.get_b_pub_key()?).map_err(|e| capnp_err(e))?,
-            b_signature: Signature::from_bytes(src.get_b_signature()?).map_err(|e| capnp_err(e))?,
+            a_id: ProfileId::from_bytes(src.get_a_id()?).map_err_capnp("Parsing id A")?,
+            a_pub_key: PublicKey::from_bytes(src.get_a_pub_key()?)
+                .map_err_capnp("Parsing pubkey A")?,
+            a_signature: Signature::from_bytes(src.get_a_signature()?)
+                .map_err_capnp("Parsing signature A")?,
+            b_id: ProfileId::from_bytes(src.get_b_id()?).map_err_capnp("Parsing id B")?,
+            b_pub_key: PublicKey::from_bytes(src.get_b_pub_key()?)
+                .map_err_capnp("Parsing pubkey B")?,
+            b_signature: Signature::from_bytes(src.get_b_signature()?)
+                .map_err_capnp("Parsing signature B")?,
         })
     }
 }
 
-impl<'a> FillFrom<RelationProof> for relation_proof::Builder<'a> {
+impl<'a> FillFrom<&RelationProof> for relation_proof::Builder<'a> {
     fn fill_from(mut self, src: &RelationProof) {
         self.set_relation_type(&src.relation_type);
         self.set_a_id(&src.a_id.to_bytes());
@@ -147,7 +161,7 @@ impl<'a> TryFrom<profile_event::Reader<'a>> for ProfileEvent {
     }
 }
 
-impl<'a> FillFrom<ProfileEvent> for profile_event::Builder<'a> {
+impl<'a> FillFrom<&ProfileEvent> for profile_event::Builder<'a> {
     fn fill_from(self, src: &ProfileEvent) {
         match src {
             ProfileEvent::PairingRequest(half_proof) => {
@@ -178,7 +192,7 @@ impl<'a> TryFrom<call_request::Reader<'a>> for CallRequestDetails {
     }
 }
 
-impl<'a> FillFrom<CallRequestDetails> for call_request::Builder<'a> {
+impl<'a> FillFrom<&CallRequestDetails> for call_request::Builder<'a> {
     fn fill_from(mut self, src: &CallRequestDetails) {
         self.set_init_payload((&src.init_payload).into());
         self.init_relation().fill_from(&src.relation);
@@ -187,7 +201,7 @@ impl<'a> FillFrom<CallRequestDetails> for call_request::Builder<'a> {
     }
 }
 
-// TODO consider using a single generic imlementation for all kinds of Dispatchers
+// TODO consider using a single generic implementation for all kinds of Dispatchers
 pub struct AppMessageDispatcherCapnProto {
     sender: AppMsgSink,
 }
@@ -204,14 +218,12 @@ impl app_message_listener::Server for AppMessageDispatcherCapnProto {
         params: app_message_listener::ReceiveParams,
         _results: app_message_listener::ReceiveResults,
     ) -> Promise<(), capnp::Error> {
-        let message = pry!(pry!(params.get()).get_message());
-        let recv_fut = self
-            .sender
-            .clone()
-            .send(Ok(message.into()))
-            .map(|_sink| ())
-            .map_err(|e| capnp::Error::failed(format!("Failed to send event: {:?}", e)));
-        Promise::from_future(recv_fut)
+        let mut sender = self.sender.clone();
+        let f = async move {
+            let message = params.get()?.get_message()?;
+            sender.send(Ok(message.into())).await.map_err_capnp("Failed to send event")
+        };
+        Promise::from_future(f)
     }
 
     fn error(
@@ -219,37 +231,59 @@ impl app_message_listener::Server for AppMessageDispatcherCapnProto {
         params: app_message_listener::ErrorParams,
         _results: app_message_listener::ErrorResults,
     ) -> Promise<(), capnp::Error> {
-        let error = pry!(pry!(params.get()).get_error()).into();
-        let recv_fut = self
-            .sender
-            .clone()
-            .send(Err(error))
-            .map(|_sink| ())
-            .map_err(|e| capnp::Error::failed(format!("Failed to send event: {:?}", e)));
-        Promise::from_future(recv_fut)
+        let mut sender = self.sender.clone();
+        let f = async move {
+            let error = params.get()?.get_error()?;
+            sender.send(Err(error.into())).await.map_err_capnp("Failed to send error")
+        };
+        Promise::from_future(f)
+    }
+}
+
+impl From<AppMsgSink> for app_message_listener::Client {
+    fn from(to_callee: AppMsgSink) -> Self {
+        let to_callee_dispatch = mercury_capnp::AppMessageDispatcherCapnProto::new(to_callee);
+        let to_callee_capnp =
+            mercury_capnp::app_message_listener::ToClient::new(to_callee_dispatch)
+                .into_client::<::capnp_rpc::Server>();
+        to_callee_capnp
+    }
+}
+
+impl From<app_message_listener::Client> for AppMsgSink {
+    fn from(client: app_message_listener::Client) -> Self {
+        fwd_appmsg(client)
     }
 }
 
 pub fn fwd_appmsg(to_callee: app_message_listener::Client) -> AppMsgSink {
-    let (send, recv) = mpsc::channel::<Result<AppMessageFrame, String>>(1);
+    let (send, mut recv) = mpsc::channel::<Result<AppMessageFrame, String>>(1);
 
-    reactor::spawn(recv.for_each(move |message| {
-        let capnp_fut = match message {
+    async fn handle_message(
+        to_callee: &app_message_listener::Client,
+        message: Result<AppMessageFrame, String>,
+    ) -> () {
+        let _res = match message {
             Ok(msg) => {
                 let mut request = to_callee.receive_request();
                 request.get().set_message(&msg.0);
-                let fut = request.send().promise.map(|_resp| ());
-                Box::new(fut) as AsyncResult<(), capnp::Error>
+                request.send().promise.await.map(|_r| ())
             }
             Err(err) => {
                 let mut request = to_callee.error_request();
                 request.get().set_error(&err);
-                let fut = request.send().promise.map(|_resp| ());
-                Box::new(fut)
+                request.send().promise.await.map(|_r| ())
             }
         };
-        capnp_fut.map_err(|_e| ()) // TODO what to do here with the network capnp error?
-    }));
+        // TODO what to do here with the network capnp error?
+    }
+
+    let f = async move {
+        while let Some(message) = recv.next().await {
+            handle_message(&to_callee, message).await;
+        }
+    };
+    tokio::runtime::current_thread::spawn(f);
 
     send
 }

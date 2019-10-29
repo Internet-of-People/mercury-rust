@@ -1,6 +1,7 @@
 use failure::format_err;
-use futures::Future;
-use tokio_current_thread as reactor;
+use futures01::prelude::*;
+use tokio01::runtime::current_thread;
+use tokio01::sync::oneshot;
 
 use crate::dapp::dapp_session::DAppSessionServiceImpl;
 use crate::home::discovery::HomeNodeCrawler;
@@ -10,7 +11,7 @@ use crate::vault::api_impl::VaultState;
 use crate::*;
 
 pub struct Daemon {
-    handle: reactor::Handle,
+    handle: current_thread::Handle,
     http_server: Server,
     join_handle: std::thread::JoinHandle<Fallible<()>>,
 }
@@ -18,60 +19,64 @@ pub struct Daemon {
 impl Daemon {
     fn run(
         options: Options,
-        tx: futures::sync::oneshot::Sender<(reactor::Handle, Server)>,
+        tx_initialized: oneshot::Sender<(current_thread::Handle, Server)>,
     ) -> Fallible<()> {
-        let mut reactor = reactor::CurrentThread::new();
+        let mut reactor = current_thread::Runtime::new()?;
         let handle = reactor.handle();
-        let actix_runner = actix_rt::System::run_in_executor("http-server", reactor.handle());
+        let executor = tokio_current_thread::CurrentThread::new().handle();
+        let actix_runner = actix_rt::System::run_in_executor("http-server", executor);
         let server = start_daemon(options)?;
-        tx.send((handle, server)).map_err(|_tx| err_msg("Could not initialize runtime"))?;
+        tx_initialized
+            .send((handle, server))
+            .map_err(|_tx| err_msg("Could not initialize runtime"))?;
         reactor.block_on(actix_runner)?;
         Ok(())
     }
 
     pub fn start(options: Options) -> Fallible<Self> {
-        let (tx, rx) = futures::sync::oneshot::channel();
+        let (tx_initialized, rx_initialized) = oneshot::channel();
+        let mut reactor = current_thread::Runtime::new()?;
 
         let join_handle =
             std::thread::Builder::new().name("actix-system".to_owned()).spawn(move || {
-                let daemon_res = Daemon::run(options, tx);
+                let daemon_res = Daemon::run(options, tx_initialized);
                 match daemon_res {
-                    Ok(()) => debug!("Daemon thread exited succesfully"),
+                    Ok(()) => debug!("Daemon thread exited successfully"),
                     Err(ref e) => error!("Daemon thread failed: {}", e),
                 };
                 daemon_res
             })?;
-        let (handle, server) = rx.wait()?;
+        let (handle, server) = reactor.block_on(rx_initialized)?;
 
         Ok(Self { handle, http_server: server, join_handle })
     }
 
     pub fn stop(&mut self) -> Fallible<()> {
         trace!("before stop");
-        let stop_fut =
+        let stop_fut01 =
             self.http_server.stop(true).map_err(|()| error!("Could not stop server gracefully"));
-        self.handle.spawn(stop_fut)?;
+        self.handle.spawn(stop_fut01)?;
         trace!("after stop");
         Ok(())
     }
 
     pub fn join(self) -> Fallible<()> {
         trace!("before join");
-        self.join_handle.join().map_err(|_e| err_msg("Thread panicked")).and_then(|r| r)?;
+        self.join_handle.join().map_err(|_e| err_msg("Thread panicked"))??;
         trace!("after join");
         Ok(())
     }
 }
 
 pub struct NetworkState {
-    pub home_connector: Arc<dyn HomeConnector + Send + Sync>,
+    pub home_connector: Arc<RwLock<dyn HomeConnector + Send + Sync>>,
     //pub explorer: Box<dyn ProfileExplorer + Send>,
     pub home_node_crawler: Arc<RwLock<HomeNodeCrawler>>,
 }
 
 impl NetworkState {
     pub fn new(
-        home_connector: Arc<dyn HomeConnector + Send + Sync>,
+        home_connector: Arc<RwLock<dyn HomeConnector + Send + Sync>>,
         //explorer: Box<dyn ProfileExplorer + Send>,
         home_node_crawler: Arc<RwLock<HomeNodeCrawler>>,
     ) -> Self {
@@ -141,7 +146,7 @@ fn start_daemon(options: Options) -> Fallible<Server> {
     let profile_repo = Arc::new(RwLock::new(FileProfileRepository::new(
         &std::path::PathBuf::from("/tmp/cuccos"),
     )?));
-    let connector = Arc::new(TcpHomeConnector::new(profile_repo.clone()));
+    let connector = Arc::new(RwLock::new(TcpHomeConnector::new(profile_repo.clone())));
     let dapp_state = DAppSessionServiceImpl::new(Arc::new(RwLock::new(interactor)));
 
     let network_state = NetworkState::new(connector, home_node_crawler);

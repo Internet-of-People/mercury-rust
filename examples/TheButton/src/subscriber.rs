@@ -16,100 +16,60 @@ impl Client {
         Self { appctx, cfg }
     }
 
-    pub fn wait_for_pairing_response(
-        events: Box<dyn Stream<Item = DAppEvent, Error = ()>>,
-        my_profile_id: ProfileId,
-    ) -> AsyncFallible<Box<dyn Relation>> {
-        let fut = events
-            .filter_map(move |event| {
-                debug!("TheButton got event");
-                if let DAppEvent::PairingResponse(relation) = event {
-                    trace!(
-                        "Got pairing response, checking peer id: {:?}",
-                        relation.proof()
-                    );
-                    if relation.proof().peer_id(&my_profile_id).is_ok() {
-                        return Some(relation);
-                    }
-                }
-                return None;
-            })
-            .take(1)
-            .into_future() // NOTE transforms stream into a future of an (item,stream) pair
-            .map_err(|((), _stream)| {
-                debug!("Pairing failed");
-                err_msg("Pairing failed")
-            })
-            .and_then(|(proof, _stream)| {
-                proof.ok_or_else(|| {
-                    debug!("Profile event stream ended without proper response");
-                    err_msg("Profile event stream ended without proper response")
-                })
-            });
-        Box::new(fut)
+    pub async fn pair_and_listen(&self) -> Fallible<()> {
+        let dapp_session =
+            self.appctx.dapp_service.dapp_session(self.appctx.dapp_id.to_owned()).await?;
+
+        let contact = self.get_or_create_contact(dapp_session.as_ref()).await?;
+        info!("Contact is available, start calling");
+
+        let mut call = contact.call(AppMessageFrame(vec![])).await?;
+        info!("call accepted, waiting for incoming messages");
+
+        while let Some(msg) = call.incoming.next().await {
+            match msg {
+                Ok(frame) => info!("Client received server message {:?}", frame),
+                Err(e) => warn!("Client got server error {:?}", e),
+            }
+        }
+
+        Ok(())
     }
 
-    fn get_or_create_contact(
-        self,
-        dapp_session: Arc<dyn DAppSession>,
-    ) -> AsyncFallible<Box<dyn Relation>> {
-        let callee_profile_id = self.cfg.server_id.clone();
-        let contact_fut = dapp_session.relation(&callee_profile_id).and_then({
-            let peer_id = self.cfg.server_id.clone();
-            move |relation| {
-                let init_rel_fut = dapp_session.initiate_relation(&peer_id);
-                match relation {
-                    Some(relation) => Box::new(Ok(relation).into_future()) as AsyncResult<_, _>,
-                    None => {
-                        debug!("No signed relation to server is available, initiate pairing");
-                        let persona_id = dapp_session.selected_profile().to_owned();
-                        let rel_fut = dapp_session
-                            .checkin()
-                            .and_then(|events| init_rel_fut.map(|()| events))
-                            .and_then(|events| {
-                                debug!("Pairing request sent, start waiting for response");
-                                Self::wait_for_pairing_response(events, persona_id)
-                            });
-                        Box::new(rel_fut)
-                    }
+    async fn get_or_create_contact(
+        &self,
+        dapp_session: &dyn DAppSession,
+    ) -> Fallible<Box<dyn Relation>> {
+        let peer_id = &self.cfg.server_id;
+        let relation_opt = dapp_session.relation(peer_id).await?;
+
+        if let Some(relation) = relation_opt {
+            return Ok(relation);
+        }
+
+        debug!("No signed relation to server is available, initiate pairing");
+        let mut dapp_events = dapp_session.checkin().await?;
+
+        dapp_session.initiate_relation(peer_id).await?;
+        debug!("Pairing request sent, start waiting for response");
+
+        while let Some(event) = dapp_events.next().await {
+            debug!("TheButton got event");
+
+            if let DAppEvent::PairingResponse(relation) = event {
+                debug!("Got pairing response, checking peer id: {:?}", relation.proof());
+                let got_peer_id_res = relation.proof().peer_id(dapp_session.profile_id());
+                match got_peer_id_res {
+                    Ok(id) if id == peer_id => return Ok(relation),
+                    Ok(id) => info!("Ignored unexpected pairing response: {}", id),
+                    Err(e) => warn!(
+                        "Received unexpected relation of another persona: {:?}",
+                        relation.proof()
+                    ),
                 }
             }
-        });
-        Box::new(contact_fut)
-    }
-}
+        }
 
-impl IntoFuture for Client {
-    type Future = AsyncResult<Self::Item, Self::Error>;
-    type Item = ();
-    type Error = failure::Error;
-
-    fn into_future(self) -> Self::Future {
-        let client_fut = self
-            .appctx
-            .dapp_service
-            .dapp_session(self.appctx.dapp_id.to_owned())
-            .and_then({
-                let client = self.clone();
-                move |dapp_session| client.get_or_create_contact(dapp_session)
-            })
-            .and_then(|contact| {
-                info!("Contact is available, start calling");
-                contact.call(AppMessageFrame(vec![])).map_err(|err| {
-                    error!("call failed: {:?}", err);
-                    err
-                })
-            })
-            .and_then(|call| {
-                info!("call accepted, waiting for incoming messages");
-                call.incoming
-                    .for_each(|msg: Result<AppMessageFrame, String>| {
-                        msg.map(|frame| info!("Client received server message {:?}", frame))
-                            .map_err(|err| warn!("Client got server error {:?}", err))
-                    })
-                    .map_err(|()| err_msg("Failed to get next event from publisher"))
-            });
-
-        Box::new(client_fut)
+        bail!("Failed to receive pairing response");
     }
 }

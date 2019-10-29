@@ -8,17 +8,19 @@ license = "LGPL-3.0+"
 edition = "2018"
 
 [build-dependencies]
-capnpc = "*"
+capnpc = { git = "https://github.com/capnproto/capnproto-rust", branch = "std-future" }
 
 [dependencies]
+async-trait = "0.1.17"
 bincode = "*"
 bytes = "*"
-capnp = "*"
-capnp-rpc = "*"
+capnp = { git = "https://github.com/capnproto/capnproto-rust", branch = "std-future" }
+capnp-rpc = { git = "https://github.com/capnproto/capnproto-rust", branch = "std-future" }
 claims = { path="../claims" }
 did = { path="../did" }
 failure= "*"
-futures = "0.1"
+futures-preview = { version="0.3.0-alpha.19", features=["compat"] }
+futures-tokio-compat = { git = "https://github.com/Nemo157/futures-tokio-compat", branch = "master" }
 keyvault = { path="../keyvault" }
 log = "*"
 multiaddr = "*"
@@ -28,8 +30,7 @@ serde = "*"
 serde_derive = "*"
 serde_json = "*"
 structopt = "*"
-tokio = "0.1"
-tokio-current-thread = "0.1"
+tokio = { version="0.2.0-alpha.6", features=["rt-current-thread"] }
 toml = "*"
 
 #x25519-dalek = { version="*", default-features=false, features=["std"] }

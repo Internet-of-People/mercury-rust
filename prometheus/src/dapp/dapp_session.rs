@@ -1,6 +1,8 @@
 use std::sync::{Arc, RwLock};
 
-use futures::{Future, Stream};
+use async_trait::async_trait;
+use failure::Fallible;
+use futures::Stream;
 
 use crate::dapp::user_interactor::UserInteractor;
 use crate::*;
@@ -19,10 +21,11 @@ pub struct DAppCall {
 // - instantiate some kind of client to a Home node, similarly as done in Connect
 // - potentially initiate pairing with profile if not done yet
 // - send message via client to target profile
+#[async_trait(?Send)]
 pub trait Relation {
     fn proof(&self) -> &RelationProof;
-    // TODO fn send(&self, message: &MessageContent) -> AsyncFallible<()>;
-    fn call(&self, init_payload: AppMessageFrame) -> AsyncFallible<DAppCall>;
+    // TODO async fn send(&self, message: &MessageContent) -> Fallible<()>;
+    async fn call(&self, init_payload: AppMessageFrame) -> Fallible<DAppCall>;
 }
 
 pub enum DAppEvent {
@@ -31,19 +34,22 @@ pub enum DAppEvent {
     Call(Box<dyn IncomingCall>), // TODO wrap IncomingCall so as call.answer() could return a DAppCall directly
 }
 
+pub type DAppEventStream = Box<dyn Stream<Item = DAppEvent> + Unpin>;
+
+#[async_trait]
 pub trait DAppSession {
     fn dapp_id(&self) -> &ApplicationId;
 
     // After the session was initialized, the profile is selected and can be queried any time
-    fn selected_profile(&self) -> &ProfileId;
+    fn profile_id(&self) -> &ProfileId;
 
     //fn app_storage(&self) -> AsyncFallible<dyn KeyValueStore<String, String>>;
 
-    fn relations(&self) -> AsyncFallible<Vec<Box<dyn Relation>>>;
-    fn relation(&self, id: &ProfileId) -> AsyncFallible<Option<Box<dyn Relation>>>;
-    fn initiate_relation(&self, with_profile: &ProfileId) -> AsyncFallible<()>;
+    async fn relations(&self) -> Fallible<Vec<Box<dyn Relation>>>;
+    async fn relation(&self, id: &ProfileId) -> Fallible<Option<Box<dyn Relation>>>;
+    async fn initiate_relation(&self, with_profile: &ProfileId) -> Fallible<()>;
 
-    fn checkin(&self) -> AsyncFallible<Box<dyn Stream<Item = DAppEvent, Error = ()>>>;
+    async fn checkin(&self) -> Fallible<DAppEventStream>;
 }
 
 pub struct DAppSessionImpl {
@@ -57,12 +63,13 @@ impl DAppSessionImpl {
     }
 }
 
+#[async_trait]
 impl DAppSession for DAppSessionImpl {
     fn dapp_id(&self) -> &ApplicationId {
         &self.dapp_id
     }
 
-    fn selected_profile(&self) -> &ProfileId {
+    fn profile_id(&self) -> &ProfileId {
         &self.profile_id
     }
 
@@ -70,26 +77,27 @@ impl DAppSession for DAppSessionImpl {
     //    unimplemented!()
     //}
 
-    fn relations(&self) -> AsyncFallible<Vec<Box<dyn Relation>>> {
+    async fn relations(&self) -> Fallible<Vec<Box<dyn Relation>>> {
         unimplemented!()
     }
 
-    fn relation(&self, _id: &ProfileId) -> AsyncFallible<Option<Box<dyn Relation>>> {
+    async fn relation(&self, _id: &ProfileId) -> Fallible<Option<Box<dyn Relation>>> {
         unimplemented!()
     }
 
-    fn initiate_relation(&self, _with_profile: &ProfileId) -> AsyncFallible<()> {
+    async fn initiate_relation(&self, _with_profile: &ProfileId) -> Fallible<()> {
         unimplemented!()
     }
 
-    fn checkin(&self) -> AsyncFallible<Box<dyn Stream<Item = DAppEvent, Error = ()>>> {
+    async fn checkin(&self) -> Fallible<DAppEventStream> {
         unimplemented!()
     }
 }
 
+#[async_trait(?Send)]
 pub trait DAppSessionService {
     // NOTE this implicitly asks for user interaction (through UI) selecting a profile to be used with the app
-    fn dapp_session(&self, app: ApplicationId) -> AsyncFallible<Arc<dyn DAppSession>>;
+    async fn dapp_session(&self, app: ApplicationId) -> Fallible<Arc<dyn DAppSession>>;
 }
 
 pub struct DAppSessionServiceImpl {
@@ -102,8 +110,9 @@ impl DAppSessionServiceImpl {
     }
 }
 
+#[async_trait(?Send)]
 impl DAppSessionService for DAppSessionServiceImpl {
-    fn dapp_session(&self, app: ApplicationId) -> AsyncFallible<Arc<dyn DAppSession>> {
+    async fn dapp_session(&self, app: ApplicationId) -> Fallible<Arc<dyn DAppSession>> {
         let interactor = match self.interactor.try_read() {
             Ok(interactor) => interactor,
             Err(e) => {
@@ -111,9 +120,8 @@ impl DAppSessionService for DAppSessionServiceImpl {
                 unreachable!()
             }
         };
-        let session_fut = interactor.select_profile().map(move |profile| {
-            Arc::new(DAppSessionImpl::new(app, profile)) as Arc<dyn DAppSession>
-        });
-        Box::new(session_fut)
+        let profile = interactor.select_profile().await?;
+        let session = Arc::new(DAppSessionImpl::new(app, profile)) as Arc<dyn DAppSession>;
+        Ok(session)
     }
 }

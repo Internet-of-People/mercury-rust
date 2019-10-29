@@ -347,20 +347,30 @@ impl RelationProof {
     }
 
     pub fn peer_id(&self, my_id: &ProfileId) -> Result<&ProfileId, Error> {
-        if self.a_id == *my_id {
+        if &self.a_id == my_id {
             return Ok(&self.b_id);
         }
-        if self.b_id == *my_id {
+        if &self.b_id == my_id {
             return Ok(&self.a_id);
         }
         Err(ErrorKind::PeerIdRetreivalFailed)?
     }
 
+    pub fn peer_pub_key(&self, my_id: &ProfileId) -> Result<&PublicKey, Error> {
+        if &self.a_id == my_id {
+            return Ok(&self.b_pub_key);
+        }
+        if &self.b_id == my_id {
+            return Ok(&self.a_pub_key);
+        }
+        Err(ErrorKind::PeerIdRetreivalFailed)?
+    }
+
     pub fn peer_signature(&self, my_id: &ProfileId) -> Result<&Signature, Error> {
-        if self.a_id == *my_id {
+        if &self.a_id == my_id {
             return Ok(&self.b_signature);
         }
-        if self.b_id == *my_id {
+        if &self.b_id == my_id {
             return Ok(&self.a_signature);
         }
         Err(ErrorKind::PeerIdRetreivalFailed)?

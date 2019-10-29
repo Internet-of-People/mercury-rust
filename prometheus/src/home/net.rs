@@ -1,30 +1,40 @@
 use std::cell::RefCell;
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::rc::Rc;
 use std::sync::{Arc, RwLock};
 
-use failure::{bail, format_err, Fail};
-use futures::{future, Future, IntoFuture};
+use async_trait::async_trait;
+use failure::{bail, format_err};
+use futures::future;
 use log::*;
 use multiaddr::{AddrComponent, Multiaddr};
 use tokio::net::tcp::TcpStream;
 
 use crate::*;
 use mercury_home_protocol::primitives::ProfileFacets;
-use mercury_home_protocol::{AsyncFallible, Home, Profile, ProfileId, Signer};
-use std::collections::HashMap;
+use mercury_home_protocol::{Home, Profile, ProfileId, Signer};
 
+#[async_trait(?Send)]
 pub trait HomeConnector {
-    fn connect(
-        self: Arc<Self>,
-        home_profile_id: &ProfileId,
-        addr_hints: &[Multiaddr],
+    async fn connect<'s, 'p>(
+        &'s mut self,
+        home_profile_id: &'p ProfileId,
+        addr_hints: &'p [Multiaddr],
         signer: Rc<dyn Signer>,
-    ) -> AsyncFallible<Rc<dyn Home>>;
+    ) -> Fallible<Rc<dyn Home + 's>>
+    where
+        's: 'p;
+}
+
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+pub enum Endpoint {
+    Tcp(SocketAddr),
+    Udp(SocketAddr),
 }
 
 /// Convert a TCP/IP multiaddr to a SocketAddr. For multiaddr instances that are not TCP or IP, error is returned.
-pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Fallible<SocketAddr> {
+pub fn multiaddr_to_endpoint(multiaddr: &Multiaddr) -> Fallible<Endpoint> {
     let mut components = multiaddr.iter();
 
     let ip_address = match components.next() {
@@ -34,15 +44,17 @@ pub fn multiaddr_to_socketaddr(multiaddr: &Multiaddr) -> Fallible<SocketAddr> {
         _ => bail!("No component found in multiaddress"),
     };
 
-    let ip_port = match components.next() {
-        Some(AddrComponent::TCP(port)) => port,
-        Some(AddrComponent::UDP(port)) => port,
+    let addr = |ip_port| SocketAddr::new(ip_address, ip_port);
+
+    let endpoint = match components.next() {
+        Some(AddrComponent::TCP(port)) => Endpoint::Tcp(addr(port)),
+        Some(AddrComponent::UDP(port)) => Endpoint::Udp(addr(port)),
         comp => {
             bail!("TCP or UDP address components are supported after IP, got {:?} instead", comp)
         }
     };
 
-    Ok(SocketAddr::new(ip_address, ip_port))
+    Ok(endpoint)
 }
 
 // TODO consider tearing down and rebuilding the whole connection in case of a network error
@@ -60,25 +72,31 @@ impl TcpHomeConnector {
         Self { profile_repo }
     }
 
-    pub fn connect_addr(addr: &Multiaddr) -> AsyncFallible<TcpStream> {
+    pub async fn connect_addr<'a>(addr: &'a Multiaddr) -> Fallible<TcpStream> {
         // TODO handle other multiaddresses, not only TCP
-        let tcp_addr = match multiaddr_to_socketaddr(addr) {
-            Ok(res) => res,
-            Err(err) => return Box::new(future::err(err)),
-        };
+        let endpoint = multiaddr_to_endpoint(addr)?;
+        let tcp_addr = match endpoint {
+            Endpoint::Tcp(addr) => Ok(addr),
+            Endpoint::Udp(addr) => Err(format_err!("UDP {} is unsupported", addr)),
+        }?;
 
-        debug!("Connecting to socket address {}", tcp_addr);
-        let tcp_str = TcpStream::connect(&tcp_addr)
+        debug!("Connecting to TCP {}", tcp_addr);
+        let tcp_res = TcpStream::connect(&tcp_addr)
+            .await
             .map_err(|e| format_err!("Failed to connect to home node: {}", e));
-        Box::new(tcp_str)
+
+        tcp_res
     }
 
-    fn connect_to_addrs(
-        &self,
-        home_profile_id: &ProfileId,
-        addresses: &[Multiaddr],
+    async fn connect_to_addrs<'a, 'b>(
+        &'a self,
+        home_profile_id: &'b ProfileId,
+        addresses: &'b [Multiaddr],
         signer: Rc<dyn Signer>,
-    ) -> AsyncFallible<Rc<dyn Home>> {
+    ) -> Fallible<Rc<dyn Home + 'a>>
+    where
+        'a: 'b,
+    {
         let key = (signer.profile_id().to_owned(), home_profile_id.to_owned());
         let cache_hit = HOME_CACHE.with(|cache| cache.borrow().get(&key).cloned());
         if let Some((addr, home)) = cache_hit {
@@ -86,66 +104,71 @@ impl TcpHomeConnector {
                 "Home {} with address {:?} found in cache, reusing connection",
                 home_profile_id, addr
             );
-            return Box::new(Ok(home).into_future());
+            return Ok(home);
         }
 
         debug!("Home address {:?} not found in cache, connecting", addresses);
-        let tcp_conns = addresses.iter().map(move |addr| {
-            let addr_clone = addr.to_owned();
-            TcpHomeConnector::connect_addr(&addr).map(move |tcp_stream| (addr_clone, tcp_stream))
+        let tcp_conns = addresses.iter().cloned().map(move |addr| {
+            Box::pin(async {
+                let tcp_stream = TcpHomeConnector::connect_addr(&addr).await?;
+                Fallible::Ok((addr, tcp_stream))
+            })
         });
 
-        let home_profile_id = home_profile_id.to_owned();
         // TODO We have to find the first successful connection **that could authenticate itself as a home node
         //      that has the given ProfileId**. At the moment the first successful TCP connection already wins.
-        let capnp_home = future::select_ok(tcp_conns)
-            .and_then( move |((addr, tcp_stream), _pending_futs)|
-            {
-                use mercury_home_protocol::handshake::temporary_unsafe_tcp_handshake_until_diffie_hellman_done;
-                temporary_unsafe_tcp_handshake_until_diffie_hellman_done(tcp_stream, signer.clone())
-                    .map_err(|err| err.context(mercury_home_protocol::error::ErrorKind::DiffieHellmanHandshakeFailed).into())
-                    .map( move |(reader, writer, _peer_ctx)| {
-                        use mercury_home_protocol::mercury_capnp::client_proxy::HomeClientCapnProto;
-                        let home = Rc::new( HomeClientCapnProto::new(reader, writer) ) as Rc<dyn Home>;
+        let ((addr, tcp_stream), _pending_futs) = future::select_ok(tcp_conns).await?;
 
-                        debug!("Save home {:?} client into cache for reuse", addr);
-                        HOME_CACHE.with(|cache| {
-                            cache.borrow_mut().insert((signer.profile_id().to_owned(), home_profile_id), (addr, home.clone()));
-                        });
-                        home
-                    })
-            });
+        use mercury_home_protocol::handshake::temporary_unsafe_tcp_handshake_until_diffie_hellman_done as handshake;
+        let (peer_ctx, reader, writer) = handshake(tcp_stream, signer.clone()).await?;
+        use mercury_home_protocol::mercury_capnp::client_proxy::HomeClientCapnProto;
+        let home = Rc::new(HomeClientCapnProto::new(peer_ctx, reader, writer)) as Rc<dyn Home>;
 
-        Box::new(capnp_home)
+        debug!("Save home {:?} client into cache for reuse", addr);
+        HOME_CACHE.with(|cache| {
+            cache.borrow_mut().insert(
+                (signer.profile_id().to_owned(), home_profile_id.to_owned()),
+                (addr, home.clone()),
+            );
+        });
+
+        Ok(home)
     }
 
-    fn connect_to_home_profile(
-        &self,
-        home_profile: &Profile,
+    async fn connect_to_home_profile<'a, 'b>(
+        &'a self,
+        home_profile: &'b Profile,
         signer: Rc<dyn Signer>,
-    ) -> AsyncFallible<Rc<dyn Home>> {
+    ) -> Fallible<Rc<dyn Home + 'a>>
+    where
+        'a: 'b,
+    {
         let addrs = match home_profile.to_home() {
             Some(ref home_facet) => home_facet.addrs.clone(),
             None => {
-                return Box::new(future::err(err_msg("Profile is not a Home node")));
+                return Err(err_msg("Profile is not a Home node"));
             }
         };
 
-        self.connect_to_addrs(&home_profile.id(), &addrs, signer)
+        self.connect_to_addrs(&home_profile.id(), &addrs, signer).await
     }
 }
 
+#[async_trait(?Send)]
 impl HomeConnector for TcpHomeConnector {
-    fn connect(
-        self: Arc<Self>,
-        home_profile_id: &ProfileId,
-        addr_hints: &[Multiaddr],
+    async fn connect<'s, 'p>(
+        &'s mut self,
+        home_profile_id: &'p ProfileId,
+        addr_hints: &'p [Multiaddr],
         signer: Rc<dyn Signer>,
-    ) -> AsyncFallible<Rc<dyn Home>> {
+    ) -> Fallible<Rc<dyn Home + 's>>
+    where
+        's: 'p,
+    {
         // TODO logic should first try connecting with addr_hint first, then if failed,
         //      also try the full home profile loading and connecting path as well
         if !addr_hints.is_empty() {
-            return self.connect_to_addrs(home_profile_id, addr_hints, signer);
+            return self.connect_to_addrs(home_profile_id, addr_hints, signer).await;
         }
 
         let profile_repo = match self.profile_repo.try_read() {
@@ -155,14 +178,10 @@ impl HomeConnector for TcpHomeConnector {
                 unreachable!()
             }
         };
-        let this = self.clone();
-        let home_conn_fut = profile_repo
-            .get_public(home_profile_id)
-            .inspect(move |home_profile| {
-                debug!("Finished loading details for home {}", home_profile.id())
-            })
-            .and_then(move |home_profile| this.connect_to_home_profile(&home_profile, signer));
-        Box::new(home_conn_fut)
+        let home_profile = profile_repo.get_public(home_profile_id).await?;
+
+        debug!("Finished loading details for home {}", home_profile.id());
+        self.connect_to_home_profile(&home_profile, signer).await
     }
 }
 
@@ -172,13 +191,29 @@ mod tests {
     use std::net::{IpAddr, Ipv4Addr};
 
     #[test]
-    fn test_multiaddr_conversion() {
+    fn test_multiaddr_tcp() {
         let multiaddr = "/ip4/127.0.0.1/tcp/22".parse::<Multiaddr>().unwrap();
-        let socketaddr = multiaddr_to_socketaddr(&multiaddr).unwrap();
-        assert_eq!(socketaddr, SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 22));
+        let endpoint = multiaddr_to_endpoint(&multiaddr).unwrap();
+        assert_eq!(
+            endpoint,
+            Endpoint::Tcp(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 22))
+        );
+    }
 
+    #[test]
+    fn test_multiaddr_udp() {
+        let multiaddr = "/ip4/127.0.0.1/udp/53".parse::<Multiaddr>().unwrap();
+        let endpoint = multiaddr_to_endpoint(&multiaddr).unwrap();
+        assert_eq!(
+            endpoint,
+            Endpoint::Udp(SocketAddr::new(IpAddr::V4(Ipv4Addr::new(127, 0, 0, 1)), 53))
+        );
+    }
+
+    #[test]
+    fn test_multiaddr_invalid() {
         let multiaddr = "/ip4/127.0.0.1/utp".parse::<Multiaddr>().unwrap();
-        let socketaddr = multiaddr_to_socketaddr(&multiaddr);
-        assert!(socketaddr.is_err());
+        let endpoint = multiaddr_to_endpoint(&multiaddr);
+        assert!(endpoint.is_err());
     }
 }

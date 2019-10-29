@@ -5,15 +5,13 @@
 use std::cell::RefCell;
 
 use multiaddr::ToMultiaddr;
-use tokio_current_thread as reactor;
 
 use super::*;
 use did::*;
 use prometheus::dapp::user_interactor::UserInteractor;
 //use prometheus::home::{connection::ConnectionFactory, net::TcpHomeConnector};
 
-pub fn ensure_registered_to_home(
-    reactor: &mut reactor::CurrentThread,
+pub async fn ensure_registered_to_home(
     private_profilekey: PrivateKey,
     home_addr: &SocketAddr,
     app_context: &AppContext,
@@ -41,7 +39,7 @@ pub fn ensure_registered_to_home(
     Ok(())
 }
 
-pub fn init_publisher(_server: &Server) -> AsyncFallible<()> {
+pub async fn init_publisher(_server: &Server) -> Fallible<()> {
     //    let handle = server.appctx.handle.clone();
     //    let fut = init_app_common(&server.appctx)
     //        .and_then(move |my_profile: Rc<dyn MyProfile>| {
@@ -65,5 +63,5 @@ pub fn init_publisher(_server: &Server) -> AsyncFallible<()> {
     //            Ok(())
     //        });
     //    Box::new(fut)
-    Box::new(futures::future::ok(()))
+    Ok(())
 }

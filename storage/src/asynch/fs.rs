@@ -42,7 +42,7 @@ impl BlockingFileStore {
     }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<V> KeyValueStore<String, V> for BlockingFileStore
 where
     V: 'static + Serialize + DeserializeOwned + Send,
@@ -103,10 +103,10 @@ impl AsyncFileStore {
     //    }
 }
 
-#[async_trait]
+#[async_trait(?Send)]
 impl<V> KeyValueStore<String, V> for AsyncFileStore
 where
-    V: 'static + Serialize + DeserializeOwned + Send,
+    V: 'static + Serialize + DeserializeOwned,
 {
     async fn set(&mut self, key: String, value: V) -> Fallible<()> {
         let bytes = serde_json::to_vec(&value)?;

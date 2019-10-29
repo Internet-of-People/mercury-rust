@@ -8,17 +8,17 @@ license = "AGPL-3.0+"
 edition = "2018"
 
 [dependencies]
+async-trait = "0.1.17"
 bincode = "*"
 claims = { path="../claims" }
 did = { path="../did" }
 failure = "*"
-futures = "0.1"
+futures-preview = "0.3.0-alpha.19"
 log = "*"
 log4rs = "*"
 mercury-home-protocol = { path="../home-protocol" }
 mercury-storage = { path="../storage" }
 multiaddr = "*"
 structopt = "*"
-tokio = "0.1"
-tokio-current-thread = "0.1"
+tokio = { version="0.2.0-alpha.6", features=["rt-current-thread"] }
 toml = "*"

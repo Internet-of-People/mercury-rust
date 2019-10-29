@@ -38,7 +38,7 @@ pub struct Options {
 pub enum Command {
     #[structopt(name = "publisher")]
     /// Generate a phraselist needed to create a profile vault
-    Pubhlisher(PublisherConfig),
+    Publisher(PublisherConfig),
 
     #[structopt(name = "subscriber")]
     /// Restore profile vault from a phraselist or profile from remote repository

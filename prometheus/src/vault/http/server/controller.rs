@@ -2,7 +2,7 @@ use std::convert::{TryFrom, TryInto};
 
 use actix_web::{web, HttpResponse, Responder};
 use failure::{err_msg, format_err, Fallible};
-use futures::prelude::*;
+use futures::future::{FutureExt, TryFutureExt};
 use log::*;
 
 use crate::names::DeterministicNameGenerator;
@@ -29,19 +29,58 @@ pub fn validate_bip39_word(word: web::Json<String>) -> impl Responder {
     HttpResponse::Ok().json(is_valid)
 }
 
+/// This macro moves a list of `pub async` functions into a hidden module and creates compatibility
+/// wrappers into this module.
+///
+/// So seemingly you can develop your methods by out-commenting the macro and you get proper IDE
+/// support. And after you are done with a new controller, you put the macro back and expose the
+/// compatibility method to an actix Route.
+///
+/// ```ignore
+///     mod compat {
+///         pub async fn init_vault(...) {...}
+///     }
+///     pub fn init_vault(
+///         state: web::Data<Mutex<DaemonState>>,
+///         words: web::Json<Vec<String>>,
+///     ) -> impl futures01::Future<Item = actix_http::Response, Error = ()> {
+///         super::init_vault(state, words).unit_error().boxed_local().compat()
+///     }
+/// ```
+macro_rules! compat {
+
+    { $(pub async fn $n:ident ( $($p:ident : $t:ty),* $(,)? ) -> $r:ty $b:block )* } => {
+        mod asynch {
+            use super::*;
+            $(
+                pub async fn $n( $( $p: $t ),* ) -> $r $b
+            )*
+        }
+
+        $(
+            pub fn $n( $( $p: $t ),* ) -> impl futures01::Future<Item = actix_http::Response, Error = ()> {
+                asynch::$n( $( $p ),* ).unit_error().boxed_local().compat()
+            }
+        )*
+    }
+
+}
+
+compat! {
+
 // TODO this Fallible -> Responder mapping + logging should be less manual,
 //      at least parts should be generated, e.g. using macros
-pub fn init_vault(
+pub async fn init_vault(
     state: web::Data<Mutex<DaemonState>>,
     words: web::Json<Vec<String>>,
-) -> impl Responder {
+) -> HttpResponse {
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
 
     let phrase = words.join(" ");
-    match state.vault.restore_vault(phrase) {
+    match state.vault.restore_vault(phrase).await {
         Ok(()) => {
             debug!("Initialized vault");
             HttpResponse::Created().body("")
@@ -53,12 +92,12 @@ pub fn init_vault(
     }
 }
 
-pub fn restore_all_dids(state: web::Data<Mutex<DaemonState>>) -> impl Responder {
+pub async fn restore_all_dids(state: web::Data<Mutex<DaemonState>>) -> HttpResponse {
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match state.vault.restore_all_profiles() {
+    match state.vault.restore_all_profiles().await {
         Ok(counts) => {
             debug!("Restored all profiles of vault");
             // Can we expose counts directly here or should we duplicate a similar, independent data structure to be used on the web UI?
@@ -71,12 +110,12 @@ pub fn restore_all_dids(state: web::Data<Mutex<DaemonState>>) -> impl Responder 
     }
 }
 
-pub fn get_default_did(state: web::Data<Mutex<DaemonState>>) -> impl Responder {
+pub async fn get_default_did(state: web::Data<Mutex<DaemonState>>) -> HttpResponse {
     let state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match state.vault.get_active_profile() {
+    match state.vault.get_active_profile().await {
         Ok(did_opt) => HttpResponse::Ok().json(did_opt.map(|did| did.to_string())),
         Err(e) => {
             error!("Failed to get default profile: {}", e);
@@ -85,10 +124,10 @@ pub fn get_default_did(state: web::Data<Mutex<DaemonState>>) -> impl Responder {
     }
 }
 
-pub fn set_default_did(
+pub async fn set_default_did(
     state: web::Data<Mutex<DaemonState>>,
     did_str: web::Json<String>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_str.parse::<ProfileId>() {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -97,7 +136,7 @@ pub fn set_default_did(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match state.vault.set_active_profile(&did) {
+    match state.vault.set_active_profile(&did).await {
         Ok(()) => HttpResponse::Ok().body(""),
         Err(e) => {
             error!("Failed to set default profile: {}", e);
@@ -106,12 +145,12 @@ pub fn set_default_did(
     }
 }
 
-pub fn list_did(state: web::Data<Mutex<DaemonState>>) -> impl Responder {
+pub async fn list_did(state: web::Data<Mutex<DaemonState>>) -> HttpResponse {
     let state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match list_dids_from_state(&state.vault) {
+    match list_dids_from_state(&state.vault).await {
         Ok(dids) => {
             debug!("Listing {} profiles", dids.len());
             HttpResponse::Ok().json(dids)
@@ -123,30 +162,16 @@ pub fn list_did(state: web::Data<Mutex<DaemonState>>) -> impl Responder {
     }
 }
 
-pub fn list_dids_from_state(state: &VaultState) -> Fallible<Vec<VaultEntry>> {
-    let recs = state.list_vault_records()?;
-    let entries = recs
-        .iter()
-        .filter_map(|record| {
-            let res = VaultEntry::try_from(record);
-            if res.is_err() {
-                error!("Failed to convert vault record {:?} for HTTP API: {:?}", record, res);
-            }
-            res.ok()
-        })
-        .collect();
-    Ok(entries)
-}
-
-pub fn create_did(
+pub async fn create_did(
     state: web::Data<Mutex<DaemonState>>,
-    mut label: web::Json<ProfileLabel>,
-) -> impl Responder {
+    label: web::Json<ProfileLabel>,
+) -> HttpResponse {
+    let mut label = label;
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match create_dids_to_state(&mut state.vault, &mut label) {
+    match create_dids_to_state(&mut state.vault, &mut label).await {
         Ok(entry) => {
             debug!("Created profile {} with label {}", entry.id, entry.label);
             HttpResponse::Created().json(entry)
@@ -158,38 +183,10 @@ pub fn create_did(
     }
 }
 
-pub fn create_dids_to_state(state: &mut VaultState, label: &mut String) -> Fallible<VaultEntry> {
-    debug!("Creating profile with label '{}'", label);
-    let profile = state.create_profile(Some(label.clone()))?;
-    let did = profile.id();
-    let did_bytes = did.to_bytes();
-
-    reset_label_if_empty(state, label, &did)?;
-
-    let mut avatar_png = Vec::new();
-    blockies::Ethereum::default()
-        .create_icon(&mut avatar_png, &did_bytes)
-        .map_err(|e| err_msg(format!("Failed to generate default profile icon: {:?}", e)))?;
-    //std::fs::write(format!("/tmp/{}.png", label), &avatar_png)?;
-
-    let mut metadata = PersonaCustomData::default();
-    metadata.image_blob = avatar_png;
-    metadata.image_format = "png".to_owned();
-    state.set_profile_metadata(Some(did.clone()), metadata.clone().try_into()?)?;
-
-    state.save_vault()?;
-    Ok(VaultEntry {
-        id: did.to_string(),
-        label: label.to_owned(),
-        avatar: Image { format: metadata.image_format, blob: metadata.image_blob },
-        state: "TODO".to_owned(),
-    })
-}
-
-pub fn get_did(
+pub async fn get_did(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&did_path) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -199,7 +196,11 @@ pub fn get_did(
         Ok(state) => state,
     };
 
-    match state.vault.get_vault_record(did).and_then(|rec| VaultEntry::try_from(&rec)) {
+    let entry_res = async move {
+        let rec = state.vault.get_vault_record(did).await?;
+        Fallible::Ok(VaultEntry::try_from(&rec)?)
+    };
+    match entry_res.await {
         Ok(entry) => {
             debug!("Fetched info for profile {}", &did_path);
             HttpResponse::Ok().json(entry)
@@ -211,11 +212,11 @@ pub fn get_did(
     }
 }
 
-pub fn restore(
+pub async fn restore(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
     force: web::Json<bool>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&did_path) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -224,7 +225,7 @@ pub fn restore(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match state.vault.restore_profile(did, *force) {
+    match state.vault.restore_profile(did, *force).await {
         Ok(priv_data) => {
             debug!("Restored profile {}", &did_path);
             HttpResponse::Ok().json(priv_data) // TODO consider security here
@@ -236,7 +237,10 @@ pub fn restore(
     }
 }
 
-pub fn revert(state: web::Data<Mutex<DaemonState>>, did_path: web::Path<String>) -> impl Responder {
+pub async fn revert(
+    state: web::Data<Mutex<DaemonState>>,
+    did_path: web::Path<String>,
+) -> HttpResponse {
     let did = match did_opt(&did_path) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -245,7 +249,7 @@ pub fn revert(state: web::Data<Mutex<DaemonState>>, did_path: web::Path<String>)
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match state.vault.revert_profile(did) {
+    match state.vault.revert_profile(did).await {
         Ok(priv_data) => {
             debug!("Reverted profile {}", &did_path);
             HttpResponse::Ok().json(priv_data) // TODO consider security here
@@ -257,11 +261,11 @@ pub fn revert(state: web::Data<Mutex<DaemonState>>, did_path: web::Path<String>)
     }
 }
 
-pub fn publish(
+pub async fn publish(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
     force: web::Json<bool>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&did_path) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -270,7 +274,7 @@ pub fn publish(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match state.vault.publish_profile(did, *force) {
+    match state.vault.publish_profile(did, *force).await {
         Ok(id) => {
             debug!("Published profile {}", &did_path);
             HttpResponse::Ok().json(id)
@@ -282,24 +286,28 @@ pub fn publish(
     }
 }
 
-pub fn rename_did(
+pub async fn rename_did(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
-    mut label: web::Json<ProfileLabel>,
-) -> impl Responder {
+    label_arg: web::Json<ProfileLabel>,
+) -> HttpResponse {
+    let mut label = label_arg.to_owned();
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    let did = match did_res(&state.vault, &did_path) {
+    let did = match did_res(&state.vault, &did_path).await {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
     };
-    match reset_label_if_empty(&mut state.vault, &mut label, &did)
-        .and_then(|()| state.vault.set_profile_label(Some(did), label.to_owned()))
-    {
+    let fut = async move {
+        reset_label_if_empty(&mut state.vault, &mut label, &did).await?;
+        state.vault.set_profile_label(Some(did), label.to_owned()).await?;
+        Fallible::Ok(())
+    };
+    match fut.await {
         Ok(()) => {
-            debug!("Renamed profile {} to {}", &did_path, label);
+            debug!("Renamed profile {} to {}", &did_path, label_arg);
             HttpResponse::Ok().body("")
         }
         Err(e) => {
@@ -309,10 +317,10 @@ pub fn rename_did(
     }
 }
 
-pub fn get_profile(
+pub async fn get_profile(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&did_path) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -321,7 +329,7 @@ pub fn get_profile(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match state.vault.get_profile_data(did, ProfileRepositoryKind::Local) {
+    match state.vault.get_profile_data(did, ProfileRepositoryKind::Local).await {
         Ok(data) => {
             debug!("Fetched data for profile {}", did_path);
             HttpResponse::Ok().json(data)
@@ -333,16 +341,16 @@ pub fn get_profile(
     }
 }
 
-pub fn set_avatar(
+pub async fn set_avatar(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
     avatar: web::Json<DataUri>,
-) -> impl Responder {
+) -> HttpResponse {
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match set_avatar_in_state(&mut state.vault, &did_path, &avatar) {
+    match set_avatar_in_state(&mut state.vault, &did_path, &avatar).await {
         Ok(()) => {
             debug!("Set profile {} avatar", &did_path);
             HttpResponse::Ok().body("")
@@ -354,25 +362,11 @@ pub fn set_avatar(
     }
 }
 
-fn set_avatar_in_state(
-    state: &mut VaultState,
-    did_str: &String,
-    avatar_datauri: &DataUri,
-) -> Fallible<()> {
-    let did = did_opt(did_str)?;
-    let (format, avatar_binary) = parse_avatar(&avatar_datauri)?;
-    let metadata_ser = state.get_profile_metadata(did.clone())?;
-    let mut metadata = PersonaCustomData::try_from(metadata_ser.as_str())?;
-    metadata.image_format = format;
-    metadata.image_blob = avatar_binary;
-    state.set_profile_metadata(did, metadata.try_into()?)
-}
-
-pub fn set_did_attribute(
+pub async fn set_did_attribute(
     state: web::Data<Mutex<DaemonState>>,
     attr_path: web::Path<AttributePath>,
     attr_val: web::Json<String>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&attr_path.did) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -381,7 +375,7 @@ pub fn set_did_attribute(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match state.vault.set_attribute(did, &attr_path.attribute_id, &attr_val) {
+    match state.vault.set_attribute(did, &attr_path.attribute_id, &attr_val).await {
         Ok(()) => {
             debug!("Set attribute {:?} to {}", &attr_path, &attr_val);
             HttpResponse::Ok().body("")
@@ -393,10 +387,10 @@ pub fn set_did_attribute(
     }
 }
 
-pub fn clear_did_attribute(
+pub async fn clear_did_attribute(
     state: web::Data<Mutex<DaemonState>>,
     attr_path: web::Path<AttributePath>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&attr_path.did) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -405,7 +399,7 @@ pub fn clear_did_attribute(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match state.vault.clear_attribute(did, &attr_path.attribute_id) {
+    match state.vault.clear_attribute(did, &attr_path.attribute_id).await {
         Ok(()) => {
             debug!("Cleared attribute {:?}", attr_path);
             HttpResponse::Ok().body("")
@@ -417,11 +411,11 @@ pub fn clear_did_attribute(
     }
 }
 
-pub fn sign_claim(
+pub async fn sign_claim(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
     claim: String,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&did_path) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -434,7 +428,7 @@ pub fn sign_claim(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match state.vault.sign_claim(did, &claim) {
+    match state.vault.sign_claim(did, &claim).await {
         Ok(proof) => {
             debug!("Signed claim with profile {}", &did_path);
             HttpResponse::Ok().body(proof.to_string())
@@ -446,10 +440,10 @@ pub fn sign_claim(
     }
 }
 
-pub fn list_did_claims(
+pub async fn list_did_claims(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&did_path) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -458,7 +452,7 @@ pub fn list_did_claims(
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match list_did_claims_impl(&state.vault, did) {
+    match list_did_claims_impl(&state.vault, did).await {
         Ok(did_claims) => {
             debug!("Fetched list of claims for did {}", &did_path);
             HttpResponse::Ok().json(did_claims)
@@ -470,30 +464,12 @@ pub fn list_did_claims(
     }
 }
 
-// TODO consider changing state operation return types to ApiClaim
-fn list_did_claims_impl(state: &VaultState, did: Option<ProfileId>) -> Fallible<Vec<ApiClaim>> {
-    let claims = state.claims(did.clone())?;
-    let rec = state.get_vault_record(did)?;
-    let schema_registry = state.claim_schemas()?;
-    let claims = claims
-        .iter()
-        .filter_map(|claim| {
-            let res = ApiClaim::try_from(claim, rec.label(), &*schema_registry);
-            if res.is_err() {
-                error!("Failed to convert claim {:?} for HTTP API: {:?}", claim, res);
-            }
-            res.ok()
-        })
-        .collect();
-    Ok(claims)
-}
-
-pub fn list_vault_claims(state: web::Data<Mutex<DaemonState>>) -> impl Responder {
+pub async fn list_vault_claims(state: web::Data<Mutex<DaemonState>>) -> HttpResponse {
     let state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match list_vault_claims_from_state(&state.vault) {
+    match list_vault_claims_from_state(&state.vault).await {
         Ok(claims) => {
             debug!("Fetched list of claims");
             HttpResponse::Ok().json(claims)
@@ -505,30 +481,16 @@ pub fn list_vault_claims(state: web::Data<Mutex<DaemonState>>) -> impl Responder
     }
 }
 
-fn list_vault_claims_from_state(state: &VaultState) -> Fallible<Vec<ApiClaim>> {
-    let schema_registry = state.claim_schemas()?;
-
-    let mut claims = Vec::new();
-    for rec in state.list_vault_records()? {
-        let did_claims = state.claims(Some(rec.id()))?;
-        for claim in did_claims {
-            claims.push(ApiClaim::try_from(&claim, rec.label(), &*schema_registry)?);
-        }
-    }
-
-    Ok(claims)
-}
-
-pub fn create_did_claim(
+pub async fn create_did_claim(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
     claim_details: web::Json<CreateClaim>,
-) -> impl Responder {
+) -> HttpResponse {
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    let did = match did_res(&state.vault, &did_path) {
+    let did = match did_res(&state.vault, &did_path).await {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
     };
@@ -539,7 +501,7 @@ pub fn create_did_claim(
         claim_details.content.to_owned(),
     );
     let claim_id = claim.id();
-    match state.vault.add_claim(Some(did), claim) {
+    match state.vault.add_claim(Some(did), claim).await {
         Ok(()) => {
             debug!("Created claim for did {}", &did_path);
             HttpResponse::Created().json(claim_id)
@@ -551,10 +513,10 @@ pub fn create_did_claim(
     }
 }
 
-pub fn delete_claim(
+pub async fn delete_claim(
     state: web::Data<Mutex<DaemonState>>,
     claim_path: web::Path<ClaimPath>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&claim_path.did) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -564,7 +526,7 @@ pub fn delete_claim(
         Ok(state) => state,
     };
 
-    match state.vault.remove_claim(did, claim_path.claim_id.to_owned()) {
+    match state.vault.remove_claim(did, claim_path.claim_id.to_owned()).await {
         Ok(()) => {
             debug!("Deleted claim {:?}", &claim_path);
             HttpResponse::Ok().body("")
@@ -576,10 +538,10 @@ pub fn delete_claim(
     }
 }
 
-pub fn request_claim_signature(
+pub async fn request_claim_signature(
     state: web::Data<Mutex<DaemonState>>,
     claim_path: web::Path<ClaimPath>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&claim_path.did) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -589,19 +551,20 @@ pub fn request_claim_signature(
         Ok(state) => state,
     };
 
-    let profile_claim = state
-        .vault
-        .get_profile_data(did.clone(), ProfileRepositoryKind::Local)
-        .and_then(|profile| {
-            profile
-                .claim(&claim_path.claim_id)
-                .map(|claim| claim.signable_part().to_string())
-                .ok_or_else(|| format_err!("Claim {:?} not found", &claim_path))
-        });
+    let claim_path_clone = claim_path.to_owned();
+    let profile_claim_fut = async move {
+        let profile =
+            state.vault.get_profile_data(did.clone(), ProfileRepositoryKind::Local).await?;
+        let profile_claim = profile
+            .claim(&claim_path.claim_id)
+            .map(|claim| claim.signable_part().to_string())
+            .ok_or_else(|| format_err!("Claim {:?} not found", &claim_path))?;
+        Fallible::Ok(profile_claim)
+    };
 
-    match profile_claim {
+    match profile_claim_fut.await {
         Ok(signable) => {
-            debug!("Created claim signature request for {:?}", &claim_path);
+            debug!("Created claim signature request for {:?}", &claim_path_clone);
             HttpResponse::Ok().body(signable)
         }
         Err(e) => {
@@ -611,16 +574,16 @@ pub fn request_claim_signature(
     }
 }
 
-pub fn add_claim_proof(
+pub async fn add_claim_proof(
     state: web::Data<Mutex<DaemonState>>,
     claim_path: web::Path<ClaimPath>,
     proof: String,
-) -> impl Responder {
+) -> HttpResponse {
     let mut state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
-    match add_claim_proof_to_state(&mut state.vault, &claim_path, &proof) {
+    match add_claim_proof_to_state(&mut state.vault, &claim_path, &proof).await {
         Ok(()) => {
             debug!("Claim witness signature added");
             HttpResponse::Created().body("")
@@ -632,29 +595,13 @@ pub fn add_claim_proof(
     }
 }
 
-pub fn add_claim_proof_to_state(
-    state: &mut VaultState,
-    claim_path: &ClaimPath,
-    proof_str: &String,
-) -> Fallible<()> {
-    let did = did_opt(&claim_path.did)?;
-    let claim_id = &claim_path.claim_id;
-    let proof: ClaimProof = proof_str.parse()?;
-    let profile = state.get_profile_data(did.clone(), ProfileRepositoryKind::Local)?;
-    let claim = profile
-        .claim(claim_id)
-        .ok_or_else(|| format_err!("Claim {} not found in profile {:?}", claim_id, did))?;
-    proof.validate(claim.signable_part())?;
-    state.add_claim_proof(did, claim_id, proof)
-}
-
-pub fn list_schemas(state: web::Data<Mutex<DaemonState>>) -> impl Responder {
+pub async fn list_schemas(state: web::Data<Mutex<DaemonState>>) -> HttpResponse {
     let state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
 
-    match state.vault.claim_schemas() {
+    match state.vault.claim_schemas().await {
         Ok(schemas) => {
             debug!("Fetched list of claim schemas");
             let schemas = schemas.iter().map(|v| v.into()).collect::<Vec<ClaimSchema>>();
@@ -667,7 +614,7 @@ pub fn list_schemas(state: web::Data<Mutex<DaemonState>>) -> impl Responder {
     }
 }
 
-pub fn list_homes(state: web::Data<Mutex<DaemonState>>) -> impl Responder {
+pub async fn list_homes(state: web::Data<Mutex<DaemonState>>) -> HttpResponse {
     let state = match lock_state(&state) {
         Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
@@ -685,10 +632,10 @@ pub fn list_homes(state: web::Data<Mutex<DaemonState>>) -> impl Responder {
     }
 }
 
-pub fn list_did_homes(
+pub async fn list_did_homes(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&did_path) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -698,7 +645,7 @@ pub fn list_did_homes(
         Ok(state) => state,
     };
 
-    match state.vault.did_homes(did) {
+    match state.vault.did_homes(did).await {
         Ok(homes) => {
             debug!("Fetched list of home nodes");
             HttpResponse::Ok().json(homes)
@@ -710,49 +657,48 @@ pub fn list_did_homes(
     }
 }
 
-pub fn register_did_home(
+pub async fn register_did_home(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
     reg_data: web::Json<HomeRegistration>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&did_path) {
-        Err(e) => return actix_web::Either::A(HttpResponse::BadRequest().body(e.to_string())),
+        Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
     };
-    let mut state = match lock_state(&state) {
-        Err(e) => return actix_web::Either::A(HttpResponse::Conflict().body(e.to_string())),
+    let mut state_guard = match lock_state(&state) {
+        Err(e) => return HttpResponse::Conflict().body(e.to_string()),
         Ok(state) => state,
     };
     let home_id: ProfileId = match reg_data.home_did.parse() {
         Ok(id) => id,
-        Err(e) => return actix_web::Either::A(HttpResponse::BadRequest().body(e.to_string())),
+        Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
     };
     let addr_hints: Vec<Multiaddr> = match &reg_data.addr_hints {
         None => vec![],
         Some(v) => v.iter().filter_map(|s| s.parse().ok()).collect(),
     };
 
-    let state = &mut *state;
-    let fut = state.vault.register_home(did.clone(), &home_id, &addr_hints, &state.network).then(
-        move |res| match res {
-            Ok(homes) => {
-                debug!("Registered new home {} to profile {:?}", reg_data.home_did, did);
-                HttpResponse::Created().json(homes)
-            }
-            Err(e) => {
-                error!("Failed to fetch list of home nodes: {}", e);
-                HttpResponse::Conflict().body(e.to_string())
-            }
-        },
-    );
-    let fut = Box::new(fut) as AsyncResult<actix_http::Response, actix_http::Error>;
-    actix_web::Either::B(fut)
+    let state = &mut *state_guard;
+    match state.vault
+        .register_home(did.clone(), &home_id, &addr_hints, &mut state.network)
+        .await
+    {
+        Ok(homes) => {
+            debug!("Registered new home {} to profile {:?}", reg_data.home_did, did);
+            HttpResponse::Created().json(homes)
+        }
+        Err(e) => {
+            error!("Failed to fetch list of home nodes: {}", e);
+            HttpResponse::Conflict().body(e.to_string())
+        }
+    }
 }
 
-pub fn leave_did_home(
+pub async fn leave_did_home(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&did_path) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -764,10 +710,10 @@ pub fn leave_did_home(
     unimplemented!()
 }
 
-pub fn set_did_home_online(
+pub async fn set_did_home_online(
     state: web::Data<Mutex<DaemonState>>,
     did_path: web::Path<String>,
-) -> impl Responder {
+) -> HttpResponse {
     let did = match did_opt(&did_path) {
         Err(e) => return HttpResponse::BadRequest().body(e.to_string()),
         Ok(did) => did,
@@ -777,6 +723,8 @@ pub fn set_did_home_online(
         Ok(state) => state,
     };
     unimplemented!()
+}
+
 }
 
 fn lock_state(state: &Mutex<DaemonState>) -> Fallible<MutexGuard<DaemonState>> {
@@ -791,22 +739,130 @@ fn did_opt(did_str: &str) -> Fallible<Option<ProfileId>> {
     Ok(Some(did))
 }
 
-fn did_res(state: &VaultState, did_str: &str) -> Fallible<ProfileId> {
+async fn did_res(state: &VaultState, did_str: &str) -> Fallible<ProfileId> {
     did_opt(did_str)?
-        .or(state.get_active_profile()?)
+        .or(state.get_active_profile().await?)
         .ok_or_else(|| err_msg("No profile specified and no active profile set in vault"))
 }
 
 // TODO consider moving this to the state
-fn reset_label_if_empty(
+async fn reset_label_if_empty(
     state: &mut VaultState,
     label: &mut String,
     did: &ProfileId,
 ) -> Fallible<()> {
-    if label.is_empty() || label.find(|c| !char::is_whitespace(c)).is_none() {
+    if label.trim().is_empty() {
         let hd_label = DeterministicNameGenerator::default().name(&did.to_bytes());
-        state.set_profile_label(Some(did.clone()), hd_label.clone())?;
+        state.set_profile_label(Some(did.clone()), hd_label.clone()).await?;
         *label = hd_label;
     }
     Ok(())
+}
+
+async fn create_dids_to_state(state: &mut VaultState, label: &mut String) -> Fallible<VaultEntry> {
+    debug!("Creating profile with label '{}'", label);
+    let profile = state.create_profile(Some(label.clone())).await?;
+    let did = profile.id();
+    let did_bytes = did.to_bytes();
+
+    reset_label_if_empty(state, label, &did).await?;
+
+    let mut avatar_png = Vec::new();
+    blockies::Ethereum::default()
+        .create_icon(&mut avatar_png, &did_bytes)
+        .map_err(|e| err_msg(format!("Failed to generate default profile icon: {:?}", e)))?;
+    //std::fs::write(format!("/tmp/{}.png", label), &avatar_png)?;
+
+    let mut metadata = PersonaCustomData::default();
+    metadata.image_blob = avatar_png;
+    metadata.image_format = "png".to_owned();
+    state.set_profile_metadata(Some(did.clone()), metadata.clone().try_into()?).await?;
+
+    state.save_vault()?;
+    Ok(VaultEntry {
+        id: did.to_string(),
+        label: label.to_owned(),
+        avatar: Image { format: metadata.image_format, blob: metadata.image_blob },
+        state: "TODO".to_owned(),
+    })
+}
+
+async fn set_avatar_in_state(
+    state: &mut VaultState,
+    did_str: &String,
+    avatar_datauri: &DataUri,
+) -> Fallible<()> {
+    let did = did_opt(did_str)?;
+    let (format, avatar_binary) = parse_avatar(&avatar_datauri)?;
+    let metadata_ser = state.get_profile_metadata(did.clone()).await?;
+    let mut metadata = PersonaCustomData::try_from(metadata_ser.as_str())?;
+    metadata.image_format = format;
+    metadata.image_blob = avatar_binary;
+    state.set_profile_metadata(did, metadata.try_into()?).await
+}
+
+// TODO consider changing state operation return types to ApiClaim
+async fn list_did_claims_impl(
+    state: &VaultState,
+    did: Option<ProfileId>,
+) -> Fallible<Vec<ApiClaim>> {
+    let claims = state.claims(did.clone()).await?;
+    let rec = state.get_vault_record(did).await?;
+    let schema_registry = state.claim_schemas().await?;
+    let claims = claims
+        .iter()
+        .filter_map(|claim| {
+            let res = ApiClaim::try_from(claim, rec.label(), &*schema_registry);
+            if res.is_err() {
+                error!("Failed to convert claim {:?} for HTTP API: {:?}", claim, res);
+            }
+            res.ok()
+        })
+        .collect();
+    Ok(claims)
+}
+
+async fn list_vault_claims_from_state(state: &VaultState) -> Fallible<Vec<ApiClaim>> {
+    let schema_registry = state.claim_schemas().await?;
+
+    let mut claims = Vec::new();
+    for rec in state.list_vault_records().await? {
+        let did_claims = state.claims(Some(rec.id())).await?;
+        for claim in did_claims {
+            claims.push(ApiClaim::try_from(&claim, rec.label(), &*schema_registry)?);
+        }
+    }
+
+    Ok(claims)
+}
+
+async fn list_dids_from_state(state: &VaultState) -> Fallible<Vec<VaultEntry>> {
+    let recs = state.list_vault_records().await?;
+    let entries = recs
+        .iter()
+        .filter_map(|record| {
+            let res = VaultEntry::try_from(record);
+            if res.is_err() {
+                error!("Failed to convert vault record {:?} for HTTP API: {:?}", record, res);
+            }
+            res.ok()
+        })
+        .collect();
+    Ok(entries)
+}
+
+async fn add_claim_proof_to_state(
+    state: &mut VaultState,
+    claim_path: &ClaimPath,
+    proof_str: &String,
+) -> Fallible<()> {
+    let did = did_opt(&claim_path.did)?;
+    let claim_id = &claim_path.claim_id;
+    let proof: ClaimProof = proof_str.parse()?;
+    let profile = state.get_profile_data(did.clone(), ProfileRepositoryKind::Local).await?;
+    let claim = profile
+        .claim(claim_id)
+        .ok_or_else(|| format_err!("Claim {} not found in profile {:?}", claim_id, did))?;
+    proof.validate(claim.signable_part())?;
+    state.add_claim_proof(did, claim_id, proof).await
 }

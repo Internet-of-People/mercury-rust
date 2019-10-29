@@ -1,8 +1,8 @@
-use failure::err_msg;
-use futures::IntoFuture;
+use async_trait::async_trait;
+use failure::{err_msg, Fallible};
 
 use crate::dapp::user_interactor::{DAppAction, UserInteractor};
-use did::model::{AsyncFallible, ProfileId};
+use did::model::ProfileId;
 use mercury_home_protocol::{RelationHalfProof, RelationProof};
 
 pub struct FakeUserInteractor {
@@ -19,25 +19,27 @@ impl FakeUserInteractor {
     }
 }
 
+#[async_trait]
 impl UserInteractor for FakeUserInteractor {
-    fn initialize(&self) -> AsyncFallible<()> {
-        Box::new(Ok(()).into_future())
+    async fn initialize(&self) -> Fallible<()> {
+        Ok(())
     }
 
-    fn confirm_dappaction(&self, _action: &DAppAction) -> AsyncFallible<()> {
-        Box::new(Ok(()).into_future())
+    async fn confirm_dappaction(&self, _action: &DAppAction) -> Fallible<()> {
+        Ok(())
     }
 
-    fn confirm_pairing(&self, _request: &RelationHalfProof) -> AsyncFallible<()> {
-        Box::new(Ok(()).into_future())
+    async fn confirm_pairing(&self, _request: &RelationHalfProof) -> Fallible<()> {
+        Ok(())
     }
 
-    fn notify_pairing(&self, _response: &RelationProof) -> AsyncFallible<()> {
-        Box::new(Ok(()).into_future())
+    async fn notify_pairing(&self, _response: &RelationProof) -> Fallible<()> {
+        Ok(())
     }
 
-    fn select_profile(&self) -> AsyncFallible<ProfileId> {
-        let profile_id = self.active_profile.to_owned().ok_or(err_msg("No profile was selected"));
-        Box::new(profile_id.into_future())
+    async fn select_profile(&self) -> Fallible<ProfileId> {
+        let profile_id_res =
+            self.active_profile.to_owned().ok_or(err_msg("No profile was selected"));
+        profile_id_res
     }
 }

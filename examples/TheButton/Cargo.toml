@@ -11,7 +11,7 @@ edition = "2018"
 claims = { path="../../claims" }
 did = { path="../../did" }
 failure = "*"
-futures = "0.1"
+futures-preview = { version="0.3.0-alpha.19", features=["compat", "async-await"] }
 log = "*"
 log4rs = "*"
 mercury-home-protocol = { path="../../home-protocol" }
@@ -20,6 +20,6 @@ multibase = "*"
 prometheus = { path="../../prometheus" }
 structopt = "*"
 tempdir = "*"
-tokio = "0.1"
-tokio-current-thread = "0.1"
-tokio-signal = "0.2"
+tokio = { version="0.2.0-alpha.6", features=["rt-current-thread"] }
+tokio-async-await = "0.1"
+tokio-net = { version="0.2.0-alpha.6", features=["signal"] }

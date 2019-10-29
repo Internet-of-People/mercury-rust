@@ -1,3 +1,4 @@
+#![warn(rust_2018_idioms)]
 #![warn(missing_docs)]
 
 //! This library provides a high-level API to be used in Morpheus as a key-vault. It wraps multiple

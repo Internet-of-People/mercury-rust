@@ -168,7 +168,7 @@ mod tests {
     struct TestKeyId(String);
 
     impl fmt::Debug for TestKeyId {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.write_str(&self.0)
         }
     }
@@ -183,7 +183,7 @@ mod tests {
     struct TestPrivateKey(String);
 
     impl fmt::Debug for TestPrivateKey {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.write_fmt(format_args!("sk({:})", self.0))
         }
     }
@@ -201,7 +201,7 @@ mod tests {
     struct TestPublicKey(String);
 
     impl fmt::Debug for TestPublicKey {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.write_fmt(format_args!("pk({:})", self.0))
         }
     }
@@ -226,7 +226,7 @@ mod tests {
     struct TestXprv(TestPrivateKey);
 
     impl fmt::Debug for TestXprv {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.write_fmt(format_args!("xprv({:?})", self.0))
         }
     }
@@ -250,7 +250,7 @@ mod tests {
     struct TestXpub(TestPublicKey);
 
     impl fmt::Debug for TestXpub {
-        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
             f.write_fmt(format_args!("xpub({:?})", self.0))
         }
     }
