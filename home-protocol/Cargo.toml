@@ -8,14 +8,14 @@ license = "LGPL-3.0+"
 edition = "2018"
 
 [build-dependencies]
-capnpc = { git = "https://github.com/capnproto/capnproto-rust", branch = "std-future" }
+capnpc = { git = "https://github.com/capnproto/capnproto-rust", rev = "35d71c1c4e80da43202edb15083348dd1804c3ab" }
 
 [dependencies]
 async-trait = "0.1.17"
 bincode = "*"
 bytes = "*"
-capnp = { git = "https://github.com/capnproto/capnproto-rust", branch = "std-future" }
-capnp-rpc = { git = "https://github.com/capnproto/capnproto-rust", branch = "std-future" }
+capnp = { git = "https://github.com/capnproto/capnproto-rust", rev = "35d71c1c4e80da43202edb15083348dd1804c3ab" }
+capnp-rpc = { git = "https://github.com/capnproto/capnproto-rust", rev = "35d71c1c4e80da43202edb15083348dd1804c3ab" }
 claims = { path="../claims" }
 did = { path="../did" }
 failure= "*"
