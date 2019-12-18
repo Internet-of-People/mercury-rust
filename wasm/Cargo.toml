@@ -1,0 +1,20 @@
+[package]
+name = "wasm"
+version = "0.1.0"
+authors = ["IoP Ventures LLC <info@iop-ventures.com>", "Rache Bartmoss <bartmoss@tutanota.com>"]
+edition = "2018"
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+did = { path="../did" }
+failure = "*"
+#futures = "0.1"
+log = "*"
+keyvault = { path="../keyvault" }
+#serde = "*"
+#serde_bytes = "*"
+#serde_derive = "*"
+serde_json = "*"
+wasm-bindgen = { version = "*", features = ["serde-serialize"] }

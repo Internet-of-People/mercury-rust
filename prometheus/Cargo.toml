@@ -6,15 +6,16 @@ edition = "2018"
 
 [dependencies]
 actix = "*"
-actix-rt = ""
+actix-rt = "0.2"
 actix-cors = "*"
 actix-http = { version = "*", features = ["rust-tls"] }
-actix-server = "0.6" # Concrete version to fix currently conflicting includes from other actix components from latest versions from crates.io
+# TODO use latest actix
+actix-server = "0.6"
 actix-web = "*"
 actix-web-actors = "*"
 base64 = "*"
 blockies = "*"
-bytes = "*"
+bytes = "0.4"
 claims = { path="../claims" }
 did = { path="../did" }
 failure = "*"

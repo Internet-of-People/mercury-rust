@@ -95,7 +95,7 @@ pub trait ProfileVault {
     fn signer(self: Arc<Self>, profile_id: &ProfileId) -> Fallible<Rc<dyn Signer>>;
     // TODO sign() should be removed and done only via signer(), but that requires using Arc<> or finding another solution
     fn sign(&self, id: &ProfileId, message: &[u8]) -> Fallible<SignedMessage>;
-    fn validate(&self, signer: &ProfileId, signed_msg: &SignedMessage) -> bool;
+    fn validate(&self, signer_id: Option<ProfileId>, signed_msg: &SignedMessage) -> bool;
 
     // TODO these probably should not be here on the long run, list() is enough in most cases.
     //      Used only for restoring all profiles of a vault with gap detection.
@@ -302,9 +302,11 @@ impl ProfileVault for HdProfileVault {
         Ok(SignedMessage::new(private_key.public_key(), message.to_owned(), signature))
     }
 
-    //fn validate(&self, signer_id: &ProfileId, signed_msg: &SignedMessage) -> bool {
-    fn validate(&self, signer: &ProfileId, signed_msg: &SignedMessage) -> bool {
-        let id_ok = signed_msg.public_key().validate_id(signer);
+    fn validate(&self, signer_id: Option<ProfileId>, signed_msg: &SignedMessage) -> bool {
+        let id_ok = match signer_id {
+            Some(id) => signed_msg.public_key().validate_id(&id),
+            None => true,
+        };
         id_ok && signed_msg.validate()
     }
 

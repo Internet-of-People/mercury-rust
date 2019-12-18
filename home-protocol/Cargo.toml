@@ -12,9 +12,10 @@ capnpc = "*"
 
 [dependencies]
 bincode = "*"
-bytes = "*"
-capnp = "*"
-capnp-rpc = "*"
+# TODO update bytes and capnp to latest versions
+bytes = "0.4"
+capnp = "0.10"
+capnp-rpc = "0.10"
 claims = { path="../claims" }
 did = { path="../did" }
 failure= "*"

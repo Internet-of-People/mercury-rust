@@ -1,14 +1,11 @@
+**/target/
 **/.idea
 **/.vscode
-**/Cargo.lock
 **/filetest/
 **/log
-**/target/
 debian/prometheus
 debian/prometheus.substvars
 debian/prometheus.*.debhelper
 debian/prometheus.debhelper.log
 debian/files
 debian/.debhelper
-# prometheus/src/names/adjectives.rs
-# prometheus/src/names/nouns.rs

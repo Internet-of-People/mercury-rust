@@ -10,7 +10,8 @@ members = [
     "prometheus",
     "prometheus-cli",
     "storage",
+    "wasm",
 # TODO put this back after refactoring
 #    "test",
-    "examples/TheButton"
+    "examples/TheButton",
 ]
