@@ -141,7 +141,7 @@ Response:
 - Content: profile id as a string or null if not set, e.g.
 
 ```json
-"IezbeWGSY2dqcUBqT8K7R14xr"
+"iezbeWGSY2dqcUBqT8K7R14xr"
 ```
 
 ### Set default profile
@@ -156,7 +156,7 @@ Request:
 - Content: profile id as a string, e.g.
 
 ```json
-"IezbeWGSY2dqcUBqT8K7R14xr"
+"iezbeWGSY2dqcUBqT8K7R14xr"
 ```
 
 Response:
@@ -184,13 +184,13 @@ Response:
 ```json
 [
   {
-    "id":"IezbeWGSY2dqcUBqT8K7R14xr",
+    "id":"iezbeWGSY2dqcUBqT8K7R14xr",
     "label":"Mr Anderson",
     "avatar":"data:image/png;base64,iVBOR...",
     "state":"TODO",
   },
   {
-    "id":"Iez25N5WZ1Q6TQpgpyYgiu9gTX",
+    "id":"iez25N5WZ1Q6TQpgpyYgiu9gTX",
     "label":"Neo",
     "avatar":"data:image/png;base64,iVBOR...",
     "state":"TODO",
@@ -216,7 +216,7 @@ Response:
 
 ```json
 {
-  "id":"IezbeWGSY2dqcUBqT8K7R14xr",
+  "id":"iezbeWGSY2dqcUBqT8K7R14xr",
   "label":"disco-deer",
   "avatar":"data:image/png;base64,iVBOR...",
   "state":"TODO",
@@ -243,7 +243,7 @@ Response:
 
 ```json
 {
-  "id":"IezbeWGSY2dqcUBqT8K7R14xr",
+  "id":"iezbeWGSY2dqcUBqT8K7R14xr",
   "label":"Mr Anderson",
   "avatar":"data:image/png;base64,iVBOR...",
   "state":"TODO",
@@ -327,7 +327,7 @@ Response:
 ```json
 [{
   "id": "<claim_id>",
-  "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n", // Morpheus DID
+  "subject_id": "iez24XMd3BfPn5LAJdGdvZp87n", // Morpheus DID
   "subject_label": "Neo",
   "schema_id": "<schema_id>",
   "schema_name": "age-over",
@@ -335,7 +335,7 @@ Response:
     // Completely schema-dependent structure here
   },
   "proof": [{
-    "signer_id": "Iez24XMd3BfPn5LAJdGdvZp87n",
+    "signer_id": "iez24XMd3BfPn5LAJdGdvZp87n",
     "signed_message": {
       "public_key": "PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb",
       "message": "...",
@@ -364,7 +364,7 @@ Response:
 ```json
 [{
   "id": "<claim_id>",
-  "subject_id": "Iez24XMd3BfPn5LAJdGdvZp87n", // Morpheus DID
+  "subject_id": "iez24XMd3BfPn5LAJdGdvZp87n", // Morpheus DID
   "subject_label": "Neo",
   "schema_id": "<schema_id>",
   "schema_name": "age-over",

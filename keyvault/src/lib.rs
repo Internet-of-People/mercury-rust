@@ -197,3 +197,6 @@ pub trait KeyDerivationCrypto: AsymmetricCrypto {
 
 /// Unicode code point for planet mercury
 pub const BIP43_PURPOSE_MERCURY: i32 = 0x263F;
+
+/// Unicode code point for sleeping symbol
+pub const BIP43_PURPOSE_MORPHEUS: i32 = 0x1F4A4;

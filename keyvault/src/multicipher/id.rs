@@ -11,6 +11,10 @@ erased_type! {
     pub struct MKeyId {}
 }
 
+impl MKeyId {
+    pub const PREFIX: char = 'i';
+}
+
 macro_rules! to_bytes_tuple {
     ($suite:ident, $self_:expr) => {
         (stringify!($suite), reify!($suite, id, $self_).to_bytes())
@@ -120,7 +124,7 @@ impl From<&MKeyId> for String {
         let (discriminator, bytes) = visit!(to_bytes_tuple(src));
         let mut output = multibase::encode(multibase::Base58btc, &bytes);
         output.insert_str(0, discriminator);
-        output.insert(0, 'I');
+        output.insert(0, MKeyId::PREFIX);
         output
     }
 }
@@ -147,7 +151,11 @@ impl std::str::FromStr for MKeyId {
     type Err = failure::Error;
     fn from_str(src: &str) -> Result<Self, Self::Err> {
         let mut chars = src.chars();
-        ensure!(chars.next() == Some('I'), "Identifiers must start with 'I'");
+        ensure!(
+            chars.next() == Some(Self::PREFIX),
+            "Identifiers must start with '{}'",
+            Self::PREFIX
+        );
         if let Some(discriminator) = chars.next() {
             let (_base, binary) = multibase::decode(chars.as_str())?;
             let ret = visit_fac!(
@@ -197,41 +205,41 @@ mod test {
 
         #[test]
         fn test_1() {
-            case("Iez21JXEtMzXjbCK6BAYFU9ewX", "01d8245272e2317ef53b26407e925edf7e");
+            case("iez21JXEtMzXjbCK6BAYFU9ewX", "01d8245272e2317ef53b26407e925edf7e");
         }
 
         #[test]
         fn test_2() {
-            case("IezpmXKKc2QRZpXbzGV62MgKe", "0182d4ecfc12c5ad8efa5ef494f47e5285");
+            case("iezpmXKKc2QRZpXbzGV62MgKe", "0182d4ecfc12c5ad8efa5ef494f47e5285");
         }
 
         #[test]
         fn discriminator_matters() {
-            let id1 = "Iez21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
-            let id2 = "Ifz21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
+            let id1 = "iez21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
+            let id2 = "ifz21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
             assert_ne!(id1, id2);
         }
 
         #[test]
         #[should_panic(expected = "Unknown crypto suite discriminator \\'g\\'")]
         fn invalid_discriminator() {
-            let _id = "Igz21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
+            let _id = "igz21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
         }
 
         #[test]
         #[should_panic(expected = "No crypto suite discriminator found")]
         fn missing_discriminator() {
-            let _id = "I".parse::<MKeyId>().unwrap();
+            let _id = "i".parse::<MKeyId>().unwrap();
         }
 
         #[test]
-        #[should_panic(expected = "Identifiers must start with \\'I\\'")]
+        #[should_panic(expected = "Identifiers must start with \\'i\\'")]
         fn invalid_type() {
-            let _id = "Fez21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
+            let _id = "fez21JXEtMzXjbCK6BAYFU9ewX".parse::<MKeyId>().unwrap();
         }
 
         #[test]
-        #[should_panic(expected = "Identifiers must start with \\'I\\'")]
+        #[should_panic(expected = "Identifiers must start with \\'i\\'")]
         fn empty() {
             let _id = "".parse::<MKeyId>().unwrap();
         }
@@ -242,7 +250,7 @@ mod test {
 
         #[test]
         fn messagepack_serialization() {
-            let id_str = "Iez21JXEtMzXjbCK6BAYFU9ewX";
+            let id_str = "iez21JXEtMzXjbCK6BAYFU9ewX";
             let id = id_str.parse::<MKeyId>().unwrap();
             let id_bin = rmp_serde::to_vec(&id).unwrap();
 

@@ -10,6 +10,20 @@ erased_type! {
     pub struct MSignature {}
 }
 
+// TODO this should not be based on the String conversions
+impl MSignature {
+    pub const PREFIX: char = 's';
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        String::from(self).as_bytes().to_vec()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Fallible<Self> {
+        let string = String::from_utf8(bytes.to_owned())?;
+        string.parse()
+    }
+}
+
 macro_rules! to_bytes_tuple {
     ($suite:ident, $self_:expr) => {
         (stringify!($suite), reify!($suite, sig, $self_).to_bytes())
@@ -89,7 +103,7 @@ impl From<&MSignature> for String {
         let (discriminator, bytes) = visit!(to_bytes_tuple(src));
         let mut output = multibase::encode(multibase::Base58btc, &bytes);
         output.insert_str(0, discriminator);
-        output.insert(0, 'S');
+        output.insert(0, MSignature::PREFIX);
         output
     }
 }
@@ -116,7 +130,11 @@ impl std::str::FromStr for MSignature {
     type Err = failure::Error;
     fn from_str(src: &str) -> Result<Self, Self::Err> {
         let mut chars = src.chars();
-        ensure!(chars.next() == Some('S'), "Signatures must start with 'S'");
+        ensure!(
+            chars.next() == Some(Self::PREFIX),
+            "Signatures must start with '{}'",
+            Self::PREFIX
+        );
         if let Some(discriminator) = chars.next() {
             let (_base, binary) = multibase::decode(chars.as_str())?;
             let ret = visit_fac!(
@@ -133,17 +151,6 @@ impl std::str::FromStr for MSignature {
 impl From<EdSignature> for MSignature {
     fn from(src: EdSignature) -> Self {
         erase!(e, MSignature, src)
-    }
-}
-
-// TODO this should not be based on the String conversions
-impl MSignature {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        String::from(self).as_bytes().to_vec()
-    }
-    pub fn from_bytes(bytes: &[u8]) -> Fallible<Self> {
-        let string = String::from_utf8(bytes.to_owned())?;
-        string.parse()
     }
 }
 
@@ -167,7 +174,7 @@ mod test {
         #[test]
         fn test_1() {
             case(
-                "SezAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2",
+                "sezAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2",
                 "01e5564300c360ac729086e2cc806e828a84877f1eb8e5d974d873e06522490155 \
                  5fb8821590a33bacc61e39701cf9b46bd25bf5f0595bbe24655141438e7a100b",
             );
@@ -176,7 +183,7 @@ mod test {
         #[test]
         fn test_2() {
             case(
-                "Sez93tR11WBTZjw25Ht3CgaiSaC5rb3GnkAcaAUznjomtVj6Ac4rzQ4df9Fvy1uitGe8ZSBiG4Q5ukaVo5sjMpAwkxX",
+                "sez93tR11WBTZjw25Ht3CgaiSaC5rb3GnkAcaAUznjomtVj6Ac4rzQ4df9Fvy1uitGe8ZSBiG4Q5ukaVo5sjMpAwkxX",
                 "0192a009a9f0d4cab8720e820b5f642540a2b27b5416503f8fb3762223ebdb69da \
                  085ac1e43e15996e458f3613d0f11d8c387b2eaeb4302aeeb00d291612bb0c00",
             );
@@ -185,7 +192,7 @@ mod test {
         #[test]
         fn test_3() {
             case(
-                "Sez86ALkZRspsufndsFkaT3GS5m4FHxUTGhBPRpdqqgfdgCMPWzDvxHjVAZXQNVPH8vHohuRkLtEWtT9guyscG2WsZB",
+                "sez86ALkZRspsufndsFkaT3GS5m4FHxUTGhBPRpdqqgfdgCMPWzDvxHjVAZXQNVPH8vHohuRkLtEWtT9guyscG2WsZB",
                 "016291d657deec24024827e69c3abe01a30ce548a284743a445e3680d7db5ac3ac \
                  18ff9b538d16f290ae67f760984dc6594a7c15e9716ed28dc027beceea1ec40a"
             );
@@ -193,8 +200,8 @@ mod test {
 
         #[test]
         fn discriminator_matters() {
-            let sig1 = "SezAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2".parse::<MSignature>().unwrap();
-            let sig2 = "SfzAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2".parse::<MSignature>().unwrap();
+            let sig1 = "sezAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2".parse::<MSignature>().unwrap();
+            let sig2 = "sfzAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2".parse::<MSignature>().unwrap();
             assert_ne!(sig1, sig2);
         }
 
@@ -202,23 +209,23 @@ mod test {
         #[should_panic(expected = "Unknown crypto suite discriminator \\'g\\'")]
         fn invalid_discriminator() {
             let _sig =
-                "SgzAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2".parse::<MSignature>().unwrap();
+                "sgzAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2".parse::<MSignature>().unwrap();
         }
 
         #[test]
         #[should_panic(expected = "No crypto suite discriminator found")]
         fn missing_discriminator() {
-            let _sig = "S".parse::<MSignature>().unwrap();
+            let _sig = "s".parse::<MSignature>().unwrap();
         }
 
         #[test]
-        #[should_panic(expected = "Signatures must start with \\'S\\'")]
+        #[should_panic(expected = "Signatures must start with \\'s\\'")]
         fn invalid_type() {
             let _sig = "FezAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2".parse::<MSignature>().unwrap();
         }
 
         #[test]
-        #[should_panic(expected = "Signatures must start with \\'S\\'")]
+        #[should_panic(expected = "Signatures must start with \\'s\\'")]
         fn empty() {
             let _sig = "".parse::<MSignature>().unwrap();
         }
@@ -229,7 +236,7 @@ mod test {
 
         #[test]
         fn messagepack_serialization() {
-            let sig_str = "SezAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2";
+            let sig_str = "sezAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2";
             let sig = sig_str.parse::<MSignature>().unwrap();
             let sig_bin = rmp_serde::to_vec(&sig).unwrap();
 
@@ -252,7 +259,7 @@ mod test {
 
         #[test]
         fn json_serialization() {
-            let sig_str = "SezAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2";
+            let sig_str = "sezAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2";
             let sig = sig_str.parse::<MSignature>().unwrap();
             let sig_bin = serde_json::to_vec(&sig).unwrap();
 
@@ -289,9 +296,9 @@ mod test {
         fn char_0() {
             test(
                 "9d61b19deffd5a60ba844af492ec2cc44449c5697b326919703bac031cae7f60",
-                "PezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z",
+                "pezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z",
                 "",
-                "SezAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2",
+                "sezAhoNep8B9HTRCAYaJFPL1hNgqxfjM72UD4B75s258aF6pPCtDf5trXm7mppZVzT6ynpC3jyH6h3Li7r9Rw4yjeG2",
             );
         }
 
@@ -299,9 +306,9 @@ mod test {
         fn char_1() {
             test(
                 "4ccd089b28ff96da9db6c346ec114e0f5b8a319f35aba624da8cf6ed4fb8a6fb",
-                "Pez586Z7H2vpX9qNhN2T4e9Utugie3ogjbxzGaMtM3E6HR5",
+                "pez586Z7H2vpX9qNhN2T4e9Utugie3ogjbxzGaMtM3E6HR5",
                 "72",
-                "Sez93tR11WBTZjw25Ht3CgaiSaC5rb3GnkAcaAUznjomtVj6Ac4rzQ4df9Fvy1uitGe8ZSBiG4Q5ukaVo5sjMpAwkxX",
+                "sez93tR11WBTZjw25Ht3CgaiSaC5rb3GnkAcaAUznjomtVj6Ac4rzQ4df9Fvy1uitGe8ZSBiG4Q5ukaVo5sjMpAwkxX",
             );
         }
 
@@ -309,9 +316,9 @@ mod test {
         fn char_2() {
             test(
                 "c5aa8df43f9f837bedb7442f31dcb7b166d38535076f094b85ce3a2e0b4458f7",
-                "PezHyx62wPQGyvXCoihZq1BrbUjBRh2LuNxWiiqMkfAuSZr",
+                "pezHyx62wPQGyvXCoihZq1BrbUjBRh2LuNxWiiqMkfAuSZr",
                 "af82",
-                "Sez86ALkZRspsufndsFkaT3GS5m4FHxUTGhBPRpdqqgfdgCMPWzDvxHjVAZXQNVPH8vHohuRkLtEWtT9guyscG2WsZB",
+                "sez86ALkZRspsufndsFkaT3GS5m4FHxUTGhBPRpdqqgfdgCMPWzDvxHjVAZXQNVPH8vHohuRkLtEWtT9guyscG2WsZB",
             );
         }
     }

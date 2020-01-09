@@ -269,14 +269,14 @@ mod test {
         let tmp_file = std::env::temp_dir().join("local_repo_test.dat");
         let mut repo = FileProfileRepository::new(&tmp_file)?;
 
-        let my_pubkey = PublicKey::from_str("PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb")?;
-        //let my_id = ProfileId::from_str("IezbeWGSY2dqcUBqT8K7R14xr")?;
+        let my_pubkey = PublicKey::from_str("pezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb")?;
+        //let my_id = ProfileId::from_str("iezbeWGSY2dqcUBqT8K7R14xr")?;
         let my_id = my_pubkey.key_id();
         let mut my_data = PrivateProfileData::empty(&my_pubkey);
         repo.set(my_data.clone()).wait()?;
 
-        let peer_pubkey = PublicKey::from_str("PezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z")?;
-        //let peer_id = ProfileId::from_str("Iez25N5WZ1Q6TQpgpyYgiu9gTX")?;
+        let peer_pubkey = PublicKey::from_str("pezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z")?;
+        //let peer_id = ProfileId::from_str("iez25N5WZ1Q6TQpgpyYgiu9gTX")?;
         let peer_id = peer_pubkey.key_id();
         let peer_data = PrivateProfileData::empty(&peer_pubkey);
         repo.set(peer_data.clone()).wait()?;

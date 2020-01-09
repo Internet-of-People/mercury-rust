@@ -23,7 +23,19 @@ macro_rules! verify {
     };
 }
 
+// TODO this should not be based on the String conversions
 impl MPublicKey {
+    pub const PREFIX: char = 'p';
+
+    pub fn to_bytes(&self) -> Vec<u8> {
+        String::from(self).as_bytes().to_vec()
+    }
+
+    pub fn from_bytes(bytes: &[u8]) -> Fallible<Self> {
+        let string = String::from_utf8(bytes.to_owned())?;
+        string.parse()
+    }
+
     pub fn validate_id(&self, key_id: &MKeyId) -> bool {
         self.key_id() == *key_id
     }
@@ -46,15 +58,6 @@ macro_rules! to_bytes_tuple {
         (stringify!($suite), reify!($suite, pk, $self_).to_bytes())
     };
 }
-
-//impl MPublicKey {
-//    pub fn to_bytes(&self) -> Vec<u8> {
-//        let (discriminator, id_bytes) = visit!(to_bytes_tuple(self));
-//        let mut bytes = id_bytes.to_vec();
-//        bytes.insert(0, discriminator.as_bytes()[0]);
-//        bytes
-//    }
-//}
 
 impl Serialize for MPublicKey {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -129,7 +132,7 @@ impl From<&MPublicKey> for String {
         let (discriminator, bytes) = visit!(to_bytes_tuple(src));
         let mut output = multibase::encode(multibase::Base58btc, &bytes);
         output.insert_str(0, discriminator);
-        output.insert(0, 'P');
+        output.insert(0, MPublicKey::PREFIX);
         output
     }
 }
@@ -156,7 +159,11 @@ impl std::str::FromStr for MPublicKey {
     type Err = failure::Error;
     fn from_str(src: &str) -> Result<Self, Self::Err> {
         let mut chars = src.chars();
-        ensure!(chars.next() == Some('P'), "Public keys must start with 'P'");
+        ensure!(
+            chars.next() == Some(Self::PREFIX),
+            "Public keys must start with '{}'",
+            Self::PREFIX
+        );
         if let Some(discriminator) = chars.next() {
             let (_base, binary) = multibase::decode(chars.as_str())?;
             let ret = visit_fac!(
@@ -173,17 +180,6 @@ impl std::str::FromStr for MPublicKey {
 impl From<EdPublicKey> for MPublicKey {
     fn from(src: EdPublicKey) -> Self {
         erase!(e, MPublicKey, src)
-    }
-}
-
-// TODO this should not be based on the String conversions
-impl MPublicKey {
-    pub fn to_bytes(&self) -> Vec<u8> {
-        String::from(self).as_bytes().to_vec()
-    }
-    pub fn from_bytes(bytes: &[u8]) -> Fallible<Self> {
-        let string = String::from_utf8(bytes.to_owned())?;
-        string.parse()
     }
 }
 
@@ -207,7 +203,7 @@ mod test {
         #[test]
         fn test_1() {
             case(
-                "Pez11111111111111111111111111111111",
+                "pez11111111111111111111111111111111",
                 "0000000000000000000000000000000000000000000000000000000000000000",
             );
         }
@@ -215,7 +211,7 @@ mod test {
         #[test]
         fn test_2() {
             case(
-                "PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb",
+                "pezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb",
                 "8fe9693f8fa62a4305a140b9764c5ee01e455963744fe18204b4fb948249308a",
             );
         }
@@ -223,7 +219,7 @@ mod test {
         #[test]
         fn test_3() {
             case(
-                "PezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z",
+                "pezFVen3X669xLzsi6N2V91DoiyzHzg1uAgqiT8jZ9nS96Z",
                 "d75a980182b10ab7d54bfed3c964073a0ee172f3daa62325af021a68f707511a",
             );
         }
@@ -231,7 +227,7 @@ mod test {
         #[test]
         fn test_4() {
             case(
-                "Pez586Z7H2vpX9qNhN2T4e9Utugie3ogjbxzGaMtM3E6HR5",
+                "pez586Z7H2vpX9qNhN2T4e9Utugie3ogjbxzGaMtM3E6HR5",
                 "3d4017c3e843895a92b70aa74d1b7ebc9c982ccf2ec4968cc0cd55f12af4660c",
             );
         }
@@ -239,15 +235,15 @@ mod test {
         #[test]
         fn test_5() {
             case(
-                "PezHyx62wPQGyvXCoihZq1BrbUjBRh2LuNxWiiqMkfAuSZr",
+                "pezHyx62wPQGyvXCoihZq1BrbUjBRh2LuNxWiiqMkfAuSZr",
                 "fc51cd8e6218a1a38da47ed00230f0580816ed13ba3303ac5deb911548908025",
             );
         }
 
         #[test]
         fn discriminator_matters() {
-            let pk1 = "Pez11111111111111111111111111111111".parse::<MPublicKey>().unwrap();
-            let pk2 = "Pfz11111111111111111111111111111111".parse::<MPublicKey>().unwrap();
+            let pk1 = "pez11111111111111111111111111111111".parse::<MPublicKey>().unwrap();
+            let pk2 = "pfz11111111111111111111111111111111".parse::<MPublicKey>().unwrap();
             assert_ne!(pk1, pk2);
         }
 
@@ -255,23 +251,23 @@ mod test {
         #[should_panic(expected = "Unknown crypto suite discriminator \\'g\\'")]
         fn invalid_discriminator() {
             let _pk =
-                "PgzAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb".parse::<MPublicKey>().unwrap();
+                "pgzAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb".parse::<MPublicKey>().unwrap();
         }
 
         #[test]
         #[should_panic(expected = "No crypto suite discriminator found")]
         fn missing_discriminator() {
-            let _pk = "P".parse::<MPublicKey>().unwrap();
+            let _pk = "p".parse::<MPublicKey>().unwrap();
         }
 
         #[test]
-        #[should_panic(expected = "Public keys must start with \\'P\\'")]
+        #[should_panic(expected = "Public keys must start with \\'p\\'")]
         fn invalid_type() {
             let _pk = "Fez21JXEtMzXjbCK6BAYFU9ewX".parse::<MPublicKey>().unwrap();
         }
 
         #[test]
-        #[should_panic(expected = "Public keys must start with \\'P\\'")]
+        #[should_panic(expected = "Public keys must start with \\'p\\'")]
         fn empty() {
             let _pk = "".parse::<MPublicKey>().unwrap();
         }
@@ -282,7 +278,7 @@ mod test {
 
         #[test]
         fn messagepack_serialization() {
-            let pk_str = "PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb";
+            let pk_str = "pezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb";
             let pk = pk_str.parse::<MPublicKey>().unwrap();
             let pk_bin = rmp_serde::to_vec(&pk).unwrap();
 
@@ -303,7 +299,7 @@ mod test {
 
         #[test]
         fn json_serialization() {
-            let pk_str = "PezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb";
+            let pk_str = "pezAgmjPHe5Qs4VakvXHGnd6NsYjaxt4suMUtf39TayrSfb";
             let pk = pk_str.parse::<MPublicKey>().unwrap();
             let pk_bin = serde_json::to_vec(&pk).unwrap();
 

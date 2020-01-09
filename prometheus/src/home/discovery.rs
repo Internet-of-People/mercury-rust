@@ -33,7 +33,7 @@ impl Default for HomeNodeCrawler {
         let attributes = facet.to_attribute_map();
         result
             .add(&Profile::new(
-                "Pez7aYuvoDPM5i7xedjwjsWaFVzL3qRKPv4sBLv3E3pAGi6".parse().unwrap(),
+                "pez7aYuvoDPM5i7xedjwjsWaFVzL3qRKPv4sBLv3E3pAGi6".parse().unwrap(),
                 1,
                 vec![],
                 attributes,
