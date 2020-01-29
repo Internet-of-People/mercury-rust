@@ -31,6 +31,11 @@ impl KeyId {
         Ok(Self { inner })
     }
 
+    #[wasm_bindgen]
+    pub fn prefix() -> String {
+        keyvault::multicipher::MKeyId::PREFIX.to_string()
+    }
+
     #[wasm_bindgen(js_name = toString)]
     pub fn to_string(&self) -> String {
         self.inner.to_string()
@@ -49,6 +54,11 @@ impl PublicKey {
     pub fn new(pub_key_str: &str) -> Result<PublicKey, JsValue> {
         let inner: did::PublicKey = pub_key_str.parse().map_err(err_to_js)?;
         Ok(Self { inner })
+    }
+
+    #[wasm_bindgen]
+    pub fn prefix() -> String {
+        keyvault::multicipher::MPublicKey::PREFIX.to_string()
     }
 
     #[wasm_bindgen(js_name = keyId)]
@@ -79,6 +89,11 @@ impl Signature {
     pub fn new(sign_str: &str) -> Result<Signature, JsValue> {
         let inner: did::Signature = sign_str.parse().map_err(err_to_js)?;
         Ok(Self { inner })
+    }
+
+    #[wasm_bindgen]
+    pub fn prefix() -> String {
+        keyvault::multicipher::MSignature::PREFIX.to_string()
     }
 
     #[wasm_bindgen(js_name = toString)]
