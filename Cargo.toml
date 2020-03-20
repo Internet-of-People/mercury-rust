@@ -7,10 +7,11 @@ members = [
     "home-node",
 #    "forgetfulfuse", # causes compilation problems on Mac, still experimental
     "keyvault",
+    "keyvault-wasm",
+    "mercury-wasm",
     "prometheus",
     "prometheus-cli",
     "storage",
-    "wasm",
 # TODO put this back after refactoring
 #    "test",
     "examples/TheButton",
