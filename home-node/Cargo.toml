@@ -19,6 +19,6 @@ mercury-home-protocol = { path="../home-protocol" }
 mercury-storage = { path="../storage" }
 multiaddr = "*"
 structopt = "*"
-tokio = "0.1"
+tokio = "1.8"
 tokio-current-thread = "0.1"
 toml = "*"
